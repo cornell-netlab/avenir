@@ -6,7 +6,7 @@ Currently, this repository contains utility scripts to easily launch ONOS and em
 2. onos-launch-scripts : automation scripts to launch ONOS and ONOS client
 
 # Setup
-A virtual machine having required packages installed to execute ONOS and network scenarios can be downloaded from [here](https://drive.google.com/file/d/16c9r8zeo7BJDz2N78XnyikGNBzKUSqXK/view?usp=sharing).
+A virtual machine(download from [here](https://drive.google.com/file/d/16c9r8zeo7BJDz2N78XnyikGNBzKUSqXK/view?usp=sharing)) having required packages installed to execute ONOS and network scenarios.
 user-name : hybrid-networks
 password : hybrid-networks
 The VM contains following.
