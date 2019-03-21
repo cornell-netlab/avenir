@@ -12,9 +12,8 @@ password : hybrid-networks
 The VM contains following.
 1. ONOS Source : We have forked ONOS [here](https://github.com/cornell-netlab/onos) from its original repository to have a fixed baseline reference for our application development. The ONOS source in the VM is cloned from the forked repository.
 This will server two purposes.
-  1. A fixed common source code base for everyone
-  2. If ONOS from ONF undergoes major changes, we will have option to not include them.
-
+    1. A fixed common source code base for everyone
+    2. If ONOS from ONF undergoes major changes, we will have option to not include them.
 2. Hybrid Source : The VM contains clone of this repository. 
 3. Code Browser/Editor : [IntelliJ IDEA](https://www.jetbrains.com/idea/download/#section=linux) to browse the ONOS code.
 
