@@ -1,0 +1,40 @@
+pkg_info {
+  arch: "v1model"
+}
+tables {
+  preamble {
+    id: 33606233
+    name: "ingress.next_hop_table"
+    alias: "next_hop_table"
+  }
+  match_fields {
+    id: 1
+    name: "hdr.nextHop.val"
+    bitwidth: 1
+    match_type: EXACT
+  }
+  action_refs {
+    id: 16786796
+  }
+  action_refs {
+    id: 16815487
+  }
+  size: 1024
+  is_const_table: true
+}
+actions {
+  preamble {
+    id: 16786796
+    name: "ingress.next_hop"
+    alias: "next_hop"
+  }
+}
+actions {
+  preamble {
+    id: 16815487
+    name: "ingress.drop_action"
+    alias: "drop_action"
+  }
+}
+type_info {
+}
