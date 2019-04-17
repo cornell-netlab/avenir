@@ -30,24 +30,32 @@
         ["checksum_error", 1, false],
         ["recirculate_flag", 32, false],
         ["parser_error", 32, false],
-        ["_padding", 5, false]
+        ["_padding_0", 5, false]
       ]
     },
     {
-      "name" : "srcMac_h",
+      "name" : "ethernet_t",
       "id" : 2,
       "fields" : [
-        ["srcMAC", 48, false],
-        ["destMAC", 48, false]
+        ["dst_addr", 48, false],
+        ["src_addr", 48, false],
+        ["ether_type", 16, false]
       ]
     },
     {
-      "name" : "nextHop_h",
+      "name" : "packet_out_header_t",
       "id" : 3,
       "fields" : [
-        ["val", 1, false],
-        ["outPort", 7, false],
-        ["unused", 40, false]
+        ["egress_port", 9, false],
+        ["_padding", 7, false]
+      ]
+    },
+    {
+      "name" : "packet_in_header_t",
+      "id" : 4,
+      "fields" : [
+        ["ingress_port", 9, false],
+        ["_padding", 7, false]
       ]
     }
   ],
@@ -67,16 +75,23 @@
       "pi_omit" : true
     },
     {
-      "name" : "srcMac",
+      "name" : "ethernet",
       "id" : 2,
-      "header_type" : "srcMac_h",
+      "header_type" : "ethernet_t",
       "metadata" : false,
       "pi_omit" : true
     },
     {
-      "name" : "nextHop",
+      "name" : "packet_out",
       "id" : 3,
-      "header_type" : "nextHop_h",
+      "header_type" : "packet_out_header_t",
+      "metadata" : false,
+      "pi_omit" : true
+    },
+    {
+      "name" : "packet_in",
+      "id" : 4,
+      "header_type" : "packet_in_header_t",
       "metadata" : false,
       "pi_omit" : true
     }
@@ -104,21 +119,59 @@
         {
           "name" : "start",
           "id" : 0,
+          "parser_ops" : [],
+          "transitions" : [
+            {
+              "type" : "hexstr",
+              "value" : "0x00ff",
+              "mask" : null,
+              "next_state" : "parse_packet_out"
+            },
+            {
+              "value" : "default",
+              "mask" : null,
+              "next_state" : "parse_ethernet"
+            }
+          ],
+          "transition_key" : [
+            {
+              "type" : "field",
+              "value" : ["standard_metadata", "ingress_port"]
+            }
+          ]
+        },
+        {
+          "name" : "parse_packet_out",
+          "id" : 1,
           "parser_ops" : [
             {
               "parameters" : [
                 {
                   "type" : "regular",
-                  "value" : "srcMac"
+                  "value" : "packet_out"
                 }
               ],
               "op" : "extract"
-            },
+            }
+          ],
+          "transitions" : [
+            {
+              "value" : "default",
+              "mask" : null,
+              "next_state" : "parse_ethernet"
+            }
+          ],
+          "transition_key" : []
+        },
+        {
+          "name" : "parse_ethernet",
+          "id" : 2,
+          "parser_ops" : [
             {
               "parameters" : [
                 {
                   "type" : "regular",
-                  "value" : "nextHop"
+                  "value" : "ethernet"
                 }
               ],
               "op" : "extract"
@@ -142,12 +195,12 @@
       "name" : "deparser",
       "id" : 0,
       "source_info" : {
-        "filename" : "./sr_mac_p4_16.p4",
-        "line" : 77,
+        "filename" : "sr_mac_p4_16.p4",
+        "line" : 112,
         "column" : 8,
         "source_fragment" : "DeparserImpl"
       },
-      "order" : ["srcMac", "nextHop"]
+      "order" : ["packet_in", "ethernet"]
     }
   ],
   "meter_arrays" : [],
@@ -157,8 +210,180 @@
   "learn_lists" : [],
   "actions" : [
     {
-      "name" : "ingress.next_hop",
+      "name" : "NoAction",
       "id" : 0,
+      "runtime_data" : [],
+      "primitives" : []
+    },
+    {
+      "name" : "ingress.send_to_cpu",
+      "id" : 1,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["standard_metadata", "egress_spec"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00ff"
+            }
+          ],
+          "source_info" : {
+            "filename" : "sr_mac_p4_16.p4",
+            "line" : 4,
+            "column" : 24,
+            "source_fragment" : "255; ..."
+          }
+        },
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "packet_in"
+            }
+          ],
+          "source_info" : {
+            "filename" : "sr_mac_p4_16.p4",
+            "line" : 59,
+            "column" : 8,
+            "source_fragment" : "hdr.packet_in.setValid()"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["packet_in", "ingress_port"]
+            },
+            {
+              "type" : "field",
+              "value" : ["standard_metadata", "ingress_port"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "sr_mac_p4_16.p4",
+            "line" : 60,
+            "column" : 8,
+            "source_fragment" : "hdr.packet_in.ingress_port = standard_metadata.ingress_port"
+          }
+        }
+      ]
+    },
+    {
+      "name" : "ingress.set_out_port",
+      "id" : 2,
+      "runtime_data" : [
+        {
+          "name" : "port",
+          "bitwidth" : 9
+        }
+      ],
+      "primitives" : [
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["standard_metadata", "egress_spec"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 0
+            }
+          ],
+          "source_info" : {
+            "filename" : "sr_mac_p4_16.p4",
+            "line" : 64,
+            "column" : 8,
+            "source_fragment" : "standard_metadata.egress_spec = port"
+          }
+        }
+      ]
+    },
+    {
+      "name" : "ingress._drop",
+      "id" : 3,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "drop",
+          "parameters" : [],
+          "source_info" : {
+            "filename" : "sr_mac_p4_16.p4",
+            "line" : 68,
+            "column" : 8,
+            "source_fragment" : "mark_to_drop()"
+          }
+        }
+      ]
+    },
+    {
+      "name" : "ingress._drop",
+      "id" : 4,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "drop",
+          "parameters" : [],
+          "source_info" : {
+            "filename" : "sr_mac_p4_16.p4",
+            "line" : 68,
+            "column" : 8,
+            "source_fragment" : "mark_to_drop()"
+          }
+        }
+      ]
+    },
+    {
+      "name" : "act",
+      "id" : 5,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["standard_metadata", "egress_spec"]
+            },
+            {
+              "type" : "field",
+              "value" : ["packet_out", "egress_port"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "sr_mac_p4_16.p4",
+            "line" : 89,
+            "column" : 12,
+            "source_fragment" : "standard_metadata.egress_spec = hdr.packet_out.egress_port"
+          }
+        },
+        {
+          "op" : "remove_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "packet_out"
+            }
+          ],
+          "source_info" : {
+            "filename" : "sr_mac_p4_16.p4",
+            "line" : 90,
+            "column" : 12,
+            "source_fragment" : "hdr.packet_out.setInvalid()"
+          }
+        }
+      ]
+    },
+    {
+      "name" : "act_0",
+      "id" : 6,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -175,8 +400,38 @@
                 "value" : {
                   "op" : "&",
                   "left" : {
-                    "type" : "field",
-                    "value" : ["nextHop", "outPort"]
+                    "type" : "expression",
+                    "value" : {
+                      "op" : "&",
+                      "left" : {
+                        "type" : "expression",
+                        "value" : {
+                          "op" : "&",
+                          "left" : {
+                            "type" : "expression",
+                            "value" : {
+                              "op" : ">>",
+                              "left" : {
+                                "type" : "field",
+                                "value" : ["ethernet", "dst_addr"]
+                              },
+                              "right" : {
+                                "type" : "hexstr",
+                                "value" : "0x1"
+                              }
+                            }
+                          },
+                          "right" : {
+                            "type" : "hexstr",
+                            "value" : "0xffffffffffff"
+                          }
+                        }
+                      },
+                      "right" : {
+                        "type" : "hexstr",
+                        "value" : "0x7f"
+                      }
+                    }
                   },
                   "right" : {
                     "type" : "hexstr",
@@ -187,10 +442,10 @@
             }
           ],
           "source_info" : {
-            "filename" : "./sr_mac_p4_16.p4",
-            "line" : 44,
-            "column" : 8,
-            "source_fragment" : "standard_metadata.egress_spec = (bit<9>)hdr.nextHop.outPort"
+            "filename" : "sr_mac_p4_16.p4",
+            "line" : 97,
+            "column" : 20,
+            "source_fragment" : "standard_metadata.egress_spec = (bit<9>)hdr.ethernet.dst_addr[7:1]"
           }
         },
         {
@@ -198,91 +453,7 @@
           "parameters" : [
             {
               "type" : "field",
-              "value" : ["nextHop", "val"]
-            },
-            {
-              "type" : "expression",
-              "value" : {
-                "type" : "expression",
-                "value" : {
-                  "op" : "&",
-                  "left" : {
-                    "type" : "field",
-                    "value" : ["nextHop", "unused"]
-                  },
-                  "right" : {
-                    "type" : "hexstr",
-                    "value" : "0x01"
-                  }
-                }
-              }
-            }
-          ],
-          "source_info" : {
-            "filename" : "./sr_mac_p4_16.p4",
-            "line" : 45,
-            "column" : 8,
-            "source_fragment" : "hdr.nextHop.val = hdr.nextHop.unused[0:0]"
-          }
-        },
-        {
-          "op" : "assign",
-          "parameters" : [
-            {
-              "type" : "field",
-              "value" : ["nextHop", "outPort"]
-            },
-            {
-              "type" : "expression",
-              "value" : {
-                "type" : "expression",
-                "value" : {
-                  "op" : "&",
-                  "left" : {
-                    "type" : "expression",
-                    "value" : {
-                      "op" : "&",
-                      "left" : {
-                        "type" : "expression",
-                        "value" : {
-                          "op" : ">>",
-                          "left" : {
-                            "type" : "field",
-                            "value" : ["nextHop", "unused"]
-                          },
-                          "right" : {
-                            "type" : "hexstr",
-                            "value" : "0x1"
-                          }
-                        }
-                      },
-                      "right" : {
-                        "type" : "hexstr",
-                        "value" : "0xffffffffff"
-                      }
-                    }
-                  },
-                  "right" : {
-                    "type" : "hexstr",
-                    "value" : "0x7f"
-                  }
-                }
-              }
-            }
-          ],
-          "source_info" : {
-            "filename" : "./sr_mac_p4_16.p4",
-            "line" : 46,
-            "column" : 8,
-            "source_fragment" : "hdr.nextHop.outPort= hdr.nextHop.unused[7:1]"
-          }
-        },
-        {
-          "op" : "assign",
-          "parameters" : [
-            {
-              "type" : "field",
-              "value" : ["nextHop", "unused"]
+              "value" : ["ethernet", "dst_addr"]
             },
             {
               "type" : "expression",
@@ -296,7 +467,7 @@
                       "op" : "<<",
                       "left" : {
                         "type" : "field",
-                        "value" : ["nextHop", "unused"]
+                        "value" : ["ethernet", "dst_addr"]
                       },
                       "right" : {
                         "type" : "hexstr",
@@ -306,34 +477,17 @@
                   },
                   "right" : {
                     "type" : "hexstr",
-                    "value" : "0xffffffffff"
+                    "value" : "0xffffffffffff"
                   }
                 }
               }
             }
           ],
           "source_info" : {
-            "filename" : "./sr_mac_p4_16.p4",
-            "line" : 47,
-            "column" : 8,
-            "source_fragment" : "hdr.nextHop.unused = hdr.nextHop.unused << 8"
-          }
-        }
-      ]
-    },
-    {
-      "name" : "ingress.drop_action",
-      "id" : 1,
-      "runtime_data" : [],
-      "primitives" : [
-        {
-          "op" : "drop",
-          "parameters" : [],
-          "source_info" : {
-            "filename" : "./sr_mac_p4_16.p4",
-            "line" : 51,
-            "column" : 8,
-            "source_fragment" : "mark_to_drop()"
+            "filename" : "sr_mac_p4_16.p4",
+            "line" : 98,
+            "column" : 20,
+            "source_fragment" : "hdr.ethernet.dst_addr = hdr.ethernet.dst_addr << 8"
           }
         }
       ]
@@ -344,81 +498,258 @@
       "name" : "ingress",
       "id" : 0,
       "source_info" : {
-        "filename" : "./sr_mac_p4_16.p4",
-        "line" : 42,
+        "filename" : "sr_mac_p4_16.p4",
+        "line" : 56,
         "column" : 8,
         "source_fragment" : "ingress"
       },
-      "init_table" : "ingress.next_hop_table",
+      "init_table" : "node_2",
       "tables" : [
         {
-          "name" : "ingress.next_hop_table",
+          "name" : "tbl_act",
           "id" : 0,
-          "source_info" : {
-            "filename" : "./sr_mac_p4_16.p4",
-            "line" : 53,
-            "column" : 10,
-            "source_fragment" : "next_hop_table"
-          },
-          "key" : [
-            {
-              "match_type" : "exact",
-              "name" : "hdr.nextHop.val",
-              "target" : ["nextHop", "val"],
-              "mask" : null
-            }
-          ],
+          "key" : [],
           "match_type" : "exact",
           "type" : "simple",
           "max_size" : 1024,
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [0, 1],
-          "actions" : ["ingress.next_hop", "ingress.drop_action"],
+          "action_ids" : [5],
+          "actions" : ["act"],
           "base_default_next" : null,
           "next_tables" : {
-            "ingress.next_hop" : null,
-            "ingress.drop_action" : null
+            "act" : null
           },
           "default_entry" : {
-            "action_id" : 1,
+            "action_id" : 5,
+            "action_const" : true,
+            "action_data" : [],
+            "action_entry_const" : true
+          }
+        },
+        {
+          "name" : "ingress.l2_for_lldp",
+          "id" : 1,
+          "source_info" : {
+            "filename" : "sr_mac_p4_16.p4",
+            "line" : 71,
+            "column" : 10,
+            "source_fragment" : "l2_for_lldp"
+          },
+          "key" : [
+            {
+              "match_type" : "ternary",
+              "name" : "standard_metadata.ingress_port",
+              "target" : ["standard_metadata", "ingress_port"],
+              "mask" : null
+            },
+            {
+              "match_type" : "ternary",
+              "name" : "hdr.ethernet.dst_addr",
+              "target" : ["ethernet", "dst_addr"],
+              "mask" : null
+            },
+            {
+              "match_type" : "ternary",
+              "name" : "hdr.ethernet.src_addr",
+              "target" : ["ethernet", "src_addr"],
+              "mask" : null
+            },
+            {
+              "match_type" : "ternary",
+              "name" : "hdr.ethernet.ether_type",
+              "target" : ["ethernet", "ether_type"],
+              "mask" : null
+            }
+          ],
+          "match_type" : "ternary",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [2, 1, 3, 0],
+          "actions" : ["ingress.set_out_port", "ingress.send_to_cpu", "ingress._drop", "NoAction"],
+          "base_default_next" : null,
+          "next_tables" : {
+            "ingress.set_out_port" : null,
+            "ingress.send_to_cpu" : null,
+            "ingress._drop" : null,
+            "NoAction" : null
+          },
+          "default_entry" : {
+            "action_id" : 0,
             "action_const" : false,
             "action_data" : [],
             "action_entry_const" : false
+          }
+        },
+        {
+          "name" : "tbl_act_0",
+          "id" : 2,
+          "key" : [],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [6],
+          "actions" : ["act_0"],
+          "base_default_next" : null,
+          "next_tables" : {
+            "act_0" : null
           },
-          "entries" : [
-            {
-              "source_info" : {
-                "filename" : "./sr_mac_p4_16.p4",
-                "line" : 62,
-                "column" : 12,
-                "source_fragment" : "1 : next_hop()"
-              },
-              "match_key" : [
-                {
-                  "match_type" : "exact",
-                  "key" : "0x01"
-                }
-              ],
-              "action_entry" : {
-                "action_id" : 0,
-                "action_data" : []
-              },
-              "priority" : 1
-            }
-          ]
+          "default_entry" : {
+            "action_id" : 6,
+            "action_const" : true,
+            "action_data" : [],
+            "action_entry_const" : true
+          }
+        },
+        {
+          "name" : "tbl__drop",
+          "id" : 3,
+          "key" : [],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [4],
+          "actions" : ["ingress._drop"],
+          "base_default_next" : null,
+          "next_tables" : {
+            "ingress._drop" : null
+          },
+          "default_entry" : {
+            "action_id" : 4,
+            "action_const" : true,
+            "action_data" : [],
+            "action_entry_const" : true
+          }
         }
       ],
       "action_profiles" : [],
-      "conditionals" : []
+      "conditionals" : [
+        {
+          "name" : "node_2",
+          "id" : 0,
+          "source_info" : {
+            "filename" : "sr_mac_p4_16.p4",
+            "line" : 88,
+            "column" : 12,
+            "source_fragment" : "standard_metadata.ingress_port == CPU_PORT"
+          },
+          "expression" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "==",
+              "left" : {
+                "type" : "field",
+                "value" : ["standard_metadata", "ingress_port"]
+              },
+              "right" : {
+                "type" : "hexstr",
+                "value" : "0x00ff"
+              }
+            }
+          },
+          "true_next" : "tbl_act",
+          "false_next" : "node_4"
+        },
+        {
+          "name" : "node_4",
+          "id" : 1,
+          "source_info" : {
+            "filename" : "sr_mac_p4_16.p4",
+            "line" : 92,
+            "column" : 16,
+            "source_fragment" : "hdr.ethernet.ether_type == 0x88cc || hdr.ethernet.ether_type == 0x8999"
+          },
+          "expression" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "or",
+              "left" : {
+                "type" : "expression",
+                "value" : {
+                  "op" : "==",
+                  "left" : {
+                    "type" : "field",
+                    "value" : ["ethernet", "ether_type"]
+                  },
+                  "right" : {
+                    "type" : "hexstr",
+                    "value" : "0x88cc"
+                  }
+                }
+              },
+              "right" : {
+                "type" : "expression",
+                "value" : {
+                  "op" : "==",
+                  "left" : {
+                    "type" : "field",
+                    "value" : ["ethernet", "ether_type"]
+                  },
+                  "right" : {
+                    "type" : "hexstr",
+                    "value" : "0x8999"
+                  }
+                }
+              }
+            }
+          },
+          "true_next" : "ingress.l2_for_lldp",
+          "false_next" : "node_6"
+        },
+        {
+          "name" : "node_6",
+          "id" : 2,
+          "source_info" : {
+            "filename" : "sr_mac_p4_16.p4",
+            "line" : 96,
+            "column" : 20,
+            "source_fragment" : "hdr.ethernet.dst_addr[0:0] == 0b1"
+          },
+          "expression" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "==",
+              "left" : {
+                "type" : "expression",
+                "value" : {
+                  "op" : "&",
+                  "left" : {
+                    "type" : "field",
+                    "value" : ["ethernet", "dst_addr"]
+                  },
+                  "right" : {
+                    "type" : "hexstr",
+                    "value" : "0x01"
+                  }
+                }
+              },
+              "right" : {
+                "type" : "hexstr",
+                "value" : "0x01"
+              }
+            }
+          },
+          "true_next" : "tbl_act_0",
+          "false_next" : "tbl__drop"
+        }
+      ]
     },
     {
       "name" : "egress",
       "id" : 1,
       "source_info" : {
-        "filename" : "./sr_mac_p4_16.p4",
-        "line" : 72,
+        "filename" : "sr_mac_p4_16.p4",
+        "line" : 107,
         "column" : 8,
         "source_fragment" : "egress"
       },
@@ -477,7 +808,7 @@
       ["standard_metadata", "recirculate_flag"]
     ]
   ],
-  "program" : "./sr_mac_p4_16.p4",
+  "program" : "sr_mac_p4_16.p4",
   "__meta__" : {
     "version" : [2, 18],
     "compiler" : "https://github.com/p4lang/p4c"

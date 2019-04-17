@@ -14,13 +14,13 @@ BUNDLES = [
 ]
 
 onos_app(
-    app_name = "hybrid.p4pipelines.srcmac",
+    app_name = "org.onosproject.hybrid.p4pipelines.srcmac",
     category = "Pipeconf",
     description = "Provides pipeconf ",
     included_bundles = BUNDLES,
     required_apps = [
         "org.onosproject.drivers.p4runtime",
     ],
-    title = "P4 Tutorial Pipeconf",
+    title = "Core Switch Pipeline",
     url = "http://onosproject.org",
 )
