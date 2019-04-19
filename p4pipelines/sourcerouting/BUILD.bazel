@@ -10,17 +10,17 @@ osgi_jar(
 )
 
 BUNDLES = [
-    "//apps/hybrid/edgecontroller/ofedge:onos-apps-hybrid-edgecontroller-ofedge",
+    "//apps/hybrid/p4pipelines/sourcerouting:onos-apps-hybrid-p4pipelines-sourcerouting",
 ]
 
 onos_app(
-    app_name = "hybrid.edgecontroller.ofedge",
+    app_name = "hybrid.p4pipelines.sourcerouting",
     category = "Pipeconf",
     description = "Provides pipeconf ",
     included_bundles = BUNDLES,
     required_apps = [
         "org.onosproject.drivers.p4runtime",
     ],
-    title = "P4 Tutorial Pipeconf",
+    title = "Core Switch Pipeline",
     url = "http://onosproject.org",
 )

@@ -14,7 +14,7 @@ BUNDLES = [
 ]
 
 onos_app(
-    app_name = "org.onosproject.hybrid.p4pipelines.srcmac",
+    app_name = "hybrid.p4pipelines.srcmac",
     category = "Pipeconf",
     description = "Provides pipeconf ",
     included_bundles = BUNDLES,

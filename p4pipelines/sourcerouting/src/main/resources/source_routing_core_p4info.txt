@@ -1,0 +1,26 @@
+pkg_info {
+  arch: "v1model"
+}
+actions {
+  preamble {
+    id: 16805608
+    name: "MyIngress.drop"
+    alias: "drop"
+  }
+}
+actions {
+  preamble {
+    id: 16811714
+    name: "MyIngress.srcRoute_nhop"
+    alias: "srcRoute_nhop"
+  }
+}
+actions {
+  preamble {
+    id: 16820482
+    name: "MyIngress.update_ttl"
+    alias: "update_ttl"
+  }
+}
+type_info {
+}

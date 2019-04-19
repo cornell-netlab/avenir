@@ -1,0 +1,228 @@
+pkg_info {
+  arch: "v1model"
+}
+tables {
+  preamble {
+    id: 33562787
+    name: "MyIngress.encapsulate"
+    alias: "encapsulate"
+  }
+  match_fields {
+    id: 1
+    name: "hdr.ethernet.dstAddr"
+    bitwidth: 48
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 2
+    name: "hdr.ethernet.srcAddr"
+    bitwidth: 48
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 3
+    name: "hdr.ethernet.etherType"
+    bitwidth: 16
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 4
+    name: "hdr.ipv4.protocol"
+    bitwidth: 8
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 5
+    name: "hdr.ipv4.srcAddr"
+    bitwidth: 32
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 6
+    name: "hdr.ipv4.dstAddr"
+    bitwidth: 32
+    match_type: TERNARY
+  }
+  action_refs {
+    id: 16805608
+  }
+  action_refs {
+    id: 16839874
+  }
+  size: 1024
+}
+actions {
+  preamble {
+    id: 16805608
+    name: "MyIngress.drop"
+    alias: "drop"
+  }
+}
+actions {
+  preamble {
+    id: 16781426
+    name: "MyIngress.srcRoute_finish"
+    alias: "srcRoute_finish"
+  }
+}
+actions {
+  preamble {
+    id: 16839874
+    name: "MyIngress.get_hdr_data"
+    alias: "get_hdr_data"
+  }
+  params {
+    id: 1
+    name: "modSrcMac"
+    bitwidth: 1
+  }
+  params {
+    id: 2
+    name: "srcEthAddr"
+    bitwidth: 48
+  }
+  params {
+    id: 3
+    name: "modDstMac"
+    bitwidth: 1
+  }
+  params {
+    id: 4
+    name: "dstEthAddr"
+    bitwidth: 48
+  }
+  params {
+    id: 5
+    name: "valid0"
+    bitwidth: 1
+  }
+  params {
+    id: 6
+    name: "bos0"
+    bitwidth: 1
+  }
+  params {
+    id: 7
+    name: "port0"
+    bitwidth: 15
+  }
+  params {
+    id: 8
+    name: "valid1"
+    bitwidth: 1
+  }
+  params {
+    id: 9
+    name: "bos1"
+    bitwidth: 1
+  }
+  params {
+    id: 10
+    name: "port1"
+    bitwidth: 15
+  }
+  params {
+    id: 11
+    name: "valid2"
+    bitwidth: 1
+  }
+  params {
+    id: 12
+    name: "bos2"
+    bitwidth: 1
+  }
+  params {
+    id: 13
+    name: "port2"
+    bitwidth: 15
+  }
+  params {
+    id: 14
+    name: "valid3"
+    bitwidth: 1
+  }
+  params {
+    id: 15
+    name: "bos3"
+    bitwidth: 1
+  }
+  params {
+    id: 16
+    name: "port3"
+    bitwidth: 15
+  }
+  params {
+    id: 17
+    name: "valid4"
+    bitwidth: 1
+  }
+  params {
+    id: 18
+    name: "bos4"
+    bitwidth: 1
+  }
+  params {
+    id: 19
+    name: "port4"
+    bitwidth: 15
+  }
+  params {
+    id: 20
+    name: "valid5"
+    bitwidth: 1
+  }
+  params {
+    id: 21
+    name: "bos5"
+    bitwidth: 1
+  }
+  params {
+    id: 22
+    name: "port5"
+    bitwidth: 15
+  }
+  params {
+    id: 23
+    name: "valid6"
+    bitwidth: 1
+  }
+  params {
+    id: 24
+    name: "bos6"
+    bitwidth: 1
+  }
+  params {
+    id: 25
+    name: "port6"
+    bitwidth: 15
+  }
+  params {
+    id: 26
+    name: "valid7"
+    bitwidth: 1
+  }
+  params {
+    id: 27
+    name: "bos7"
+    bitwidth: 1
+  }
+  params {
+    id: 28
+    name: "port7"
+    bitwidth: 15
+  }
+  params {
+    id: 29
+    name: "egress_spec"
+    bitwidth: 9
+  }
+}
+actions {
+  preamble {
+    id: 16788655
+    name: "MyIngress.push_srcRoute_header"
+    alias: "push_srcRoute_header"
+  }
+}
+type_info {
+}

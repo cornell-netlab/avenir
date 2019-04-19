@@ -1,0 +1,3409 @@
+{
+  "header_types" : [
+    {
+      "name" : "scalars_0",
+      "id" : 0,
+      "fields" : [
+        ["flagSrcMac_0", 1, false],
+        ["flagDstMac_0", 1, false],
+        ["flagSrcHdr0_0", 1, false],
+        ["flagSrcHdr1_0", 1, false],
+        ["flagSrcHdr2_0", 1, false],
+        ["flagSrcHdr3_0", 1, false],
+        ["flagSrcHdr4_0", 1, false],
+        ["flagSrcHdr5_0", 1, false],
+        ["flagSrcHdr6_0", 1, false],
+        ["flagSrcHdr7_0", 1, false],
+        ["srcMac_0", 48, false],
+        ["destMac_0", 48, false],
+        ["p0_0", 15, false],
+        ["p1_0", 15, false],
+        ["p2_0", 15, false],
+        ["p3_0", 15, false],
+        ["p4_0", 15, false],
+        ["p5_0", 15, false],
+        ["p6_0", 15, false],
+        ["p7_0", 15, false],
+        ["b0_0", 1, false],
+        ["b1_0", 1, false],
+        ["b2_0", 1, false],
+        ["b3_0", 1, false],
+        ["b4_0", 1, false],
+        ["b5_0", 1, false],
+        ["b6_0", 1, false],
+        ["b7_0", 1, false],
+        ["_padding_0", 6, false]
+      ]
+    },
+    {
+      "name" : "standard_metadata",
+      "id" : 1,
+      "fields" : [
+        ["ingress_port", 9, false],
+        ["egress_spec", 9, false],
+        ["egress_port", 9, false],
+        ["clone_spec", 32, false],
+        ["instance_type", 32, false],
+        ["drop", 1, false],
+        ["recirculate_port", 16, false],
+        ["packet_length", 32, false],
+        ["enq_timestamp", 32, false],
+        ["enq_qdepth", 19, false],
+        ["deq_timedelta", 32, false],
+        ["deq_qdepth", 19, false],
+        ["ingress_global_timestamp", 48, false],
+        ["egress_global_timestamp", 48, false],
+        ["lf_field_list", 32, false],
+        ["mcast_grp", 16, false],
+        ["resubmit_flag", 32, false],
+        ["egress_rid", 16, false],
+        ["checksum_error", 1, false],
+        ["recirculate_flag", 32, false],
+        ["parser_error", 32, false],
+        ["_padding", 5, false]
+      ]
+    },
+    {
+      "name" : "ethernet_t",
+      "id" : 2,
+      "fields" : [
+        ["dstAddr", 48, false],
+        ["srcAddr", 48, false],
+        ["etherType", 16, false]
+      ]
+    },
+    {
+      "name" : "ethType_t",
+      "id" : 3,
+      "fields" : [
+        ["etherType", 16, false]
+      ]
+    },
+    {
+      "name" : "ipv4_t",
+      "id" : 4,
+      "fields" : [
+        ["version", 4, false],
+        ["ihl", 4, false],
+        ["diffserv", 8, false],
+        ["totalLen", 16, false],
+        ["identification", 16, false],
+        ["flags", 3, false],
+        ["fragOffset", 13, false],
+        ["ttl", 8, false],
+        ["protocol", 8, false],
+        ["hdrChecksum", 16, false],
+        ["srcAddr", 32, false],
+        ["dstAddr", 32, false]
+      ]
+    },
+    {
+      "name" : "srcRoute_t",
+      "id" : 5,
+      "fields" : [
+        ["bos", 1, false],
+        ["port", 15, false]
+      ]
+    }
+  ],
+  "headers" : [
+    {
+      "name" : "scalars",
+      "id" : 0,
+      "header_type" : "scalars_0",
+      "metadata" : true,
+      "pi_omit" : true
+    },
+    {
+      "name" : "standard_metadata",
+      "id" : 1,
+      "header_type" : "standard_metadata",
+      "metadata" : true,
+      "pi_omit" : true
+    },
+    {
+      "name" : "ethernet",
+      "id" : 2,
+      "header_type" : "ethernet_t",
+      "metadata" : false,
+      "pi_omit" : true
+    },
+    {
+      "name" : "ethType",
+      "id" : 3,
+      "header_type" : "ethType_t",
+      "metadata" : false,
+      "pi_omit" : true
+    },
+    {
+      "name" : "ipv4",
+      "id" : 4,
+      "header_type" : "ipv4_t",
+      "metadata" : false,
+      "pi_omit" : true
+    },
+    {
+      "name" : "srcRoutes[0]",
+      "id" : 5,
+      "header_type" : "srcRoute_t",
+      "metadata" : false,
+      "pi_omit" : true
+    },
+    {
+      "name" : "srcRoutes[1]",
+      "id" : 6,
+      "header_type" : "srcRoute_t",
+      "metadata" : false,
+      "pi_omit" : true
+    },
+    {
+      "name" : "srcRoutes[2]",
+      "id" : 7,
+      "header_type" : "srcRoute_t",
+      "metadata" : false,
+      "pi_omit" : true
+    },
+    {
+      "name" : "srcRoutes[3]",
+      "id" : 8,
+      "header_type" : "srcRoute_t",
+      "metadata" : false,
+      "pi_omit" : true
+    },
+    {
+      "name" : "srcRoutes[4]",
+      "id" : 9,
+      "header_type" : "srcRoute_t",
+      "metadata" : false,
+      "pi_omit" : true
+    },
+    {
+      "name" : "srcRoutes[5]",
+      "id" : 10,
+      "header_type" : "srcRoute_t",
+      "metadata" : false,
+      "pi_omit" : true
+    },
+    {
+      "name" : "srcRoutes[6]",
+      "id" : 11,
+      "header_type" : "srcRoute_t",
+      "metadata" : false,
+      "pi_omit" : true
+    },
+    {
+      "name" : "srcRoutes[7]",
+      "id" : 12,
+      "header_type" : "srcRoute_t",
+      "metadata" : false,
+      "pi_omit" : true
+    }
+  ],
+  "header_stacks" : [
+    {
+      "name" : "srcRoutes",
+      "id" : 0,
+      "header_type" : "srcRoute_t",
+      "size" : 8,
+      "header_ids" : [5, 6, 7, 8, 9, 10, 11, 12]
+    }
+  ],
+  "header_union_types" : [],
+  "header_unions" : [],
+  "header_union_stacks" : [],
+  "field_lists" : [],
+  "errors" : [
+    ["NoError", 0],
+    ["PacketTooShort", 1],
+    ["NoMatch", 2],
+    ["StackOutOfBounds", 3],
+    ["HeaderTooShort", 4],
+    ["ParserTimeout", 5]
+  ],
+  "enums" : [],
+  "parsers" : [
+    {
+      "name" : "parser",
+      "id" : 0,
+      "init_state" : "start",
+      "parse_states" : [
+        {
+          "name" : "start",
+          "id" : 0,
+          "parser_ops" : [
+            {
+              "parameters" : [
+                {
+                  "type" : "regular",
+                  "value" : "ethernet"
+                }
+              ],
+              "op" : "extract"
+            }
+          ],
+          "transitions" : [
+            {
+              "type" : "hexstr",
+              "value" : "0x1234",
+              "mask" : null,
+              "next_state" : "parse_srcRouting"
+            }
+          ],
+          "transition_key" : [
+            {
+              "type" : "field",
+              "value" : ["ethernet", "etherType"]
+            }
+          ]
+        },
+        {
+          "name" : "parse_srcRouting",
+          "id" : 1,
+          "parser_ops" : [
+            {
+              "parameters" : [
+                {
+                  "type" : "stack",
+                  "value" : "srcRoutes"
+                }
+              ],
+              "op" : "extract"
+            }
+          ],
+          "transitions" : [
+            {
+              "type" : "hexstr",
+              "value" : "0x01",
+              "mask" : null,
+              "next_state" : "parse_ethType"
+            },
+            {
+              "value" : "default",
+              "mask" : null,
+              "next_state" : "parse_srcRouting"
+            }
+          ],
+          "transition_key" : [
+            {
+              "type" : "stack_field",
+              "value" : ["srcRoutes", "bos"]
+            }
+          ]
+        },
+        {
+          "name" : "parse_ethType",
+          "id" : 2,
+          "parser_ops" : [
+            {
+              "parameters" : [
+                {
+                  "type" : "regular",
+                  "value" : "ethType"
+                }
+              ],
+              "op" : "extract"
+            }
+          ],
+          "transitions" : [
+            {
+              "type" : "hexstr",
+              "value" : "0x0800",
+              "mask" : null,
+              "next_state" : "parse_ipv4"
+            },
+            {
+              "value" : "default",
+              "mask" : null,
+              "next_state" : null
+            }
+          ],
+          "transition_key" : [
+            {
+              "type" : "field",
+              "value" : ["ethType", "etherType"]
+            }
+          ]
+        },
+        {
+          "name" : "parse_ipv4",
+          "id" : 3,
+          "parser_ops" : [
+            {
+              "parameters" : [
+                {
+                  "type" : "regular",
+                  "value" : "ipv4"
+                }
+              ],
+              "op" : "extract"
+            }
+          ],
+          "transitions" : [
+            {
+              "value" : "default",
+              "mask" : null,
+              "next_state" : null
+            }
+          ],
+          "transition_key" : []
+        }
+      ]
+    }
+  ],
+  "parse_vsets" : [],
+  "deparsers" : [
+    {
+      "name" : "deparser",
+      "id" : 0,
+      "source_info" : {
+        "filename" : "source_routing_edge.p4",
+        "line" : 347,
+        "column" : 8,
+        "source_fragment" : "MyDeparser"
+      },
+      "order" : ["ethernet", "srcRoutes[0]", "srcRoutes[1]", "srcRoutes[2]", "srcRoutes[3]", "srcRoutes[4]", "srcRoutes[5]", "srcRoutes[6]", "srcRoutes[7]", "ethType", "ipv4"]
+    }
+  ],
+  "meter_arrays" : [],
+  "counter_arrays" : [],
+  "register_arrays" : [],
+  "calculations" : [
+    {
+      "name" : "calc",
+      "id" : 0,
+      "source_info" : {
+        "filename" : "source_routing_edge.p4",
+        "line" : 326,
+        "column" : 8,
+        "source_fragment" : "update_checksum(hdr.ipv4.isValid() && hdr.ipv4.ihl == 5, ..."
+      },
+      "algo" : "csum16",
+      "input" : [
+        {
+          "type" : "field",
+          "value" : ["ipv4", "version"]
+        },
+        {
+          "type" : "field",
+          "value" : ["ipv4", "ihl"]
+        },
+        {
+          "type" : "field",
+          "value" : ["ipv4", "diffserv"]
+        },
+        {
+          "type" : "field",
+          "value" : ["ipv4", "totalLen"]
+        },
+        {
+          "type" : "field",
+          "value" : ["ipv4", "identification"]
+        },
+        {
+          "type" : "field",
+          "value" : ["ipv4", "flags"]
+        },
+        {
+          "type" : "field",
+          "value" : ["ipv4", "fragOffset"]
+        },
+        {
+          "type" : "field",
+          "value" : ["ipv4", "ttl"]
+        },
+        {
+          "type" : "field",
+          "value" : ["ipv4", "protocol"]
+        },
+        {
+          "type" : "field",
+          "value" : ["ipv4", "srcAddr"]
+        },
+        {
+          "type" : "field",
+          "value" : ["ipv4", "dstAddr"]
+        }
+      ]
+    }
+  ],
+  "learn_lists" : [],
+  "actions" : [
+    {
+      "name" : "MyIngress.drop",
+      "id" : 0,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "drop",
+          "parameters" : [],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 153,
+            "column" : 8,
+            "source_fragment" : "mark_to_drop()"
+          }
+        }
+      ]
+    },
+    {
+      "name" : "MyIngress.srcRoute_finish",
+      "id" : 1,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["standard_metadata", "egress_spec"]
+            },
+            {
+              "type" : "expression",
+              "value" : {
+                "type" : "expression",
+                "value" : {
+                  "op" : "&",
+                  "left" : {
+                    "type" : "field",
+                    "value" : ["srcRoutes[0]", "port"]
+                  },
+                  "right" : {
+                    "type" : "hexstr",
+                    "value" : "0x01ff"
+                  }
+                }
+              }
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 157,
+            "column" : 8,
+            "source_fragment" : "standard_metadata.egress_spec = (bit<9>)hdr.srcRoutes[0].port"
+          }
+        },
+        {
+          "op" : "pop",
+          "parameters" : [
+            {
+              "type" : "header_stack",
+              "value" : "srcRoutes"
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x1"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 158,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes.pop_front(1)"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["ethernet", "etherType"]
+            },
+            {
+              "type" : "field",
+              "value" : ["ethType", "etherType"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 159,
+            "column" : 8,
+            "source_fragment" : "hdr.ethernet.etherType = hdr.ethType.etherType"
+          }
+        },
+        {
+          "op" : "remove_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "ethType"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 160,
+            "column" : 8,
+            "source_fragment" : "hdr.ethType.setInvalid()"
+          }
+        }
+      ]
+    },
+    {
+      "name" : "MyIngress.get_hdr_data",
+      "id" : 2,
+      "runtime_data" : [
+        {
+          "name" : "modSrcMac",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "srcEthAddr",
+          "bitwidth" : 48
+        },
+        {
+          "name" : "modDstMac",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "dstEthAddr",
+          "bitwidth" : 48
+        },
+        {
+          "name" : "valid0",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "bos0",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "port0",
+          "bitwidth" : 15
+        },
+        {
+          "name" : "valid1",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "bos1",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "port1",
+          "bitwidth" : 15
+        },
+        {
+          "name" : "valid2",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "bos2",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "port2",
+          "bitwidth" : 15
+        },
+        {
+          "name" : "valid3",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "bos3",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "port3",
+          "bitwidth" : 15
+        },
+        {
+          "name" : "valid4",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "bos4",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "port4",
+          "bitwidth" : 15
+        },
+        {
+          "name" : "valid5",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "bos5",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "port5",
+          "bitwidth" : 15
+        },
+        {
+          "name" : "valid6",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "bos6",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "port6",
+          "bitwidth" : 15
+        },
+        {
+          "name" : "valid7",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "bos7",
+          "bitwidth" : 1
+        },
+        {
+          "name" : "port7",
+          "bitwidth" : 15
+        },
+        {
+          "name" : "egress_spec",
+          "bitwidth" : 9
+        }
+      ],
+      "primitives" : [
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcMac_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 0
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 179,
+            "column" : 8,
+            "source_fragment" : "flagSrcMac = modSrcMac"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagDstMac_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 2
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 180,
+            "column" : 8,
+            "source_fragment" : "flagDstMac = modDstMac"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "srcMac_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 1
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 181,
+            "column" : 8,
+            "source_fragment" : "srcMac = srcEthAddr"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "destMac_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 3
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 182,
+            "column" : 8,
+            "source_fragment" : "destMac = dstEthAddr"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["standard_metadata", "egress_spec"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 28
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 183,
+            "column" : 8,
+            "source_fragment" : "standard_metadata.egress_spec = egress_spec"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcHdr0_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 4
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 185,
+            "column" : 8,
+            "source_fragment" : "flagSrcHdr0 = valid0"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcHdr1_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 7
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 186,
+            "column" : 8,
+            "source_fragment" : "flagSrcHdr1 = valid1"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcHdr2_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 10
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 187,
+            "column" : 8,
+            "source_fragment" : "flagSrcHdr2 = valid2"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcHdr3_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 13
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 188,
+            "column" : 8,
+            "source_fragment" : "flagSrcHdr3 = valid3"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcHdr4_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 16
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 189,
+            "column" : 8,
+            "source_fragment" : "flagSrcHdr4 = valid4"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcHdr5_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 19
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 190,
+            "column" : 8,
+            "source_fragment" : "flagSrcHdr5 = valid5"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcHdr6_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 22
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 191,
+            "column" : 8,
+            "source_fragment" : "flagSrcHdr6 = valid6"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcHdr7_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 25
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 192,
+            "column" : 8,
+            "source_fragment" : "flagSrcHdr7 = valid7"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "b0_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 5
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 193,
+            "column" : 8,
+            "source_fragment" : "b0 = bos0"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "b1_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 8
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 194,
+            "column" : 8,
+            "source_fragment" : "b1 = bos1"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "b2_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 11
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 195,
+            "column" : 8,
+            "source_fragment" : "b2 = bos2"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "b3_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 14
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 196,
+            "column" : 8,
+            "source_fragment" : "b3 = bos3"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "b4_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 17
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 197,
+            "column" : 8,
+            "source_fragment" : "b4 = bos4"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "b5_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 20
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 198,
+            "column" : 8,
+            "source_fragment" : "b5 = bos5"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "b6_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 23
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 199,
+            "column" : 8,
+            "source_fragment" : "b6 = bos6"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "b7_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 26
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 200,
+            "column" : 8,
+            "source_fragment" : "b7 = bos7"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "p0_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 6
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 201,
+            "column" : 8,
+            "source_fragment" : "p0 = port0"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "p1_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 9
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 202,
+            "column" : 8,
+            "source_fragment" : "p1 = port1"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "p2_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 12
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 203,
+            "column" : 8,
+            "source_fragment" : "p2 = port2"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "p3_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 15
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 204,
+            "column" : 8,
+            "source_fragment" : "p3 = port3"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "p4_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 18
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 205,
+            "column" : 8,
+            "source_fragment" : "p4 = port4"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "p5_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 21
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 206,
+            "column" : 8,
+            "source_fragment" : "p5 = port5"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "p6_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 24
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 207,
+            "column" : 8,
+            "source_fragment" : "p6 = port6"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "p7_0"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 27
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 208,
+            "column" : 8,
+            "source_fragment" : "p7 = port7"
+          }
+        }
+      ]
+    },
+    {
+      "name" : "MyIngress.push_srcRoute_header",
+      "id" : 3,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "ethType"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 229,
+            "column" : 8,
+            "source_fragment" : "hdr.ethType.setValid()"
+          }
+        },
+        {
+          "op" : "push",
+          "parameters" : [
+            {
+              "type" : "header_stack",
+              "value" : "srcRoutes"
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x1"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 230,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes.push_front(1)"
+          }
+        },
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "srcRoutes[0]"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 231,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].setValid()"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["srcRoutes[0]", "bos"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "b7_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 232,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].bos = bos; ..."
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["srcRoutes[0]", "port"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "p7_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 233,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].port = port; ..."
+          }
+        }
+      ]
+    },
+    {
+      "name" : "MyIngress.push_srcRoute_header",
+      "id" : 4,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "ethType"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 229,
+            "column" : 8,
+            "source_fragment" : "hdr.ethType.setValid()"
+          }
+        },
+        {
+          "op" : "push",
+          "parameters" : [
+            {
+              "type" : "header_stack",
+              "value" : "srcRoutes"
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x1"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 230,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes.push_front(1)"
+          }
+        },
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "srcRoutes[0]"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 231,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].setValid()"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["srcRoutes[0]", "bos"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "b6_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 232,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].bos = bos; ..."
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["srcRoutes[0]", "port"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "p6_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 233,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].port = port; ..."
+          }
+        }
+      ]
+    },
+    {
+      "name" : "MyIngress.push_srcRoute_header",
+      "id" : 5,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "ethType"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 229,
+            "column" : 8,
+            "source_fragment" : "hdr.ethType.setValid()"
+          }
+        },
+        {
+          "op" : "push",
+          "parameters" : [
+            {
+              "type" : "header_stack",
+              "value" : "srcRoutes"
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x1"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 230,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes.push_front(1)"
+          }
+        },
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "srcRoutes[0]"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 231,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].setValid()"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["srcRoutes[0]", "bos"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "b5_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 232,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].bos = bos; ..."
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["srcRoutes[0]", "port"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "p5_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 233,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].port = port; ..."
+          }
+        }
+      ]
+    },
+    {
+      "name" : "MyIngress.push_srcRoute_header",
+      "id" : 6,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "ethType"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 229,
+            "column" : 8,
+            "source_fragment" : "hdr.ethType.setValid()"
+          }
+        },
+        {
+          "op" : "push",
+          "parameters" : [
+            {
+              "type" : "header_stack",
+              "value" : "srcRoutes"
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x1"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 230,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes.push_front(1)"
+          }
+        },
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "srcRoutes[0]"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 231,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].setValid()"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["srcRoutes[0]", "bos"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "b4_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 232,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].bos = bos; ..."
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["srcRoutes[0]", "port"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "p4_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 233,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].port = port; ..."
+          }
+        }
+      ]
+    },
+    {
+      "name" : "MyIngress.push_srcRoute_header",
+      "id" : 7,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "ethType"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 229,
+            "column" : 8,
+            "source_fragment" : "hdr.ethType.setValid()"
+          }
+        },
+        {
+          "op" : "push",
+          "parameters" : [
+            {
+              "type" : "header_stack",
+              "value" : "srcRoutes"
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x1"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 230,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes.push_front(1)"
+          }
+        },
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "srcRoutes[0]"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 231,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].setValid()"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["srcRoutes[0]", "bos"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "b3_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 232,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].bos = bos; ..."
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["srcRoutes[0]", "port"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "p3_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 233,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].port = port; ..."
+          }
+        }
+      ]
+    },
+    {
+      "name" : "MyIngress.push_srcRoute_header",
+      "id" : 8,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "ethType"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 229,
+            "column" : 8,
+            "source_fragment" : "hdr.ethType.setValid()"
+          }
+        },
+        {
+          "op" : "push",
+          "parameters" : [
+            {
+              "type" : "header_stack",
+              "value" : "srcRoutes"
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x1"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 230,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes.push_front(1)"
+          }
+        },
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "srcRoutes[0]"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 231,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].setValid()"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["srcRoutes[0]", "bos"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "b2_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 232,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].bos = bos; ..."
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["srcRoutes[0]", "port"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "p2_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 233,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].port = port; ..."
+          }
+        }
+      ]
+    },
+    {
+      "name" : "MyIngress.push_srcRoute_header",
+      "id" : 9,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "ethType"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 229,
+            "column" : 8,
+            "source_fragment" : "hdr.ethType.setValid()"
+          }
+        },
+        {
+          "op" : "push",
+          "parameters" : [
+            {
+              "type" : "header_stack",
+              "value" : "srcRoutes"
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x1"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 230,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes.push_front(1)"
+          }
+        },
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "srcRoutes[0]"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 231,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].setValid()"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["srcRoutes[0]", "bos"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "b1_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 232,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].bos = bos; ..."
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["srcRoutes[0]", "port"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "p1_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 233,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].port = port; ..."
+          }
+        }
+      ]
+    },
+    {
+      "name" : "MyIngress.push_srcRoute_header",
+      "id" : 10,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "ethType"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 229,
+            "column" : 8,
+            "source_fragment" : "hdr.ethType.setValid()"
+          }
+        },
+        {
+          "op" : "push",
+          "parameters" : [
+            {
+              "type" : "header_stack",
+              "value" : "srcRoutes"
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x1"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 230,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes.push_front(1)"
+          }
+        },
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "srcRoutes[0]"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 231,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].setValid()"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["srcRoutes[0]", "bos"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "b0_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 232,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].bos = bos; ..."
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["srcRoutes[0]", "port"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "p0_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 233,
+            "column" : 8,
+            "source_fragment" : "hdr.srcRoutes[0].port = port; ..."
+          }
+        }
+      ]
+    },
+    {
+      "name" : "act",
+      "id" : 11,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["ethernet", "srcAddr"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "srcMac_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 283,
+            "column" : 16,
+            "source_fragment" : "hdr.ethernet.srcAddr = srcMac"
+          }
+        }
+      ]
+    },
+    {
+      "name" : "act_0",
+      "id" : 12,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["ethernet", "dstAddr"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "destMac_0"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 285,
+            "column" : 16,
+            "source_fragment" : "hdr.ethernet.dstAddr = destMac"
+          }
+        }
+      ]
+    },
+    {
+      "name" : "act_1",
+      "id" : 13,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["ethType", "etherType"]
+            },
+            {
+              "type" : "field",
+              "value" : ["ethernet", "etherType"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 303,
+            "column" : 16,
+            "source_fragment" : "hdr.ethType.etherType = hdr.ethernet.etherType"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["ethernet", "etherType"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x1234"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 5,
+            "column" : 32,
+            "source_fragment" : "0x1234; ..."
+          }
+        }
+      ]
+    },
+    {
+      "name" : "act_2",
+      "id" : 14,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcMac_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 119,
+            "column" : 4,
+            "source_fragment" : "bit<1> flagSrcMac = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagDstMac_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 120,
+            "column" : 4,
+            "source_fragment" : "bit<1> flagDstMac = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcHdr0_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 122,
+            "column" : 4,
+            "source_fragment" : "bit<1> flagSrcHdr0 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcHdr1_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 123,
+            "column" : 4,
+            "source_fragment" : "bit<1> flagSrcHdr1 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcHdr2_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 124,
+            "column" : 4,
+            "source_fragment" : "bit<1> flagSrcHdr2 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcHdr3_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 125,
+            "column" : 4,
+            "source_fragment" : "bit<1> flagSrcHdr3 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcHdr4_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 126,
+            "column" : 4,
+            "source_fragment" : "bit<1> flagSrcHdr4 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcHdr5_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 127,
+            "column" : 4,
+            "source_fragment" : "bit<1> flagSrcHdr5 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcHdr6_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 128,
+            "column" : 4,
+            "source_fragment" : "bit<1> flagSrcHdr6 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "flagSrcHdr7_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 129,
+            "column" : 4,
+            "source_fragment" : "bit<1> flagSrcHdr7 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "srcMac_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x000000000000"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 130,
+            "column" : 4,
+            "source_fragment" : "macAddr_t srcMac = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "destMac_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x000000000000"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 131,
+            "column" : 4,
+            "source_fragment" : "macAddr_t destMac = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "p0_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x0000"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 134,
+            "column" : 4,
+            "source_fragment" : "bit<15> p0 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "p1_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x0000"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 135,
+            "column" : 4,
+            "source_fragment" : "bit<15> p1 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "p2_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x0000"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 136,
+            "column" : 4,
+            "source_fragment" : "bit<15> p2 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "p3_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x0000"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 137,
+            "column" : 4,
+            "source_fragment" : "bit<15> p3 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "p4_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x0000"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 138,
+            "column" : 4,
+            "source_fragment" : "bit<15> p4 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "p5_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x0000"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 139,
+            "column" : 4,
+            "source_fragment" : "bit<15> p5 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "p6_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x0000"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 140,
+            "column" : 4,
+            "source_fragment" : "bit<15> p6 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "p7_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x0000"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 141,
+            "column" : 4,
+            "source_fragment" : "bit<15> p7 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "b0_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 143,
+            "column" : 4,
+            "source_fragment" : "bit<1> b0 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "b1_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 144,
+            "column" : 4,
+            "source_fragment" : "bit<1> b1 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "b2_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 145,
+            "column" : 4,
+            "source_fragment" : "bit<1> b2 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "b3_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 146,
+            "column" : 4,
+            "source_fragment" : "bit<1> b3 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "b4_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 147,
+            "column" : 4,
+            "source_fragment" : "bit<1> b4 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "b5_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 148,
+            "column" : 4,
+            "source_fragment" : "bit<1> b5 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "b6_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 149,
+            "column" : 4,
+            "source_fragment" : "bit<1> b6 = 0;"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "b7_0"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 150,
+            "column" : 4,
+            "source_fragment" : "bit<1> b7 = 0;"
+          }
+        }
+      ]
+    }
+  ],
+  "pipelines" : [
+    {
+      "name" : "ingress",
+      "id" : 0,
+      "source_info" : {
+        "filename" : "source_routing_edge.p4",
+        "line" : 115,
+        "column" : 8,
+        "source_fragment" : "MyIngress"
+      },
+      "init_table" : "tbl_act",
+      "tables" : [
+        {
+          "name" : "tbl_act",
+          "id" : 0,
+          "key" : [],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [14],
+          "actions" : ["act_2"],
+          "base_default_next" : "node_3",
+          "next_tables" : {
+            "act_2" : "node_3"
+          },
+          "default_entry" : {
+            "action_id" : 14,
+            "action_const" : true,
+            "action_data" : [],
+            "action_entry_const" : true
+          }
+        },
+        {
+          "name" : "tbl_srcRoute_finish",
+          "id" : 1,
+          "key" : [],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [1],
+          "actions" : ["MyIngress.srcRoute_finish"],
+          "base_default_next" : null,
+          "next_tables" : {
+            "MyIngress.srcRoute_finish" : null
+          },
+          "default_entry" : {
+            "action_id" : 1,
+            "action_const" : true,
+            "action_data" : [],
+            "action_entry_const" : true
+          }
+        },
+        {
+          "name" : "MyIngress.encapsulate",
+          "id" : 2,
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 211,
+            "column" : 10,
+            "source_fragment" : "encapsulate"
+          },
+          "key" : [
+            {
+              "match_type" : "ternary",
+              "name" : "hdr.ethernet.dstAddr",
+              "target" : ["ethernet", "dstAddr"],
+              "mask" : null
+            },
+            {
+              "match_type" : "ternary",
+              "name" : "hdr.ethernet.srcAddr",
+              "target" : ["ethernet", "srcAddr"],
+              "mask" : null
+            },
+            {
+              "match_type" : "ternary",
+              "name" : "hdr.ethernet.etherType",
+              "target" : ["ethernet", "etherType"],
+              "mask" : null
+            },
+            {
+              "match_type" : "ternary",
+              "name" : "hdr.ipv4.protocol",
+              "target" : ["ipv4", "protocol"],
+              "mask" : null
+            },
+            {
+              "match_type" : "ternary",
+              "name" : "hdr.ipv4.srcAddr",
+              "target" : ["ipv4", "srcAddr"],
+              "mask" : null
+            },
+            {
+              "match_type" : "ternary",
+              "name" : "hdr.ipv4.dstAddr",
+              "target" : ["ipv4", "dstAddr"],
+              "mask" : null
+            }
+          ],
+          "match_type" : "ternary",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [0, 2],
+          "actions" : ["MyIngress.drop", "MyIngress.get_hdr_data"],
+          "base_default_next" : "node_6",
+          "next_tables" : {
+            "MyIngress.drop" : "node_6",
+            "MyIngress.get_hdr_data" : "node_6"
+          },
+          "default_entry" : {
+            "action_id" : 0,
+            "action_const" : false,
+            "action_data" : [],
+            "action_entry_const" : false
+          }
+        },
+        {
+          "name" : "tbl_act_0",
+          "id" : 3,
+          "key" : [],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [11],
+          "actions" : ["act"],
+          "base_default_next" : "node_8",
+          "next_tables" : {
+            "act" : "node_8"
+          },
+          "default_entry" : {
+            "action_id" : 11,
+            "action_const" : true,
+            "action_data" : [],
+            "action_entry_const" : true
+          }
+        },
+        {
+          "name" : "tbl_act_1",
+          "id" : 4,
+          "key" : [],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [12],
+          "actions" : ["act_0"],
+          "base_default_next" : "node_10",
+          "next_tables" : {
+            "act_0" : "node_10"
+          },
+          "default_entry" : {
+            "action_id" : 12,
+            "action_const" : true,
+            "action_data" : [],
+            "action_entry_const" : true
+          }
+        },
+        {
+          "name" : "tbl_push_srcRoute_header",
+          "id" : 5,
+          "key" : [],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [3],
+          "actions" : ["MyIngress.push_srcRoute_header"],
+          "base_default_next" : "node_12",
+          "next_tables" : {
+            "MyIngress.push_srcRoute_header" : "node_12"
+          },
+          "default_entry" : {
+            "action_id" : 3,
+            "action_const" : true,
+            "action_data" : [],
+            "action_entry_const" : true
+          }
+        },
+        {
+          "name" : "tbl_push_srcRoute_header_0",
+          "id" : 6,
+          "key" : [],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [4],
+          "actions" : ["MyIngress.push_srcRoute_header"],
+          "base_default_next" : "node_14",
+          "next_tables" : {
+            "MyIngress.push_srcRoute_header" : "node_14"
+          },
+          "default_entry" : {
+            "action_id" : 4,
+            "action_const" : true,
+            "action_data" : [],
+            "action_entry_const" : true
+          }
+        },
+        {
+          "name" : "tbl_push_srcRoute_header_1",
+          "id" : 7,
+          "key" : [],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [5],
+          "actions" : ["MyIngress.push_srcRoute_header"],
+          "base_default_next" : "node_16",
+          "next_tables" : {
+            "MyIngress.push_srcRoute_header" : "node_16"
+          },
+          "default_entry" : {
+            "action_id" : 5,
+            "action_const" : true,
+            "action_data" : [],
+            "action_entry_const" : true
+          }
+        },
+        {
+          "name" : "tbl_push_srcRoute_header_2",
+          "id" : 8,
+          "key" : [],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [6],
+          "actions" : ["MyIngress.push_srcRoute_header"],
+          "base_default_next" : "node_18",
+          "next_tables" : {
+            "MyIngress.push_srcRoute_header" : "node_18"
+          },
+          "default_entry" : {
+            "action_id" : 6,
+            "action_const" : true,
+            "action_data" : [],
+            "action_entry_const" : true
+          }
+        },
+        {
+          "name" : "tbl_push_srcRoute_header_3",
+          "id" : 9,
+          "key" : [],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [7],
+          "actions" : ["MyIngress.push_srcRoute_header"],
+          "base_default_next" : "node_20",
+          "next_tables" : {
+            "MyIngress.push_srcRoute_header" : "node_20"
+          },
+          "default_entry" : {
+            "action_id" : 7,
+            "action_const" : true,
+            "action_data" : [],
+            "action_entry_const" : true
+          }
+        },
+        {
+          "name" : "tbl_push_srcRoute_header_4",
+          "id" : 10,
+          "key" : [],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [8],
+          "actions" : ["MyIngress.push_srcRoute_header"],
+          "base_default_next" : "node_22",
+          "next_tables" : {
+            "MyIngress.push_srcRoute_header" : "node_22"
+          },
+          "default_entry" : {
+            "action_id" : 8,
+            "action_const" : true,
+            "action_data" : [],
+            "action_entry_const" : true
+          }
+        },
+        {
+          "name" : "tbl_push_srcRoute_header_5",
+          "id" : 11,
+          "key" : [],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [9],
+          "actions" : ["MyIngress.push_srcRoute_header"],
+          "base_default_next" : "node_24",
+          "next_tables" : {
+            "MyIngress.push_srcRoute_header" : "node_24"
+          },
+          "default_entry" : {
+            "action_id" : 9,
+            "action_const" : true,
+            "action_data" : [],
+            "action_entry_const" : true
+          }
+        },
+        {
+          "name" : "tbl_push_srcRoute_header_6",
+          "id" : 12,
+          "key" : [],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [10],
+          "actions" : ["MyIngress.push_srcRoute_header"],
+          "base_default_next" : "node_26",
+          "next_tables" : {
+            "MyIngress.push_srcRoute_header" : "node_26"
+          },
+          "default_entry" : {
+            "action_id" : 10,
+            "action_const" : true,
+            "action_data" : [],
+            "action_entry_const" : true
+          }
+        },
+        {
+          "name" : "tbl_act_2",
+          "id" : 13,
+          "key" : [],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [13],
+          "actions" : ["act_1"],
+          "base_default_next" : null,
+          "next_tables" : {
+            "act_1" : null
+          },
+          "default_entry" : {
+            "action_id" : 13,
+            "action_const" : true,
+            "action_data" : [],
+            "action_entry_const" : true
+          }
+        }
+      ],
+      "action_profiles" : [],
+      "conditionals" : [
+        {
+          "name" : "node_3",
+          "id" : 0,
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 278,
+            "column" : 12,
+            "source_fragment" : "hdr.srcRoutes[0].isValid()"
+          },
+          "expression" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "d2b",
+              "left" : null,
+              "right" : {
+                "type" : "field",
+                "value" : ["srcRoutes[0]", "$valid$"]
+              }
+            }
+          },
+          "true_next" : "tbl_srcRoute_finish",
+          "false_next" : "MyIngress.encapsulate"
+        },
+        {
+          "name" : "node_6",
+          "id" : 1,
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 282,
+            "column" : 16,
+            "source_fragment" : "flagSrcMac == 1"
+          },
+          "expression" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "==",
+              "left" : {
+                "type" : "field",
+                "value" : ["scalars", "flagSrcMac_0"]
+              },
+              "right" : {
+                "type" : "hexstr",
+                "value" : "0x01"
+              }
+            }
+          },
+          "true_next" : "tbl_act_0",
+          "false_next" : "node_8"
+        },
+        {
+          "name" : "node_8",
+          "id" : 2,
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 284,
+            "column" : 16,
+            "source_fragment" : "flagDstMac == 1"
+          },
+          "expression" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "==",
+              "left" : {
+                "type" : "field",
+                "value" : ["scalars", "flagDstMac_0"]
+              },
+              "right" : {
+                "type" : "hexstr",
+                "value" : "0x01"
+              }
+            }
+          },
+          "true_next" : "tbl_act_1",
+          "false_next" : "node_10"
+        },
+        {
+          "name" : "node_10",
+          "id" : 3,
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 286,
+            "column" : 16,
+            "source_fragment" : "flagSrcHdr7 == 1"
+          },
+          "expression" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "==",
+              "left" : {
+                "type" : "field",
+                "value" : ["scalars", "flagSrcHdr7_0"]
+              },
+              "right" : {
+                "type" : "hexstr",
+                "value" : "0x01"
+              }
+            }
+          },
+          "true_next" : "tbl_push_srcRoute_header",
+          "false_next" : "node_12"
+        },
+        {
+          "name" : "node_12",
+          "id" : 4,
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 288,
+            "column" : 16,
+            "source_fragment" : "flagSrcHdr6 == 1"
+          },
+          "expression" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "==",
+              "left" : {
+                "type" : "field",
+                "value" : ["scalars", "flagSrcHdr6_0"]
+              },
+              "right" : {
+                "type" : "hexstr",
+                "value" : "0x01"
+              }
+            }
+          },
+          "true_next" : "tbl_push_srcRoute_header_0",
+          "false_next" : "node_14"
+        },
+        {
+          "name" : "node_14",
+          "id" : 5,
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 290,
+            "column" : 16,
+            "source_fragment" : "flagSrcHdr5 == 1"
+          },
+          "expression" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "==",
+              "left" : {
+                "type" : "field",
+                "value" : ["scalars", "flagSrcHdr5_0"]
+              },
+              "right" : {
+                "type" : "hexstr",
+                "value" : "0x01"
+              }
+            }
+          },
+          "true_next" : "tbl_push_srcRoute_header_1",
+          "false_next" : "node_16"
+        },
+        {
+          "name" : "node_16",
+          "id" : 6,
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 292,
+            "column" : 16,
+            "source_fragment" : "flagSrcHdr4 == 1"
+          },
+          "expression" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "==",
+              "left" : {
+                "type" : "field",
+                "value" : ["scalars", "flagSrcHdr4_0"]
+              },
+              "right" : {
+                "type" : "hexstr",
+                "value" : "0x01"
+              }
+            }
+          },
+          "true_next" : "tbl_push_srcRoute_header_2",
+          "false_next" : "node_18"
+        },
+        {
+          "name" : "node_18",
+          "id" : 7,
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 294,
+            "column" : 16,
+            "source_fragment" : "flagSrcHdr3 == 1"
+          },
+          "expression" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "==",
+              "left" : {
+                "type" : "field",
+                "value" : ["scalars", "flagSrcHdr3_0"]
+              },
+              "right" : {
+                "type" : "hexstr",
+                "value" : "0x01"
+              }
+            }
+          },
+          "true_next" : "tbl_push_srcRoute_header_3",
+          "false_next" : "node_20"
+        },
+        {
+          "name" : "node_20",
+          "id" : 8,
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 296,
+            "column" : 16,
+            "source_fragment" : "flagSrcHdr2 == 1"
+          },
+          "expression" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "==",
+              "left" : {
+                "type" : "field",
+                "value" : ["scalars", "flagSrcHdr2_0"]
+              },
+              "right" : {
+                "type" : "hexstr",
+                "value" : "0x01"
+              }
+            }
+          },
+          "true_next" : "tbl_push_srcRoute_header_4",
+          "false_next" : "node_22"
+        },
+        {
+          "name" : "node_22",
+          "id" : 9,
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 298,
+            "column" : 16,
+            "source_fragment" : "flagSrcHdr1 == 1"
+          },
+          "expression" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "==",
+              "left" : {
+                "type" : "field",
+                "value" : ["scalars", "flagSrcHdr1_0"]
+              },
+              "right" : {
+                "type" : "hexstr",
+                "value" : "0x01"
+              }
+            }
+          },
+          "true_next" : "tbl_push_srcRoute_header_5",
+          "false_next" : "node_24"
+        },
+        {
+          "name" : "node_24",
+          "id" : 10,
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 300,
+            "column" : 16,
+            "source_fragment" : "flagSrcHdr0 == 1"
+          },
+          "expression" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "==",
+              "left" : {
+                "type" : "field",
+                "value" : ["scalars", "flagSrcHdr0_0"]
+              },
+              "right" : {
+                "type" : "hexstr",
+                "value" : "0x01"
+              }
+            }
+          },
+          "true_next" : "tbl_push_srcRoute_header_6",
+          "false_next" : "node_26"
+        },
+        {
+          "name" : "node_26",
+          "id" : 11,
+          "source_info" : {
+            "filename" : "source_routing_edge.p4",
+            "line" : 302,
+            "column" : 16,
+            "source_fragment" : "hdr.ethType.isValid()"
+          },
+          "expression" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "d2b",
+              "left" : null,
+              "right" : {
+                "type" : "field",
+                "value" : ["ethType", "$valid$"]
+              }
+            }
+          },
+          "false_next" : null,
+          "true_next" : "tbl_act_2"
+        }
+      ]
+    },
+    {
+      "name" : "egress",
+      "id" : 1,
+      "source_info" : {
+        "filename" : "source_routing_edge.p4",
+        "line" : 314,
+        "column" : 8,
+        "source_fragment" : "MyEgress"
+      },
+      "init_table" : null,
+      "tables" : [],
+      "action_profiles" : [],
+      "conditionals" : []
+    }
+  ],
+  "checksums" : [
+    {
+      "name" : "cksum",
+      "id" : 0,
+      "source_info" : {
+        "filename" : "source_routing_edge.p4",
+        "line" : 326,
+        "column" : 8,
+        "source_fragment" : "update_checksum(hdr.ipv4.isValid() && hdr.ipv4.ihl == 5, ..."
+      },
+      "target" : ["ipv4", "hdrChecksum"],
+      "type" : "generic",
+      "calculation" : "calc",
+      "verify" : false,
+      "update" : true,
+      "if_cond" : {
+        "type" : "expression",
+        "value" : {
+          "op" : "and",
+          "left" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "d2b",
+              "left" : null,
+              "right" : {
+                "type" : "field",
+                "value" : ["ipv4", "$valid$"]
+              }
+            }
+          },
+          "right" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "==",
+              "left" : {
+                "type" : "field",
+                "value" : ["ipv4", "ihl"]
+              },
+              "right" : {
+                "type" : "hexstr",
+                "value" : "0x05"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "force_arith" : [],
+  "extern_instances" : [],
+  "field_aliases" : [
+    [
+      "queueing_metadata.enq_timestamp",
+      ["standard_metadata", "enq_timestamp"]
+    ],
+    [
+      "queueing_metadata.enq_qdepth",
+      ["standard_metadata", "enq_qdepth"]
+    ],
+    [
+      "queueing_metadata.deq_timedelta",
+      ["standard_metadata", "deq_timedelta"]
+    ],
+    [
+      "queueing_metadata.deq_qdepth",
+      ["standard_metadata", "deq_qdepth"]
+    ],
+    [
+      "intrinsic_metadata.ingress_global_timestamp",
+      ["standard_metadata", "ingress_global_timestamp"]
+    ],
+    [
+      "intrinsic_metadata.egress_global_timestamp",
+      ["standard_metadata", "egress_global_timestamp"]
+    ],
+    [
+      "intrinsic_metadata.lf_field_list",
+      ["standard_metadata", "lf_field_list"]
+    ],
+    [
+      "intrinsic_metadata.mcast_grp",
+      ["standard_metadata", "mcast_grp"]
+    ],
+    [
+      "intrinsic_metadata.resubmit_flag",
+      ["standard_metadata", "resubmit_flag"]
+    ],
+    [
+      "intrinsic_metadata.egress_rid",
+      ["standard_metadata", "egress_rid"]
+    ],
+    [
+      "intrinsic_metadata.recirculate_flag",
+      ["standard_metadata", "recirculate_flag"]
+    ]
+  ],
+  "program" : "source_routing_edge.p4",
+  "__meta__" : {
+    "version" : [2, 18],
+    "compiler" : "https://github.com/p4lang/p4c"
+  }
+}
