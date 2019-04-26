@@ -1,32 +1,31 @@
 
 package hybrid.controller.edge;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 
+import org.onosproject.codec.CodecService;
 import org.onosproject.core.ApplicationId;
 import org.onosproject.core.CoreService;
 import org.onosproject.net.Device;
 import org.onosproject.net.DeviceId;
-import org.onosproject.net.Host;
-import org.onosproject.net.PortNumber;
+
+import org.onosproject.net.config.*;
+import org.onosproject.net.config.basics.SubjectFactories;
 import org.onosproject.net.device.DeviceEvent;
 import org.onosproject.net.device.DeviceListener;
 import org.onosproject.net.device.DeviceService;
 import org.onosproject.net.flow.*;
 import org.onosproject.net.flow.criteria.PiCriterion;
-import org.onosproject.net.host.HostEvent;
-import org.onosproject.net.host.HostListener;
-import org.onosproject.net.host.HostService;
-import org.onosproject.net.pi.model.PiActionId;
+
 import org.onosproject.net.pi.model.PiActionParamId;
-import org.onosproject.net.pi.model.PiMatchFieldId;
+
 import org.onosproject.net.pi.model.PiTableId;
 import org.onosproject.net.pi.runtime.PiAction;
 import org.onosproject.net.pi.runtime.PiActionParam;
-import org.onosproject.net.topology.Topology;
-import org.onosproject.net.topology.TopologyService;
+
 import org.osgi.service.component.annotations.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,13 +38,15 @@ public class EdgeController {
 
     private static final String APP_NAME = "hybrid.controller.edge";
 
-
+    private static final Class<EdgeControllerConfig> CONFIG_CLASS = EdgeControllerConfig.class;
     private static final int FLOW_RULE_PRIORITY = 200;
 
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     private ApplicationId appId;
     private final DeviceListener deviceListener = new InternalDeviceListener();
+
+
 
     //--------------------------------------------------------------------------
     // ONOS core services needed by this application.
@@ -55,17 +56,44 @@ public class EdgeController {
     private FlowRuleService flowRuleService;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
+    protected NetworkConfigRegistry registry;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private CoreService coreService;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private DeviceService deviceService;
 
+    @Reference(cardinality = ReferenceCardinality.MANDATORY)
+    private CodecService codecService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY)
+    private NetworkConfigService networkConfigService;
+
+
+    private final InternalNetworkConfigListener configListener = new InternalNetworkConfigListener();
+
+
+    private EdgeRules edgeRules = null;
+
+    private ConfigFactory<ApplicationId, EdgeControllerConfig>
+            edgeRoutingConfigFactory =
+            new ConfigFactory<ApplicationId, EdgeControllerConfig>(
+                    SubjectFactories.APP_SUBJECT_FACTORY,
+                    EdgeControllerConfig.class, "edgeController") {
+                @Override
+                public EdgeControllerConfig createConfig() {
+                    return new EdgeControllerConfig();
+                }
+            };
 
     @Activate
     protected void activate() {
         log.info("Starting...");
         appId = coreService.registerApplication(APP_NAME);
         deviceService.addListener(deviceListener);
+        networkConfigService.addListener(configListener);
+        registry.registerConfigFactory(edgeRoutingConfigFactory);
         log.info("STARTED", appId.id());
     }
 
@@ -73,10 +101,27 @@ public class EdgeController {
     protected void deactivate() {
         log.info("Stopping...");
         deviceService.removeListener(deviceListener);
+        registry.unregisterConfigFactory(edgeRoutingConfigFactory);
+        networkConfigService.removeListener(configListener);
         flowRuleService.removeFlowRulesById(appId);
         log.info("STOPPED");
     }
 
+
+    private void insertEdgeFlowOnDevice(DeviceId deviceId) {
+        for (EdgeRule er : edgeRules.edgeRuleArrayList) {
+            String erDid = "device:bmv2:"+er.deviceId.toString();
+            if (erDid.equals(deviceId.toString())) {
+                log.info("------------------------------------------------");
+                log.info("inserting table entry  in device "+ deviceId.toString());
+                log.info(er.trafficSelector.toString());
+                log.info(er.piAction.toString());
+                log.info("------------------------------------------------");
+                insertPiFlowRule(deviceId, SourceRoutingPipelineConstants.encapsulateTableId, er.trafficSelector, er.piAction);
+                log.info("-------------------inserted---------------------");
+            }
+        }
+    }
 
     private class InternalDeviceListener implements DeviceListener {
 
@@ -86,26 +131,8 @@ public class EdgeController {
             log.info("Device: "+device.toString() +" DeviceEvent "+event.toString());
             synchronized (this) {
                 if (event.type() == DeviceEvent.Type.DEVICE_ADDED) {
-                    log.info(device.id().toString());
-                    if (device.id().toString() == "device:bmv2:e1") {
-                        log.info("inserting flow on e1");
-                        insert_entry_edge_1(device.id());
-                    }
-                    if (device.id().toString() == "device:bmv2:e2") {
-                        log.info("inserting flow on e2");
-                        insert_entry_edge_2(device.id());
-                    }
-                }
-                if (event.type() == DeviceEvent.Type.DEVICE_ADDED) {
-                    log.info(device.id().toString());
-                    if (device.id().toString().equals("device:bmv2:e1")) {
-                        log.info("inserting flow on e1");
-                        insert_entry_edge_1(device.id());
-                    }
-                    if (device.id().toString().equals("device:bmv2:e2")) {
-                        log.info("inserting flow on e2");
-                        insert_entry_edge_2(device.id());
-                    }
+                    log.info(" id  "+device.id().toString());
+                    insertEdgeFlowOnDevice(device.id());
                 }
 
             }
@@ -113,194 +140,111 @@ public class EdgeController {
         }
     }
 
-    private void insert_entry_edge_1(DeviceId deviceId){
-        Collection<PiActionParam> actionParams = new HashSet<>();
-        byte[] ethSrcAddr =  {0,0,0,0,0,1};
-        addModEthSrcActionParam(actionParams, ethSrcAddr);
-        byte[] ethDstAddr = {0,0,0,0,0,2};
-        addModEthDstActionParam(actionParams, ethDstAddr);
-        short[] ports = {3,2,1};
-        addValidSrcRouteParams(actionParams, ports);
-        addEgressSpecActionParam(actionParams, (short)3);
-        addRemainingSrcRouteParams(actionParams, ports.length);
-
-        PiAction action = createAction(actionParams);
-        PiCriterion.Builder piCriterionBuilder = PiCriterion.builder();
-        addEthDstMatchField(piCriterionBuilder, ethDstAddr);
-        addEthSrcMatchField(piCriterionBuilder, ethSrcAddr);
-        PiCriterion piCriterion = piCriterionBuilder.build();
-
-        log.info(deviceId.toString()+" ----------------> " + action.toString());
-        insertPiFlowRule(deviceId, SourceRoutingPipelineConstants.encapsulateTableId, piCriterion, action);
+    private class InternalNetworkConfigListener implements NetworkConfigListener {
+        @Override
+        public void event(NetworkConfigEvent event) {
+            if (event.configClass() != CONFIG_CLASS) {
+                return;
+            }
+            synchronized (this) {
+                switch (event.type()) {
+                    case CONFIG_UNREGISTERED:
+                        break;
+                    case CONFIG_REGISTERED:
+                    case CONFIG_ADDED:
+                    case CONFIG_UPDATED:
+                        EdgeControllerConfig config = networkConfigService.getConfig(
+                                coreService.registerApplication(APP_NAME), CONFIG_CLASS);
+                        if (config != null) {
+                            // log.info("--------------  " + config.toString());
+                            edgeRules = config.getEdgeRules();
+                            for (EdgeRule e : edgeRules.edgeRuleArrayList) {
+                                log.info("Device ID:  " + e.deviceId.toString());
+                                log.info("Criterion:  " + e.trafficSelector.toString());
+                                log.info("Action:  " + e.piAction.toString());
+                            }
+                        }
+                        break;
+                    case CONFIG_REMOVED:
+                        if (event.configClass() == CONFIG_CLASS) {
+                             log.info(" Not implemented config removed ");
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
     }
 
+//    private void insert_entry_edge_1(DeviceId deviceId){
+//        Collection<PiActionParam> actionParams = new HashSet<>();
+//        byte[] ethSrcAddr =  {0,0,0,0,0,1};
+//        EdgeDevicePI.addModEthSrcActionParam(actionParams, ethSrcAddr);
+//        byte[] ethDstAddr = {0,0,0,0,0,2};
+//        EdgeDevicePI.addModEthDstActionParam(actionParams, ethDstAddr);
+//        ArrayList<Short> ports = new ArrayList<>();
+//        ports.add((short)3);
+//        ports.add((short)2);
+//        ports.add((short)1);
+//
+//        EdgeDevicePI.addValidSrcRouteParams(actionParams, ports);
+//        EdgeDevicePI.addEgressSpecActionParam(actionParams, (short)3);
+//        EdgeDevicePI.addRemainingSrcRouteParams(actionParams, ports.size());
+//
+//        PiAction action = EdgeDevicePI.createAction(actionParams);
+//
+//        PiCriterion.Builder piCriterionBuilder = PiCriterion.builder();
+//        EdgeDevicePI.addEthDstMatchField(piCriterionBuilder, ethDstAddr);
+//        EdgeDevicePI.addEthSrcMatchField(piCriterionBuilder, ethSrcAddr);
+//        PiCriterion piCriterion = piCriterionBuilder.build();
+//
+//        log.info(deviceId.toString()+" ----------------> " + action.toString());
+//        insertPiFlowRule(deviceId, SourceRoutingPipelineConstants.encapsulateTableId, piCriterion, action);
+//    }
+//
+//
+//    private void insert_entry_edge_2(DeviceId deviceId){
+//        Collection<PiActionParam> actionParams = new HashSet<>();
+//        byte[] ethSrcAddr =  {0,0,0,0,0,2};
+//        EdgeDevicePI.addModEthSrcActionParam(actionParams, ethSrcAddr);
+//        byte[] ethDstAddr = {0,0,0,0,0,1};
+//        EdgeDevicePI.addModEthDstActionParam(actionParams, ethDstAddr);
+//        ArrayList<Short> ports = new ArrayList<>();
+//        ports.add((short)1);
+//        ports.add((short)1);
+//        EdgeDevicePI.addValidSrcRouteParams(actionParams, ports);
+//        EdgeDevicePI.addEgressSpecActionParam(actionParams, (short)3);
+//        EdgeDevicePI.addRemainingSrcRouteParams(actionParams, ports.size());
+//
+//        PiAction action = EdgeDevicePI.createAction(actionParams);
+//
+//
+//        PiCriterion.Builder piCriterionBuilder = PiCriterion.builder();
+//
+//        EdgeDevicePI.addEthDstMatchField(piCriterionBuilder, ethDstAddr);
+//        EdgeDevicePI.addEthSrcMatchField(piCriterionBuilder, ethSrcAddr);
+//
+//        PiCriterion piCriterion = piCriterionBuilder.build();
+//        log.info(deviceId.toString()+" ----------------> " +action.toString());
+//
+//        insertPiFlowRule(deviceId, SourceRoutingPipelineConstants.encapsulateTableId, piCriterion, action);
+//    }
 
-    private void insert_entry_edge_2(DeviceId deviceId){
-        Collection<PiActionParam> actionParams = new HashSet<>();
-        byte[] ethSrcAddr =  {0,0,0,0,0,2};
-        addModEthSrcActionParam(actionParams, ethSrcAddr);
-        byte[] ethDstAddr = {0,0,0,0,0,1};
-        addModEthDstActionParam(actionParams, ethDstAddr);
-        short[] ports = {1, 1};
-        addValidSrcRouteParams(actionParams, ports);
-        addEgressSpecActionParam(actionParams, (short)3);
-        addRemainingSrcRouteParams(actionParams, ports.length);
 
-        PiAction action = createAction(actionParams);
-
-
-        PiCriterion.Builder piCriterionBuilder = PiCriterion.builder();
-
-        addEthDstMatchField(piCriterionBuilder, ethDstAddr);
-        addEthSrcMatchField(piCriterionBuilder, ethSrcAddr);
-
-        PiCriterion piCriterion = piCriterionBuilder.build();
-        log.info(deviceId.toString()+" ----------------> " +action.toString());
-
-        insertPiFlowRule(deviceId, SourceRoutingPipelineConstants.encapsulateTableId, piCriterion, action);
-    }
-
-
-    private void insertPiFlowRule(DeviceId switchId, PiTableId tableId, PiCriterion piCriterion, PiAction piAction) {
+    private void insertPiFlowRule(DeviceId switchId, PiTableId tableId, TrafficSelector trafficSelector, PiAction piAction) {
         FlowRule rule = DefaultFlowRule.builder()
                 .forDevice(switchId)
                 .forTable(tableId)
                 .fromApp(appId)
                 .withPriority(FLOW_RULE_PRIORITY)
                 .makePermanent()
-                .withSelector(DefaultTrafficSelector.builder()
-                        .matchPi(piCriterion).build())
+                .withSelector(trafficSelector)
                 .withTreatment(DefaultTrafficTreatment.builder()
                         .piTableAction(piAction).build())
                 .build();
         flowRuleService.applyFlowRules(rule);
     }
 
-    private byte[] getMask(Boolean valid, Integer size) {
-        byte[] mask = new byte[size];
-        if (valid)
-            Arrays.fill(mask, (byte)0xff);
-        else
-            Arrays.fill(mask, (byte)0x00);
-        return mask;
-    }
 
-    private PiAction createAction(Collection<PiActionParam> params)  {
-        return PiAction.builder()
-                .withId(SourceRoutingPipelineConstants.getHdrDataActionId)
-                .withParameters(params)
-                .build();
-    }
-
-    private Collection<PiActionParam> addModEthSrcActionParam(Collection<PiActionParam> actionParams, byte[] ethSrcAddr) {
-        PiActionParam modParam = new PiActionParam(SourceRoutingPipelineConstants.modSrcMacParamId, 1);
-        PiActionParam valueParam = new PiActionParam(SourceRoutingPipelineConstants.srcEthAddrParamId, ethSrcAddr);
-        actionParams.add(modParam);
-        actionParams.add(valueParam);
-        return actionParams;
-    }
-
-    private Collection<PiActionParam> addModEthDstActionParam(Collection<PiActionParam> actionParams, byte[] ethDstAddr) {
-        PiActionParam modParam = new PiActionParam(SourceRoutingPipelineConstants.modDstMacParamId, 1);
-        PiActionParam valueParam = new PiActionParam(SourceRoutingPipelineConstants.dstEthAddrParamId, ethDstAddr);
-        actionParams.add(modParam);
-        actionParams.add(valueParam);
-        return actionParams;
-    }
-
-    private Collection<PiActionParam> addEgressSpecActionParam(Collection<PiActionParam> actionParams, short egressSpec) {
-        PiActionParam valueParam = new PiActionParam(SourceRoutingPipelineConstants.egressSpecParamId , egressSpec);
-        actionParams.add(valueParam);
-        return actionParams;
-    }
-
-    private Collection<PiActionParam> addValidSrcRouteParams(Collection<PiActionParam> actionParams, short[] ports) {
-        byte bos = 1;
-        for (Integer i = ports.length-1; i>=0; i--){
-            PiActionParamId validParamId = PiActionParamId.of("valid"+i.toString());
-            PiActionParamId bosParamId = PiActionParamId.of("bos"+i.toString());
-            PiActionParamId portParamId = PiActionParamId.of("port"+i.toString());
-            PiActionParam validParam = new PiActionParam(validParamId, 1);
-            PiActionParam bosParam = new PiActionParam(bosParamId, bos);
-            PiActionParam portParam = new PiActionParam(portParamId, ports[i]);
-            actionParams.add(validParam);
-            actionParams.add(bosParam);
-            actionParams.add(portParam);
-            bos = 0;
-        }
-        return actionParams;
-    }
-
-    private Collection<PiActionParam> addRemainingSrcRouteParams(Collection<PiActionParam> actionParams, Integer from) {
-        for (Integer i = from; i<8; i++){
-            PiActionParamId validParamId = PiActionParamId.of("valid"+i.toString());
-            PiActionParamId bosParamId = PiActionParamId.of("bos"+i.toString());
-            PiActionParamId portParamId = PiActionParamId.of("port"+i.toString());
-            PiActionParam validParam = new PiActionParam(validParamId, 0);
-            PiActionParam bosParam = new PiActionParam(bosParamId, 0);
-            PiActionParam portParam = new PiActionParam(portParamId, 0);
-            actionParams.add(validParam);
-            actionParams.add(bosParam);
-            actionParams.add(portParam);
-        }
-        return actionParams;
-    }
-
-    private PiCriterion.Builder addEthDstMatchField(PiCriterion.Builder matchBuilder, byte[] ethDstAddr) {
-        byte[] mask = getMask(true, ethDstAddr.length);
-        return matchBuilder.matchTernary(SourceRoutingPipelineConstants.ethDstAddrMatchFieldId, ethDstAddr, mask);
-    }
-    private PiCriterion.Builder addEthDstMatchField(PiCriterion.Builder matchBuilder) {
-        byte[] mask = getMask(false, 6);
-        return matchBuilder.matchTernary(SourceRoutingPipelineConstants.ethDstAddrMatchFieldId, mask, mask);
-    }
-
-    private PiCriterion.Builder addEthSrcMatchField(PiCriterion.Builder matchBuilder, byte[] ethSrcAddr) {
-        byte[] mask = getMask(true, ethSrcAddr.length);
-        return matchBuilder.matchTernary(SourceRoutingPipelineConstants.ethSrcAddrMatchFieldId, ethSrcAddr, mask);
-    }
-    private PiCriterion.Builder addEthSrcMatchField(PiCriterion.Builder matchBuilder) {
-        byte[] mask = getMask(false, 6);
-        return matchBuilder.matchTernary(SourceRoutingPipelineConstants.ethSrcAddrMatchFieldId, mask, mask);
-    }
-
-    private PiCriterion.Builder addEtherTypeMatchField(PiCriterion.Builder matchBuilder, byte[] etherType) {
-        byte[] mask = getMask(true, etherType.length);
-        return matchBuilder.matchTernary(SourceRoutingPipelineConstants.etherTypeMatchFieldId, etherType, mask);
-    }
-
-    private PiCriterion.Builder addEtherTypeMatchField(PiCriterion.Builder matchBuilder) {
-        byte[] mask = getMask(false, 2);
-        return matchBuilder.matchTernary(SourceRoutingPipelineConstants.etherTypeMatchFieldId, mask, mask);
-    }
-
-    private PiCriterion.Builder addIpProtocolMatchField(PiCriterion.Builder matchBuilder, byte[] ipProto) {
-        byte[] mask = getMask(true, ipProto.length);
-        return matchBuilder.matchTernary(SourceRoutingPipelineConstants.ipProtocolMatchFieldId, ipProto, mask);
-    }
-
-    private PiCriterion.Builder addIpProtocolMatchField(PiCriterion.Builder matchBuilder) {
-        byte[] mask = getMask(false, 1);
-        return matchBuilder.matchTernary(SourceRoutingPipelineConstants.ipProtocolMatchFieldId, mask, mask);
-    }
-
-    private PiCriterion.Builder addIpSrcAddrMatchField(PiCriterion.Builder matchBuilder, byte[] ipSrcAddr) {
-        byte[] mask = getMask(true, ipSrcAddr.length);
-        return matchBuilder.matchTernary(SourceRoutingPipelineConstants.ipSrcAddrMatchFieldId, ipSrcAddr, mask);
-    }
-
-    private PiCriterion.Builder addIpSrcAddrMatchField(PiCriterion.Builder matchBuilder) {
-        byte[] mask = getMask(false, 4);
-        return matchBuilder.matchTernary(SourceRoutingPipelineConstants.ipSrcAddrMatchFieldId, mask, mask);
-    }
-
-    private PiCriterion.Builder addIpDstAddrMatchField(PiCriterion.Builder matchBuilder, byte[] ipDstAddr) {
-        byte[] mask = getMask(true, ipDstAddr.length);
-        return matchBuilder.matchTernary(SourceRoutingPipelineConstants.ipDstAddrMatchFieldId, ipDstAddr, mask);
-    }
-
-    private PiCriterion.Builder addIpDstAddrMatchField(PiCriterion.Builder matchBuilder) {
-        byte[] mask = getMask(false, 4);
-        return matchBuilder.matchTernary(SourceRoutingPipelineConstants.ipDstAddrMatchFieldId, mask, mask);
-    }
 }

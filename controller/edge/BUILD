@@ -1,4 +1,4 @@
-COMPILE_DEPS = CORE_DEPS + [
+COMPILE_DEPS = CORE_DEPS + JACKSON + [
     "@minimal_json//jar",
     "//drivers/default:onos-drivers-default",
     "//apps/hybrid/p4pipelines/sourcerouting:onos-apps-hybrid-p4pipelines-sourcerouting",

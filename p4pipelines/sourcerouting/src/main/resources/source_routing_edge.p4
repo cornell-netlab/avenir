@@ -210,7 +210,7 @@ control MyIngress(inout headers hdr,
 
     table encapsulate {
         key = {
-            // standard_metadata.ingress_port  : ternary;
+            standard_metadata.ingress_port  : ternary;
             hdr.ethernet.dstAddr            : ternary;
             hdr.ethernet.srcAddr            : ternary;
             hdr.ethernet.etherType          : ternary;
@@ -231,48 +231,6 @@ control MyIngress(inout headers hdr,
         hdr.srcRoutes[0].setValid();
         hdr.srcRoutes[0].bos = bos;
         hdr.srcRoutes[0].port = port;
-    }
-
-    action push_srcRoute_header_0() {
-        hdr.ethType.setValid();
-        hdr.srcRoutes[0].setValid();
-        hdr.srcRoutes[0].bos = b0;
-        hdr.srcRoutes[0].port = p0;
-    }
-    action push_srcRoute_header_1() {
-        hdr.srcRoutes[1].setValid();
-        hdr.srcRoutes[1].bos = b1;
-        hdr.srcRoutes[1].port = p1;
-    }
-    action push_srcRoute_header_2() {
-        hdr.srcRoutes[2].setValid();
-        hdr.srcRoutes[2].bos = b2;
-        hdr.srcRoutes[2].port = p2;
-    }
-    action push_srcRoute_header_3() {
-        hdr.srcRoutes[3].setValid();
-        hdr.srcRoutes[3].bos = b3;
-        hdr.srcRoutes[3].port = p3;
-    }
-    action push_srcRoute_header_4() {
-        hdr.srcRoutes[4].setValid();
-        hdr.srcRoutes[4].bos = b4;
-        hdr.srcRoutes[4].port = p4;
-    }
-    action push_srcRoute_header_5() {
-        hdr.srcRoutes[5].setValid();
-        hdr.srcRoutes[5].bos = b5;
-        hdr.srcRoutes[5].port = p5;
-    }
-    action push_srcRoute_header_6() {
-        hdr.srcRoutes[6].setValid();
-        hdr.srcRoutes[6].bos = b6;
-        hdr.srcRoutes[6].port = p6;
-    }
-    action push_srcRoute_header_7() {
-        hdr.srcRoutes[7].setValid();
-        hdr.srcRoutes[7].bos = b7;
-        hdr.srcRoutes[7].port = p7;
     }
     apply {
         if (hdr.srcRoutes[0].isValid()){ // core-to-hosts packets

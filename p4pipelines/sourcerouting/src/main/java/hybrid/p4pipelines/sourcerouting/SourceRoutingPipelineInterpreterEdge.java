@@ -80,7 +80,7 @@ public class SourceRoutingPipelineInterpreterEdge extends AbstractHandlerBehavio
 
     private static final BiMap<Criterion.Type, PiMatchFieldId> CRITERION_MAP =
             new ImmutableBiMap.Builder<Criterion.Type, PiMatchFieldId>()
-//                    .put(Criterion.Type.IN_PORT, INGRESS_PORT_ID)
+                    .put(Criterion.Type.IN_PORT, INGRESS_PORT_ID)
 //                    .put(Criterion.Type.ETH_DST, ETH_DST_ID)
 //                    .put(Criterion.Type.ETH_SRC, ETH_SRC_ID)
 //                    .put(Criterion.Type.ETH_TYPE, ETH_TYPE_ID)

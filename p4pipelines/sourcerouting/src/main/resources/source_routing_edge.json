@@ -357,7 +357,7 @@
       "id" : 0,
       "source_info" : {
         "filename" : "source_routing_edge.p4",
-        "line" : 347,
+        "line" : 305,
         "column" : 8,
         "source_fragment" : "MyDeparser"
       },
@@ -373,7 +373,7 @@
       "id" : 0,
       "source_info" : {
         "filename" : "source_routing_edge.p4",
-        "line" : 326,
+        "line" : 284,
         "column" : 8,
         "source_fragment" : "update_checksum(hdr.ipv4.isValid() && hdr.ipv4.ihl == 5, ..."
       },
@@ -1983,7 +1983,7 @@
           ],
           "source_info" : {
             "filename" : "source_routing_edge.p4",
-            "line" : 283,
+            "line" : 241,
             "column" : 16,
             "source_fragment" : "hdr.ethernet.srcAddr = srcMac"
           }
@@ -2009,7 +2009,7 @@
           ],
           "source_info" : {
             "filename" : "source_routing_edge.p4",
-            "line" : 285,
+            "line" : 243,
             "column" : 16,
             "source_fragment" : "hdr.ethernet.dstAddr = destMac"
           }
@@ -2035,7 +2035,7 @@
           ],
           "source_info" : {
             "filename" : "source_routing_edge.p4",
-            "line" : 303,
+            "line" : 261,
             "column" : 16,
             "source_fragment" : "hdr.ethType.etherType = hdr.ethernet.etherType"
           }
@@ -2671,6 +2671,12 @@
           "key" : [
             {
               "match_type" : "ternary",
+              "name" : "standard_metadata.ingress_port",
+              "target" : ["standard_metadata", "ingress_port"],
+              "mask" : null
+            },
+            {
+              "match_type" : "ternary",
               "name" : "hdr.ethernet.dstAddr",
               "target" : ["ethernet", "dstAddr"],
               "mask" : null
@@ -2987,7 +2993,7 @@
           "id" : 0,
           "source_info" : {
             "filename" : "source_routing_edge.p4",
-            "line" : 278,
+            "line" : 236,
             "column" : 12,
             "source_fragment" : "hdr.srcRoutes[0].isValid()"
           },
@@ -3010,7 +3016,7 @@
           "id" : 1,
           "source_info" : {
             "filename" : "source_routing_edge.p4",
-            "line" : 282,
+            "line" : 240,
             "column" : 16,
             "source_fragment" : "flagSrcMac == 1"
           },
@@ -3036,7 +3042,7 @@
           "id" : 2,
           "source_info" : {
             "filename" : "source_routing_edge.p4",
-            "line" : 284,
+            "line" : 242,
             "column" : 16,
             "source_fragment" : "flagDstMac == 1"
           },
@@ -3062,7 +3068,7 @@
           "id" : 3,
           "source_info" : {
             "filename" : "source_routing_edge.p4",
-            "line" : 286,
+            "line" : 244,
             "column" : 16,
             "source_fragment" : "flagSrcHdr7 == 1"
           },
@@ -3088,7 +3094,7 @@
           "id" : 4,
           "source_info" : {
             "filename" : "source_routing_edge.p4",
-            "line" : 288,
+            "line" : 246,
             "column" : 16,
             "source_fragment" : "flagSrcHdr6 == 1"
           },
@@ -3114,7 +3120,7 @@
           "id" : 5,
           "source_info" : {
             "filename" : "source_routing_edge.p4",
-            "line" : 290,
+            "line" : 248,
             "column" : 16,
             "source_fragment" : "flagSrcHdr5 == 1"
           },
@@ -3140,7 +3146,7 @@
           "id" : 6,
           "source_info" : {
             "filename" : "source_routing_edge.p4",
-            "line" : 292,
+            "line" : 250,
             "column" : 16,
             "source_fragment" : "flagSrcHdr4 == 1"
           },
@@ -3166,7 +3172,7 @@
           "id" : 7,
           "source_info" : {
             "filename" : "source_routing_edge.p4",
-            "line" : 294,
+            "line" : 252,
             "column" : 16,
             "source_fragment" : "flagSrcHdr3 == 1"
           },
@@ -3192,7 +3198,7 @@
           "id" : 8,
           "source_info" : {
             "filename" : "source_routing_edge.p4",
-            "line" : 296,
+            "line" : 254,
             "column" : 16,
             "source_fragment" : "flagSrcHdr2 == 1"
           },
@@ -3218,7 +3224,7 @@
           "id" : 9,
           "source_info" : {
             "filename" : "source_routing_edge.p4",
-            "line" : 298,
+            "line" : 256,
             "column" : 16,
             "source_fragment" : "flagSrcHdr1 == 1"
           },
@@ -3244,7 +3250,7 @@
           "id" : 10,
           "source_info" : {
             "filename" : "source_routing_edge.p4",
-            "line" : 300,
+            "line" : 258,
             "column" : 16,
             "source_fragment" : "flagSrcHdr0 == 1"
           },
@@ -3270,7 +3276,7 @@
           "id" : 11,
           "source_info" : {
             "filename" : "source_routing_edge.p4",
-            "line" : 302,
+            "line" : 260,
             "column" : 16,
             "source_fragment" : "hdr.ethType.isValid()"
           },
@@ -3295,7 +3301,7 @@
       "id" : 1,
       "source_info" : {
         "filename" : "source_routing_edge.p4",
-        "line" : 314,
+        "line" : 272,
         "column" : 8,
         "source_fragment" : "MyEgress"
       },
@@ -3311,7 +3317,7 @@
       "id" : 0,
       "source_info" : {
         "filename" : "source_routing_edge.p4",
-        "line" : 326,
+        "line" : 284,
         "column" : 8,
         "source_fragment" : "update_checksum(hdr.ipv4.isValid() && hdr.ipv4.ihl == 5, ..."
       },

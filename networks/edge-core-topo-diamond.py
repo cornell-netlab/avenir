@@ -11,6 +11,7 @@ from mininet.node import RemoteController
 import ipaddress
 import os
 import sys
+import json
 
 ONOS_ROOT_PATH = os.environ['ONOS_ROOT']
 sys.path.insert(0, ONOS_ROOT_PATH+'/tools/dev/mininet')
@@ -63,7 +64,28 @@ if __name__ == '__main__':
                   controller=None, autoStaticArp=True)
                   #controller=RemoteController(name='onos', ip=REMOTE_CONTROLLER_IP, port=6633))
     net.addController("onos", controller=RemoteController, ip=REMOTE_CONTROLLER_IP)
-    net.start()
-    CLI(net)
+
+    print "links"
+    links = net.topo.links(withInfo=True)
+    newLinks = []
+    hostLinks = []
+    for l in links:
+        print l
+        if net.topo.isSwitch(l[0]) and net.topo.isSwitch(l[1]):
+            newLinks.append(l[2])
+        elif net.topo.isSwitch(l[0]):
+            swport, hport = net.topo.port(l[0], l[1])
+            hostLinks.append({"node":l[0], "port":swport})
+        elif net.topo.isSwitch(l[1]):
+            swport, hport = net.topo.port(l[1], l[0])
+            hostLinks.append({"node":l[1], "port":swport})
+
+    topoDict = {"edge":hostLinks, "links":newLinks}
+
+    with open(net.topo.__class__.__name__ +".json", "w") as write_file:
+        json.dump(topoDict, write_file)
+
+    # net.start()
+    # CLI(net)
 net.stop()
 
