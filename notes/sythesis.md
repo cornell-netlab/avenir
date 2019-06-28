@@ -109,13 +109,10 @@ that `wp(P_l, ϕ) -> wp (P_r, ϕ)`._
 
 In the above problem, we constrain our function `f` so that it cannot
 modify the parts of `P_l` that describe the physical reality of the
-*real* network.
+*real* network. We call these portions of the code _unalienable_.
 
-To use CEGIS, we must solving a finite subproblem of Problem 1: 
+To use CEGIS, we must solve a finite subproblem of Problem 1: 
 
 *Sub-Problem 1a. Given a finite set of traces `{tr₁, tr₂, …,tr₃}`
 through `P_l`, and a predicate `T` describing that set of traces, can
 we find a modification `f` such that `(wp(P_l, ϕ) /\ T) → wp(f(P_r), ϕ)`*
-
-
-

@@ -3,3 +3,8 @@
 .*.swp
 .*.swo
 .*.swa
+
+# emacs files
+*~
+\#*\#
+.\#*
