@@ -58,19 +58,20 @@ Let's do a brief example.
 
 _Example_ Say a programmer wants to run the following logical program.
 ```
-loc = 1
+loc = 0
 while  loc != 2 {
-  loc=1 ∧ pkt=10.0.0.1 → loc := 2 ∧ pkt = 10.0.0.2
+  loc=1 ∧ pkt = 10.0.0.1 → loc := 2 ∧ pkt = 10.0.0.2
   true -> abort
 }
 ```
 
 The network can be described using a _real_ program
 ```
-loc = 1
+loc = 0
 while loc != 2 {
+  loc=0 → ?   # the hole represents the programmable switch
   loc=1 ∧ pkt = 10.0.0.1 → loc := 2 ∧ pkt = 10.0.0.2
-  loc=1 ∧  pkt = 10.0.0.2 → loc := 2 ∧ pkt = 10.0.0.1
+  loc=1 ∧ pkt = 10.0.0.2 → loc := 2 ∧ pkt = 10.0.0.1
   * -> abort
 }
 ```
@@ -87,14 +88,11 @@ For example:
 ```
 loc = 1
 while loc != 2 {
-  ( # Modifications
-    loc = 1 ∧ pkt = 10.0.0.2 → abort
-	true -> id
-  )
   ( # unalienable
     loc=1 ∧ pkt = 10.0.0.1 → loc := 2 ∧ pkt = 10.0.0.2
-    loc=1 ∧ plt = 10.0.0.2 → loc := 2 ∧ pkt = 10.0.0.1
-    true -> abort
+    loc=1 ∧ pkt = 10.0.0.2 → loc := 2 ∧ pkt = 10.0.0.1
+	loc=0 ∧ pkt = 10.0.0.2 → abort
+    true → abort
   )
 }
 ```
@@ -116,3 +114,37 @@ To use CEGIS, we must solve a finite subproblem of Problem 1:
 *Sub-Problem 1a. Given a finite set of traces `{tr₁, tr₂, …,tr₃}`
 through `P_l`, and a predicate `T` describing that set of traces, can
 we find a modification `f` such that `(wp(P_l, ϕ) /\ T) → wp(f(P_r), ϕ)`*
+
+Out solution will be to use an SMT solver. We will instrument the real
+program with "holes" for each programmable switch to allow. Instead of
+a massive hole `?` like we have above in the real program, we will
+provide some structure, e.g.
+
+```
+loc = 0 ∧ pkt = ?ₘ → loc := ?ₛ ∧ pkt := ?ₐ
+```
+
+Now, the SMT solver will give a set of conditions (e.g. on the match
+hole `?ₘ`, the next-switch hole `?ₛ` and the action hole `?ₐ`) that
+will affirm *Sub-Problem 1a*.
+
+More specifically, we will sample a random packet from a uniform
+distribution (`pᵢ ∼ Unif(Nat < 2ᵇ)`) and send it through the network
+from one of the ingress hosts `Hᵢ`. Assume that when run through `P_l`
+the packet reaches egress host `Hₒ` with value `pₒ` via trace `σ`.
+
+Now we can perform symbolic execution on `P_r`.  Given a matching
+relation on traces (such as equality, bisimilarity, or homoemorphic)
+`R`, Pick a path `τ` such that `σ R τ`. Now we can compute `wp(τ, pkt
+= pₒ).` Recall that we have inserted holes for the programmable
+switches, so the formula `wp(τ, pkt = pₒ)` is expressed in terms of
+these holes. Now the SMT solver will give us a model for these holes
+to satisfy the subproblem.  Filling this model in to `P_r` gives us a
+new program `S`. Now we know that `S` executed on `pᵢ` at `Hᵢ` will
+give packet `pₒ` at `Hₒ`.
+
+
+
+
+
+
