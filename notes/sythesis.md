@@ -32,10 +32,6 @@ behavior of the network. For instance `(loc = 1) /\ (pkt = 100) ->
 (loc := 2 ) /\ (pkt = 2)` forwards packets equal to `100` at location
 `1` to location `2` and updates the value of the packet to `200`.
 
-### The Guarded Command Logic
-
-
-
 ### A Too-Simple Approach
 
 With our logical and real programs in hand (`Pl` and `Pr`
