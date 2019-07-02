@@ -5,7 +5,8 @@ type value =
 val string_of_value :  value -> string
 
 type test =
-  | True | False
+  | True
+  | False
   | Eq of (string * value)
   | And of (test * test)
   | Or of (test * test)
@@ -18,8 +19,10 @@ type expr =
   | Seq of (expr * expr)
   | Assign of (string * value)
   | Test of test
-  | SelectFrom of expr list
+  | SelectFrom of (test * expr) list
 
-val mkIf : test -> expr -> expr -> expr
+val mkIf : test -> expr  -> expr
+
+val combineSelects : expr -> expr -> expr (*PRE : both input exprs are [SelectFrom]s*)
 
 val string_of_expr : ?depth:int -> expr -> string

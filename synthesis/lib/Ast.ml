@@ -30,25 +30,29 @@ type expr =
   | Seq of (expr * expr)
   | Assign of (string * value)
   | Test of test
-  | SelectFrom of expr list
+  | SelectFrom of (test * expr) list
 
-let mkIf cond tru fls = SelectFrom [
-    Seq (Test cond, tru);
-    Seq (Test (Neg cond), fls)
+let mkIf cond tru = SelectFrom [
+    (cond, tru)
   ]
+
+let combineSelects e e' =
+  match e, e' with
+  | SelectFrom xs, SelectFrom ys -> SelectFrom (xs @ ys)
+  | _ -> failwith "Can only combine selects statements "
 
 let rec repeat c n =  if n = 0 then "" else c ^ repeat c (n-1)
 
 let rec string_of_expr ?depth:(depth=0) (e : expr) : string =
   match e with 
   | While (cond, body) ->
-    repeat "\t" depth ^
+    "\n" ^ repeat "\t" depth ^
     "while(" ^ string_of_test cond ^ ") {\n"
-      ^ repeat "\t" (depth+1)
+      (* ^ repeat "\t" (depth+1) *)
       ^ string_of_expr ~depth:(depth+1) body ^ "\n"
       ^ repeat "\t" depth ^ "}\n"
   | Seq (firstdo, thendo) ->
-    string_of_expr ~depth firstdo ^ ";"
+    string_of_expr ~depth firstdo ^ "; "
     ^ string_of_expr ~depth thendo
   | Assign (field, value) ->
     repeat "\t" depth ^
@@ -56,12 +60,13 @@ let rec string_of_expr ?depth:(depth=0) (e : expr) : string =
   | Test test ->
     repeat "\t" depth ^ string_of_test test
   | SelectFrom es ->
-    let needJoin = ref false in
-    List.fold_left es ~init:"" ~f:(fun str e' ->
-        str ^
-        (if !needJoin then "  []  " else (needJoin := true; "")) 
-        ^ string_of_expr e'
+    "\n" ^ repeat "\t" depth ^ "if" ^
+    List.fold_left es ~init:"" ~f:(fun str (cond, act)->
+        str ^ "\n"  ^
+        repeat "\t" (depth + 1)
+        ^ string_of_test cond  ^ " -> " ^ string_of_expr act
       )
+    ^ "\n" ^ repeat "\t" depth ^ "fi"
 
     
    
