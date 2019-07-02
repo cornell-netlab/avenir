@@ -1,4 +1,5 @@
 open Ast
+open Manip
 
 let test1 = string_of_expr (
     Seq(
@@ -11,4 +12,7 @@ let test1 = string_of_expr (
     )
   )
     
+let test2 = string_of_test (wp (Assign("h",Var("Ingress"))) True)		
+		
 let () = Printf.printf "%s\n" test1
+let () = Printf.printf "%s\n" test2
