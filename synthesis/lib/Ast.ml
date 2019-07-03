@@ -11,25 +11,27 @@ let string_of_value v =
 
 type test =
   | True | False
-  | Eq of (string * value)
+  | Eq of (value * value)
   | And of (test * test)
   | Or of (test * test)
   | Neg of test
+
+let mkImplies assum conseq = Or(Neg assum, conseq)
 
 let rec string_of_test t =
   match t with
   | True -> "true"
   | False -> "false"
-  | Eq (field, value) -> field ^ " = " ^ string_of_value value
+  | Eq (left, right) -> string_of_value left ^ " = " ^ string_of_value right
   | Or (left, right) -> "(" ^ string_of_test left ^ ") || (" ^ string_of_test right ^ ")"
   | And (left, right) -> string_of_test left ^ "&" ^ string_of_test right
   | Neg t -> "~(" ^ string_of_test t ^ ")"
 
 type expr =
+  | Skip
   | While of (test * expr)
   | Seq of (expr * expr)
   | Assign of (string * value)
-  | Test of test
   | SelectFrom of (test * expr) list
 
 let mkIf cond tru = SelectFrom [
@@ -44,7 +46,8 @@ let combineSelects e e' =
 let rec repeat c n =  if n = 0 then "" else c ^ repeat c (n-1)
 
 let rec string_of_expr ?depth:(depth=0) (e : expr) : string =
-  match e with 
+  match e with
+  | Skip -> "skip"
   | While (cond, body) ->
     "\n" ^ repeat "\t" depth ^
     "while(" ^ string_of_test cond ^ ") {\n"
@@ -57,8 +60,8 @@ let rec string_of_expr ?depth:(depth=0) (e : expr) : string =
   | Assign (field, value) ->
     repeat "\t" depth ^
     field ^ " := " ^ string_of_value value
-  | Test test ->
-    repeat "\t" depth ^ string_of_test test
+  (* | Test test ->
+   *   repeat "\t" depth ^ string_of_test test *)
   | SelectFrom es ->
     "\n" ^ repeat "\t" depth ^ "if" ^
     List.fold_left es ~init:"" ~f:(fun str (cond, act)->
