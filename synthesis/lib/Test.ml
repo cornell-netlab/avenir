@@ -17,4 +17,4 @@ let test2 = string_of_test (wp (Assign("h",Var("Ingress"))) True)
 
 let () = Printf.printf "%s\n" test1
 let () = Printf.printf "%s\n" test2
-let () = checkSMT (Eq("x", Int 6))
+let () = checkSMT (Eq(Var "x", Int 6))

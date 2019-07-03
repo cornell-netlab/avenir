@@ -1,5 +1,5 @@
 (library
-  (name lib)
-   (libraries core )
+  (name Test)
+   (libraries core z3)
    (preprocess (pps ppx_jane ppx_deriving_yojson)))
   
