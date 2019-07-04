@@ -1,5 +1,7 @@
 (library
   (name Test)
    (libraries core z3)
-   (preprocess (pps ppx_jane ppx_deriving_yojson)))
+   (preprocess (pps ppx_jane ppx_deriving_yojson))
+   (ocamlc_flags -custom -cclib -lstdc++)
+   (ocamlopt_flags -linkpkg -cclib -lstdc++))
   
