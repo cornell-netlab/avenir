@@ -16,15 +16,18 @@ let rec mkZ3Test t ctx = match t with
 let context = Z3.mk_context [("model", "true")]
 let solver = Z3.Solver.mk_solver context None
 
-let checkSMT test =
-	let phi = mkZ3Test test context in
-	let _ = Z3.Solver.add solver [phi] in 
-    match Z3.Solver.check solver [] with
-    | UNSATISFIABLE -> Printf.printf "unsat\n"
-    | UNKNOWN -> Printf.printf "unknown"
-    | SATISFIABLE ->
-        match Z3.Solver.get_model solver with
-        | None -> ()
-        | Some model ->
-            Printf.printf "%s\n"
-                (Z3.Model.to_string model)
+let checkSMT expect test =
+  let phi = mkZ3Test test context in
+  let _ = Z3.Solver.add solver [phi] in
+  let response = Z3.Solver.check solver [] in
+  begin match response with
+  | UNSATISFIABLE -> Printf.printf "unsat\n"
+  | UNKNOWN -> Printf.printf "unknown"
+  | SATISFIABLE ->
+     match Z3.Solver.get_model solver with
+     | None -> ()
+     | Some model ->
+        Printf.printf "%s\n"
+          (Z3.Model.to_string model)
+  end;
+  expect = response

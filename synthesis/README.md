@@ -25,5 +25,17 @@ dune external-lib-deps --missing @all
 + Now youre ready to go! Open the library in `utop` by running `dune lib utop`
 
 
+# Writing and Running Tests
 
+The current Testing framework uses `inline_tests`, which means you can write tests anywhere in your code. Currently all of the tests are localized in the `Test.ml` file. To write a test simply write
 
+```
+let%test _ = <boolean expression>
+```
+if the boolean expression returns `true`, the test passes, if it returns `false`, the test fails.
+
+To run all of the tests written in the the library (`lib/`),  execute the following command
+
+```
+dune runtest
+```

@@ -1,7 +1,7 @@
 open Ast
 open Manip
 open Prover
-
+   
 let test1 = string_of_expr (
     Seq(
       Assign("h",Var("Ingress")),
@@ -13,8 +13,9 @@ let test1 = string_of_expr (
     )
   )
     
-let test2 = string_of_test (wp (Assign("h",Var("Ingress"))) True)		
+let test2 = wp (Assign("h",Var("Ingress"))) True 
 
-let () = Printf.printf "%s\n" test1
-let () = Printf.printf "%s\n" test2
-let () = checkSMT (Eq(Var "x", Int 6))
+let%test _ = Printf.printf "%s\n" test1; true
+let%test _ = Printf.printf "%s\n" (string_of_test test2);
+             test2 = True
+let%test _ = checkSMT SATISFIABLE (Eq(Var "x", Int 6))
