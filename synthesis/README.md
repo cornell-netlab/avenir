@@ -22,8 +22,20 @@ opam user-setup install
 dune external-lib-deps --missing @all
 ```
 
-+ Now youre ready to go! Open the library in `utop` by running `dune lib utop`
++ Now you're ready to go! Open the library in `utop` by running `dune lib utop`
 
++ This project needs [Z3 SMT solver](https://github.com/Z3Prover/z3) to be installed on your machine.
+You should also add the Z3 library to  your path. In Mac, this can be achieved by setting the DYLD_LIBRARY_PATH variable:
+
+```
+export DYLD_LIBRARY_PATH=`opam config var z3:lib`
+```
+
+on GNU/Linux systems the same can be done via the LD_LIBRARY_PATH environment variable:
+
+```
+export LD_LIBRARY_PATH=`opam config var z3:lib`
+```
 
 # Writing and Running Tests
 
