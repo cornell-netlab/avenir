@@ -17,7 +17,6 @@ let rec unroll n p =
     |> SelectFrom
   | _ -> p (* Assign, Test cannot be unrolled *)
 
-
 let get_val subsMap str default =
   StringMap.find subsMap str |> Option.value ~default
 
@@ -48,7 +47,7 @@ let rec wp c phi = match c with
     substitute phi (StringMap.singleton field value)
   | SelectFrom exprs ->
     And(List.fold exprs ~init:False ~f:(fun acc (cond, _  ) -> Or  (acc, cond)),
-        List.fold exprs ~init:False ~f:(fun acc (cond, act) -> And (acc, mkImplies cond (wp act phi)))
+        List.fold exprs ~init:True ~f:(fun acc (cond, act) -> And (acc, mkImplies cond (wp act phi)))
        )                                     
   | While _ ->
     Printf.printf "Warning: skipping While loop, because loops must be unrolled\n%!";

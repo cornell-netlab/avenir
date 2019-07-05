@@ -23,8 +23,8 @@ let rec string_of_test t =
   | True -> "true"
   | False -> "false"
   | Eq (left, right) -> string_of_value left ^ " = " ^ string_of_value right
-  | Or (left, right) -> "(" ^ string_of_test left ^ ") || (" ^ string_of_test right ^ ")"
-  | And (left, right) -> string_of_test left ^ "&" ^ string_of_test right
+  | Or (left, right) -> "(" ^ string_of_test left ^ " || " ^ string_of_test right ^ ")"
+  | And (left, right) -> "(" ^ string_of_test left ^ "&" ^ string_of_test right ^ ")"
   | Neg t -> "~(" ^ string_of_test t ^ ")"
 
 type expr =
