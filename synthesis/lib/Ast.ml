@@ -16,7 +16,42 @@ type test =
   | Or of (test * test)
   | Neg of test
 
-let mkImplies assum conseq = Or(Neg assum, conseq)
+let mkEq v v' =
+  if v = v' then True else
+    match v, v' with
+    | Int _, Int _ -> False
+    | _, _ -> Eq(v, v')
+
+let (%=%) = mkEq
+let (%<>%) v v' = Neg(v %=% v') 
+
+let mkOr t t' =
+  match t, t' with
+  | False, x  | x, False -> x
+  | _ -> Or (t, t')
+
+let (%+%) = mkOr
+
+let mkAnd t t' =
+  match t, t' with
+  | True, x | x, True -> x
+  | _ -> And (t, t')
+
+let (%&%) = mkAnd
+       
+let mkNeg t =
+  match t with
+  | True -> False
+  | False -> True
+  | _ -> Neg t
+
+let (!%) = mkNeg      
+  
+let mkImplies assum conseq = mkOr (Neg assum) conseq
+let (%=>%) = mkImplies
+
+let mkIff lhs rhs = (lhs %=>% rhs) %&% (rhs %=>% lhs)
+let (%<=>%) = mkIff
 
 let rec string_of_test t =
   match t with
@@ -34,15 +69,30 @@ type expr =
   | Assign of (string * value)
   | SelectFrom of (test * expr) list
 
-let mkIf cond tru = SelectFrom [
-    (cond, tru)
-  ]
+let mkIf cond tru = SelectFrom [(cond, tru)]
+let (%?%) = mkIf
+
+let mkSeq first scnd =
+  match first, scnd with
+  | Skip, x | x, Skip -> x
+  | _,_ -> Seq(first, scnd)
+         
+let (%:%) = mkSeq
+
+let mkAssn f v = Assign (f, v)
+let (%<-%)= mkAssn
+         
 
 let combineSelects e e' =
   match e, e' with
   | SelectFrom xs, SelectFrom ys -> SelectFrom (xs @ ys)
   | _ -> failwith "Can only combine selects statements "
 
+let (%%) = combineSelects
+
+let mkWhile t e = While(t,e)
+
+       
 let rec repeat c n =  if n = 0 then "" else c ^ repeat c (n-1)
 
 let rec string_of_expr ?depth:(depth=0) (e : expr) : string =

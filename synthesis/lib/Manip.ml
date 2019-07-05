@@ -6,13 +6,13 @@ module StringMap = Map.Make (String)
 
 (* Unrolls all loops in the program p n times *)
 let rec unroll n p =
-  if n = 0 then p else
-  match p with
-  | While (cond, body) ->
-    mkIf cond (Seq(body, unroll (n-1) p))
-  | Seq (firstdo, thendo) ->
+  match p, n with
+  | While (_, _), 0 -> Skip
+  | While (cond, body), _ -> 
+     cond %?% (body %:% unroll (n-1) p)
+  | Seq (firstdo, thendo), _ ->
     Seq (unroll n firstdo, unroll n thendo)
-  | SelectFrom exprs ->
+  | SelectFrom exprs, _ ->
     List.map exprs ~f:(fun (cond, action) -> (cond, unroll n action))
     |> SelectFrom
   | _ -> p (* Assign, Test cannot be unrolled *)
@@ -27,16 +27,16 @@ let rec substitute ex subsMap =
   | True  -> True
   | False -> False
   (* Homomorphic Rules*)               
-  | Neg e       -> Neg (substitute e subsMap)
-  | Or  (e, e') -> Or  (substitute e subsMap, substitute e' subsMap)
-  | And (e, e') -> And (substitute e subsMap, substitute e' subsMap)
+  | Neg e       -> !%(substitute e subsMap)
+  | Or  (e, e') -> substitute e subsMap %+% substitute e' subsMap
+  | And (e, e') -> substitute e subsMap %&% substitute e' subsMap
   (* Do the work *)
   | Eq (v,v') -> 
     match v, v' with
-    | Var field, Var field' -> Eq (subst field v, subst field' v')
-    | Var field, _          -> Eq (subst field v, v'             )
-    | _        , Var field' -> Eq (v            , subst field' v')
-    | _        , _          -> Eq (v            , v'             )
+    | Var field, Var field' -> subst field v %=% subst field' v'
+    | Var field, _          -> subst field v %=% v'             
+    | _        , Var field' -> v %=% subst field' v'
+    | _        , _          -> v %=% v'
 
 (* computes weakest pre-condition of condition phi w.r.t command c *)
 let rec wp c phi = match c with
@@ -46,8 +46,8 @@ let rec wp c phi = match c with
   | Assign (field, value) ->
     substitute phi (StringMap.singleton field value)
   | SelectFrom exprs ->
-    And(List.fold exprs ~init:False ~f:(fun acc (cond, _  ) -> Or  (acc, cond)),
-        List.fold exprs ~init:True ~f:(fun acc (cond, act) -> And (acc, mkImplies cond (wp act phi)))
+    And(List.fold exprs ~init:False ~f:(fun acc (cond, _  ) -> acc %+% cond),
+        List.fold exprs ~init:True ~f:(fun acc (cond, act) -> acc %&% (cond %=>% wp act phi))
        )                                     
   | While _ ->
     Printf.printf "Warning: skipping While loop, because loops must be unrolled\n%!";
