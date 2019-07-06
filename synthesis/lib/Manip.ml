@@ -15,7 +15,7 @@ let rec unroll n p =
   | SelectFrom exprs, _ ->
     List.map exprs ~f:(fun (cond, action) -> (cond, unroll n action))
     |> SelectFrom
-  | _ -> p (* Assign, Test cannot be unrolled *)
+  | _ -> p (* Assign, Test, Assert cannot be unrolled *)
 
 let get_val subsMap str default =
   StringMap.find subsMap str |> Option.value ~default
@@ -44,7 +44,8 @@ let rec wp c phi = match c with
   | Seq (firstdo, thendo) ->
     wp firstdo (wp thendo phi)
   | Assign (field, value) ->
-    substitute phi (StringMap.singleton field value)
+     substitute phi (StringMap.singleton field value)
+  | Assert t -> t %&% phi
   | SelectFrom exprs ->
     And(List.fold exprs ~init:False ~f:(fun acc (cond, _  ) -> acc %+% cond),
         List.fold exprs ~init:True ~f:(fun acc (cond, act) -> acc %&% (cond %=>% wp act phi))

@@ -33,6 +33,7 @@ type expr =
   | While of (test * expr)
   | Seq of (expr * expr)
   | Assign of (string * value)
+  | Assert of test
   | SelectFrom of (test * expr) list
 
 val mkIf : test -> expr -> expr

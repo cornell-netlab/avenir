@@ -1,7 +1,6 @@
 # TodoList
 
 ## Immediate (Today)
-+ Add assert
 + slides (3-4) plus backup slides
 
 ## Next (Monday)

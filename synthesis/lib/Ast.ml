@@ -67,6 +67,7 @@ type expr =
   | While of (test * expr)
   | Seq of (expr * expr)
   | Assign of (string * value)
+  | Assert of test
   | SelectFrom of (test * expr) list
 
 let mkIf cond tru = SelectFrom [(cond, tru)]
@@ -107,6 +108,9 @@ let rec string_of_expr ?depth:(depth=0) (e : expr) : string =
   | Seq (firstdo, thendo) ->
     string_of_expr ~depth firstdo ^ "; "
     ^ string_of_expr ~depth thendo
+  | Assert t ->
+     repeat "\t" depth ^ "("
+     ^ string_of_test t ^ ")"
   | Assign (field, value) ->
     repeat "\t" depth ^
     field ^ " := " ^ string_of_value value

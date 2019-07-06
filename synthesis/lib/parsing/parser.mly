@@ -30,6 +30,8 @@ expression :
   { Ast.mkWhile t e }
 | f = ID; ASSIGN; v = value
   { Ast.Assign (f, v) }
+| ASSERT; LPAREN; t = test ; RPAREN
+  { Ast.Assert (t) }
 | IF; s = select; FI
   { Ast.SelectFrom s }
 

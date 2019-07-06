@@ -90,11 +90,15 @@ let%test _ = (* wp behaves well with selects *)
   let exp = all_conds %&% all_imps in
   comp = exp
 
-
-
-  
            
 let%test _ = (* wp behaves well with sequence *)
   let prog = ("h" %<-% Int 10) %:% ("h" %<-% Int 80) in
   let cond = Var "h" %=% Var "g" in
   Int 80 %=% Var "g" = wp prog cond
+
+let%test _ = (* wp behaves well with assertions *)
+  let asst = (Var "h" %<>% Int 10) %&% (Var "h" %<>% Int 15) in
+  let prog = Assert(asst) in
+  let phi =  Var "h" %=% Var "g" in
+  wp prog phi = asst %&% phi
+  
