@@ -31,3 +31,10 @@ let checkSMT expect test =
           (Z3.Model.to_string model)
   end;
   expect = response
+
+
+
+let synthesize p q =
+  Printf.printf "Synthesize %s\n with %s \n"
+    (string_of_expr p)
+    (string_of_expr q)

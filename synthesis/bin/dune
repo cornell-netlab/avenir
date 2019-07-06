@@ -1,0 +1,4 @@
+(executable
+ (name main)
+ (libraries core motley)
+ (preprocess (pps ppx_jane)))

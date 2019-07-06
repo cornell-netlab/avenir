@@ -2,8 +2,6 @@
 
 ## Immediate (Today)
 + Add assert
-+ Executable w/ parser
-+ smart constructors & operators
 + slides (3-4) plus backup slides
 
 ## Next (Monday)
