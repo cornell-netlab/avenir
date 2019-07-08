@@ -5,7 +5,7 @@
 %token OR AND NOT EQ
 %token WHILE SKIP SEMICOLON ASSIGN
 %token ASSERT
-%token IF CASE FI
+%token IF CASE BRACKETS FI
 %token LPAREN RPAREN LBRACE RBRACE
 %token EOF
 
@@ -36,9 +36,8 @@ expression :
   { Ast.SelectFrom s }
 
 select :
-| t = test; CASE; e = expression
-  { [ t, e ] }
-| t = test; CASE; e = expression; SEMICOLON; s = select
+| t = test; CASE; e = expression { [ t, e ] }
+| t = test; CASE; e = expression; BRACKETS; s = select
   { (t, e) :: s }
 
 value :

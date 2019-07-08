@@ -1,0 +1,4 @@
+loc := Ingress;
+while (~loc=Egress) {
+  x := 10
+}

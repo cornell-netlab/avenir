@@ -1,0 +1,9 @@
+CONTROLLER := 100;
+loc := Ingress;
+while (~loc=Egress) {
+   if
+     loc = 10 && pkt = 100 -> loc := 11; pkt := 101  []
+     loc = 99 && pkt = 909 -> loc := 100; pkt := 5 []
+     ~(loc = 10 && pkt = 100) && ~(loc = 99 && pkt = 909) -> loc := CONTROLLER
+   fi 
+}

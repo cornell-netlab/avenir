@@ -20,6 +20,7 @@ rule tokens = parse
 | ":="            { ASSIGN }
 | "->"            { CASE }
 | "if"            { IF }
+| "[]"            { BRACKETS }
 | "fi"            { FI }
 | "||"            { OR }
 | "&&"            { AND }

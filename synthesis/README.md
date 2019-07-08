@@ -37,6 +37,21 @@ on GNU/Linux systems the same can be done via the LD_LIBRARY_PATH environment va
 export LD_LIBRARY_PATH=`opam config var z3:lib`
 ```
 
+# Running the code
+
+To build the executable, run
+
+```
+dune build bin/main.exe
+```
+
+To build-and-run the executable, run
+
+```
+dune exec bin/main.exe <path/to/logical/program> <path/to/real/program>
+```
+
+
 # Writing and Running Tests
 
 The current Testing framework uses `inline_tests`, which means you can write tests anywhere in your code. Currently all of the tests are localized in the `Test.ml` file. To write a test simply write
