@@ -4,6 +4,46 @@ open Ast
 module StringMap = Map.Make (String)
 
 
+(* computes the product of two lists of disjuncitons *)
+let multiply orlist orlist' =
+  let foil outer inner =
+    List.fold outer ~init:[] ~f:(fun acc x ->
+        List.map inner ~f:(mkAnd x)
+        @ acc
+      )
+  in
+  foil orlist orlist'
+  @ foil orlist' orlist
+    
+  
+(* Computes the Negation Normal Form of a test*)               
+let rec nnf t : test =
+  match t with
+  | Eq(_, _)
+    | True
+    | False
+    | Neg(Eq(_, _))
+    | Neg(True)
+    | Neg(False) -> t
+  | Neg (Neg t) -> nnf t
+  | And (a, b) -> mkAnd (nnf a) (nnf b)
+  | Or (a, b) -> mkOr (nnf a) (nnf b)
+  | Neg(And(a, b)) -> mkOr (Neg a) (Neg b) |> nnf
+  | Neg(Or(a, b)) -> mkAnd (Neg a) (Neg b) |> nnf
+
+
+(* Computes the Disjunctive Normal form of a test *)
+let rec dnf t : test list =
+  match nnf t with
+  | And(a, b) -> multiply (dnf a) (dnf b)
+  | Or (a, b) -> dnf a @ dnf b
+  | Eq _
+    | Neg _ (* will not be And/Or because NNF*)
+    | True
+    | False  ->  [t]
+
+               
+                 
 (* Unrolls all loops in the program p n times *)
 let rec unroll n p =
   match p, n with

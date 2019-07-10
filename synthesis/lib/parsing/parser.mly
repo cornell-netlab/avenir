@@ -26,7 +26,7 @@ expression :
   { Ast.Skip }
 | e = expression; SEMICOLON; ee = expression
   { Ast.Seq (e, ee) }
-| WHILE; LPAREN; t = test; RPAREN; LBRACE; e = expression RBRACE
+| WHILE; LPAREN; t = test; RPAREN; LBRACE; e = expression; RBRACE
   { Ast.mkWhile t e }
 | f = ID; ASSIGN; v = value
   { Ast.Assign (f, v) }

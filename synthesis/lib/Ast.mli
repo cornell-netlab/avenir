@@ -30,10 +30,10 @@ val (!%) : test -> test
     
 type expr =
   | Skip
-  | While of (test * expr)
-  | Seq of (expr * expr)
   | Assign of (string * value)
   | Assert of test
+  | Seq of (expr * expr)
+  | While of (test * expr)
   | SelectFrom of (test * expr) list
 
 val mkIf : test -> expr -> expr
