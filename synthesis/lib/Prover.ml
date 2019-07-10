@@ -36,14 +36,22 @@ let mk_deBruijn vars : int StringMap.t =
       db_map'
     )
 
-let initSolver test =
+let bind_vars ctx vs formula =
+  let open Z3 in
+  let types = List.map vs ~f:(fun _ -> Arithmetic.Integer.mk_sort ctx) in
+  let names = List.map vs ~f:(Symbol.mk_string ctx) in
+  let q = Quantifier.mk_forall ctx types names formula (Some 1) [] [] None None in
+  Quantifier.expr_of_quantifier q
+
+  
+let initSolver ctx test =
   let bindable_vars = free_vars_of_test test in
-  let phi = mkZ3Test test context (mk_deBruijn bindable_vars) in
-  Z3.Solver.add solver [phi]
+  let phi = mkZ3Test test ctx (mk_deBruijn bindable_vars) in
+  Z3.Solver.add solver [bind_vars ctx bindable_vars phi]
 
   
 let checkSMT expect test =
-  let _ = initSolver test in
+  let _ = initSolver context test in
   let response = Z3.Solver.check solver [] in
   begin match response with
   | UNSATISFIABLE -> Printf.printf "unsat\n"
@@ -59,7 +67,7 @@ let checkSMT expect test =
 
 
 let checkModel test =
-  let _ = initSolver test in
+  let _ = initSolver context test in
   let response = Z3.Solver.check solver [] in
   match response with
   | UNSATISFIABLE | UNKNOWN -> None

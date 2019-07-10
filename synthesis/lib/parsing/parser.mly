@@ -44,7 +44,7 @@ select :
 value :
 | i = INT { Ast.Int (i) }
 | x = ID  { Ast.Var (x) }
-| QUESTION; x = ID { Ast.Hole (x) }
+| QUESTION; x = ID { Ast.Hole ("?" ^ x) }
 
 test :
 | TRUE

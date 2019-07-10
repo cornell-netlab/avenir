@@ -128,25 +128,6 @@ let all_locations graph : int list =
     |> List.dedup_and_sort ~compare
   in
   List.fold init ~init ~f
-  
-  
-let get_all_paths ?ingress:(ingress=None) ?egress:(egress=None) graph : path list =
-  let nodes = all_locations graph in
-  let loop = List.fold nodes ~init:[] in
-  let skip x_opt y : bool = match x_opt with | None -> false | Some x -> x = y in
-  loop ~f:(fun paths ing ->
-      if skip ingress ing then
-        paths
-      else 
-        loop ~f:(fun paths' egr ->
-            if skip egress egr then
-              paths
-            else
-              get_all_paths_between graph [] ing egr
-              @ paths'
-          )
-        @ paths
-    )
 
 let get_edges (graph:graph) src dst =
   let succs = IntMap.find_exn graph src in

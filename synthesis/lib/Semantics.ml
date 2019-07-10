@@ -32,6 +32,8 @@ module Packet = struct
         %&% test
       )
 
+  let empty = StringMap.empty
+
 end
 
 let rec check_test (cond : test) (pkt : Packet.t) : bool =
@@ -48,21 +50,36 @@ let rec check_test (cond : test) (pkt : Packet.t) : bool =
      | (Var v, Var v') -> valOf v = valOf v'
      | (Int i, Var v) | (Var v, Int i) -> i = valOf v
      | (Hole _, _ ) | (_, Hole _) -> failwith "Semantics of holes are undefined"
-              
-let rec eval (expr : expr) (pkt : Packet.t) =
+
+(** Appends two lists eliminating the equal boundary 
+  * e.g. squash [1; 2; 3] [3; 4; 5] == [1; 2; 3; 4; 5]
+  **)
+let squash xs ys =
+  xs @ ys
+  |> List.remove_consecutive_duplicates
+       ~which_to_keep:`First
+       ~equal:(=)
+let (%@) = squash
+                                   
+let rec trace_eval (expr : expr) (pkt : Packet.t) =
+  let output_for pkt = (pkt, [Packet.get_val pkt "loc"]) in
   match expr with
-  | Skip -> pkt
+  | Skip -> output_for pkt
   | Assign (f, v) ->
      Packet.set_field_of_value pkt f v
+     |> output_for
   | Assert (t) ->
      if check_test t pkt then
-       pkt
+       output_for pkt
      else
        failwith ("AssertionFailure: " ^ string_of_test t ^ "was false")
   | Seq ( firstdo, thendo ) ->
-     pkt
-     |> eval firstdo
-     |> eval thendo
+     let (pkt', trace') = trace_eval firstdo pkt in
+     let (pkt'', trace'') = trace_eval thendo pkt' in
+     (pkt'', [Packet.get_val pkt "loc"]
+             %@ trace'
+             %@ trace'')
+     
   | SelectFrom selects ->
      let rec find_match ss =
        match ss with
@@ -73,12 +90,12 @@ let rec eval (expr : expr) (pkt : Packet.t) =
           else
             find_match rst
      in
-     eval (find_match selects) pkt
+     trace_eval (find_match selects) pkt
      
   | While ( cond , body ) ->
+     let _, trace = output_for pkt in
      if check_test cond pkt then
-       pkt
-     else
-       pkt
-       |> eval body
-       |> eval expr
+       let pkt', trace' = trace_eval (Seq(body,expr)) pkt in
+       (pkt', trace %@ trace')
+     else 
+       (pkt, trace)
