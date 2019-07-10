@@ -13,11 +13,17 @@ module IntMap = Map.Make (Int)
 
 type graph = (((test * expr) list) IntMap.t) IntMap.t
 type path = int list
-                  
+
+let string_of_graph (g : graph) =
+	let buf = Buffer.create 200 in
+  IntMap.iter ~f:(fun n ->
+		IntMap.iter ~f:(fun li ->
+			List.iter ~f:(fun (t,e) -> Printf.bprintf buf "%s \n" ("(" ^ (string_of_test t) ^ "," ^ (string_of_expr e) ^ ")") ) li ) n ) g;
+	Buffer.contents buf;;
+									                  
 
 let (%.) f g x = f (g x)
-
-              
+             
 let rec split_test_on_loc test =
   match test with
   | Or _ -> failwith ("malformed test, || not allowed in if statement, please make a separate case (" ^ (string_of_test test) ^")")
