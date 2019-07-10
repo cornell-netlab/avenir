@@ -1,5 +1,6 @@
 %token <int> INT
 %token <string> ID
+%token QUESTION
 %token TRUE
 %token FALSE
 %token OR AND NOT EQ
@@ -43,6 +44,7 @@ select :
 value :
 | i = INT { Ast.Int (i) }
 | x = ID  { Ast.Var (x) }
+| QUESTION; x = ID { Ast.Hole (x) }
 
 test :
 | TRUE

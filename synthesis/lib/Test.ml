@@ -19,7 +19,9 @@ let test2 = wp ("h" %<-% Var "Ingress") True
 let%test _ = Printf.printf "%s\n" test1; true
 let%test _ = Printf.printf "%s\n" (string_of_test test2);
              test2 = True
-let%test _ = checkSMT SATISFIABLE ((Var "x" %=% Int 6))
+             
+let%test _ = checkSMT SATISFIABLE ((Var "x" %=% Int 6) %+% (Var "x" %<>% Int 6))
+let%test _ = checkSMT SATISFIABLE (Hole "?x" %=% Int 6)
 
 let%test _ = (* Testing unrolling *)
   unroll 1 simple_test = "h" %<-% Var "Ingress" %:%

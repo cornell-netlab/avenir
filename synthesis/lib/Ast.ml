@@ -2,11 +2,12 @@ open Core
 
 type value =
   | Var of string
+  | Hole of string
   | Int of int
 
 let string_of_value v =
   match v with
-  | Var s -> s
+  | Var s | Hole s -> s
   | Int i -> string_of_int i
 
 type test =
@@ -14,7 +15,7 @@ type test =
   | Eq of (value * value)
   | And of (test * test)
   | Or of (test * test)
-  | Neg of test
+  | Neg of test         
 
 let mkEq v v' =
   if v = v' then True else
@@ -62,6 +63,21 @@ let rec string_of_test t =
   | And (left, right) -> "(" ^ string_of_test left ^ "&" ^ string_of_test right ^ ")"
   | Neg t -> "~(" ^ string_of_test t ^ ")"
 
+
+let rec free_vars_of_test test =
+  begin match test with
+  | True | False ->
+     []
+  | Or (l,r) | And (l, r) ->
+     free_vars_of_test l @ free_vars_of_test r
+  | Neg t ->
+     free_vars_of_test t
+  | Eq (Var v, Var v') -> [v; v']
+  | Eq (Var v, _) | Eq (_, Var v) -> [v]
+  | Eq (_, _) -> []
+  end
+  |> List.dedup_and_sort ~compare
+           
 type expr =
   | Skip
   | Assign of (string * value)

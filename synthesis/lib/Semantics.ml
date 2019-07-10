@@ -22,6 +22,8 @@ module Packet = struct
     | Var v ->
        get_val pkt v
        |> set_field pkt field
+    | Hole _ ->
+       failwith "Packets cannot have holes in them"
 
   let to_test pkt =
     StringMap.fold pkt ~init:True
@@ -45,6 +47,7 @@ let rec check_test (cond : test) (pkt : Packet.t) : bool =
      | (Int i, Int i') -> i = i'
      | (Var v, Var v') -> valOf v = valOf v'
      | (Int i, Var v) | (Var v, Int i) -> i = valOf v
+     | (Hole _, _ ) | (_, Hole _) -> failwith "Semantics of holes are undefined"
               
 let rec eval (expr : expr) (pkt : Packet.t) =
   match expr with

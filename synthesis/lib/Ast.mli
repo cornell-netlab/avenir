@@ -1,6 +1,8 @@
 type value =
   | Var of string
+  | Hole of string
   | Int of int
+         
 
 val string_of_value :  value -> string
 
@@ -13,6 +15,7 @@ type test =
   | Neg of test
 
 val string_of_test : test -> string
+val free_vars_of_test : test -> string list
 
 val mkImplies : test -> test -> test
 val (%=>%) : test -> test -> test
