@@ -1,6 +1,11 @@
+open Core
 open Ast
 open Manip
-open Prover
+(* open Prover *)
+open Semantics
+open Synthesis
+
+let parse s = Parser.main Lexer.tokens (Lexing.from_string s)
    
 let loop_body =
   combineSelects
@@ -16,12 +21,11 @@ let test1 = string_of_expr simple_test
                 
 let test2 = wp ("h" %<-% Var "Ingress") True 
 
-let%test _ = Printf.printf "%s\n" test1; true
-let%test _ = Printf.printf "%s\n" (string_of_test test2);
-             test2 = True
+(* let%test _ = Printf.printf "%s\n" test1; true *)
+let%test _ = test2 = True
              
-let%test _ = checkSMT SATISFIABLE ((Var "x" %=% Int 6) %+% (Var "x" %<>% Int 6))
-let%test _ = checkSMT SATISFIABLE (Hole "?x" %=% Int 6)
+(* let%test _ = checkSMT SATISFIABLE ((Var "x" %=% Int 6) %+% (Var "x" %<>% Int 6))
+ * let%test _ = checkSMT SATISFIABLE (Hole "?x" %=% Int 6) *)
 
 let%test _ = (* Testing unrolling *)
   unroll 1 simple_test = "h" %<-% Var "Ingress" %:%
@@ -60,7 +64,7 @@ let%test _ = (*Skip behaves well *)
 
 let%test _ = (* Assign behaves well with integers *)
   let prog = "h" %<-% Int 7 in
-  Printf.printf "%s\n" (string_of_test (wp prog (Var "h" %=% Int 7)));
+  (* Printf.printf "%s\n" (string_of_test (wp prog (Var "h" %=% Int 7))); *)
   Int 7 %=% Int 7 = wp prog (Var "h" %=% Int 7)
   && Int 7 %=% Var "g" = wp prog (Var "h" %=% Var "g")
 
@@ -103,4 +107,54 @@ let%test _ = (* wp behaves well with assertions *)
   let prog = Assert(asst) in
   let phi =  Var "h" %=% Var "g" in
   wp prog phi = asst %&% phi
+
+
+  
+                           (* TESTING SEMANTICS *)
+
+(* let%test _ =
+ *   let p = parse "loc := 0; while (~ loc = 1) { if loc = 0 && pkt = 100 -> pkt := 101; loc := 1 fi } " in
+ *   let pkt = Packet.(set_field (set_field empty "loc" 0) "pkt" 100) in
+ *   let _, tr = trace_eval p pkt in
+ *   let _ = Printf.printf "TRACE: ";
+ *           List.iter tr ~f:(fun l -> Printf.printf "%d " l);
+ *           Printf.printf "\n%!" in
+ *   tr = [0; 1] *)
+
+let test_trace p_string expected_trace =
+  let p = parse p_string in
+  let pkt = Packet.(set_field (set_field empty "loc" 0) "pkt" 100) in
+  let _, tr = trace_eval p pkt in
+  tr = expected_trace
+  
+
+let%test _ = test_trace
+               "loc:=0; loc:=0"
+               [0]
+let%test _ = test_trace
+               "loc:=0; loc := 1"
+               [0; 1]
+let%test _ = test_trace
+               "loc:=0; if loc = 0 -> loc := 1 fi; loc := 2"
+               [0; 1; 2]
+let%test _ = test_trace
+               "loc:=0; while (~ loc = 1) { loc := 1 }"
+               [0; 1]
+let%test _ = test_trace
+               "loc := 0; while (~ loc = 1) { if loc = 0 && pkt = 100 -> pkt := 101; loc := 1 fi }"
+               [0;1]
+  
+
+
+                           (* TESTING FOR CEGIS PROCEDURE *)
+
+let%test _ =
+  let pkt = Packet.(set_field (set_field empty "loc" 0) "pkt" 100) in
+  let log  = parse "loc := 0; while (~ loc = 1) { if loc = 0 && pkt = 100 -> pkt := 101; loc := 1 fi } " in
+  let real = parse "loc := 0 ; while (~ loc = 1) { if loc = 0 && pkt = ?_hole0 -> pkt := ?_hole1; loc := 1 fi } " in
+  let model = get_one_model pkt log real in
+  let expected = "(define-fun ?_hole0 () Int\n  100)\n(define-fun ?_hole1 () Int\n  101)" in
+  let model_str = Z3.Model.to_string model in
+  model_str = expected
+  
   
