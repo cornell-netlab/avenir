@@ -95,6 +95,7 @@ type expr =
   | Skip
   | Assign of (string * value)
   | Assert of test
+  | Assume of test
   | Seq of (expr * expr)
   | While of (test * expr)
   | SelectFrom of (test * expr) list
@@ -141,6 +142,9 @@ let rec string_of_expr ?depth:(depth=0) (e : expr) : string =
   | Assert t ->
      repeat "\t" depth ^ "assert ("
      ^ string_of_test t ^ ")"
+  | Assume t ->
+     repeat "\t" depth ^ "assume ("
+     ^ string_of_test t ^ ")"
   | Assign (field, value) ->
     field ^ " := " ^ string_of_value value
   | SelectFrom es ->
@@ -165,7 +169,7 @@ let rec free_vars_of_expr (e:expr) : string list =
   | While (cond, body) ->
      free_vars_of_test cond
      @ free_vars_of_expr body
-  | Assert t -> free_vars_of_test t
+  | Assert t | Assume t -> free_vars_of_test t
   | SelectFrom ss ->
      List.fold ss ~init:[] ~f:(fun fvs (test, action) ->
          free_vars_of_test test

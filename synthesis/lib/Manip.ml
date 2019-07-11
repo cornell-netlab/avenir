@@ -96,6 +96,7 @@ let rec wp c phi = match c with
   | Assign (field, value) ->
      substitute phi (StringMap.singleton field value)
   | Assert t -> t %&% phi
+  | Assume t -> t %=>% phi
   | SelectFrom exprs ->
     And(List.fold exprs ~init:False ~f:(fun acc (cond, _  ) -> acc %+% cond),
         List.fold exprs ~init:True ~f:(fun acc (cond, act) -> acc %&% (cond %=>% wp act phi))

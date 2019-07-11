@@ -5,7 +5,7 @@
 %token FALSE
 %token OR AND NOT EQ LESS GREATER LEQ GEQ NEQ
 %token WHILE SKIP SEMICOLON ASSIGN
-%token ASSERT
+%token ASSERT ASSUME ABORT
 %token IF CASE BRACKETS FI
 %token LPAREN RPAREN LBRACE RBRACE
 %token EOF
@@ -33,6 +33,10 @@ expression :
   { Ast.Assign (f, v) }
 | ASSERT; LPAREN; t = test ; RPAREN
   { Ast.Assert (t) }
+| ABORT
+  { Ast.Assert (Ast.False) }
+| ASSUME; LPAREN; t = test; RPAREN
+  { Ast.Assume (t) }
 | IF; s = select; FI
   { Ast.SelectFrom s }
 

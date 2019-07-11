@@ -84,7 +84,7 @@ let rec trace_eval (expr : expr) (pkt : Packet.t) =
   | Assign (f, v) ->
      Packet.set_field_of_value pkt f v
      |> output_for
-  | Assert (t) ->
+  | Assert (t) | Assume (t) ->
      if check_test t pkt then
        output_for pkt
      else

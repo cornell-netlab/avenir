@@ -38,6 +38,7 @@ type expr =
   | Skip
   | Assign of (string * value)
   | Assert of test
+  | Assume of test
   | Seq of (expr * expr)
   | While of (test * expr)
   | SelectFrom of (test * expr) list

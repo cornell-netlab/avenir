@@ -13,6 +13,8 @@ rule tokens = parse
 | [' ' '\t' '\n'] { tokens lexbuf }
 | ['0'-'9']+ as i { INT (int_of_string i) }
 | "assert"        { ASSERT }
+| "assume"        { ASSUME }
+| "abort"         { ABORT }
 | "true"          { TRUE }
 | "false"         { FALSE }
 | "while"         { WHILE }

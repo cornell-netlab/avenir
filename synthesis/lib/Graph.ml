@@ -59,7 +59,8 @@ let rec split_expr_on_loc (expr:expr) : (expr * int option) =
   | Assign ("loc", Int l) -> (Skip, Some l)
   | Assign _
     | Skip
-    | Assert _ -> (expr, None)
+    | Assert _
+    | Assume _ -> (expr, None)
   | Seq (p, q) ->
      let (expr_p, loc_p) = split_expr_on_loc p in
      let (expr_q, loc_q) = split_expr_on_loc q in
@@ -82,7 +83,7 @@ let normalize_selects (ss : (test * expr) list) : (test * expr) list =
        
 let rec get_selects (e : Ast.expr) =
   match e with
-  | Skip | Assign _ | Assert _  -> []
+  | Skip | Assign _ | Assert _ | Assume _ -> []
   | While (_, body) -> get_selects body
   | Seq (firstdo, thendo) -> get_selects firstdo @ get_selects thendo
   | SelectFrom ss ->

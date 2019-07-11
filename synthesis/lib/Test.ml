@@ -44,9 +44,10 @@ let rec generate_random_expr size =
   | 0 -> Skip
   | 1 -> Assign (generate_random_string 3, generate_random_value 5)
   | 2 -> Assert (generate_random_test size')
-  | 3 -> Seq (generate_random_expr size', generate_random_expr size')
-  | 4 -> While (generate_random_test size', generate_random_expr size')
-  | 5 -> let rec loop n =
+  | 3 -> Assume (generate_random_test size')
+  | 4 -> Seq (generate_random_expr size', generate_random_expr size')
+  | 5 -> While (generate_random_test size', generate_random_expr size')
+  | 6 -> let rec loop n =
            if n = 0 then [] else 
            (generate_random_test size', generate_random_expr size') :: loop (n-1)
          in
