@@ -24,6 +24,10 @@ rule tokens = parse
 | "fi"            { FI }
 | "||"            { OR }
 | "&&"            { AND }
+| "<>"            { NEQ }
+| "!="            { NEQ }
+| "<="            { LEQ }
+| ">="            { GEQ }
 | "~"             { NOT }
 | "="             { EQ }
 | "("             { LPAREN }
@@ -32,6 +36,8 @@ rule tokens = parse
 | "}"             { RBRACE }
 | ";"             { SEMICOLON }
 | "?"             { QUESTION }
+| ">"             { GREATER }
+| "<"             { LESS }
 | eof             { EOF }
 | id as x         { ID x }
 | _ { raise (ParseError (Printf.sprintf "At offset %d: unexpected character.\n" (Lexing.lexeme_start lexbuf))) }

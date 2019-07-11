@@ -10,7 +10,7 @@ type test =
   | True
   | False
   | Eq of (value * value)
-	| Lt of (value * value) 
+  | Lt of (value * value) 
   | And of (test * test)
   | Or of (test * test)
   | Neg of test

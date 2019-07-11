@@ -3,7 +3,7 @@
 %token QUESTION
 %token TRUE
 %token FALSE
-%token OR AND NOT EQ
+%token OR AND NOT EQ LESS GREATER LEQ GEQ NEQ
 %token WHILE SKIP SEMICOLON ASSIGN
 %token ASSERT
 %token IF CASE BRACKETS FI
@@ -37,6 +37,7 @@ expression :
   { Ast.SelectFrom s }
 
 select :
+| t = test; CASE; e = expression; BRACKETS { [ t, e ] }
 | t = test; CASE; e = expression { [ t, e ] }
 | t = test; CASE; e = expression; BRACKETS; s = select
   { (t, e) :: s }
@@ -59,5 +60,15 @@ test :
   { Ast.Neg t }
 | v = value; EQ; vv = value
   { Ast.Eq (v, vv) }
+| v = value; NEQ; vv = value
+  { Ast.Neg(Ast.Eq (v, vv)) }
+| v = value; LESS; vv = value
+  { Ast.Lt (v, vv) }
+| v = value; GREATER; vv = value
+  { Ast.Lt (vv, v) }
+| v = value; GEQ; vv = value
+  { Ast.Or(Ast.Lt(vv, v), Ast.Eq(vv, v)) }
+| v = value; LEQ; vv = value
+  { Ast.Or(Ast.Lt(v, vv), Ast.Eq(v, vv)) }
 | LPAREN; t = test; RPAREN
   { t }
