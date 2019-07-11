@@ -10,6 +10,7 @@ type test =
   | True
   | False
   | Eq of (value * value)
+	| Lt of (value * value) 
   | And of (test * test)
   | Or of (test * test)
   | Neg of test
@@ -24,6 +25,8 @@ val (%<=>%) : test -> test -> test
 val mkEq : value -> value -> test
 val (%=%) : value -> value -> test
 val (%<>%) : value -> value -> test
+val mkLt : value -> value -> test
+val (%<%) : value -> value -> test
 val mkOr : test -> test -> test
 val (%+%) : test -> test -> test
 val mkAnd : test -> test -> test

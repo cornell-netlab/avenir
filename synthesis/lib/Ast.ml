@@ -13,6 +13,7 @@ let string_of_value v =
 type test =
   | True | False
   | Eq of (value * value)
+	| Lt of (value * value)
   | And of (test * test)
   | Or of (test * test)
   | Neg of test         
@@ -23,8 +24,16 @@ let mkEq v v' =
     | Int _, Int _ -> False
     | _, _ -> Eq(v, v')
 
+let mkLt v v' =
+  if v < v' then True else
+    match v, v' with
+    | Int _, Int _ -> False
+    | _, _ -> Lt(v, v')
+
 let (%=%) = mkEq
 let (%<>%) v v' = Neg(v %=% v') 
+
+let (%<%) = mkLt
 
 let mkOr t t' =
   match t, t' with
@@ -59,6 +68,7 @@ let rec string_of_test t =
   | True -> "true"
   | False -> "false"
   | Eq (left, right) -> string_of_value left ^ " = " ^ string_of_value right
+	| Lt (left, right) -> string_of_value left ^ " < " ^ string_of_value right
   | Or (left, right) -> "(" ^ string_of_test left ^ " || " ^ string_of_test right ^ ")"
   | And (left, right) -> "(" ^ string_of_test left ^ "&" ^ string_of_test right ^ ")"
   | Neg t -> "~(" ^ string_of_test t ^ ")"
@@ -75,6 +85,9 @@ let rec free_vars_of_test test =
   | Eq (Var v, Var v') -> [v; v']
   | Eq (Var v, _) | Eq (_, Var v) -> [v]
   | Eq (_, _) -> []
+	| Lt (Var v, Var v') -> [v; v']
+  | Lt (Var v, _) | Lt (_, Var v) -> [v]
+  | Lt (_, _) -> [] 
   end
   |> List.dedup_and_sort ~compare
            
