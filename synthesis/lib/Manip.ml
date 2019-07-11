@@ -20,9 +20,11 @@ let multiply orlist orlist' =
 let rec nnf t : test =
   match t with
   | Eq(_, _)
+	  | Lt(_, _) 
     | True
     | False
     | Neg(Eq(_, _))
+		| Neg(Lt(_, _))
     | Neg(True)
     | Neg(False) -> t
   | Neg (Neg t) -> nnf t
@@ -38,6 +40,7 @@ let rec dnf t : test list =
   | And(a, b) -> multiply (dnf a) (dnf b)
   | Or (a, b) -> dnf a @ dnf b
   | Eq _
+	  | Lt _ 
     | Neg _ (* will not be And/Or because NNF*)
     | True
     | False  ->  [t]
@@ -72,11 +75,18 @@ let rec substitute ex subsMap =
   | And (e, e') -> substitute e subsMap %&% substitute e' subsMap
   (* Do the work *)
   | Eq (v,v') -> 
-    match v, v' with
+    (match v, v' with
     | Var field, Var field' -> subst field v %=% subst field' v'
     | Var field, _          -> subst field v %=% v'             
     | _        , Var field' -> v %=% subst field' v'
-    | _        , _          -> v %=% v'
+    | _        , _          -> v %=% v')
+  | Lt (v,v') -> 
+    (match v, v' with
+    | Var field, Var field' -> subst field v %<% subst field' v'
+    | Var field, _          -> subst field v %<% v'             
+    | _        , Var field' -> v %<% subst field' v'
+    | _        , _          -> v %<% v')
+
 
 (* computes weakest pre-condition of condition phi w.r.t command c *)
 let rec wp c phi = match c with

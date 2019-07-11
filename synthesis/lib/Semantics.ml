@@ -53,11 +53,18 @@ let rec check_test (cond : test) (pkt : Packet.t) : bool =
   | And (a, b) -> check_test a pkt && check_test b pkt
   | Or (a, b) -> check_test a pkt || check_test b pkt
   | Eq p ->
-     let valOf = Packet.get_val pkt in
+     (let valOf = Packet.get_val pkt in
      match p with
      | (Int i, Int i') -> i = i'
      | (Var v, Var v') -> valOf v = valOf v'
      | (Int i, Var v) | (Var v, Int i) -> i = valOf v
+     | (Hole _, _ ) | (_, Hole _) -> failwith "Semantics of holes are undefined")
+  | Lt p ->
+     let valOf = Packet.get_val pkt in
+     match p with
+     | (Int i, Int i') -> i < i'
+     | (Var v, Var v') -> valOf v < valOf v'
+     | (Int i, Var v) | (Var v, Int i) -> i < valOf v
      | (Hole _, _ ) | (_, Hole _) -> failwith "Semantics of holes are undefined"
 
 (** Appends two lists eliminating the equal boundary 

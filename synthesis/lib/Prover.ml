@@ -20,6 +20,7 @@ let rec mkZ3Test t ctx deBruijn =
   | True -> Z3.Boolean.mk_true ctx
   | False -> Z3.Boolean.mk_false ctx
   | Eq (left, right) -> Z3.Boolean.mk_eq ctx   (z3_value left) (z3_value right)
+	| Lt (left, right) -> Z3.Arithmetic.mk_lt ctx   (z3_value left) (z3_value right)
   | Or (left, right) -> Z3.Boolean.mk_or ctx   [(z3_test left); (z3_test right)]
   | And (left, right) -> Z3.Boolean.mk_and ctx [(z3_test left); (z3_test right)]
   | Neg tt -> Z3.Boolean.mk_not ctx (z3_test tt) 

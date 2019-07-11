@@ -34,6 +34,11 @@ let rec split_test_on_loc test =
      | Var "loc", Int l | Int l , Var "loc" -> (Some l, True)
      | _, _ -> (None, mkEq v v')
      end
+  | Lt (v, v') ->
+     begin match v, v' with
+     | Var "loc", Int l | Int l , Var "loc" -> (Some l, True)
+     | _, _ -> (None, mkLt v v')
+     end
   | Neg ((Eq (_, _))) -> (None, test)
   | Neg _ -> failwith "malformed test, must be in NNF"
   | And (a, b) ->
