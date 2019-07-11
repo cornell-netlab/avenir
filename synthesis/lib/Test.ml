@@ -1,7 +1,7 @@
 open Core
 open Ast
 open Manip
-(* open Prover *)
+open Graph   
 open Semantics
 open Synthesis
 
@@ -109,17 +109,12 @@ let%test _ = (* wp behaves well with assertions *)
   wp prog phi = asst %&% phi
 
 
+                           (* Test Graph Generation *)
+let%test _ =
+  let e =  parse "if loc = 0 && x = 5 -> loc := 1 []  loc = 0 && ~(x = 5) -> loc := 2 []  loc = 1 -> y := 0; loc := 6     []  loc = 2 -> y := 1; loc := 6 fi " in
+  Printf.printf "%s\n" (make_graph e |> string_of_graph); true
   
                            (* TESTING SEMANTICS *)
-
-(* let%test _ =
- *   let p = parse "loc := 0; while (~ loc = 1) { if loc = 0 && pkt = 100 -> pkt := 101; loc := 1 fi } " in
- *   let pkt = Packet.(set_field (set_field empty "loc" 0) "pkt" 100) in
- *   let _, tr = trace_eval p pkt in
- *   let _ = Printf.printf "TRACE: ";
- *           List.iter tr ~f:(fun l -> Printf.printf "%d " l);
- *           Printf.printf "\n%!" in
- *   tr = [0; 1] *)
 
 let test_trace p_string expected_trace =
   let p = parse p_string in

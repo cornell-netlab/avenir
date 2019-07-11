@@ -24,7 +24,7 @@ let rec mkZ3Test t ctx deBruijn =
   | And (left, right) -> Z3.Boolean.mk_and ctx [(z3_test left); (z3_test right)]
   | Neg tt -> Z3.Boolean.mk_not ctx (z3_test tt) 
 
-let context = Z3.mk_context [("model", "true")]
+let context = Z3.mk_context [("model", "true"); ("unsat_core", "true")]
 let solver = Z3.Solver.mk_solver context None
 
 let mk_deBruijn vars : int StringMap.t =
@@ -73,8 +73,12 @@ let checkModel test =
   | UNSATISFIABLE | UNKNOWN -> None
   | SATISFIABLE -> Z3.Solver.get_model solver
 
-
-  
+let checkCE test =
+  let _ = initSolver context test in
+  let response = Z3.Solver.check solver [] in
+  match response with
+  | SATISFIABLE | UNKNOWN -> None
+  | UNSATISFIABLE -> Some (Z3.Solver.get_unsat_core solver)
   
 
 let synthesize p q =

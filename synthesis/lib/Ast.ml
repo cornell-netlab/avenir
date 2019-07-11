@@ -141,6 +141,26 @@ let rec string_of_expr ?depth:(depth=0) (e : expr) : string =
       )
     ^ "\n" ^ repeat "\t" depth ^ "fi"
 
-    
-   
-    
+
+let rec free_vars_of_expr (e:expr) : string list =
+  match e with
+  | Skip -> []
+  | Assign (f, v) ->
+     f :: (match v with
+           | Int _ | Hole _ -> []
+           | Var x -> [x])
+  | Seq (p, q) ->
+     free_vars_of_expr p @ free_vars_of_expr q
+  | While (cond, body) ->
+     free_vars_of_test cond
+     @ free_vars_of_expr body
+  | Assert t -> free_vars_of_test t
+  | SelectFrom ss ->
+     List.fold ss ~init:[] ~f:(fun fvs (test, action) ->
+         free_vars_of_test test
+         @ free_vars_of_expr action
+         @ fvs
+       )
+           
+      
+                     

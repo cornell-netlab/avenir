@@ -49,8 +49,32 @@ let get_one_model (pkt : Packet.t) (logical : expr) (real : expr) : Z3.Model.mod
      | None -> failwith "Cannot implement logical network in real network : No model"
      | Some model -> model
 
+let fixup _ _ =
+  failwith "TODO : the hard part"
+              
+let implements n logical real correct=
+  let u_log = unroll n logical in
+  let u_rea = unroll n real in
+  match checkCE (wp u_log correct %=>% wp u_rea correct) with
+  | None -> `Yes
+  | Some x -> `NoAndCE (Packet.from_CE x) 
+                   
 (** solves the inner loop **)
-let inner_cegis_loop (_ : expr) (_ : expr) =
-  failwith "?"
+let solve_concrete ?packet:(packet=None) (logical : expr) (real : expr) =
+  let fvs = free_vars_of_expr logical @ free_vars_of_expr real in
+  let pkt = Option.value packet ~default:(Packet.generate fvs) in
+  let model = get_one_model pkt logical real in
+  fixup real model
+
+
+let cegis (logical : expr) (real : expr) (correct : test) (unroll : int) =
+  let rec loop real =
+    match implements unroll logical real correct with
+    | `Yes -> real
+    | `NoAndCE counter -> 
+       solve_concrete ~packet:counter logical real |> loop
+  in
+  solve_concrete logical real |> loop
+    
 
   

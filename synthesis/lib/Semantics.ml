@@ -25,6 +25,9 @@ module Packet = struct
     | Hole _ ->
        failwith "Packets cannot have holes in them"
 
+  let init_field_to_random bound pkt v =
+    set_field pkt v (Random.int bound) 
+
   let to_test pkt =
     StringMap.fold pkt ~init:True
       ~f:(fun ~key ~data test ->
@@ -34,6 +37,12 @@ module Packet = struct
 
   let empty = StringMap.empty
 
+  let generate ?bound:(bound=10000000) vars =
+    List.fold vars ~init:empty ~f:(init_field_to_random bound)
+
+  let from_CE _ =
+    failwith "How?"
+    
 end
 
 let rec check_test (cond : test) (pkt : Packet.t) : bool =

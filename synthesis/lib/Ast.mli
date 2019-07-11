@@ -52,3 +52,5 @@ val combineSelects : expr -> expr -> expr (*PRE : both input exprs are [SelectFr
 val (%%) : expr -> expr -> expr
 
 val string_of_expr : ?depth:int -> expr -> string
+val free_vars_of_expr : expr -> string list
+                                         
