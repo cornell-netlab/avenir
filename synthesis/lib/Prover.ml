@@ -25,7 +25,8 @@ let rec mkZ3Test t ctx deBruijn =
   | And (left, right) -> Z3.Boolean.mk_and ctx [(z3_test left); (z3_test right)]
   | Neg tt -> Z3.Boolean.mk_not ctx (z3_test tt) 
 
-let context = Z3.mk_context [("model", "true"); ("unsat_core", "true")]
+
+let context = Z3.mk_context [("model", "true")]
 let solver = Z3.Solver.mk_solver context None
 
 let mk_deBruijn vars : int StringMap.t =
@@ -54,6 +55,7 @@ let initSolver ctx test =
 let checkSMT expect test =
   let _ = initSolver context test in
   let response = Z3.Solver.check solver [] in
+	
   begin match response with
   | UNSATISFIABLE -> Printf.printf "unsat\n"
   | UNKNOWN -> Printf.printf "unknown"
@@ -67,22 +69,34 @@ let checkSMT expect test =
   expect = response
 
 
-let checkModel test =
+let check test =
   let _ = initSolver context test in
   let response = Z3.Solver.check solver [] in
   match response with
   | UNSATISFIABLE | UNKNOWN -> None
   | SATISFIABLE -> Z3.Solver.get_model solver
 
-let checkCE test =
-  let _ = initSolver context test in
-  let response = Z3.Solver.check solver [] in
-  match response with
-  | SATISFIABLE | UNKNOWN -> None
-  | UNSATISFIABLE -> Some (Z3.Solver.get_unsat_core solver)
-  
+let checkCE _ = None
+let checkModel _ = None
 
 let synthesize p q =
   Printf.printf "Synthesize %s\n with %s \n"
     (string_of_expr p)
     (string_of_expr q)
+		
+let mkMotleyTest expr =	
+	match Z3.AST.get_ast_kind (Z3.Expr.ast_of_expr expr) with
+	  | APP_AST -> Printf.printf "TODO\n"; True 
+  	| _ -> Printf.printf "TODO\n"; True
+
+
+let mkMotleyModel model = 
+		let consts = Z3.Model.get_const_decls model in
+		List.iter
+                    ~f:(fun func_decl ->
+                      let name = (Z3.Symbol.get_string (Z3.FuncDecl.get_name func_decl)) in
+                      let value = Z3.Model.get_const_interp model func_decl in
+											(match value with
+											| Some v -> Printf.printf"The mapping: (%s,%s)\n" name (Z3.Expr.to_string v) 
+											| None -> raise (Failure "should not happen")))
+                    consts
