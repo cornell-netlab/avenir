@@ -24,10 +24,9 @@ let mkEq v v' =
     | Int _, Int _ -> False
     | _, _ -> Eq(v, v')
 
-let mkLt v v' =
-  if v < v' then True else
-    match v, v' with
-    | Int _, Int _ -> False
+let mkLt v v' = match v, v' with
+    | Int first, Int second -> 
+			if first < second then True else False
     | _, _ -> Lt(v, v')
 
 let (%=%) = mkEq

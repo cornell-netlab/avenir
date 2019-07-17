@@ -69,13 +69,6 @@ let checkSMT expect test =
   expect = response
 
 
-let check test =
-  let _ = initSolver context test in
-  let response = Z3.Solver.check solver [] in
-  match response with
-  | UNSATISFIABLE | UNKNOWN -> None
-  | SATISFIABLE -> Z3.Solver.get_model solver
-
 let checkCE _ = None
 let checkModel _ = None
 
@@ -83,20 +76,42 @@ let synthesize p q =
   Printf.printf "Synthesize %s\n with %s \n"
     (string_of_expr p)
     (string_of_expr q)
-		
-let mkMotleyTest expr =	
+
+(*
+ Converts a Z3 expression to Motley expression 
+*)
+let mkMotleyExpr expr =	
 	match Z3.AST.get_ast_kind (Z3.Expr.ast_of_expr expr) with
-	  | APP_AST -> Printf.printf "TODO\n"; True 
-  	| _ -> Printf.printf "TODO\n"; True
+		| NUMERAL_AST -> Int (int_of_string (Z3.Expr.to_string expr))
+	  | APP_AST  
+		| VAR_AST   
+  	| _  -> raise (Failure ("Prover: still not supporting: " ^ (Z3.AST.to_string (Z3.Expr.ast_of_expr expr)) ^ "\n"))
 
-
+(*
+ Converts a Z3 model to a map from String to Motley expression
+*) 
 let mkMotleyModel model = 
-		let consts = Z3.Model.get_const_decls model in
-		List.iter
-                    ~f:(fun func_decl ->
-                      let name = (Z3.Symbol.get_string (Z3.FuncDecl.get_name func_decl)) in
-                      let value = Z3.Model.get_const_interp model func_decl in
-											(match value with
-											| Some v -> Printf.printf"The mapping: (%s,%s)\n" name (Z3.Expr.to_string v) 
-											| None -> raise (Failure "should not happen")))
-                    consts
+  let consts = Z3.Model.get_const_decls model in
+  let name_vals: (string * value) list = (List.map
+    ~f:(fun func_decl ->
+      let name = (Z3.Symbol.get_string (Z3.FuncDecl.get_name func_decl)) in
+      let value = Z3.Model.get_const_interp model func_decl in
+  		  (match value with
+				  | Some v -> name, (mkMotleyExpr v) 
+					| None -> raise (Failure "Prover: empty model")))
+            consts)
+						in
+							StringMap.of_alist_exn(name_vals);;
+
+(*
+ Checks SMT query. Returns either None (UNSAT) or SAT (model map) 
+*)
+let check test =
+  let _ = initSolver context test in
+  let response = Z3.Solver.check solver [] in
+	(*Printf.printf "formula: %s\n" (string_of_test test);*)
+  match response with
+  | UNSATISFIABLE | UNKNOWN -> None
+  | SATISFIABLE -> match (Z3.Solver.get_model solver) with 
+	  | Some m -> Some(mkMotleyModel m)
+		| None -> None;;
