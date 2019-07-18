@@ -15,12 +15,12 @@ type graph = (((test * expr) list) IntMap.t) IntMap.t
 type path = int list
 
 let string_of_graph (g : graph) =
-	let buf = Buffer.create 200 in
-  IntMap.iter ~f:(fun n ->
-		IntMap.iter ~f:(fun li ->
-			List.iter ~f:(fun (t,e) -> Printf.bprintf buf "%s \n" ("(" ^ (string_of_test t) ^ "," ^ (string_of_expr e) ^ ")") ) li ) n ) g;
-	Buffer.contents buf;;
-									                  
+  IntMap.fold ~f:(fun ~key:k1 ~data:n1 acc1 -> 
+		acc1 ^ 
+		IntMap.fold ~f:(fun ~key:k2 ~data:n2 acc2 -> 
+			acc2 ^ (string_of_int k1) ^ "->" ^ 
+			(List.fold_left ~f:(fun acc3 (t,e) -> (acc3 ^ "(" ^ (string_of_test t) ^ "," ^ (string_of_expr e) ^ ")") ) ~init:"" n2) ^ "->" ^
+			(string_of_int k2) ^ "\n") n1 ~init:"") g ~init:""					                  
 
 let (%.) f g x = f (g x)
              
