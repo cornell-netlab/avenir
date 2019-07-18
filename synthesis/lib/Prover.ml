@@ -115,3 +115,6 @@ let check test =
   | SATISFIABLE -> match (Z3.Solver.get_model solver) with 
 	  | Some m -> Some(mkMotleyModel m)
 		| None -> None;;
+
+let string_of_map m =
+  StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value v) ^ ") " ^ acc)) m ~init:"";;
