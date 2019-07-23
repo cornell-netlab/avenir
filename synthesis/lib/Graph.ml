@@ -22,6 +22,8 @@ let string_of_graph (g : graph) =
 			(List.fold_left ~f:(fun acc3 (t,e) -> (acc3 ^ "(" ^ (string_of_test t) ^ "," ^ (string_of_expr e) ^ ")") ) ~init:"" n2) ^ "->" ^
 			(string_of_int k2) ^ "\n") n1 ~init:"") g ~init:""					                  
 
+let string_of_path (p : path) = List.fold_left ~f:(fun acc e -> acc ^ "->" ^ (string_of_int e)) p ~init:"";;
+
 let (%.) f g x = f (g x)
              
 let rec split_test_on_loc test =
@@ -128,9 +130,7 @@ let rec get_all_paths_between (graph:graph) (rev_path:path) (current:int) (final
         (get_all_paths_between graph (current :: rev_path) nbr final)
         @ paths
       )
-
-
-
+			
     
 let all_locations graph : int list =
   let init = IntMap.keys graph in
@@ -148,10 +148,10 @@ let get_edges (graph:graph) src dst =
 
 let rec get_program_of_rev_path graph rev_path : expr =
   match rev_path with
-  | [] -> Skip
-  | [final] -> mkAssn "loc" (Int final)
-  | after :: before :: rest -> (* path is reversed so packet traveling from before -> ater  *)
-     let edges = get_edges graph before after |> SelectFrom in
-     get_program_of_rev_path graph rest %:% edges     
+  | [] 
+  | [_] -> Skip
+  | after :: before :: rest -> (* path is reversed so packet traveling from before -> after  *)
+     let edges = SelectFrom (get_edges graph before after) in
+     get_program_of_rev_path graph (before :: rest) %:% edges     
 
      
