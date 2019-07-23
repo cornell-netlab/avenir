@@ -118,18 +118,22 @@ let get_neighbors (graph:graph) location =
   | None -> IntMap.empty
   | Some nbrs -> nbrs
   
-  
-let rec get_all_paths_between (graph:graph) (rev_path:path) (current:int) (final:int) : path list =
-  if current = final then (* reached destination *)
-    [current :: rev_path]
-  else if List.mem rev_path current ~equal:(=) then (* Found a loop *)
-    []
-  else
-    let nbrs = get_neighbors graph current |> IntMap.keys in
-    List.fold nbrs ~init:[] ~f:(fun paths nbr ->
-        (get_all_paths_between graph (current :: rev_path) nbr final)
-        @ paths
-      )
+
+let get_all_paths_between (graph:graph) (current:int) (final:int) : path list =
+let rec rec_get_all_paths_between (graph:graph) (rev_path:path) (current:int) (final:int) : path list =
+	begin
+    if current = final then (* reached destination *)
+      [current :: rev_path]
+    else if List.mem rev_path current ~equal:(=) then (* Found a loop *)
+      []
+    else
+      let nbrs = get_neighbors graph current |> IntMap.keys in
+      List.fold nbrs ~init:[] ~f:(fun paths nbr ->
+          (rec_get_all_paths_between graph (current :: rev_path) nbr final)
+          @ paths
+        )
+  end in 
+	  rec_get_all_paths_between graph [] current final;;	
 			
     
 let all_locations graph : int list =

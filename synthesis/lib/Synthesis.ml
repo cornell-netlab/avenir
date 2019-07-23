@@ -10,7 +10,7 @@ open Manip
 let find_trace (graph:graph) (in_pkt : Packet.t) (out_pkt : Packet.t) =
   let in_loc  = Packet.get_val in_pkt  "loc" in
   let out_loc = Packet.get_val out_pkt "loc" in
-  let all_paths_to_pkt = get_all_paths_between graph [] in_loc out_loc in
+  let all_paths_to_pkt = get_all_paths_between graph in_loc out_loc in
   (* let _ = Printf.printf "ALL PATHS from %d to %d ;\n" in_loc out_loc;
    *         List.iter all_paths_to_pkt ~f:(fun path ->
    *             Printf.printf "\t[ ";
