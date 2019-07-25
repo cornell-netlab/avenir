@@ -97,7 +97,7 @@ let rec wp c phi = match c with
      substitute phi (StringMap.singleton field value)
   | Assert t -> t %&% phi
   | Assume t -> t %=>% phi
-  | SelectFrom exprs ->
+  | SelectFrom exprs -> (* requires at least one guard to be true *)
     And(List.fold exprs ~init:False ~f:(fun acc (cond, _  ) -> acc %+% cond),
         List.fold exprs ~init:True ~f:(fun acc (cond, act) -> acc %&% (cond %=>% wp act phi))
        )                                     

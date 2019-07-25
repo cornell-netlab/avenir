@@ -3,6 +3,8 @@ module Ast = Motley.Ast
 module Parser = Motley.Parser
 module Lexer = Motley.Lexer
 module Prover = Motley.Prover
+module Synthesis = Motley.Synthesis
+
 
 let parse_file (filename : string) : Ast.expr =
   let cts = In_channel.read_all filename in
@@ -19,7 +21,7 @@ module Solver = struct
   let run logical real () =
     let log_expr = parse_file logical in
     let real_expr = parse_file real in
-    Prover.synthesize log_expr real_expr
+    Synthesis.synthesize log_expr real_expr
            
 end
    
@@ -30,3 +32,7 @@ let command =
     Solver.run
     
 let () = Command.run command
+
+
+	
+	

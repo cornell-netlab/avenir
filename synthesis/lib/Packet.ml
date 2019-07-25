@@ -5,6 +5,8 @@ module StringMap = Map.Make (String)
 
 type t = int StringMap.t
 
+let string_of_packet (p) = (StringMap.fold ~f:(fun ~key:k ~data:v acc -> acc ^ k ^ "," ^ (string_of_int v) ^ ",") p ~init:"(") ^ ")" ;;
+
 let set_field pkt field i  =
 	StringMap.set pkt ~key:field ~data:i
     

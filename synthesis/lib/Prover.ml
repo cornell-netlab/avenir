@@ -1,3 +1,7 @@
+(*
+ * Interface to Z3
+ *)
+
 open Core
 open Ast
 
@@ -70,12 +74,6 @@ let checkSMT expect test =
 
 
 let checkCE _ = None
-let checkModel _ = None
-
-let synthesize p q =
-  Printf.printf "Synthesize %s\n with %s \n"
-    (string_of_expr p)
-    (string_of_expr q)
 
 (*
  Converts a Z3 expression to Motley expression 

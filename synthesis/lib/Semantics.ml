@@ -32,7 +32,13 @@ let squash xs ys =
        ~which_to_keep:`First
        ~equal:(=)
 let (%@) = squash
-                                   
+                        
+(*
+  TODO:
+	1 - This function assumes that "loc" is a field in the packet header which is incorrect in general
+	2 - The semantics of assume and assert is different
+*)
+	 
 let rec trace_eval (expr : expr) (pkt : Packet.t) =
   let output_for pkt = (pkt, [Packet.get_val pkt "loc"]) in
   match expr with

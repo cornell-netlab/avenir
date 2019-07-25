@@ -221,7 +221,7 @@ let%test _ =
   let log  = parse "loc := 0; while (~ loc = 1) { if loc = 0 && pkt = 100 -> pkt := 101; loc := 1 fi } " in
   let real = parse "loc := 0 ; while (~ loc = 1) { if loc = 0 && pkt = ?_hole0 -> pkt := ?_hole1; loc := 1 fi } " in
   let model = get_one_model pkt log real in
-  let _ = Z3.Model.to_string model in
+  let _ = model in
   true
   
   
