@@ -58,7 +58,8 @@ let rec trace_eval (expr : expr) (pkt : Packet.t) =
              %@ trace'
              %@ trace'')
      
-  | SelectFrom selects ->
+  | TotalSelect selects
+	| PartialSelect selects ->
      let rec find_match ss =
        match ss with
        | [] -> Skip (* If no case matches, just skip *)

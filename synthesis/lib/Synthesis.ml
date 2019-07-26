@@ -21,6 +21,8 @@ let find_traces (graph:graph) (in_pkt : Packet.t) (out_pkt : Packet.t) =
 
 (** Solves the inner loop of the cegis procedure. *)
 
+(* pre-condition: pkt is at an ingress host *)
+
 let get_one_model (pkt : Packet.t) (logical : expr) (real : expr) =
   let pkt',log_trace = trace_eval logical pkt in
   let log_graph = make_graph logical in
@@ -30,7 +32,7 @@ let get_one_model (pkt : Packet.t) (logical : expr) (real : expr) =
 	let rec find_match traces = match traces
 	with
 	| [] -> (failwith "Cannot implement logical network in real network : No path")
-	| rev_path :: rest_paths -> 
+	| rev_path :: rest_paths ->
          let path_expr = get_program_of_rev_path real_graph rev_path in
          let condition = Packet.to_test pkt' in
          let wp_of_path = wp path_expr condition in
@@ -38,14 +40,14 @@ let get_one_model (pkt : Packet.t) (logical : expr) (real : expr) =
           *           (string_of_expr path_expr)
           *           (string_of_test condition)
           *           (string_of_test wp_of_path) in *)
-         if (wp_of_path = False)
+         if (wp_of_path = False) (* TODO: if wp "evaluates" to False, not "equal" to False *)
          then (find_match rest_paths)
          else begin
 					  let condition = wp log_trace_expr (Packet.to_test pkt') %=>% wp_of_path in
 						match check condition with
               | None -> (find_match rest_paths)
               | Some model ->
-			        (string_of_map model) 
+			        Printf.printf "The model: %s\n" (string_of_map model) 
 			     end in 
 					   find_match all_traces
 					

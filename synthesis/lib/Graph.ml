@@ -57,7 +57,8 @@ let rec split_test_on_loc test =
 let rec split_expr_on_loc (expr:expr) : (expr * int option) =
   match expr with
   | While _ -> failwith "cannot handle while nested under select"
-  | SelectFrom _ -> failwith "Cannot handle nested selects"
+	| PartialSelect _
+  | TotalSelect _ -> failwith "Cannot handle nested selects"
   | Assign ("loc", Int l) -> (Skip, Some l)
   | Assign _
     | Skip
@@ -88,7 +89,8 @@ let rec get_selects (e : Ast.expr) =
   | Skip | Assign _ | Assert _ | Assume _ -> []
   | While (_, body) -> get_selects body
   | Seq (firstdo, thendo) -> get_selects firstdo @ get_selects thendo
-  | SelectFrom ss ->
+	| PartialSelect ss 
+  | TotalSelect ss ->
      List.map ss ~f:(fun (test, act) ->
          let loc, test = split_test_on_loc test in
          let act, loc' = split_expr_on_loc act in
@@ -155,7 +157,7 @@ let rec get_program_of_rev_path graph rev_path : expr =
   | [] 
   | [_] -> Skip
   | after :: before :: rest -> (* path is reversed so packet traveling from before -> after  *)
-     let edges = SelectFrom (get_edges graph before after) in
+     let edges = PartialSelect (get_edges graph before after) in
      get_program_of_rev_path graph (before :: rest) %:% edges     
 
      

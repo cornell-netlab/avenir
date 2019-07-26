@@ -2,7 +2,6 @@ open Core
 open Ast
 open Manip
 open Graph
-open Prover
 open Semantics
 open Synthesis
 
@@ -51,7 +50,7 @@ let rec generate_random_expr size =
            if n = 0 then [] else 
            (generate_random_test size', generate_random_expr size') :: loop (n-1)
          in
-         SelectFrom (loop (1 + Random.int 4 ))
+         TotalSelect (loop (1 + Random.int 4 ))
   | _ -> failwith "Should Not generate number larger than 5"
     
 
@@ -73,9 +72,6 @@ let test2 = wp ("h" %<-% Var "Ingress") True
 let%test _ = Printf.printf "%s\n" test1; true 
 let%test _ = test2 = True
              
-let%test _ = checkSMT SATISFIABLE ((Var "x" %=% Int 6) %+% (Var "x" %<>% Int 6))
-let%test _ = checkSMT SATISFIABLE (Hole "?x" %=% Int 6)
-
 let%test _ = (* Testing unrolling *)
   unroll 1 simple_test = "h" %<-% Var "Ingress" %:%
                           (Var "h" %<>% Var "Egress" %?% loop_body)
@@ -99,9 +95,9 @@ let%test _ = (*Sequencing unrolls works*)
 let%test _ = (*Selection unrolls works*)
   let cond = Var "h" %<>% Var "Egress" in
   let selectCond = Var "h" %=% Int 5 in
-  unroll 1 (SelectFrom [ selectCond, mkWhile cond loop_body;
+  unroll 1 (TotalSelect [ selectCond, mkWhile cond loop_body;
                          True, mkWhile cond loop_body])
-  = SelectFrom [selectCond, unroll 1 (mkWhile cond loop_body);
+  = TotalSelect [selectCond, unroll 1 (mkWhile cond loop_body);
                 True, unroll 1 (mkWhile cond loop_body)]
       
       
@@ -124,7 +120,7 @@ let%test _ = (* Assign behaves well with variables *)
   && Var "hgets" %=% Var "g" = wphEQ (Var "g")
 
 let%test _ = (* wp behaves well with selects *)
-  let prog =  SelectFrom[
+  let prog =  TotalSelect[
                   Var "h" %=%  Var "g" , "g" %<-% Int 8
                 ; Var "h" %=%  Int 99  , "h" %<-% Int 4
                 ; Var "h" %<>% Int 2   , "h" %<-% Var "g"

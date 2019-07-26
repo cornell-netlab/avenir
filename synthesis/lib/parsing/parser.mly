@@ -38,7 +38,7 @@ expression :
 | ASSUME; LPAREN; t = test; RPAREN
   { Ast.Assume (t) }
 | IF; s = select; FI
-  { Ast.SelectFrom s }
+  { Ast.TotalSelect s }
 
 select :
 | t = test; CASE; e = expression; BRACKETS { [ t, e ] }

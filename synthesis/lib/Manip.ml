@@ -55,9 +55,12 @@ let rec unroll n p =
      cond %?% (body %:% unroll (n-1) p)
   | Seq (firstdo, thendo), _ ->
     Seq (unroll n firstdo, unroll n thendo)
-  | SelectFrom exprs, _ ->
+  | TotalSelect exprs, _ ->
     List.map exprs ~f:(fun (cond, action) -> (cond, unroll n action))
-    |> SelectFrom
+    |> TotalSelect
+	| PartialSelect exprs, _ ->			
+    List.map exprs ~f:(fun (cond, action) -> (cond, unroll n action))
+    |> PartialSelect
   | _ -> p (* Assign, Test, Assert cannot be unrolled *)
 
 let get_val subsMap str default =
@@ -97,10 +100,12 @@ let rec wp c phi = match c with
      substitute phi (StringMap.singleton field value)
   | Assert t -> t %&% phi
   | Assume t -> t %=>% phi
-  | SelectFrom exprs -> (* requires at least one guard to be true *)
+	| PartialSelect exprs -> (* requires at least one guard to be true *)
+    List.fold exprs ~init:True ~f:(fun acc (cond, act) -> acc %&% (cond %=>% wp act phi))
+  | TotalSelect exprs -> (* requires at least one guard to be true *)
     And(List.fold exprs ~init:False ~f:(fun acc (cond, _  ) -> acc %+% cond),
         List.fold exprs ~init:True ~f:(fun acc (cond, act) -> acc %&% (cond %=>% wp act phi))
-       )                                     
+       )
   | While _ ->
     Printf.printf "Warning: skipping While loop, because loops must be unrolled\n%!";
     phi

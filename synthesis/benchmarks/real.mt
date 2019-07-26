@@ -8,6 +8,6 @@ while (~ loc = 6 ) {
     loc = 0 && x = ?hole0 -> loc := 3 []
     loc = 3 && x = ?hole1 && y = ?hole2 -> loc := 5 []
     loc = 3 && x = ?hole3 && y = ?hole4 -> loc := 4 []
-    loc = 4 && y = ?hole5 -> loc := 6
+    loc = 4 -> y := ?hole5; loc := 6
   fi
 }

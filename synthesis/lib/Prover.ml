@@ -56,23 +56,6 @@ let initSolver ctx test =
   Z3.Solver.add solver [bind_vars ctx bindable_vars phi]
 
   
-let checkSMT expect test =
-  let _ = initSolver context test in
-  let response = Z3.Solver.check solver [] in
-	
-  begin match response with
-  | UNSATISFIABLE -> Printf.printf "unsat\n"
-  | UNKNOWN -> Printf.printf "unknown"
-  | SATISFIABLE ->
-     match Z3.Solver.get_model solver with
-     | None -> ()
-     | Some model ->
-        Printf.printf "%s\n"
-          (Z3.Model.to_string model)
-  end;
-  expect = response
-
-
 let checkCE _ = None
 
 (*
@@ -107,7 +90,7 @@ let mkMotleyModel model =
 let check test =
   let _ = initSolver context test in
   let response = Z3.Solver.check solver [] in
-	(*Printf.printf "formula: %s\n" (string_of_test test);*)
+	(*Printf.printf "Motely formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string solver) ;*)
   match response with
   | UNSATISFIABLE | UNKNOWN -> None
   | SATISFIABLE -> match (Z3.Solver.get_model solver) with 

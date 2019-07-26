@@ -41,7 +41,8 @@ type expr =
   | Assume of test
   | Seq of (expr * expr)
   | While of (test * expr)
-  | SelectFrom of (test * expr) list
+  | PartialSelect of (test * expr) list
+  | TotalSelect of (test * expr) list 
 
 val mkIf : test -> expr -> expr
 val (%?%) : test -> expr -> expr
@@ -52,7 +53,7 @@ val (%<-%) : string -> value -> expr
 val mkWhile : test -> expr -> expr
 
 
-val combineSelects : expr -> expr -> expr (*PRE : both input exprs are [SelectFrom]s*)
+val combineSelects : expr -> expr -> expr (*PRE : both input exprs are [Select]s*)
 val (%%) : expr -> expr -> expr
 
 val string_of_expr : ?depth:int -> expr -> string

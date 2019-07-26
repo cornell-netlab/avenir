@@ -97,9 +97,10 @@ type expr =
   | Assume of test
   | Seq of (expr * expr)
   | While of (test * expr)
-  | SelectFrom of (test * expr) list
+	| PartialSelect of (test * expr) list
+	| TotalSelect of (test * expr) list 
 
-let mkIf cond tru = SelectFrom [(cond, tru)]
+let mkIf cond tru = PartialSelect [(cond, tru)]
 let (%?%) = mkIf
 
 let mkSeq first scnd =
@@ -115,7 +116,7 @@ let (%<-%)= mkAssn
 
 let combineSelects e e' =
   match e, e' with
-  | SelectFrom xs, SelectFrom ys -> SelectFrom (xs @ ys)
+  | PartialSelect xs, PartialSelect ys -> PartialSelect (xs @ ys)
   | _ -> failwith "Can only combine selects statements "
 
 let (%%) = combineSelects
@@ -146,7 +147,9 @@ let rec string_of_expr ?depth:(depth=0) (e : expr) : string =
      ^ string_of_test t ^ ")"
   | Assign (field, value) ->
     field ^ " := " ^ string_of_value value
-  | SelectFrom es ->
+  | PartialSelect es
+	| TotalSelect es 
+	-> 
      (* "\n" ^ repeat "\t" depth ^*) "if" ^
       List.fold_left es ~init:"" ~f:(fun str (cond, act)->
             str ^ "\n" ^
@@ -169,7 +172,8 @@ let rec free_vars_of_expr (e:expr) : string list =
      free_vars_of_test cond
      @ free_vars_of_expr body
   | Assert t | Assume t -> free_vars_of_test t
-  | SelectFrom ss ->
+  | PartialSelect ss 
+	| TotalSelect ss ->
      List.fold ss ~init:[] ~f:(fun fvs (test, action) ->
          free_vars_of_test test
          @ free_vars_of_expr action
