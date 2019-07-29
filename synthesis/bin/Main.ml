@@ -34,5 +34,11 @@ let command =
 let () = Command.run command
 
 
+let () = 
+	let log_expr = parse_file ("benchmarks/logical.mt") in
+	let real_expr = parse_file ("benchmarks/real.mt") in
+  let pkt = Motley.Packet.(set_field (set_field (set_field empty "x" 3) "y" 1) "loc" 0) in
+	let _ = Motley.Synthesis.get_one_model pkt log_expr real_expr in 
+	Printf.printf ""
 	
 	

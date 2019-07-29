@@ -81,7 +81,7 @@ let rec string_of_test t =
   | False -> "false"
   | Eq (left, right) -> string_of_value left ^ " = " ^ string_of_value right
   | Lt (left, right) -> string_of_value left ^ " < " ^ string_of_value right
-  | Or (Neg(assum), conseq) -> string_of_test assum ^ " ==> " ^ string_of_test conseq
+  | Or (Neg(assum), conseq) -> "(" ^ string_of_test assum ^ " ==> " ^ string_of_test conseq ^ ")"
   | Or (left, right) -> "(" ^ string_of_test left ^ " || " ^ string_of_test right ^ ")"
   | And (left, right) -> "(" ^ string_of_test left ^ "&&" ^ string_of_test right ^ ")"
   | Neg t -> "~(" ^ string_of_test t ^ ")"
