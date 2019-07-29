@@ -34,16 +34,21 @@ let (%<>%) v v' = Neg(v %=% v')
 
 let (%<%) = mkLt
 
-let mkOr t t' =
+let rec mkOr t t' =
   match t, t' with
   | False, x  | x, False -> x
+  | True, _ | _, True -> True
+  | _, Or (t'', t''') -> (* left-associative *)
+     mkOr (mkOr t t'') t'''
   | _ -> Or (t, t')
 
 let (%+%) = mkOr
 
-let mkAnd t t' =
+let rec mkAnd t t' =
   match t, t' with
   | True, x | x, True -> x
+  | _, And ( t'', t''') -> (* left-associative *)
+     mkAnd (mkAnd t t'') t'''
   | _ -> And (t, t')
 
 let (%&%) = mkAnd

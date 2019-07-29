@@ -7,6 +7,13 @@ open Synthesis
 
 let parse s = Parser.main Lexer.tokens (Lexing.from_string s)
 
+let print_test_neq ~got:got ~exp:exp =
+  Printf.printf "TEST FAILED ------\n";
+  Printf.printf "EXPECTED: \n%s\n" (string_of_test exp);
+  Printf.printf "GOT: \n%s\n" (string_of_test got);
+  Printf.printf "------------------\n"
+
+            
 let alphanum = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
 
 let rec generate_random_string length =
@@ -119,6 +126,18 @@ let%test _ = (* Assign behaves well with variables *)
   Var "hgets" %=% Int 7 = wphEQ (Int 7) 
   && Var "hgets" %=% Var "g" = wphEQ (Var "g")
 
+
+
+  
+let%test _ =
+  let prog = TotalSelect [
+                 Var "h" %=% Var "g", "g" %<-% Int 8
+               ] in
+  let prec = wp prog (Var "g" %=% Int 8) in
+  let exp  = Var "h" %=% Var "g" in
+  (if prec <> exp then print_test_neq ~got:prec ~exp:exp);
+  prec = exp
+  
 let%test _ = (* wp behaves well with selects *)
   let prog =  TotalSelect[
                   Var "h" %=%  Var "g" , "g" %<-% Int 8
@@ -127,19 +146,19 @@ let%test _ = (* wp behaves well with selects *)
                 ] in
   let comp = wp prog (Var "g" %=% Int 8) in
   let all_conds =
-    False
-    %+% (Var "h" %=%  Var "g")
+    (Var "h" %=%  Var "g")
     %+% (Var "h" %=%  Int 99)
     %+% (Var "h" %<>% Int 2)
   in
   let all_imps =
-    True
-    %&% ((Var "h" %=%  Var "g") %=>% (Int  8  %=% Int 8))
+    ((Var "h" %=%  Var "g") %=>% (Int  8  %=% Int 8))
     %&% ((Var "h" %=%  Int 99)  %=>% (Var "g" %=% Int 8))
     %&% ((Var "h" %<>% Int 2)   %=>% (Var "g" %=% Int 8))
   in
   let exp = all_conds %&% all_imps in
+  (if comp <> exp then print_test_neq ~got:comp ~exp:exp );
   comp = exp
+
 
            
 let%test _ = (* wp behaves well with sequence *)

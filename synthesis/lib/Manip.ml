@@ -91,8 +91,26 @@ let rec substitute ex subsMap =
     | _        , _          -> v %<% v')
 
 
+(* Applies f to every element in the list and then combines them pairwise using c.
+ * Roughly equivalent to [map exprs f |> fold ~init ~f:c], except that [init] is optional
+ * If it is provided, then if the input list is empty, it simply returns the provided [init] value
+ * However, if no [~init] is provided (or it has the value [None]), then [concatMap] 
+ * assumes that there is at least one element in the input list. If there is not, then it fails.
+ *)
+exception EmptyList of string
+let rec concatMap ?init:(init=None) ~f:(f: 'a -> 'b)  ~c:(c : 'b -> 'b -> 'b) (xs : 'a list) : 'b =
+  match xs, init with
+  | [], None -> raise (EmptyList "called concatMap on an empty list")
+  | [], Some y -> y
+  | [x], None -> f x
+  | [x], Some y -> c (f x) y
+  | x::xs ,_ -> c (f x) (concatMap ~init ~f ~c xs)
+
+              
 (* computes weakest pre-condition of condition phi w.r.t command c *)
-let rec wp c phi = match c with
+let rec wp c phi =
+  let guarded_wp phi (cond, act) = cond %=>% wp act phi in
+  match c with
   | Skip -> phi
   | Seq (firstdo, thendo) ->
     wp firstdo (wp thendo phi)
@@ -100,12 +118,17 @@ let rec wp c phi = match c with
      substitute phi (StringMap.singleton field value)
   | Assert t -> t %&% phi
   | Assume t -> t %=>% phi
-	| PartialSelect exprs -> (* requires at least one guard to be true *)
-    List.fold exprs ~init:True ~f:(fun acc (cond, act) -> acc %&% (cond %=>% wp act phi))
-  | TotalSelect exprs -> (* requires at least one guard to be true *)
-    And(List.fold exprs ~init:False ~f:(fun acc (cond, _  ) -> acc %+% cond),
-        List.fold exprs ~init:True ~f:(fun acc (cond, act) -> acc %&% (cond %=>% wp act phi))
-       )
+              
+  (* requires at least one guard to be true *)
+  | TotalSelect [] -> False
+  | TotalSelect exprs ->
+     concatMap exprs ~c:(%+%) ~f:fst 
+     %&% concatMap exprs ~c:(%&%) ~f:(guarded_wp phi)
+    
+  (* doesn't require at any guard to be true *)
+  | PartialSelect [] -> True
+  | PartialSelect exprs ->
+     concatMap exprs ~c:(%&%) ~f:(guarded_wp phi)
   | While _ ->
     Printf.printf "Warning: skipping While loop, because loops must be unrolled\n%!";
     phi
