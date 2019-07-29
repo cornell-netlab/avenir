@@ -19,7 +19,7 @@ let find_traces (graph:graph) (in_pkt : Packet.t) (out_pkt : Packet.t) =
    *) 
    
 
-(** Solves the inner loop of the cegis procedure. *)
+(* Solves the inner loop of the cegis procedure. *)
 
 (* pre-condition: pkt is at an ingress host *)
 
@@ -36,20 +36,21 @@ let get_one_model (pkt : Packet.t) (logical : expr) (real : expr) =
          let path_expr = get_program_of_rev_path real_graph rev_path in
          let condition = Packet.to_test pkt' in
          let wp_of_path = wp path_expr condition in
-         (* let _ = Printf.printf "wp(%s, %s) = %s\n%!"
+         (* let _ = Printf.printf "(%s) =\nwp(%s, %s)\n%!"
+          *           (string_of_test wp_of_path)
           *           (string_of_expr path_expr)
-          *           (string_of_test condition)
-          *           (string_of_test wp_of_path) in *)
-         if (wp_of_path = False) (* TODO: if wp "evaluates" to False, not "equal" to False *)
+          *           (string_of_test condition) in *)
+         if (wp_of_path = False) 
          then (find_match rest_paths)
          else begin
-					  let condition = wp log_trace_expr (Packet.to_test pkt') %=>% wp_of_path in
-						match check condition with
-              | None -> (find_match rest_paths)
-              | Some model ->
-			        Printf.printf "The model: %s\n" (string_of_map model) 
-			     end in 
-					   find_match all_traces
+	     let condition = wp log_trace_expr (Packet.to_test pkt') %=>% wp_of_path in
+             (* let _ = Printf.printf "CONDITION: \n%s\n" (sexp_string_of_test condition) in *)
+	     match check condition with
+             | None -> (find_match rest_paths)
+             | Some model ->
+		Printf.printf "The model: %s\n" (string_of_map model); model
+	   end in 
+	find_match all_traces
 					
 
 let fixup _ _ =

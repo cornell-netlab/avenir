@@ -16,6 +16,7 @@ type test =
   | Neg of test
 
 val string_of_test : test -> string
+val sexp_string_of_test : test -> string
 val free_vars_of_test : test -> string list
 
 val mkImplies : test -> test -> test
@@ -57,5 +58,6 @@ val combineSelects : expr -> expr -> expr (*PRE : both input exprs are [Select]s
 val (%%) : expr -> expr -> expr
 
 val string_of_expr : ?depth:int -> expr -> string
+val sexp_string_of_expr : expr -> string
 val free_vars_of_expr : expr -> string list
                                          

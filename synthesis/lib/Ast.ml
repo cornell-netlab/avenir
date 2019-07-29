@@ -1,4 +1,5 @@
 open Core
+open Util
 
 type value =
   | Var of string
@@ -7,8 +8,15 @@ type value =
 
 let string_of_value v =
   match v with
-  | Var s | Hole s -> s
+  | Var s -> s
+  | Hole s -> "?" ^ s
   | Int i -> string_of_int i
+
+let sexp_string_of_value v =
+  match v with
+  | Var s -> "(Var " ^ s ^ ")"
+  | Hole s -> "Hole (" ^ s ^ ")"  
+  | Int i -> "(Int " ^ string_of_int i ^ ")"
 
 type test =
   | True | False
@@ -73,11 +81,39 @@ let rec string_of_test t =
   | False -> "false"
   | Eq (left, right) -> string_of_value left ^ " = " ^ string_of_value right
   | Lt (left, right) -> string_of_value left ^ " < " ^ string_of_value right
+  | Or (Neg(assum), conseq) -> string_of_test assum ^ " ==> " ^ string_of_test conseq
   | Or (left, right) -> "(" ^ string_of_test left ^ " || " ^ string_of_test right ^ ")"
   | And (left, right) -> "(" ^ string_of_test left ^ "&&" ^ string_of_test right ^ ")"
   | Neg t -> "~(" ^ string_of_test t ^ ")"
 
-
+let rec sexp_string_of_test t =
+  let binop opname left right recfun : string=
+    opname ^ "(" ^ recfun left ^ "," ^ recfun right ^ ")" in
+  match t with
+  | True -> "True"
+  | False -> "False"
+  | Eq  (left, right) -> binop "Eq" left right sexp_string_of_value
+  | Lt  (left, right) -> binop "Lt" left right sexp_string_of_value
+  | Or  (left, right) -> binop "Or" left right sexp_string_of_test
+  | And (left, right) -> binop "And" left right sexp_string_of_test
+  | Neg t -> "Neg(" ^ sexp_string_of_test t ^ ")"
+           
+let rec remove_dups y xs =
+  match xs with
+  | [] -> []
+  | x::xs ->
+     if y = x then
+       remove_dups y xs
+     else
+       x :: remove_dups y xs
+    
+let rec dedup xs =
+  match xs with
+  | [] -> []
+  | x::xs ->
+     let xs' = remove_dups x xs in
+     x :: dedup xs'
+  
 let rec free_vars_of_test test =
   begin match test with
   | True | False ->
@@ -93,7 +129,7 @@ let rec free_vars_of_test test =
   | Lt (Var v, _) | Lt (_, Var v) -> [v]
   | Lt (_, _) -> [] 
   end
-  |> List.dedup_and_sort ~compare
+  |> dedup
            
 type expr =
   | Skip
@@ -102,8 +138,8 @@ type expr =
   | Assume of test
   | Seq of (expr * expr)
   | While of (test * expr)
-	| PartialSelect of (test * expr) list
-	| TotalSelect of (test * expr) list 
+  | PartialSelect of (test * expr) list
+  | TotalSelect of (test * expr) list 
 
 let mkIf cond tru = PartialSelect [(cond, tru)]
 let (%?%) = mkIf
@@ -131,6 +167,7 @@ let mkWhile t e = While(t,e)
        
 let rec repeat c n =  if n = 0 then "" else c ^ repeat c (n-1)
 
+                    
 let rec string_of_expr ?depth:(depth=0) (e : expr) : string =
   match e with
   | Skip -> "skip"
@@ -152,18 +189,37 @@ let rec string_of_expr ?depth:(depth=0) (e : expr) : string =
      ^ string_of_test t ^ ")"
   | Assign (field, value) ->
     field ^ " := " ^ string_of_value value
-  | PartialSelect es
-	| TotalSelect es 
-	-> 
-     (* "\n" ^ repeat "\t" depth ^*) "if" ^
-      List.fold_left es ~init:"" ~f:(fun str (cond, act)->
-            str ^ "\n" ^
-              repeat "\t" (depth + 1)
-              ^ string_of_test cond  ^ " -> " ^ string_of_expr ~depth:(depth+2) act ^ " []"
-        )
-      ^ "\n" ^ repeat "\t" depth ^ "fi"
+  | PartialSelect es ->
+     string_of_select "if" depth es
+  | TotalSelect es -> 
+     string_of_select "tif" depth es
 
+and string_of_select openstr depth es =
+  openstr ^
+    List.fold_left es ~init:"" ~f:(fun str (cond, act)->
+        str ^ "\n" ^
+          repeat "\t" (depth + 1)
+          ^ string_of_test cond  ^ " -> " ^ string_of_expr ~depth:(depth+2) act ^ " []"
+      )
+    ^ "\n" ^ repeat "\t" depth ^ String.rev openstr
+  
+let rec sexp_string_of_expr e : string =
+  let string_select = concatMap 
+                        ~f:(fun (cond,act) -> "(" ^ sexp_string_of_test cond ^ "," ^ sexp_string_of_expr act ^ ")")
+                        ~c:(fun acc d -> acc ^ ";" ^ d) in
+  match e with
+  | Skip -> "Skip"
+  | While (cond, body) -> "While("^ sexp_string_of_test cond ^ "," ^ sexp_string_of_expr body ^")"
+  | Seq (p, q) -> "Seq(" ^ sexp_string_of_expr p ^ "," ^ sexp_string_of_expr q ^ ")"
+  | Assert t -> "Assert(" ^ sexp_string_of_test t ^ ")"
+  | Assume t -> "Assume(" ^ sexp_string_of_test t ^ ")"
+  | Assign (f,v) -> "Assign(" ^ f ^ "," ^ string_of_value v ^")"
+  | PartialSelect [] -> "PartialSelect([])"
+  | PartialSelect exprs -> "PartialSelect([" ^ string_select exprs ^ "])"
+  | TotalSelect [] -> "TotalSelect([])"
+  | TotalSelect exprs -> "PartialSelect([" ^ string_select exprs ^ "])"
 
+  
 let rec free_vars_of_expr (e:expr) : string list =
   match e with
   | Skip -> []

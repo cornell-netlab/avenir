@@ -1,9 +1,10 @@
 open Core
 open Ast
 open Manip
-open Graph
+(* open Graph *)
 open Semantics
 open Synthesis
+open Prover
 
 let parse s = Parser.main Lexer.tokens (Lexing.from_string s)
 
@@ -27,7 +28,7 @@ let generate_random_value size =
   match Random.int 3 with
   | 0 -> Int (Random.int 256)
   | 1 -> Var (generate_random_string size)
-  | 2 -> Hole ("?" ^ generate_random_string size)
+  | 2 -> Hole (generate_random_string size)
   | _ -> failwith "generated random integer larger than 2"
           
 let rec generate_random_test size =
@@ -76,8 +77,6 @@ let test1 = string_of_expr simple_test
                 
 let test2 = wp ("h" %<-% Var "Ingress") True 
 
-let%test _ = Printf.printf "%s\n" test1; true 
-let%test _ = test2 = True
              
 let%test _ = (* Testing unrolling *)
   unroll 1 simple_test = "h" %<-% Var "Ingress" %:%
@@ -172,6 +171,14 @@ let%test _ = (* wp behaves well with assertions *)
   let phi =  Var "h" %=% Var "g" in
   wp prog phi = asst %&% phi
 
+let%test _ = (* wp behaves well with partials *)
+  let cond = Var "pkt" %=% Int 101 in
+  let prog = PartialSelect [ Var "pkt" %=% Hole "_hole0", "pkt" %<-% Hole "_hole1" ] in
+  let expected = Var "pkt" %=% Hole "_hole0" %=>% (Hole "_hole1" %=% Int 101) in
+  let pre = wp prog cond in
+  (* Printf.printf "EXPECTED:\n%s\n\nGOT:\n%s\n" (sexp_string_of_test expected) (sexp_string_of_test pre); *)
+  expected = pre
+  
 
                            (* TEST PARSING *)
 
@@ -180,22 +187,27 @@ let%test _ =
     if n = 0 then true else
       let e = generate_random_expr 3 in
       let s = string_of_expr e in
-      let s' = parse s |> string_of_expr in
-      if s = s' then loop (n-1)
-      else
-        (Printf.printf "[PARSER ROUND TRIP] FAILED for:\n %s\n got %s" s  s';
-         false)
+      try
+        let s' = parse s |> string_of_expr in
+        if s = s' then loop (n-1)
+        else
+          (Printf.printf "[PARSER ROUND TRIP] FAILED for:\n %s\n got %s" s  s';
+           false)
+      with _ ->
+        (Printf.printf "[PARSING FAILED] for expression:\n%s\n\n%s\n" s (sexp_string_of_expr e);
+        false)
   in
   loop 100
+
 
 
   
 
 
                            (* TEST GRAPH GENERATION *)
-let%test _ =
-  let e =  parse "if loc = 0 && x = 5 -> loc := 1 []  loc = 0 && ~(x = 5) -> loc := 2 []  loc = 1 -> y := 0; loc := 6     []  loc = 2 -> y := 1; loc := 6 fi " in
-  Printf.printf "%s\n" (make_graph e |> string_of_graph); true
+(* let%test _ =
+ *   let e =  parse "if loc = 0 && x = 5 -> loc := 1 []  loc = 0 && ~(x = 5) -> loc := 2 []  loc = 1 -> y := 0; loc := 6     []  loc = 2 -> y := 1; loc := 6 fi " in
+ *   Printf.printf "%s\n" (make_graph e |> string_of_graph); true *)
 
 
 
@@ -226,7 +238,42 @@ let%test _ = test_trace
 let%test _ = test_trace
                "loc := 0; while (~ loc = 1) { if loc = 0 && pkt = 100 -> pkt := 101; loc := 1 fi }"
                [0;1]
-  
+
+                            (* TESTING Formula Construction *)
+
+let%test _ =
+  let ctx = context in
+  let t = (!%( (Var "x" %=% Int 5) %+% ((Var "x" %=% Int 3) %&% (Var "z" %=% Int 6)))
+           %+% !%( (Var "x" %=% Hole "hole0") %+% (Var "y" %=% Hole "hole1"))) in
+  let exp_fvs = ["x"; "z"; "y"] in
+  let indices = mk_deBruijn (free_vars_of_test t) in
+  let get = StringMap.find indices in
+  let z3test = mkZ3Test t ctx indices in
+  let expz3string = "(let ((a!1 (not (or (= (:var 2) 5) (and (= (:var 2) 3) (= (:var 1) 6))))))\n  (or a!1 (not (or (= (:var 2) hole0) (= (:var 0) hole1)))))" in
+  let qform = bind_vars ctx exp_fvs z3test in
+  let exp_qform_string ="(forall ((x Int) (z Int) (y Int))\n  (let ((a!1 (not (or (= x 5) (and (= x 3) (= z 6))))))\n    (or a!1 (not (or (= x hole0) (= y hole1))))))" in
+  free_vars_of_test t = exp_fvs
+  && get "x" = Some 2 && get "y" = Some 0 && get "z" = Some 1
+  && Z3.Expr.to_string z3test = expz3string
+  && Z3.Expr.to_string qform = exp_qform_string
+    
+let%test _ =
+  let t = (!%( (Var "x" %=% Int 5) %+% ((Var "x" %=% Int 3) %&% (Var "z" %=% Int 6)))
+           %+% !%( (Var "x" %=% Hole "hole0") %+% (Var "y" %=% Hole "hole1"))) in
+  let r = check t in
+  let r' = check t in
+  r = None (* i.e. is unsat *)
+  && r = r'
+           
+let%test _ = (* Test deBruijn Indices*)
+  let vars = ["x"; "y"; "z"] in
+  let indices = mk_deBruijn vars in
+  let get = StringMap.find indices in
+  match get "x", get "y", get "z" with
+  | Some xi, Some yi, Some zi -> xi = 2 && yi = 1 && zi = 0
+  | _, _, _ -> false
+           
+           
 
 
                            (* TESTING FOR CEGIS PROCEDURE *)

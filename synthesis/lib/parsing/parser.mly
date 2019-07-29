@@ -3,13 +3,14 @@
 %token QUESTION
 %token TRUE
 %token FALSE
-%token OR AND NOT EQ LESS GREATER LEQ GEQ NEQ
+%token OR AND NOT EQ LESS GREATER LEQ GEQ NEQ IMPLIES
 %token WHILE SKIP SEMICOLON ASSIGN
 %token ASSERT ASSUME ABORT
 %token IF CASE BRACKETS FI
 %token LPAREN RPAREN LBRACE RBRACE
 %token EOF
 
+%left IMPLIES
 %left OR
 %left AND
 %left SEMICOLON
@@ -38,7 +39,7 @@ expression :
 | ASSUME; LPAREN; t = test; RPAREN
   { Ast.Assume (t) }
 | IF; s = select; FI
-  { Ast.TotalSelect s }
+  { Ast.PartialSelect s }
 
 select :
 | t = test; CASE; e = expression; BRACKETS { [ t, e ] }
@@ -49,7 +50,7 @@ select :
 value :
 | i = INT { Ast.Int (i) }
 | x = ID  { Ast.Var (x) }
-| QUESTION; x = ID { Ast.Hole ("?" ^ x) }
+| QUESTION; x = ID { Ast.Hole (x) }
 
 test :
 | TRUE
@@ -76,3 +77,5 @@ test :
   { Ast.Or(Ast.Lt(v, vv), Ast.Eq(v, vv)) }
 | LPAREN; t = test; RPAREN
   { t }
+| t = test; IMPLIES; tt = test
+  { Ast.( t %=>% tt) }
