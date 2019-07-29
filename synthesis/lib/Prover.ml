@@ -92,7 +92,7 @@ let check test =
   let mySolver = solver () in
   let _ = initSolver mySolver context test in
   let response = Z3.Solver.check mySolver [] in
-  Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver);
+  (*Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver);*)
   match response with
   | UNSATISFIABLE | UNKNOWN -> None
   | SATISFIABLE ->
