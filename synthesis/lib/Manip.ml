@@ -109,7 +109,7 @@ let rec concatMap ?init:(init=None) ~f:(f: 'a -> 'b)  ~c:(c : 'b -> 'b -> 'b) (x
               
 (* computes weakest pre-condition of condition phi w.r.t command c *)
 let rec wp c phi =
-  let guarded_wp phi (cond, act) = cond %=>% wp act phi in
+  let guarded_wp (cond, act) = cond %=>% wp act phi in
   match c with
   | Skip -> phi
   | Seq (firstdo, thendo) ->
@@ -123,12 +123,12 @@ let rec wp c phi =
   | TotalSelect [] -> False
   | TotalSelect exprs ->
      concatMap exprs ~c:(%+%) ~f:fst 
-     %&% concatMap exprs ~c:(%&%) ~f:(guarded_wp phi)
+     %&% concatMap exprs ~c:(%&%) ~f:guarded_wp
     
   (* doesn't require at any guard to be true *)
   | PartialSelect [] -> True
   | PartialSelect exprs ->
-     concatMap exprs ~c:(%&%) ~f:(guarded_wp phi)
+     concatMap exprs ~c:(%&%) ~f:guarded_wp
   | While _ ->
     Printf.printf "Warning: skipping While loop, because loops must be unrolled\n%!";
     phi
