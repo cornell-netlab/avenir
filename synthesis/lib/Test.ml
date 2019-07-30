@@ -285,5 +285,45 @@ let%test _ =
   let model = get_one_model pkt log real in
   let _ = model in
   true
-  
+
+
+let%test _ =
+  let x = "x" in
+  let y = "y" in
+  let loc = "loc" in
+  let vloc = Var loc in
+  let vx = Var x in
+  let vy = Var y in
+  let pkt = Packet.(set_field (set_field (set_field empty "x" 3) "y" 1) "loc" 1) in
+  let logical = loc %<-% Int 0 %:%
+                  While(!%(vloc %=% Int 6),
+                        PartialSelect [
+                            vloc %=% Int 0 %&% (vx %=% Int 5), loc %<-% Int 1 ;
+                            vloc %=% Int 0 %&% !%(vx %=% Int 5), loc %<-% Int 2 ;
+                            vloc %=% Int 1 , y %<-% Int 0 %:% (loc %<-% Int 6) ;
+                            vloc %=% Int 2 , y %<-% Int 1 %:% (loc %<-% Int 6) ;
+                          ]
+                    )
+  in
+  let real = loc %<-% Int 0 %:%
+               While ( !%(vloc %=% Int 6),
+                       PartialSelect [
+                           vloc %=% Int 0 %&% (vx %=% Int 5 ), loc %<-% Int 1 ;
+                           vloc %=% Int 1 %&% (vy %=% Hole "6"), loc %<-% Int 2 ;
+                           vloc %=% Int 2 , y %<-% Int 1 %:% (loc %<-% Int 6) ;
+                           vloc %=% Int 5 , y %<-% Int 0 %:% (loc %<-% Int 6) ;
+                           vloc %=% Int 0 %&% (vx %=% Hole "0"), loc %<-% Int 3 ;
+                           vloc %=% Int 3 %&% (vx %=% Hole "1" %&% (vy %=% Hole "2")), loc %<-% Int 5 ;
+                           vloc %=% Int 3 %&% (vx %=% Hole "3" %&% (vy %=% Hole "2")), loc %<-% Int 3 ;
+                           vloc %=% Int 4 , (y %<-% Int 5 %:% (loc %<-% Int 6))
+                 ])
+  in
+  let _ = Printf.printf "\n----- Testing Running Example----\n\n" in
+  let model = get_one_model pkt logical real in
+  Printf.printf "PACKET:\n%s\n\nLOGICAL PROGRAM:\n%s\n\nREAL PROGRAM:\n%s\n\n MODEL:\n%s\n\n%!"
+    (Packet.string_of_packet pkt)
+    (string_of_expr logical)
+    (string_of_expr real)
+    (string_of_map model);
+  true
   

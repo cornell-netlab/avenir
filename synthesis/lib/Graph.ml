@@ -33,14 +33,10 @@ let rec split_test_on_loc test =
   | False -> (None, False)
   | Eq (v, v') ->
      begin match v, v' with
-     | Var "loc", Int l | Int l , Var "loc" -> (Some l, True)
+     | Var "loc", Int l | Int l , Var "loc" -> (Some l, Var "loc" %=% Int l)
      | _, _ -> (None, mkEq v v')
      end
-  | Lt (v, v') ->
-     begin match v, v' with
-     | Var "loc", Int l | Int l , Var "loc" -> (Some l, True)
-     | _, _ -> (None, mkLt v v')
-     end
+  | Lt (v, v') -> (None, mkLt v v')
   | Neg ((Eq (_, _))) -> (None, test)
   | Neg _ -> failwith "malformed test, must be in NNF"
   | And (a, b) ->
@@ -148,6 +144,7 @@ let all_locations graph : int list =
   List.fold init ~init ~f
 
 let get_edges (graph:graph) src dst =
+  Printf.printf "[LOG] looking for edge from %d to %d\n%!" src dst;
   let succs = IntMap.find_exn graph src in
   let edges = IntMap.find_exn succs dst in
   edges

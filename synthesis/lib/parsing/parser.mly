@@ -78,4 +78,4 @@ test :
 | LPAREN; t = test; RPAREN
   { t }
 | t = test; IMPLIES; tt = test
-  { Ast.( t %=>% tt) }
+  { Ast.(Or(Neg(t), tt)) }

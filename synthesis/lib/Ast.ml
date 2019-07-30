@@ -55,6 +55,7 @@ let (%+%) = mkOr
 let rec mkAnd t t' =
   match t, t' with
   | True, x | x, True -> x
+  | False, _ | _, False -> False
   | _, And ( t'', t''') -> (* left-associative *)
      mkAnd (mkAnd t t'') t'''
   | _ -> And (t, t')
@@ -69,7 +70,7 @@ let mkNeg t =
 
 let (!%) = mkNeg      
   
-let mkImplies assum conseq = mkOr (Neg assum) conseq
+let mkImplies assum conseq = mkOr (mkNeg assum) conseq
 let (%=>%) = mkImplies
 
 let mkIff lhs rhs = (lhs %=>% rhs) %&% (rhs %=>% lhs)

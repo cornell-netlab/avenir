@@ -44,8 +44,7 @@ let rec trace_eval (expr : expr) (pkt : Packet.t) =
   match expr with
   | Skip -> output_for pkt
   | Assign (f, v) ->
-     Packet.set_field_of_value pkt f v
-     |> output_for
+     output_for ( Packet.set_field_of_value pkt f v)
   | Assert (t) | Assume (t) ->
      if check_test t pkt then
        output_for pkt
@@ -58,8 +57,18 @@ let rec trace_eval (expr : expr) (pkt : Packet.t) =
              %@ trace'
              %@ trace'')
      
-  | TotalSelect selects
-	| PartialSelect selects ->
+  | TotalSelect selects ->
+     let rec find_match ss =
+       | [] -> failwith "ABORT, COULD NOT FIND MATCH IN SELECT STATEMENT"
+       | (cond, action) :: rest ->
+          if check_test cond pkt then
+            action
+          else
+            find_match rst
+     in
+     trace_eval (find_match selects) pkt
+     
+  | PartialSelect selects ->
      let rec find_match ss =
        match ss with
        | [] -> Skip (* If no case matches, just skip *)

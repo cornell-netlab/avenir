@@ -100,5 +100,9 @@ let check test =
      | Some m -> Some (mkMotleyModel m)
      | None -> None
 
+(* Checks SMT Query for validity. Returns None (VALID) or Some model (Counter Example) *)          
+let check_valid test = check (!%test)
+  
+
 let string_of_map m =
   StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value v) ^ ") " ^ acc)) m ~init:""
