@@ -225,7 +225,7 @@ let test_trace p_string expected_trace =
 
 let%test _ = test_trace
                "loc:=0; loc:=0"
-               [0]
+               [0; 0]
 let%test _ = test_trace
                "loc:=0; loc := 1"
                [0; 1]

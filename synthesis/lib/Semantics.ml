@@ -39,52 +39,40 @@ let (%@) = squash
 	2 - The semantics of assume and assert is different
 *)
 	 
-let rec trace_eval (expr : expr) (pkt : Packet.t) =
-  let output_for pkt = (pkt, [Packet.get_val pkt "loc"]) in
+let rec trace_eval (expr : expr) (pkt : Packet.t) : Packet.t * (int list) =
+  let rec find_match ss ~default:default =
+    match ss with 
+    | [] -> default ()
+    | (cond, action) :: rest ->
+       if check_test cond pkt then
+         action
+       else
+         find_match rest ~default
+  in
   match expr with
-  | Skip -> output_for pkt
+  | Skip -> (pkt, [])
+  | Assign ("loc", Int i ) ->
+     (Packet.set_field pkt "loc" i, [i])
+  | Assign ("loc", _) -> failwith "Cannot assign location to a hole or variable"
   | Assign (f, v) ->
-     output_for ( Packet.set_field_of_value pkt f v)
-  | Assert (t) | Assume (t) ->
+     (Packet.set_field_of_value pkt f v, [])
+  | Assert (t) ->
      if check_test t pkt then
-       output_for pkt
+       (pkt, [])
      else
        failwith ("AssertionFailure: " ^ string_of_test t ^ "was false")
-  | Seq ( firstdo, thendo ) ->
+  | Assume _ -> (pkt, [])
+  | Seq (firstdo, thendo) ->
      let (pkt', trace') = trace_eval firstdo pkt in
      let (pkt'', trace'') = trace_eval thendo pkt' in
-     (pkt'', [Packet.get_val pkt "loc"]
-             %@ trace'
-             %@ trace'')
-     
+     (pkt'', trace' @ trace'')
   | TotalSelect selects ->
-     let rec find_match ss =
-       match ss with 
-       | [] -> failwith "ABORT, COULD NOT FIND MATCH IN SELECT STATEMENT"
-       | (cond, action) :: rest ->
-          if check_test cond pkt then
-            action
-          else
-            find_match rest
-     in
-     trace_eval (find_match selects) pkt
-     
+     let abort _ = failwith "SelectionError: Could not find match in select"in
+     trace_eval (find_match selects ~default:abort) pkt
   | PartialSelect selects ->
-     let rec find_match ss =
-       match ss with
-       | [] -> Skip (* If no case matches, just skip *)
-       | (cond, action) :: rst ->
-          if check_test cond pkt then
-            action
-          else
-            find_match rst
-     in
-     trace_eval (find_match selects) pkt
-     
-  | While ( cond , body ) ->
-     let _, trace = output_for pkt in
-     if check_test cond pkt then
-       let pkt', trace' = trace_eval (Seq(body,expr)) pkt in
-       (pkt', trace %@ trace')
-     else 
-       (pkt, trace)
+     trace_eval (find_match selects ~default:(fun _ -> Skip)) pkt
+  |  While ( cond , body ) ->
+      if check_test cond pkt then
+        trace_eval (Seq(body,expr)) pkt 
+      else 
+        (pkt, [])

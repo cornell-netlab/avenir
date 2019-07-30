@@ -5,18 +5,18 @@ module StringMap = Map.Make (String)
 
 type t = int StringMap.t
 
-let string_of_packet (p) = (StringMap.fold ~f:(fun ~key:k ~data:v acc -> acc ^ k ^ "," ^ (string_of_int v) ^ ",") p ~init:"(") ^ ")" ;;
+let string_of_packet (p) = (StringMap.fold ~f:(fun ~key:k ~data:v acc -> acc ^ k ^ "," ^ (string_of_int v) ^ ",") p ~init:"(") ^ ")"
 
 let set_field pkt field i  =
-	StringMap.set pkt ~key:field ~data:i
+  StringMap.set pkt ~key:field ~data:i
     
 let get_val pkt field =
-	match StringMap.find pkt field with
+  match StringMap.find pkt field with
     | None -> failwith ("UseBeforeDef error" ^ field)
     | Some v -> v
     
 let set_field_of_value pkt field value =
-	match value with
+  match value with
     | Int i -> set_field pkt field i
     | Var v ->
        get_val pkt v
@@ -25,14 +25,14 @@ let set_field_of_value pkt field value =
        failwith "Packets cannot have holes in them"
 
 let init_field_to_random bound pkt v =
-	set_field pkt v (Random.int bound) 
+  set_field pkt v (Random.int bound) 
 
 let to_test pkt =
-	StringMap.fold pkt ~init:True
-      ~f:(fun ~key ~data test ->
-        Var key %=% Int data
-        %&% test
-      )
+  StringMap.fold pkt ~init:True
+    ~f:(fun ~key ~data test ->
+      Var key %=% Int data
+      %&% test
+    )
 
 let empty = StringMap.empty
 
