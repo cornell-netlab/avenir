@@ -219,8 +219,9 @@ let%test _ =
 let test_trace p_string expected_trace =
   let p = parse p_string in
   let pkt = Packet.(set_field (set_field empty "loc" 0) "pkt" 100) in
-  let _, tr = trace_eval p pkt in
-  tr = expected_trace
+  match trace_eval p pkt with
+  | None -> false
+  | Some (_, tr) -> tr = expected_trace
   
 
 let%test _ = test_trace
@@ -294,7 +295,7 @@ let%test _ =
   let vloc = Var loc in
   let vx = Var x in
   let vy = Var y in
-  let pkt = Packet.(set_field (set_field (set_field empty "x" 3) "y" 1) "loc" 1) in
+  let pkt = Packet.(set_field (set_field (set_field empty "x" 3) "y" 1) "loc" 0) in
   let logical = loc %<-% Int 0 %:%
                   While(!%(vloc %=% Int 6),
                         PartialSelect [
@@ -309,18 +310,18 @@ let%test _ =
                While ( !%(vloc %=% Int 6),
                        PartialSelect [
                            vloc %=% Int 0 %&% (vx %=% Int 5 ), loc %<-% Int 1 ;
-                           vloc %=% Int 1 %&% (vy %=% Hole "6"), loc %<-% Int 2 ;
+                           vloc %=% Int 1 %&% (vy %=% Hole "_6"), loc %<-% Int 2 ;
                            vloc %=% Int 2 , y %<-% Int 1 %:% (loc %<-% Int 6) ;
                            vloc %=% Int 5 , y %<-% Int 0 %:% (loc %<-% Int 6) ;
-                           vloc %=% Int 0 %&% (vx %=% Hole "0"), loc %<-% Int 3 ;
-                           vloc %=% Int 3 %&% (vx %=% Hole "1" %&% (vy %=% Hole "2")), loc %<-% Int 5 ;
-                           vloc %=% Int 3 %&% (vx %=% Hole "3" %&% (vy %=% Hole "2")), loc %<-% Int 3 ;
-                           vloc %=% Int 4 , (y %<-% Int 5 %:% (loc %<-% Int 6))
+                           vloc %=% Int 0 %&% (vx %=% Hole "_0"), loc %<-% Int 3 ;
+                           vloc %=% Int 3 %&% (vx %=% Hole "_1" %&% (vy %=% Hole "_2")), loc %<-% Int 5 ;
+                           vloc %=% Int 3 %&% (vx %=% Hole "_3" %&% (vy %=% Hole "_4")), loc %<-% Int 4 ;
+                           vloc %=% Int 4 , (y %<-% Int 1 %:% (loc %<-% Int 6))
                  ])
   in
   let _ = Printf.printf "\n----- Testing Running Example----\n\n" in
   let model = get_one_model pkt logical real in
-  Printf.printf "PACKET:\n%s\n\nLOGICAL PROGRAM:\n%s\n\nREAL PROGRAM:\n%s\n\n MODEL:\n%s\n\n%!"
+  Printf.printf "PACKET:\n%s\n%!\nLOGICAL PROGRAM:\n%s\n%!\nREAL PROGRAM:\n%s\n%!\n MODEL:\n%s\n\n%!"
     (Packet.string_of_packet pkt)
     (string_of_expr logical)
     (string_of_expr real)

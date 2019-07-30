@@ -30,11 +30,17 @@ let init_field_to_random bound pkt v =
 let to_test pkt =
   StringMap.fold pkt ~init:True
     ~f:(fun ~key ~data test ->
-      Var key %=% Int data
-      %&% test
+      if key = "loc" then
+        test
+      else 
+        Var key %=% Int data
+        %&% test
     )
 
 let empty = StringMap.empty
+
+let equal (pkt:t) (pkt':t) = StringMap.equal (=) pkt pkt'
+  
 
 let generate ?bound:(bound=10000000) vars =
     List.fold vars ~init:empty ~f:(init_field_to_random bound)

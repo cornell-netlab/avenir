@@ -117,3 +117,47 @@ let rec wp c phi =
   | While _ ->
     Printf.printf "Warning: skipping While loop, because loops must be unrolled\n%!";
     phi
+
+let fill_holes_value v subst =
+  match v with
+  | Int _ | Var _ -> v
+  | Hole h ->
+     match StringMap.find subst h with
+     | None -> v
+     | Some v' -> v'
+      
+    
+let rec fill_holes_test t subst =
+  let binop cnstr rcall left right = cnstr (rcall left subst) (rcall right subst) in
+  match t with
+  | True | False -> t
+  | Neg a -> mkNeg (fill_holes_test a subst)
+  | And (a, b) -> binop mkAnd fill_holes_test  a b
+  | Or (a, b)  -> binop mkOr  fill_holes_test  a b
+  | Lt (a, b)  -> binop mkLt  fill_holes_value a b
+  | Eq (a, b)  -> binop mkEq  fill_holes_value a b
+
+let rec fill_holes (c : expr) subst =
+  let rec_select = concatMap ~c:(@)
+                     ~f:(fun (cond, act) ->
+                       [(fill_holes_test cond subst, fill_holes act subst)]) in
+  match c with
+  | Assign (f, Hole h) ->
+     begin match StringMap.find subst h with
+     | None -> c
+     | Some v -> Assign (f, v)
+     end
+  | Assign (_, _) -> c
+  | Seq (firstdo, thendo) ->
+     fill_holes firstdo subst %:% fill_holes thendo subst
+  | Assert t ->
+     fill_holes_test t subst |> Assert
+  | Assume t ->
+     fill_holes_test t subst |> Assume
+  | TotalSelect [] | PartialSelect [] | Skip ->
+     c
+  | TotalSelect exprs ->
+     rec_select exprs |> TotalSelect
+  | PartialSelect exprs ->
+     rec_select exprs |> PartialSelect
+  | While (cond, body) -> While (fill_holes_test cond subst, fill_holes body subst)

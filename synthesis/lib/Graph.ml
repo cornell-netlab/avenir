@@ -1,6 +1,7 @@
 open Core
 open Ast
 open Manip
+open Util
 
 module Int = struct
   type t = int
@@ -33,7 +34,7 @@ let rec split_test_on_loc test =
   | False -> (None, False)
   | Eq (v, v') ->
      begin match v, v' with
-     | Var "loc", Int l | Int l , Var "loc" -> (Some l, Var "loc" %=% Int l)
+     | Var "loc", Int l | Int l , Var "loc" -> (Some l, True)
      | _, _ -> (None, mkEq v v')
      end
   | Lt (v, v') -> (None, mkLt v v')
@@ -118,20 +119,19 @@ let get_neighbors (graph:graph) location =
   
 
 let get_all_paths_between (graph:graph) (current:int) (final:int) : path list =
-let rec rec_get_all_paths_between (graph:graph) (rev_path:path) (current:int) (final:int) : path list =
-	begin
-    if current = final then (* reached destination *)
-      [current :: rev_path]
-    else if List.mem rev_path current ~equal:(=) then (* Found a loop *)
-      []
-    else
-      let nbrs = get_neighbors graph current |> IntMap.keys in
-      List.fold nbrs ~init:[] ~f:(fun paths nbr ->
-          (rec_get_all_paths_between graph (current :: rev_path) nbr final)
-          @ paths
-        )
-  end in 
-	  rec_get_all_paths_between graph [] current final;;	
+  let rec rec_get_all_paths_between (graph:graph) (rev_path:path) (current:int) (final:int) : path list =
+      if current = final then (* reached destination *)
+        [current :: rev_path]
+      else if List.mem rev_path current ~equal:(=) then (* Found a loop *)
+        [] (* destroy the current path *)
+      else
+        let nbrs = get_neighbors graph current |> IntMap.keys in
+        List.fold nbrs ~init:[] ~f:(fun paths nbr ->
+            (rec_get_all_paths_between graph (current :: rev_path) nbr final)
+            @ paths
+          )
+  in 
+  rec_get_all_paths_between graph [] current final
 			
     
 let all_locations graph : int list =
@@ -147,14 +147,14 @@ let get_edges (graph:graph) src dst =
   Printf.printf "[LOG] looking for edge from %d to %d\n%!" src dst;
   let succs = IntMap.find_exn graph src in
   let edges = IntMap.find_exn succs dst in
-  edges
+  concatMap edges ~c:(%:%) ~f:(fun (cond, act) -> Assert cond %:% act)
 
 let rec get_program_of_rev_path graph rev_path : expr =
   match rev_path with
   | [] 
   | [_] -> Skip
   | after :: before :: rest -> (* path is reversed so packet traveling from before -> after  *)
-     let edges = PartialSelect (get_edges graph before after) in
+     let edges = get_edges graph before after in
      get_program_of_rev_path graph (before :: rest) %:% edges     
 
      

@@ -66,6 +66,7 @@ let mkNeg t =
   match t with
   | True -> False
   | False -> True
+  | Neg t -> t
   | _ -> Neg t
 
 let (!%) = mkNeg      

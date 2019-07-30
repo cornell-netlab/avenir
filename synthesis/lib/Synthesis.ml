@@ -10,51 +10,57 @@ open Manip
 let find_traces (graph:graph) (in_pkt : Packet.t) (out_pkt : Packet.t) =
   let in_loc  = Packet.get_val in_pkt  "loc" in
   let out_loc = Packet.get_val out_pkt "loc" in
-  get_all_paths_between graph in_loc out_loc
-  (* let _ = Printf.printf "ALL PATHS from %d to %d ;\n" in_loc out_loc;
-   *         List.iter all_paths_to_pkt ~f:(fun path ->
-   *             Printf.printf "\t[ ";
-   *             List.iter path ~f:(Printf.printf "%d ");
-   *             Printf.printf "]\n%!")
-   *) 
+  let traces = get_all_paths_between graph in_loc out_loc in
+  let _ = Printf.printf "ALL PATHS from %d to %d ;\n" in_loc out_loc;
+          List.iter traces ~f:(fun tr ->
+              Printf.printf "\t[ ";
+              List.iter tr ~f:(Printf.printf "%d ");
+              Printf.printf "]\n%!") in
+  traces
    
 
-(* Solves the inner loop of the cegis procedure. *)
-
-(* pre-condition: pkt is at an ingress host *)
-
+(** Solves the inner loop of the cegis procedure. 
+ * pre-condition: pkt is at an ingress host 
+**)
 let get_one_model (pkt : Packet.t) (logical : expr) (real : expr) =
-  let pkt', log_trace = trace_eval logical pkt in
-  let log_graph = make_graph logical in
-  let _ = Printf.printf "[LOG] get_program_of ";
+  let pkt', log_trace = trace_eval logical pkt |> Option.value_exn in
+  (* let log_graph = make_graph logical in *)
+  let _ = Printf.printf "[LOG] get_program_of logical path ";
           List.iter log_trace ~f:(Printf.printf "%d ");
           Printf.printf "\n%!" in
-  let log_trace_expr = get_program_of_rev_path log_graph (List.rev log_trace) in
+  (* let log_trace_expr = get_program_of_rev_path log_graph (List.rev log_trace) in *)
   let real_graph = make_graph real in
-	let all_traces = find_traces real_graph pkt pkt' in
-	let rec find_match traces = match traces with
-	| [] -> (failwith "Cannot implement logical network in real network : No path")
-	| rev_path :: rest_paths ->
-         let path_expr = get_program_of_rev_path real_graph rev_path in
-         let condition = Packet.to_test pkt' in
-         let wp_of_path = wp path_expr condition in
-         let _ = Printf.printf "WEAKEST_PRECONDITION:\n(%s) =\nwp(%s, %s)\n\n%!"
+  let _ = Printf.printf "REAL GRAPH:\n%s\n%!" (string_of_graph real_graph) in
+  let all_traces = find_traces real_graph pkt pkt' in
+  let _ = Printf.printf "[LOG] There are %d traces\n%!" (List.length all_traces) in
+  let rec find_match traces = match traces with
+    | [] -> (failwith "Cannot implement logical network in real network : No path")
+    | path :: rest_paths ->
+       let _ = Printf.printf "[LOG] Check real path ";
+               List.iter (List.rev path) ~f:(Printf.printf "%d ");
+               Printf.printf "\n%!" in
+       let path_expr = get_program_of_rev_path real_graph path in
+       let condition = Packet.to_test pkt' in
+       let wp_of_path = wp path_expr condition in
+       let _ = Printf.printf "WEAKEST_PRECONDITION:\n(%s) =\nwp(%s, %s)\n\n%!"
                    (string_of_test wp_of_path)
                    (string_of_expr path_expr)
                    (string_of_test condition) in
-         if (wp_of_path = False) 
-         then (find_match rest_paths)
-         else begin
-	     let condition = wp log_trace_expr (Packet.to_test pkt')
-                             %=>% wp_of_path in
-             let _ = Printf.printf "CONDITION: \n%s\n" (string_of_test condition) in
-	     match check condition with
-             | None -> Printf.printf "unsat!\n"; (find_match rest_paths)
-             | Some model ->
-		(* Printf.printf "The model: %s\n" (string_of_map model); *)
-                model
-	   end in 
-	find_match all_traces
+       if (wp_of_path = False) 
+       then (Printf.printf "-- contradictory WP\n%!"; find_match rest_paths)
+       else begin
+	   let condition = Packet.to_test pkt %=>% wp_of_path in
+           let _ = Printf.printf "CONDITION: \n%s\n%!" (string_of_test condition) in
+	   match check condition with
+           | None -> Printf.printf "unsat!\n%!"; (find_match rest_paths)
+           | Some model ->
+	      (* Printf.printf "The model: %s\n" (string_of_map model); *)
+              let real' = fill_holes real model in
+              match trace_eval real' pkt with
+              | None -> find_match rest_paths
+              | Some (_,_) -> model
+  end in 
+  find_match all_traces
 					
 
 let fixup _ _ =
