@@ -59,12 +59,13 @@ let rec trace_eval (expr : expr) (pkt : Packet.t) =
      
   | TotalSelect selects ->
      let rec find_match ss =
+       match ss with 
        | [] -> failwith "ABORT, COULD NOT FIND MATCH IN SELECT STATEMENT"
        | (cond, action) :: rest ->
           if check_test cond pkt then
             action
           else
-            find_match rst
+            find_match rest
      in
      trace_eval (find_match selects) pkt
      
