@@ -62,13 +62,86 @@ let get_one_model (pkt : Packet.t) (logical : expr) (real : expr) =
   end in 
   find_match all_traces
 					
+let fixup_val v model : value =
+  match v with
+  | Int _ | Var _ -> v
+  | Hole h -> 
+    match StringMap.find model h with
+    | None -> v
+    | Some v' -> v'
 
-let fixup _ _ =
-  failwith "TODO : the hard part"
-              
+let rec fixup_test t model =
+  let binop ctor call left right = ctor (call left model) (call right model) in 
+  match t with
+  | True | False -> t
+  | Neg p -> mkNeg (fixup_test p model)
+  | And(p, q) -> binop mkAnd fixup_test p q
+  | Or(p, q) -> binop mkOr fixup_test p q
+  | Eq (v, w) -> binop mkEq fixup_val v w
+  | Lt (v, w) -> binop mkLt fixup_val v w
+
+let rec fixup_selects es model =
+  match es with
+  | [] -> []
+  | (cond, act)::es' ->
+    let cond' = fixup_test cond model in
+    let act' = fixup act model in
+    (cond', act') :: (
+      if cond = cond' && act = act' then
+        fixup_selects es' model
+      else
+        (cond, act) :: fixup_selects es' model
+    )
+    
+and fixup (real:expr) (model : value StringMap.t) : expr =
+  match real with
+  | Skip -> Skip
+  | Assign (f, v) -> Assign(f, fixup_val v model)
+  | Assert t -> Assert (fixup_test t model)
+  | Assume t -> Assume (fixup_test t model)
+  | Seq (p, q) -> Seq (fixup p model, fixup q model)
+  | While (cond, body) -> While (fixup_test cond model, fixup body model)
+  | PartialSelect exprs -> fixup_selects exprs model |> PartialSelect
+  | TotalSelect exprs -> fixup_selects exprs model |> TotalSelect
+
+
+
+
+(** Plug_holes makes tests with holes always false assignemnts with holes abort **)
+let rec plug_holes real =
+  let binop ctor call left right = ctor (call left) (call right) in
+  let rec plug_holes_test t =
+    match t with
+    (* Base *)
+    | True | False -> t
+    (* The real work -- here we plug the holes in tests *)
+    | Eq (Hole _, _) | Eq (_, Hole _)
+    | Lt (Hole _, _) | Lt (_, Hole _)  -> False
+    (* If there's no hole, make no change *)
+    | Eq (_, _)      | Lt (_,_)        -> t
+    (* Homomorphic cases *)
+    | And (p, q) -> binop mkAnd plug_holes_test p q
+    | Or (p, q) -> binop mkAnd plug_holes_test p q
+    | Neg p -> mkNeg (plug_holes_test p)
+  in
+  let plug_holes_select =
+    List.map ~f:(fun (c, a) -> (plug_holes_test c, plug_holes a))
+  in
+  match real with
+  | Skip -> Skip
+  | Assign (_, Hole _) -> Assert False
+  | Assign (_, _) -> real
+  | Assert t -> Assert (plug_holes_test t)
+  | Assume t -> Assume (plug_holes_test t)
+  | Seq (p, q) -> plug_holes p %:% plug_holes q
+  | While (cond, body) -> While(plug_holes_test cond, plug_holes body)
+  | PartialSelect es -> PartialSelect (plug_holes_select es)
+  | TotalSelect es -> TotalSelect (plug_holes_select es)
+          
+
 let implements n logical real correct =
   let u_log = unroll n logical in
-  let u_rea = unroll n real in
+  let u_rea = unroll n real |> plug_holes in
   match check_valid (wp u_log correct %=>% wp u_rea correct) with
   | None -> `Yes
   | Some x -> `NoAndCE (Packet.from_CE x) 
@@ -76,7 +149,7 @@ let implements n logical real correct =
 (** solves the inner loop **)
 let solve_concrete ?packet:(packet=None) (logical : expr) (real : expr) =
   let fvs = free_vars_of_expr logical @ free_vars_of_expr real in
-  let pkt = Option.value packet ~default:(Packet.generate fvs) in
+  let pkt = packet |> Option.value ~default:(Packet.generate fvs) in
   let model = get_one_model pkt logical real in
   fixup real model
 

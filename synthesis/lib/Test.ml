@@ -321,10 +321,12 @@ let%test _ =
   in
   let _ = Printf.printf "\n----- Testing Running Example----\n\n" in
   let model = get_one_model pkt logical real in
-  Printf.printf "PACKET:\n%s\n%!\nLOGICAL PROGRAM:\n%s\n%!\nREAL PROGRAM:\n%s\n%!\n MODEL:\n%s\n\n%!"
+  Printf.printf "PACKET:\n%s\n%!\nLOGICAL PROGRAM:\n%s\n%!\nREAL PROGRAM:\n%s\n%!\n MODEL:\n%s\n%!\nNEWREAL:\n%s\n%!"
     (Packet.string_of_packet pkt)
     (string_of_expr logical)
     (string_of_expr real)
-    (string_of_map model);
+    (string_of_map model)
+    (string_of_expr (fixup real model)) 
+  ;
   true
   
