@@ -132,7 +132,14 @@ let get_all_paths_between (graph:graph) (current:int) (final:int) : path list =
           )
   in 
   rec_get_all_paths_between graph [] current final
-			
+
+let get_all_paths graph =
+  let nodes = all_locations graph in
+  let all_endpoints = List.cartesian_product nodes nodes in
+  concatMap all_endpoints ~c:(@)
+    ~f:(fun (src, dst) ->
+        get_all_paths_between graph src dst
+      )
     
 let all_locations graph : int list =
   let init = IntMap.keys graph in
