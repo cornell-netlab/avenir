@@ -139,22 +139,20 @@ let rec plug_holes real =
   | TotalSelect es -> TotalSelect (plug_holes_select es)
 
 
-let path_specification (path_prog : expr) =
-  failwith "TODO"
-
-let specification (prog : expr) =
-  let graph = make_graph prog in
-  let paths = get_all_paths graph in
-  concatMap paths ~c:(%&%)
-    ~f:(fun path ->
-        get_program_of_rev_path path
-        |> path_specification 
-      )
-
-let implements n logical real correct =
+let implements n logical real =
   let u_log = unroll n logical in
   let u_rea = unroll n real |> plug_holes in
-  match check_valid specification u_log %=>% specification u_rea) with
+  let symbolic_pkt =
+    List.fold (free_vars_of_expr u_log) ~init:(True, 0)
+      ~f:(fun (acc_test, fv_count) var ->
+          if var = "loc" then (acc_test, fv_count) else
+            (Var var %=% Var ("$" ^ string_of_int fv_count)
+             %&% acc_test
+            , fv_count + 1)
+        )
+    |> fst
+  in
+  match check_valid (wp u_log symbolic_pkt %=>% wp u_rea symbolic_pkt) with
   | None -> `Yes
   | Some x -> `NoAndCE (Packet.from_CE x) 
                    
@@ -166,15 +164,15 @@ let solve_concrete ?packet:(packet=None) (logical : expr) (real : expr) =
   fixup real model
 
 
-let cegis ?gas:(gas=1000) (logical : expr) (real : expr) (correct : test) (unroll : int) =
+let cegis ?gas:(gas=1000) ?unroll:(unroll=10) (logical : expr) (real : expr) =
   let rec loop gas real =
     if gas = 0 then None else 
-    match implements unroll logical real correct with
-    | `Yes -> Some real
+    match implements unroll logical real with
+    | `Yes -> Some (real |> plug_holes) 
     | `NoAndCE counter -> 
        solve_concrete ~packet:counter logical real |> loop (gas-1)
   in
   solve_concrete logical real |> loop gas
     
-let synthesize logical real = cegis ~gas:1000 logical real ((*WRONG*)True) 10
+let synthesize = cegis ~gas:1000 ~unroll:10
   
