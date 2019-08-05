@@ -97,11 +97,22 @@ let rec substitute ex subsMap =
 (* computes weakest pre-condition of condition phi w.r.t command c *)
 let rec wp c phi =
   let guarded_wp (cond, act) = cond %=>% wp act phi in
+  let rec subst_location l phi =
+    match phi with
+    (* Do the Work *)
+    | LocEq l' -> if l' = l then True else False
+    (* Do nothing *)
+    | True | False | Eq _ | Lt _ -> phi
+    (* Homorphically recurse *)
+    | And (p, q) -> subst_location l p %&% subst_location l q
+    | Or (p, q) -> subst_location l p %+% subst_location l q
+    | Neg p -> !%(subst_location l p)
+  in
   match c with
   | Skip -> phi
   | Seq (firstdo, thendo) ->
     wp firstdo (wp thendo phi)
-  | SetLoc _ -> phi
+  | SetLoc l -> subst_location l phi
   | Assign (field, value) ->
      substitute phi (StringMap.singleton field value)
   | Assert t -> t %&% phi

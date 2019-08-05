@@ -15,96 +15,6 @@ let find_traces (graph:graph) (in_loc : int) (out_loc : int) =
               List.iter tr ~f:(Printf.printf "%d ");
               Printf.printf "]\n%!") in
   traces
-   
-
-(** Solves the inner loop of the cegis procedure. 
- * pre-condition: pkt is at an ingress host 
-**)
-let get_one_model (pkt : Packet.t) (logical : expr) (real : expr) =
-  let pkt_loc', log_trace = trace_eval logical (pkt,None) |> Option.value_exn in
-  (* let log_graph = make_graph logical in *)
-  let _ = Printf.printf "[LOG] get_program_of logical path ";
-          List.iter log_trace ~f:(Printf.printf "%d ");
-          Printf.printf "\n%!" in
-  (* let log_trace_expr = get_program_of_rev_path log_graph (List.rev log_trace) in *)
-  let real_graph = make_graph real in
-  let _ = Printf.printf "REAL GRAPH:\n%s\n%!" (string_of_graph real_graph) in
-  let in_loc = List.hd log_trace |> Option.value_exn in
-  let out_loc = List.last log_trace |> Option.value_exn in
-  let all_traces = find_traces real_graph in_loc out_loc in
-  let _ = Printf.printf "[LOG] There are %d traces\n%!" (List.length all_traces) in
-  let rec find_match traces = match traces with
-    | [] -> (failwith "Cannot implement logical network in real network : No path")
-    | path :: rest_paths ->
-       let _ = Printf.printf "[LOG] Check real path ";
-               List.iter (List.rev path) ~f:(Printf.printf "%d ");
-               Printf.printf "\n%!" in
-       let path_expr = get_program_of_rev_path real_graph path in
-       let condition = Packet.to_test (fst pkt_loc') in
-       let wp_of_path = wp path_expr condition in
-       let _ = Printf.printf "WEAKEST_PRECONDITION:\n(%s) =\nwp(%s, %s)\n\n%!"
-                   (string_of_test wp_of_path)
-                   (string_of_expr path_expr)
-                   (string_of_test condition) in
-       if (wp_of_path = False) 
-       then (Printf.printf "-- contradictory WP\n%!"; find_match rest_paths)
-       else begin
-	   let condition = Packet.to_test pkt %=>% wp_of_path in
-           let _ = Printf.printf "CONDITION: \n%s\n%!" (string_of_test condition) in
-	   match check condition with
-           | None -> Printf.printf "unsat!\n%!"; (find_match rest_paths)
-           | Some model ->
-	      (* Printf.printf "The model: %s\n" (string_of_map model); *)
-              let real' = fill_holes real model in
-              match trace_eval real' (pkt,None) with
-              | None -> find_match rest_paths
-              | Some (_,_) -> model
-  end in 
-  find_match all_traces
-					
-let fixup_val v model : value =
-  match v with
-  | Int _ | Var _ -> v
-  | Hole h -> 
-    match StringMap.find model h with
-    | None -> v
-    | Some v' -> v'
-
-let rec fixup_test t model =
-  let binop ctor call left right = ctor (call left model) (call right model) in 
-  match t with
-  | True | False | LocEq _ -> t
-  | Neg p -> mkNeg (fixup_test p model)
-  | And(p, q) -> binop mkAnd fixup_test p q
-  | Or(p, q) -> binop mkOr fixup_test p q
-  | Eq (v, w) -> binop mkEq fixup_val v w
-  | Lt (v, w) -> binop mkLt fixup_val v w
-
-let rec fixup_selects es model =
-  match es with
-  | [] -> []
-  | (cond, act)::es' ->
-    let cond' = fixup_test cond model in
-    let act' = fixup act model in
-    (cond', act') :: (
-      if cond = cond' && act = act' then
-        fixup_selects es' model
-      else
-        (cond, act) :: fixup_selects es' model
-    )
-    
-and fixup (real:expr) (model : value StringMap.t) : expr =
-  match real with
-  | Skip -> Skip
-  | SetLoc l -> SetLoc l
-  | Assign (f, v) -> Assign(f, fixup_val v model)
-  | Assert t -> Assert (fixup_test t model)
-  | Assume t -> Assume (fixup_test t model)
-  | Seq (p, q) -> Seq (fixup p model, fixup q model)
-  | While (cond, body) -> While (fixup_test cond model, fixup body model)
-  | PartialSelect exprs -> fixup_selects exprs model |> PartialSelect
-  | TotalSelect exprs -> fixup_selects exprs model |> TotalSelect
-
 
 
 
@@ -141,11 +51,107 @@ let rec plug_holes real =
   | TotalSelect es -> TotalSelect (plug_holes_select es)
 
 
+(** Solves the inner loop of the cegis procedure. 
+ * pre-condition: pkt is at an ingress host 
+**)
+let get_one_model (pkt : Packet.t) (logical : expr) (real : expr) =
+  let pkt_loc', log_trace = trace_eval logical (pkt,None) |> Option.value_exn in
+  (* let log_graph = make_graph logical in *)
+  let _ = Printf.printf "[LOG] get_program_of logical path ";
+          List.iter log_trace ~f:(Printf.printf "%d ");
+          Printf.printf "\n%!" in
+  (* let log_trace_expr = get_program_of_rev_path log_graph (List.rev log_trace) in *)
+  let real_graph = make_graph real in
+  let _ = Printf.printf "REAL GRAPH:\n%s\n%!" (string_of_graph real_graph) in
+  let in_loc = List.hd log_trace |> Option.value_exn in
+  let out_loc = List.last log_trace |> Option.value_exn in
+  let all_traces = find_traces real_graph in_loc out_loc in
+  let _ = Printf.printf "[LOG] There are %d traces\n%!" (List.length all_traces) in
+  let rec find_match traces = match traces with
+    | [] -> (failwith "Cannot implement logical network in real network : No path")
+    | path :: rest_paths ->
+       let _ = Printf.printf "[LOG] Check real path ";
+               List.iter (List.rev path) ~f:(Printf.printf "%d ");
+               Printf.printf "\n%!" in
+       let path_expr = get_program_of_rev_path real_graph path in
+       let condition = Packet.to_test (fst pkt_loc') in
+       let wp_of_path = wp path_expr condition in
+       let _ = Printf.printf "WEAKEST_PRECONDITION:\n(%s) =\nwp(%s, %s)\n\n%!"
+                   (string_of_test wp_of_path)
+                   (string_of_expr path_expr)
+                   (string_of_test condition) in
+       if (wp_of_path = False) 
+       then (Printf.printf "-- contradictory WP\n%!"; find_match rest_paths)
+       else begin
+	   let condition = Packet.to_test pkt %=>% wp_of_path in
+           let _ = Printf.printf "CONDITION: \n%s\n%!" (string_of_test condition) in
+	   match check `Sat condition with
+           | None -> Printf.printf "unsat!\n%!"; (find_match rest_paths)
+           | Some model ->
+	      (* Printf.printf "The model: %s\n" (string_of_map model); *)
+             let real' = fill_holes real model |> plug_holes in
+             Printf.printf "FILLED HOLES WITH %s TO GET:\n%s\n%!\n" (string_of_map model) (string_of_expr real');
+             match trace_eval real' (pkt,None) with
+             | None ->
+               Printf.printf "No Match!\n%!";
+               find_match rest_paths
+             | Some (_,_) ->
+               Printf.printf "Found a match!!\n%!";
+               model
+  end in 
+  find_match all_traces
+					
+let fixup_val v model : value =
+  match v with
+  | Int _ | Var _ -> v
+  | Hole h -> 
+    match StringMap.find model h with
+    | None -> v
+    | Some v' -> v'
+
+let rec fixup_test t model =
+  let binop ctor call left right = ctor (call left model) (call right model) in 
+  match t with
+  | True | False | LocEq _ -> t
+  | Neg p -> mkNeg (fixup_test p model)
+  | And(p, q) -> binop mkAnd fixup_test p q
+  | Or(p, q) -> binop mkOr fixup_test p q
+  | Eq (v, w) -> binop mkEq fixup_val v w
+  | Lt (v, w) -> binop mkLt fixup_val v w
+
+let rec fixup_selects es model =
+  match es with
+  | [] -> []
+  | (cond, act)::es' ->
+    let cond' = fixup_test cond model in
+    let act' = fixup act model in
+    (cond', act') :: (
+      if cond = cond' && act = act' then
+        fixup_selects es' model
+      else
+        (cond, act) :: fixup_selects es' model
+    )
+    
+and fixup (real:expr) (model : value StringMap.t) : expr =
+  Printf.printf "FIXUP WITH MODEL: %s\n%!\n" (string_of_map model);
+  match real with
+  | Skip -> Skip
+  | SetLoc l -> SetLoc l
+  | Assign (f, v) -> Assign(f, fixup_val v model)
+  | Assert t -> Assert (fixup_test t model)
+  | Assume t -> Assume (fixup_test t model)
+  | Seq (p, q) -> Seq (fixup p model, fixup q model)
+  | While (cond, body) -> While (fixup_test cond model, fixup body model)
+  | PartialSelect exprs -> fixup_selects exprs model |> PartialSelect
+  | TotalSelect exprs -> fixup_selects exprs model |> TotalSelect
+
+
 let implements n logical real =
   let u_log = unroll n logical in
   let u_rea = unroll n real |> plug_holes in
+  let fvs = List.dedup_and_sort ~compare (free_vars_of_expr u_log @ free_vars_of_expr u_rea) in
   let symbolic_pkt =
-    List.fold (free_vars_of_expr u_log) ~init:(True, 0)
+    List.fold fvs  ~init:(True, 0)
       ~f:(fun (acc_test, fv_count) var ->
           (Var var %=% Var ("$" ^ string_of_int fv_count)
            %&% acc_test
@@ -153,8 +159,14 @@ let implements n logical real =
         )
     |> fst
   in
-  match check_valid (wp u_log symbolic_pkt %=>% wp u_rea symbolic_pkt) with
-  | None -> `Yes
+  let log_wp  = wp u_log symbolic_pkt in
+  let real_wp = wp u_rea symbolic_pkt in
+  Printf.printf "SYMBOLIC PACKET:\n%s\n%!\n\nLOGICAL SPEC:\n%s\n\nREAL SPEC: \n%s\n\n"
+    (string_of_test symbolic_pkt)
+    (string_of_test log_wp)
+    (string_of_test real_wp);
+  match check_valid (log_wp %=>% real_wp) with
+  | None -> Printf.printf "valid\n%!"; `Yes
   | Some x -> `NoAndCE (Packet.from_CE x) 
                    
 (** solves the inner loop **)
@@ -167,12 +179,18 @@ let solve_concrete ?packet:(packet=None) (logical : expr) (real : expr) =
 
 let cegis ?gas:(gas=1000) ?unroll:(unroll=10) (logical : expr) (real : expr) =
   let rec loop gas real =
+    Printf.printf "======================= LOOP (%d) =======================\n%!" (gas);
     if gas = 0 then None else 
     match implements unroll logical real with
     | `Yes -> Some (real |> plug_holes) 
     | `NoAndCE counter -> 
       solve_concrete ~packet:(Some counter) logical real |> loop (gas-1)
   in
-  solve_concrete logical real |> loop gas
+ solve_concrete logical real |> loop gas
     
-let synthesize = cegis ~gas:1000 ~unroll:10
+let synthesize logical real =
+  Printf.printf "\nSynthesized Program:\n%s\n\n%!"
+    (cegis ~gas:1000 ~unroll:1 logical real
+     |> Option.value ~default:(Assert False)
+     |> plug_holes
+     |> string_of_expr)

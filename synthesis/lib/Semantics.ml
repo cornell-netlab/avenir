@@ -28,16 +28,6 @@ let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
      | (Var v, Var v') -> valOf v < valOf v'
      | (Int i, Var v) | (Var v, Int i) -> i < valOf v
      | (Hole _, _ ) | (_, Hole _) -> true
-
-(** Appends two lists eliminating the equal boundary 
-  * e.g. squash [1; 2; 3] [3; 4; 5] == [1; 2; 3; 4; 5]
-  **)
-let squash xs ys =
-  xs @ ys
-  |> List.remove_consecutive_duplicates
-       ~which_to_keep:`First
-       ~equal:(=)
-let (%@) = squash
                         
 (*
   TODO:
@@ -46,6 +36,11 @@ let (%@) = squash
 *)
 	 
 let rec trace_eval ?gas:(gas=1000) (expr : expr) (pkt_loc : Packet.located) : (Packet.located * (int list)) option =
+  Printf.printf "TRACE EVAL:\n\tPACKET: %s\n\tLOCATION: %s\n%!"
+    (Packet.string_of_packet (fst pkt_loc))
+    (match snd pkt_loc with
+     | None -> "None"
+     | Some l -> string_of_int l);
   let rec find_match ss ~default:default =
     match ss with 
     | [] -> default ()

@@ -44,22 +44,24 @@ let mk_deBruijn vars : int StringMap.t =
       db_map'
     )
 
-let bind_vars ctx vs formula =
+let bind_vars typ ctx vs formula =
   let open Z3 in
   let types = List.map vs ~f:(fun _ -> Arithmetic.Integer.mk_sort ctx) in
   let names = List.map vs ~f:(Symbol.mk_string ctx) in
   let q = Quantifier.mk_forall ctx types names formula (Some 1) [] [] None None in
-  Quantifier.expr_of_quantifier q
+  match typ with
+  | `Sat -> Quantifier.expr_of_quantifier q
+  | `Valid -> Boolean.mk_not ctx (Quantifier.expr_of_quantifier q)
+
 
   
-let initSolver solver ctx test =
+let initSolver typ solver ctx test =
+  Printf.printf "SENDING TEST TO Z3: %s\n%!" (sexp_string_of_test test);
   let bindable_vars = free_vars_of_test test in
   let phi = mkZ3Test test ctx (mk_deBruijn bindable_vars) in
-  Z3.Solver.add solver [bind_vars ctx bindable_vars phi]
+  Z3.Solver.add solver [bind_vars typ ctx bindable_vars phi]
 
   
-let checkCE _ = None
-
 (*
  Converts a Z3 expression to Motley expression 
 *)
@@ -89,9 +91,9 @@ let mkMotleyModel model =
 (*
  Checks SMT query. Returns either None (UNSAT) or SAT (model map) 
 *)
-let check test =
+let check typ test =
   let mySolver = solver () in
-  let _ = initSolver mySolver context test in
+  let _ = initSolver typ mySolver context test in
   let _ = Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in
   let response = Z3.Solver.check mySolver [] in
   (* Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver); *)
@@ -104,7 +106,7 @@ let check test =
     | None -> None
 
 (* Checks SMT Query for validity. Returns None (VALID) or Some model (Counter Example) *)          
-let check_valid test = check (!%test)
+let check_valid test = check `Valid (test)
   
 
 let string_of_map m =

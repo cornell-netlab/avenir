@@ -188,11 +188,11 @@ let rec string_of_expr ?depth:(depth=0) (e : expr) : string =
     string_of_expr ~depth firstdo ^ "; "
     ^ string_of_expr ~depth thendo
   | Assert t ->
-     repeat "\t" depth ^ "assert ("
-     ^ string_of_test t ^ ")"
+    (* repeat "\t" depth ^ *)
+    "assert (" ^ string_of_test t ^ ")"
   | Assume t ->
-     repeat "\t" depth ^ "assume ("
-     ^ string_of_test t ^ ")"
+    (* repeat "\t" depth ^ *)
+    "assume (" ^ string_of_test t ^ ")"
   | SetLoc i -> "loc := " ^ string_of_int i
   | Assign (field, value) ->
     field ^ " := " ^ string_of_value value

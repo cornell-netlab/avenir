@@ -36,7 +36,8 @@ let rec split_test_on_loc test =
   | Eq (v, v') -> (None, mkEq v v')
   | Lt (v, v') -> (None, mkLt v v')
   | Neg ((Eq (_, _))) -> (None, test)
-  | Neg _ -> failwith "malformed test, must be in NNF"
+  | Neg ((LocEq _)) -> (None, test)
+  | Neg _ -> failwith ("malformed test " ^ sexp_string_of_test test ^ ", must be in NNF")
   | And (a, b) ->
      let loc_opt_a, test_a = split_test_on_loc a in
      let loc_opt_b, test_b = split_test_on_loc b in
