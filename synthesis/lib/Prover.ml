@@ -6,7 +6,10 @@ open Core
 open Ast
 
    
-module StringMap = Map.Make (String) 
+module StringMap = Map.Make (String)
+    
+let string_of_map m =
+  StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value v) ^ ") " ^ acc)) m ~init:""
    
 let mkZ3Value typ v ctx (deBruijn : int StringMap.t) : Z3.Expr.expr =
   let open Z3.Arithmetic in
@@ -60,15 +63,15 @@ let bind_vars ctx vs formula =
   
 let initSolver typ solver ctx test =
   Printf.printf "SENDING TEST TO Z3: %s\n%!" (sexp_string_of_test test);
-  let init bindable test =
+  let init bindable ctor =
     let phi = mkZ3Test typ test ctx (mk_deBruijn bindable) in
-    Z3.Solver.add solver [bind_vars ctx bindable phi]
+    Z3.Solver.add solver [ctor (bind_vars ctx bindable phi)]
   in
   match typ with
   | `Sat ->
-    init (free_vars_of_test test) test
+    init (free_vars_of_test test) (fun x -> x)
   | `Valid ->
-    init (holes_of_test test) (!%test)
+    init (holes_of_test test) (Z3.Boolean.mk_not ctx)
   
 (*
  Converts a Z3 expression to Motley expression 
@@ -108,14 +111,15 @@ let check typ test =
   match response with
   | UNSATISFIABLE | UNKNOWN -> Printf.printf "UNSAT\n%!"; None
   | SATISFIABLE ->
-    Printf.printf "SAT\n%!";
     match Z3.Solver.get_model mySolver with 
-    | Some m -> Some (mkMotleyModel m)
+    | Some m ->
+      let model = mkMotleyModel m in
+      Printf.printf "SAT: %s \n%!" (string_of_map model);
+      Some model
     | None -> None
 
 (* Checks SMT Query for validity. Returns None (VALID) or Some model (Counter Example) *)          
 let check_valid test = check `Valid (test)
   
 
-let string_of_map m =
-  StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value v) ^ ") " ^ acc)) m ~init:""
+

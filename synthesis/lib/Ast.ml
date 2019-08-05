@@ -177,6 +177,20 @@ type expr =
   | PartialSelect of (test * expr) list
   | TotalSelect of (test * expr) list 
 
+let mkPartial ss =
+  let selects = concatMap ss ~init:(Some []) ~c:(@)
+    ~f:(fun (cond, act) ->
+        if cond = False then
+          []
+        else
+          [cond, act])
+  in
+  if List.length selects = 0 then
+    Skip
+  else
+    PartialSelect selects
+
+
 let mkIf cond tru = PartialSelect [(cond, tru)]
 let (%?%) = mkIf
 
@@ -291,8 +305,9 @@ let rec multi_ints_of_expr e =
   | Skip
   | SetLoc _ ->
     []
-  | Assign (_, Int i) ->
-    [i]
+  (* | Assign (_, Int i) ->
+   *   [i] *)
+  (* Only collect _tested_ inputs*)
   | Assign _ ->
     []
   | Seq (p, q) ->

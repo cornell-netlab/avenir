@@ -56,7 +56,8 @@ let rec unroll n p =
   match p, n with
   | While (_, _), 0 -> Skip
   | While (cond, body), _ -> 
-     cond %?% (body %:% unroll (n-1) p)
+    cond %?% (body %:% unroll (n-1) p)
+  (* %:% assert (!% cond)*)
   | Seq (firstdo, thendo), _ ->
     Seq (unroll n firstdo, unroll n thendo)
   | TotalSelect exprs, _ ->
