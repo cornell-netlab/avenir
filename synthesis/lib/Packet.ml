@@ -5,6 +5,8 @@ module StringMap = Map.Make (String)
 
 type t = int StringMap.t
 
+type located = t * (int option)
+
 let string_of_packet (p) = (StringMap.fold ~f:(fun ~key:k ~data:v acc -> acc ^ k ^ "," ^ (string_of_int v) ^ ",") p ~init:"(") ^ ")"
 
 let set_field pkt field i  =
@@ -45,5 +47,9 @@ let equal (pkt:t) (pkt':t) = StringMap.equal (=) pkt pkt'
 let generate ?bound:(bound=10000000) vars =
     List.fold vars ~init:empty ~f:(init_field_to_random bound)
 
-let from_CE _ =
-    failwith "How?"    
+let from_CE (model : value StringMap.t) : t =
+  StringMap.fold model ~init:empty
+    ~f:(fun ~key ~data pkt -> set_field_of_value pkt key data)
+
+        
+        

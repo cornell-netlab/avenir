@@ -15,16 +15,17 @@ let string_of_value v =
 let sexp_string_of_value v =
   match v with
   | Var s -> "(Var " ^ s ^ ")"
-  | Hole s -> "Hole (" ^ s ^ ")"  
+  | Hole s -> "(Hole " ^ s ^ ")"  
   | Int i -> "(Int " ^ string_of_int i ^ ")"
 
 type test =
   | True | False
+  | LocEq of int
   | Eq of (value * value)
   | Lt of (value * value)
   | And of (test * test)
   | Or of (test * test)
-  | Neg of test         
+  | Neg of test       
 
 let mkEq v v' =
   if v = v' then True else
@@ -34,7 +35,7 @@ let mkEq v v' =
 
 let mkLt v v' = match v, v' with
     | Int first, Int second -> 
-			if first < second then True else False
+      if first < second then True else False
     | _, _ -> Lt(v, v')
 
 let (%=%) = mkEq
@@ -81,6 +82,7 @@ let rec string_of_test t =
   match t with
   | True -> "true"
   | False -> "false"
+  | LocEq i -> "loc = " ^ string_of_int i
   | Eq (left, right) -> string_of_value left ^ " = " ^ string_of_value right
   | Lt (left, right) -> string_of_value left ^ " < " ^ string_of_value right
   | Or (Neg(assum), conseq) -> "(" ^ string_of_test assum ^ " ==> " ^ string_of_test conseq ^ ")"
@@ -94,6 +96,7 @@ let rec sexp_string_of_test t =
   match t with
   | True -> "True"
   | False -> "False"
+  | LocEq l -> "LocEq(" ^ string_of_int l ^ ")"
   | Eq  (left, right) -> binop "Eq" left right sexp_string_of_value
   | Lt  (left, right) -> binop "Lt" left right sexp_string_of_value
   | Or  (left, right) -> binop "Or" left right sexp_string_of_test
@@ -118,8 +121,8 @@ let rec dedup xs =
   
 let rec free_vars_of_test test =
   begin match test with
-  | True | False ->
-     []
+  | True | False | LocEq _ ->
+    []
   | Or (l,r) | And (l, r) ->
      free_vars_of_test l @ free_vars_of_test r
   | Neg t ->
@@ -135,6 +138,7 @@ let rec free_vars_of_test test =
            
 type expr =
   | Skip
+  | SetLoc of int
   | Assign of (string * value)
   | Assert of test
   | Assume of test
@@ -189,6 +193,7 @@ let rec string_of_expr ?depth:(depth=0) (e : expr) : string =
   | Assume t ->
      repeat "\t" depth ^ "assume ("
      ^ string_of_test t ^ ")"
+  | SetLoc i -> "loc := " ^ string_of_int i
   | Assign (field, value) ->
     field ^ " := " ^ string_of_value value
   | PartialSelect es ->
@@ -215,6 +220,7 @@ let rec sexp_string_of_expr e : string =
   | Seq (p, q) -> "Seq(" ^ sexp_string_of_expr p ^ "," ^ sexp_string_of_expr q ^ ")"
   | Assert t -> "Assert(" ^ sexp_string_of_test t ^ ")"
   | Assume t -> "Assume(" ^ sexp_string_of_test t ^ ")"
+  | SetLoc l ->  "SetLoc(" ^ string_of_int l ^ ")"
   | Assign (f,v) -> "Assign(" ^ f ^ "," ^ string_of_value v ^")"
   | PartialSelect [] -> "PartialSelect([])"
   | PartialSelect exprs -> "PartialSelect([" ^ string_select exprs ^ "])"
@@ -224,10 +230,10 @@ let rec sexp_string_of_expr e : string =
   
 let rec free_vars_of_expr (e:expr) : string list =
   match e with
-  | Skip -> []
+  | Skip | SetLoc _ -> []
   | Assign (f, v) ->
      f :: (match v with
-           | Int _ | Hole _ -> []
+           | Int _ | Hole _  -> []
            | Var x -> [x])
   | Seq (p, q) ->
      free_vars_of_expr p @ free_vars_of_expr q

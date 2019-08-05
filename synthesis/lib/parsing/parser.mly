@@ -4,6 +4,7 @@
 %token TRUE
 %token FALSE
 %token OR AND NOT EQ LESS GREATER LEQ GEQ NEQ IMPLIES
+%token LOC
 %token WHILE SKIP SEMICOLON ASSIGN
 %token ASSERT ASSUME ABORT
 %token IF CASE BRACKETS FI
@@ -30,6 +31,8 @@ expression :
   { Ast.Seq (e, ee) }
 | WHILE; LPAREN; t = test; RPAREN; LBRACE; e = expression; RBRACE
   { Ast.mkWhile t e }
+| LOC; ASSIGN; i = INT
+  { Ast.SetLoc i }
 | f = ID; ASSIGN; v = value
   { Ast.Assign (f, v) }
 | ASSERT; LPAREN; t = test ; RPAREN
@@ -57,6 +60,8 @@ test :
   { Ast.True }
 | FALSE
   { Ast.False }
+| LOC; EQ; i = INT;
+  { Ast.LocEq i }
 | t = test; OR; tt = test
   { Ast.Or (t, tt) }
 | t = test; AND; tt = test

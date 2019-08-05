@@ -198,9 +198,6 @@ let%test _ =
         false)
   in
   loop 100
-
-
-
   
 
 
@@ -218,8 +215,9 @@ let%test _ =
 
 let test_trace p_string expected_trace =
   let p = parse p_string in
-  let pkt = Packet.(set_field (set_field empty "loc" 0) "pkt" 100) in
-  match trace_eval p pkt with
+  let pkt = Packet.(set_field empty "pkt" 100) in
+  let loc = Some 0 in
+  match trace_eval p (pkt, loc) with
   | None -> false
   | Some (_, tr) -> tr = expected_trace
   
@@ -280,7 +278,7 @@ let%test _ = (* Test deBruijn Indices*)
                            (* TESTING FOR CEGIS PROCEDURE *)
 
 let%test _ =
-  let pkt = Packet.(set_field (set_field empty "loc" 0) "pkt" 100) in
+  let pkt = Packet.(set_field empty "pkt" 100) in
   let log  = parse "loc := 0; while (~ loc = 1) { if loc = 0 && pkt = 100 -> pkt := 101; loc := 1 fi } " in
   let real = parse "loc := 0 ; while (~ loc = 1) { if loc = 0 && pkt = ?_hole0 -> pkt := ?_hole1; loc := 1 fi } " in
   let model = get_one_model pkt log real in
@@ -291,32 +289,30 @@ let%test _ =
 let%test _ =
   let x = "x" in
   let y = "y" in
-  let loc = "loc" in
-  let vloc = Var loc in
   let vx = Var x in
   let vy = Var y in
-  let pkt = Packet.(set_field (set_field (set_field empty "x" 3) "y" 1) "loc" 0) in
-  let logical = loc %<-% Int 0 %:%
-                  While(!%(vloc %=% Int 6),
+  let pkt = Packet.(set_field (set_field empty "x" 3) "y" 1) in
+  let logical = SetLoc 0 %:%
+                  While(!%(LocEq 6),
                         PartialSelect [
-                            vloc %=% Int 0 %&% (vx %=% Int 5), loc %<-% Int 1 ;
-                            vloc %=% Int 0 %&% !%(vx %=% Int 5), loc %<-% Int 2 ;
-                            vloc %=% Int 1 , y %<-% Int 0 %:% (loc %<-% Int 6) ;
-                            vloc %=% Int 2 , y %<-% Int 1 %:% (loc %<-% Int 6) ;
+                            LocEq 0 %&% (vx %=% Int 5), SetLoc 1 ;
+                            LocEq 0 %&% !%(vx %=% Int 5), SetLoc 2 ;
+                            LocEq 1 , y %<-% Int 0 %:% (SetLoc 6) ;
+                            LocEq 2 , y %<-% Int 1 %:% (SetLoc 6) ;
                           ]
-                    )
+                       )
   in
-  let real = loc %<-% Int 0 %:%
-               While ( !%(vloc %=% Int 6),
+  let real = SetLoc 0 %:%
+               While ( !%(LocEq 6),
                        PartialSelect [
-                           vloc %=% Int 0 %&% (vx %=% Int 5 ), loc %<-% Int 1 ;
-                           vloc %=% Int 1 %&% (vy %=% Hole "_6"), loc %<-% Int 2 ;
-                           vloc %=% Int 2 , y %<-% Int 1 %:% (loc %<-% Int 6) ;
-                           vloc %=% Int 5 , y %<-% Int 0 %:% (loc %<-% Int 6) ;
-                           vloc %=% Int 0 %&% (vx %=% Hole "_0"), loc %<-% Int 3 ;
-                           vloc %=% Int 3 %&% (vx %=% Hole "_1" %&% (vy %=% Hole "_2")), loc %<-% Int 5 ;
-                           vloc %=% Int 3 %&% (vx %=% Hole "_3" %&% (vy %=% Hole "_4")), loc %<-% Int 4 ;
-                           vloc %=% Int 4 , (y %<-% Int 1 %:% (loc %<-% Int 6))
+                           LocEq 0 %&% (vx %=% Int 5 ), SetLoc 1 ;
+                           LocEq 1 %&% (vy %=% Hole "_6"), SetLoc 2 ;
+                           LocEq 2 , y %<-% Int 1 %:% (SetLoc 6) ;
+                           LocEq 5 , y %<-% Int 0 %:% (SetLoc 6) ;
+                           LocEq 0 %&% (vx %=% Hole "_0"), SetLoc 3 ;
+                           LocEq 3 %&% (vx %=% Hole "_1" %&% (vy %=% Hole "_2")), SetLoc 5 ;
+                           LocEq 3 %&% (vx %=% Hole "_3" %&% (vy %=% Hole "_4")), SetLoc 4 ;
+                           LocEq 4 , (y %<-% Int 1 %:% (SetLoc 6))
                  ])
   in
   let _ = Printf.printf "\n----- Testing Running Example----\n\n" in
@@ -326,7 +322,10 @@ let%test _ =
     (string_of_expr logical)
     (string_of_expr real)
     (string_of_map model)
-    (string_of_expr (fixup real model)) 
-  ;
+    (string_of_expr (fixup real model)) ;
+  (match cegis ~gas:1 logical real with
+   | None -> Printf.printf "FINAL PROGRAM:\nNONE\n%!"
+   | Some final_program -> 
+     Printf.printf "FINAL PROGRAM:\n%s\n%!" (final_program |> string_of_expr));
   true
   

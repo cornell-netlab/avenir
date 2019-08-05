@@ -7,9 +7,7 @@ open Manip
 
 
 (* Computes the traces between two points in graph *)
-let find_traces (graph:graph) (in_pkt : Packet.t) (out_pkt : Packet.t) =
-  let in_loc  = Packet.get_val in_pkt  "loc" in
-  let out_loc = Packet.get_val out_pkt "loc" in
+let find_traces (graph:graph) (in_loc : int) (out_loc : int) =
   let traces = get_all_paths_between graph in_loc out_loc in
   let _ = Printf.printf "ALL PATHS from %d to %d ;\n" in_loc out_loc;
           List.iter traces ~f:(fun tr ->
@@ -23,7 +21,7 @@ let find_traces (graph:graph) (in_pkt : Packet.t) (out_pkt : Packet.t) =
  * pre-condition: pkt is at an ingress host 
 **)
 let get_one_model (pkt : Packet.t) (logical : expr) (real : expr) =
-  let pkt', log_trace = trace_eval logical pkt |> Option.value_exn in
+  let pkt_loc', log_trace = trace_eval logical (pkt,None) |> Option.value_exn in
   (* let log_graph = make_graph logical in *)
   let _ = Printf.printf "[LOG] get_program_of logical path ";
           List.iter log_trace ~f:(Printf.printf "%d ");
@@ -31,7 +29,9 @@ let get_one_model (pkt : Packet.t) (logical : expr) (real : expr) =
   (* let log_trace_expr = get_program_of_rev_path log_graph (List.rev log_trace) in *)
   let real_graph = make_graph real in
   let _ = Printf.printf "REAL GRAPH:\n%s\n%!" (string_of_graph real_graph) in
-  let all_traces = find_traces real_graph pkt pkt' in
+  let in_loc = List.hd log_trace |> Option.value_exn in
+  let out_loc = List.last log_trace |> Option.value_exn in
+  let all_traces = find_traces real_graph in_loc out_loc in
   let _ = Printf.printf "[LOG] There are %d traces\n%!" (List.length all_traces) in
   let rec find_match traces = match traces with
     | [] -> (failwith "Cannot implement logical network in real network : No path")
@@ -40,7 +40,7 @@ let get_one_model (pkt : Packet.t) (logical : expr) (real : expr) =
                List.iter (List.rev path) ~f:(Printf.printf "%d ");
                Printf.printf "\n%!" in
        let path_expr = get_program_of_rev_path real_graph path in
-       let condition = Packet.to_test pkt' in
+       let condition = Packet.to_test (fst pkt_loc') in
        let wp_of_path = wp path_expr condition in
        let _ = Printf.printf "WEAKEST_PRECONDITION:\n(%s) =\nwp(%s, %s)\n\n%!"
                    (string_of_test wp_of_path)
@@ -56,7 +56,7 @@ let get_one_model (pkt : Packet.t) (logical : expr) (real : expr) =
            | Some model ->
 	      (* Printf.printf "The model: %s\n" (string_of_map model); *)
               let real' = fill_holes real model in
-              match trace_eval real' pkt with
+              match trace_eval real' (pkt,None) with
               | None -> find_match rest_paths
               | Some (_,_) -> model
   end in 
@@ -73,7 +73,7 @@ let fixup_val v model : value =
 let rec fixup_test t model =
   let binop ctor call left right = ctor (call left model) (call right model) in 
   match t with
-  | True | False -> t
+  | True | False | LocEq _ -> t
   | Neg p -> mkNeg (fixup_test p model)
   | And(p, q) -> binop mkAnd fixup_test p q
   | Or(p, q) -> binop mkOr fixup_test p q
@@ -96,6 +96,7 @@ let rec fixup_selects es model =
 and fixup (real:expr) (model : value StringMap.t) : expr =
   match real with
   | Skip -> Skip
+  | SetLoc l -> SetLoc l
   | Assign (f, v) -> Assign(f, fixup_val v model)
   | Assert t -> Assert (fixup_test t model)
   | Assume t -> Assume (fixup_test t model)
@@ -113,7 +114,7 @@ let rec plug_holes real =
   let rec plug_holes_test t =
     match t with
     (* Base *)
-    | True | False -> t
+    | True | False | LocEq _ -> t
     (* The real work -- here we plug the holes in tests *)
     | Eq (Hole _, _) | Eq (_, Hole _)
     | Lt (Hole _, _) | Lt (_, Hole _)  -> False
@@ -129,6 +130,7 @@ let rec plug_holes real =
   in
   match real with
   | Skip -> Skip
+  | SetLoc i -> SetLoc i
   | Assign (_, Hole _) -> Assert False
   | Assign (_, _) -> real
   | Assert t -> Assert (plug_holes_test t)
@@ -145,10 +147,9 @@ let implements n logical real =
   let symbolic_pkt =
     List.fold (free_vars_of_expr u_log) ~init:(True, 0)
       ~f:(fun (acc_test, fv_count) var ->
-          if var = "loc" then (acc_test, fv_count) else
-            (Var var %=% Var ("$" ^ string_of_int fv_count)
-             %&% acc_test
-            , fv_count + 1)
+          (Var var %=% Var ("$" ^ string_of_int fv_count)
+           %&% acc_test
+          , fv_count + 1)
         )
     |> fst
   in
@@ -170,9 +171,8 @@ let cegis ?gas:(gas=1000) ?unroll:(unroll=10) (logical : expr) (real : expr) =
     match implements unroll logical real with
     | `Yes -> Some (real |> plug_holes) 
     | `NoAndCE counter -> 
-       solve_concrete ~packet:counter logical real |> loop (gas-1)
+      solve_concrete ~packet:(Some counter) logical real |> loop (gas-1)
   in
   solve_concrete logical real |> loop gas
     
 let synthesize = cegis ~gas:1000 ~unroll:10
-  

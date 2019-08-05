@@ -32,11 +32,8 @@ let rec split_test_on_loc test =
   | Or _ -> failwith ("malformed test, || not allowed in if statement, please make a separate case (" ^ (string_of_test test) ^")")
   | True -> (None, True)
   | False -> (None, False)
-  | Eq (v, v') ->
-     begin match v, v' with
-     | Var "loc", Int l | Int l , Var "loc" -> (Some l, True)
-     | _, _ -> (None, mkEq v v')
-     end
+  | LocEq l -> (Some l, True)
+  | Eq (v, v') -> (None, mkEq v v')
   | Lt (v, v') -> (None, mkLt v v')
   | Neg ((Eq (_, _))) -> (None, test)
   | Neg _ -> failwith "malformed test, must be in NNF"
@@ -54,9 +51,9 @@ let rec split_test_on_loc test =
 let rec split_expr_on_loc (expr:expr) : (expr * int option) =
   match expr with
   | While _ -> failwith "cannot handle while nested under select"
-	| PartialSelect _
+  | PartialSelect _
   | TotalSelect _ -> failwith "Cannot handle nested selects"
-  | Assign ("loc", Int l) -> (Skip, Some l)
+  | SetLoc l -> (Skip, Some l)
   | Assign _
     | Skip
     | Assert _
@@ -83,17 +80,21 @@ let normalize_selects (ss : (test * expr) list) : (test * expr) list =
        
 let rec get_selects (e : Ast.expr) =
   match e with
-  | Skip | Assign _ | Assert _ | Assume _ -> []
+  | Skip | SetLoc _ | Assign _ | Assert _ | Assume _ -> []
   | While (_, body) -> get_selects body
   | Seq (firstdo, thendo) -> get_selects firstdo @ get_selects thendo
-	| PartialSelect ss 
+  | PartialSelect ss 
   | TotalSelect ss ->
-     List.map ss ~f:(fun (test, act) ->
-         let loc, test = split_test_on_loc test in
-         let act, loc' = split_expr_on_loc act in
-         (loc, test, act, loc')
-       )
-              
+    List.map ss ~f:(fun (test, act) ->
+        let loc, test = split_test_on_loc test in
+        let act, loc' = split_expr_on_loc act in
+        match loc, loc' with
+        | None, _ | _, None ->
+          failwith ("could not find location for " ^ sexp_string_of_test test ^ " -> " ^ sexp_string_of_expr act ^ " []")
+        | Some l, Some l' ->
+          (l, test, act, l')
+      )
+      
 
 let add_edge graph (src,test,act,dst) =
   IntMap.update graph src
@@ -102,14 +103,7 @@ let add_edge graph (src,test,act,dst) =
   
 let make_graph (e : Ast.expr) : graph =
   let selects = get_selects e in
-  List.fold selects ~init:IntMap.empty
-    ~f:(fun g (src_loc_opt, test, action, dst_loc_opt) ->
-      match src_loc_opt, dst_loc_opt with
-      | Some src_loc, Some dst_loc ->
-         add_edge g (src_loc, test, action, dst_loc)
-      | _, _ -> failwith "Could not find the location for a select statement"
-    )
-
+  List.fold selects ~init:IntMap.empty ~f:add_edge
 
 
 let get_neighbors (graph:graph) location =

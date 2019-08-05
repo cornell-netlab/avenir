@@ -20,14 +20,16 @@ let multiply orlist orlist' =
 (* Computes the Negation Normal Form of a test*)               
 let rec nnf t : test =
   match t with
+  | LocEq _
   | Eq(_, _)
-	  | Lt(_, _) 
-    | True
-    | False
-    | Neg(Eq(_, _))
-		| Neg(Lt(_, _))
-    | Neg(True)
-    | Neg(False) -> t
+  | Lt(_, _) 
+  | True
+  | False
+  | Neg(Eq(_, _))
+  | Neg(LocEq _)
+  | Neg(Lt(_, _))
+  | Neg(True)
+  | Neg(False) -> t
   | Neg (Neg t) -> nnf t
   | And (a, b) -> mkAnd (nnf a) (nnf b)
   | Or (a, b) -> mkOr (nnf a) (nnf b)
@@ -37,15 +39,16 @@ let rec nnf t : test =
 
 (* Computes the Disjunctive Normal form of a test *)
 let rec dnf t : test list =
-  match nnf t with
+  let t' = nnf t in
+  match t' with
   | And(a, b) -> multiply (dnf a) (dnf b)
   | Or (a, b) -> dnf a @ dnf b
+  | LocEq _
   | Eq _
-	  | Lt _ 
-    | Neg _ (* will not be And/Or because NNF*)
-    | True
-    | False  ->  [t]
-
+  | Lt _ 
+  | Neg _ (* will not be And/Or because NNF*)
+  | True
+  | False  ->  [t']
                
                  
 (* Unrolls all loops in the program p n times *)
@@ -71,8 +74,7 @@ let get_val subsMap str default =
 let rec substitute ex subsMap =
   let subst = get_val subsMap in 
   match ex with
-  | True  -> True
-  | False -> False
+  | True | False | LocEq _ -> ex
   (* Homomorphic Rules*)               
   | Neg e       -> !%(substitute e subsMap)
   | Or  (e, e') -> substitute e subsMap %+% substitute e' subsMap
@@ -99,6 +101,7 @@ let rec wp c phi =
   | Skip -> phi
   | Seq (firstdo, thendo) ->
     wp firstdo (wp thendo phi)
+  | SetLoc _ -> phi
   | Assign (field, value) ->
      substitute phi (StringMap.singleton field value)
   | Assert t -> t %&% phi
@@ -130,7 +133,7 @@ let fill_holes_value v subst =
 let rec fill_holes_test t subst =
   let binop cnstr rcall left right = cnstr (rcall left subst) (rcall right subst) in
   match t with
-  | True | False -> t
+  | True | False | LocEq _ -> t
   | Neg a -> mkNeg (fill_holes_test a subst)
   | And (a, b) -> binop mkAnd fill_holes_test  a b
   | Or (a, b)  -> binop mkOr  fill_holes_test  a b
@@ -147,7 +150,7 @@ let rec fill_holes (c : expr) subst =
      | None -> c
      | Some v -> Assign (f, v)
      end
-  | Assign (_, _) -> c
+  | SetLoc _ | Assign (_, _) -> c
   | Seq (firstdo, thendo) ->
      fill_holes firstdo subst %:% fill_holes thendo subst
   | Assert t ->

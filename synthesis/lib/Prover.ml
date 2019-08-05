@@ -23,6 +23,7 @@ let rec mkZ3Test t ctx deBruijn =
   match t with 
   | True -> Z3.Boolean.mk_true ctx
   | False -> Z3.Boolean.mk_false ctx
+  | LocEq _ -> failwith "dont know how to insert locations into tests"
   | Eq (left, right) -> Z3.Boolean.mk_eq ctx   (z3_value left) (z3_value right)
   | Lt (left, right) -> Z3.Arithmetic.mk_lt ctx   (z3_value left) (z3_value right)
   | Or (left, right) -> Z3.Boolean.mk_or ctx   [(z3_test left); (z3_test right)]
@@ -70,7 +71,7 @@ let mkMotleyExpr expr =
   	  | _  -> raise (Failure ("Prover: still not supporting: " ^ (Z3.AST.to_string (Z3.Expr.ast_of_expr expr)) ^ "\n"))
 
 (*
- Converts a Z3 model to a map from String to Motley expression
+ Converts a Z3 model to a map from String to Motley value
 *) 
 let mkMotleyModel model = 
   let consts = Z3.Model.get_const_decls model in
@@ -93,13 +94,14 @@ let check test =
   let _ = initSolver mySolver context test in
   let _ = Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in
   let response = Z3.Solver.check mySolver [] in
-  (*Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver);*)
+  (* Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver); *)
   match response with
-  | UNSATISFIABLE | UNKNOWN -> None
+  | UNSATISFIABLE | UNKNOWN -> Printf.printf "UNSAT\n%!"; None
   | SATISFIABLE ->
-     match Z3.Solver.get_model mySolver with 
-     | Some m -> Some (mkMotleyModel m)
-     | None -> None
+    Printf.printf "SAT\n%!";
+    match Z3.Solver.get_model mySolver with 
+    | Some m -> Some (mkMotleyModel m)
+    | None -> None
 
 (* Checks SMT Query for validity. Returns None (VALID) or Some model (Counter Example) *)          
 let check_valid test = check (!%test)
