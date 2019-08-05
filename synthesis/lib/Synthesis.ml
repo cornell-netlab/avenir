@@ -148,7 +148,7 @@ and fixup (real:expr) (model : value StringMap.t) : expr =
 
 let implements n logical real =
   let u_log = unroll n logical in
-  let u_rea = unroll n real |> plug_holes in
+  let u_rea = unroll n real in
   let fvs = List.dedup_and_sort ~compare (free_vars_of_expr u_log @ free_vars_of_expr u_rea) in
   let symbolic_pkt =
     List.fold fvs  ~init:(True, 0)
@@ -172,9 +172,12 @@ let implements n logical real =
 (** solves the inner loop **)
 let solve_concrete ?packet:(packet=None) (logical : expr) (real : expr) =
   let fvs = free_vars_of_expr logical @ free_vars_of_expr real in
-  let pkt = packet |> Option.value ~default:(Packet.generate fvs) in
+  let values = multi_ints_of_expr logical in
+  let pkt = packet |> Option.value ~default:(Packet.generate fvs ~values) in
   let model = get_one_model pkt logical real in
-  fixup real model
+  let real' =  fixup real model in
+  Printf.printf "\n\nNEXT ITERATION OF REAL PROGRAM:\n%s\n%!\n" (string_of_expr real');
+  real'
 
 
 let cegis ?gas:(gas=1000) ?unroll:(unroll=10) (logical : expr) (real : expr) =
@@ -186,11 +189,11 @@ let cegis ?gas:(gas=1000) ?unroll:(unroll=10) (logical : expr) (real : expr) =
     | `NoAndCE counter -> 
       solve_concrete ~packet:(Some counter) logical real |> loop (gas-1)
   in
- solve_concrete logical real |> loop gas
+  solve_concrete logical real |> loop gas
     
 let synthesize logical real =
   Printf.printf "\nSynthesized Program:\n%s\n\n%!"
-    (cegis ~gas:1000 ~unroll:1 logical real
+    (cegis ~gas:3 ~unroll:1 logical real
      |> Option.value ~default:(Assert False)
      |> plug_holes
      |> string_of_expr)

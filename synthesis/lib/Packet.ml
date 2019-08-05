@@ -26,8 +26,13 @@ let set_field_of_value pkt field value =
     | Hole _ ->
        failwith "Packets cannot have holes in them"
 
-let init_field_to_random bound pkt v =
-  set_field pkt v (Random.int bound) 
+let init_field_to_random bound pkt f =
+  set_field pkt f (Random.int bound)
+
+let init_field_to_value_in values pkt f =
+  Random.int (List.length values)
+  |> List.nth_exn values
+  |> set_field pkt f
 
 let to_test pkt =
   StringMap.fold pkt ~init:True
@@ -43,9 +48,12 @@ let empty = StringMap.empty
 
 let equal (pkt:t) (pkt':t) = StringMap.equal (=) pkt pkt'
   
-
-let generate ?bound:(bound=10000000) vars =
+let generate ?bound:(bound=10000000) ?values:(values=[]) vars =
+  match values with
+  | [] ->
     List.fold vars ~init:empty ~f:(init_field_to_random bound)
+  | _ ->
+    List.fold vars ~init:empty ~f:(init_field_to_value_in values)
 
 let from_CE (model : value StringMap.t) : t =
   StringMap.fold model ~init:empty

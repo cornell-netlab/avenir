@@ -8,18 +8,23 @@ open Ast
    
 module StringMap = Map.Make (String) 
    
-let mkZ3Value v ctx (deBruijn : int StringMap.t) : Z3.Expr.expr =
+let mkZ3Value typ v ctx (deBruijn : int StringMap.t) : Z3.Expr.expr =
   let open Z3.Arithmetic in
-  match v with
-  | Hole h -> Integer.mk_const_s ctx h
-  | Int i  -> Integer.mk_numeral_i ctx i
-  | Var v  -> match StringMap.find deBruijn v with
-              | None -> failwith ( "unbound variable " ^ v) 
-              | Some x -> Z3.Quantifier.mk_bound ctx x (Integer.mk_sort ctx)
+  match v, typ with
+  | Int i, _ ->
+    Integer.mk_numeral_i ctx i
+  | Hole x, `Sat
+  | Var x, `Valid ->
+    Integer.mk_const_s ctx x
+  | Var x, `Sat
+  | Hole x, `Valid  ->
+    match StringMap.find deBruijn x with
+    | None -> failwith ( "unbound variable " ^ x) 
+    | Some x' -> Z3.Quantifier.mk_bound ctx x' (Integer.mk_sort ctx)
 
-let rec mkZ3Test t ctx deBruijn =
-  let z3_value v = mkZ3Value v ctx deBruijn in
-  let z3_test t = mkZ3Test t ctx deBruijn in 
+let rec mkZ3Test typ t ctx deBruijn =
+  let z3_value (v : value) = mkZ3Value typ v ctx deBruijn in
+  let z3_test t = mkZ3Test typ t ctx deBruijn in 
   match t with 
   | True -> Z3.Boolean.mk_true ctx
   | False -> Z3.Boolean.mk_false ctx
@@ -44,33 +49,36 @@ let mk_deBruijn vars : int StringMap.t =
       db_map'
     )
 
-let bind_vars typ ctx vs formula =
+let bind_vars ctx vs formula =
   let open Z3 in
   let types = List.map vs ~f:(fun _ -> Arithmetic.Integer.mk_sort ctx) in
   let names = List.map vs ~f:(Symbol.mk_string ctx) in
   let q = Quantifier.mk_forall ctx types names formula (Some 1) [] [] None None in
-  match typ with
-  | `Sat -> Quantifier.expr_of_quantifier q
-  | `Valid -> Boolean.mk_not ctx (Quantifier.expr_of_quantifier q)
+  Quantifier.expr_of_quantifier q
 
 
   
 let initSolver typ solver ctx test =
   Printf.printf "SENDING TEST TO Z3: %s\n%!" (sexp_string_of_test test);
-  let bindable_vars = free_vars_of_test test in
-  let phi = mkZ3Test test ctx (mk_deBruijn bindable_vars) in
-  Z3.Solver.add solver [bind_vars typ ctx bindable_vars phi]
-
+  let init bindable test =
+    let phi = mkZ3Test typ test ctx (mk_deBruijn bindable) in
+    Z3.Solver.add solver [bind_vars ctx bindable phi]
+  in
+  match typ with
+  | `Sat ->
+    init (free_vars_of_test test) test
+  | `Valid ->
+    init (holes_of_test test) (!%test)
   
 (*
  Converts a Z3 expression to Motley expression 
 *)
 let mkMotleyExpr expr =	
-	match Z3.AST.get_ast_kind (Z3.Expr.ast_of_expr expr) with
-	| NUMERAL_AST -> Int (int_of_string (Z3.Expr.to_string expr))
-	| APP_AST  
-	  | VAR_AST   
-  	  | _  -> raise (Failure ("Prover: still not supporting: " ^ (Z3.AST.to_string (Z3.Expr.ast_of_expr expr)) ^ "\n"))
+  match Z3.AST.get_ast_kind (Z3.Expr.ast_of_expr expr) with
+  | NUMERAL_AST -> Int (int_of_string (Z3.Expr.to_string expr))
+  | APP_AST  
+  | VAR_AST   
+  | _  -> raise (Failure ("Prover: still not supporting: " ^ (Z3.AST.to_string (Z3.Expr.ast_of_expr expr)) ^ "\n"))
 
 (*
  Converts a Z3 model to a map from String to Motley value

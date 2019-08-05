@@ -119,22 +119,52 @@ let rec dedup xs =
      let xs' = remove_dups x xs in
      x :: dedup xs'
   
-let rec free_vars_of_test test =
+let rec free_of_test typ test =
   begin match test with
   | True | False | LocEq _ ->
     []
   | Or (l,r) | And (l, r) ->
-     free_vars_of_test l @ free_vars_of_test r
+     free_of_test typ l @ free_of_test typ r
   | Neg t ->
-     free_vars_of_test t
-  | Eq (Var v, Var v') -> [v; v']
-  | Eq (Var v, _) | Eq (_, Var v) -> [v]
-  | Eq (_, _) -> []
-  | Lt (Var v, Var v') -> [v; v']
-  | Lt (Var v, _) | Lt (_, Var v) -> [v]
-  | Lt (_, _) -> [] 
+    free_of_test typ t
+  | Eq (v, v') | Lt (v, v') ->
+    match typ, v, v'  with
+    | `Var, Var x, Var x' ->
+      [x; x']
+    | `Var, _, Var x
+    | `Var, Var x, _ ->
+      [x]
+    | `Hole, Hole x, Hole x' ->
+      [x; x']
+    | `Hole, Hole x, _
+    | `Hole, _, Hole x ->
+      [x]
+    | _ ->
+      []
   end
   |> dedup
+
+let free_vars_of_test = free_of_test `Var
+let holes_of_test = free_of_test `Hole
+
+let rec multi_ints_of_test test =
+  begin match test with
+    | True | False | LocEq _ ->
+      []
+    | Or (l, r) | And (l, r) ->
+      multi_ints_of_test l
+      @ multi_ints_of_test r
+    | Neg t ->
+      multi_ints_of_test t
+    | Eq (v, v') | Lt (v, v') ->
+      match v, v' with
+      | Int x, Int y ->
+        [x; y]
+      | Int x, _
+      | _, Int x ->
+        [x]
+      | _ -> []
+  end
            
 type expr =
   | Skip
@@ -228,26 +258,58 @@ let rec sexp_string_of_expr e : string =
   | TotalSelect exprs -> "PartialSelect([" ^ string_select exprs ^ "])"
 
   
-let rec free_vars_of_expr (e:expr) : string list =
-  match e with
+let rec free_of_expr typ (e:expr) : string list =
+  begin match e with
   | Skip | SetLoc _ -> []
   | Assign (f, v) ->
-     f :: (match v with
-           | Int _ | Hole _  -> []
-           | Var x -> [x])
+     f :: (match v,typ with
+        | Hole x,`Hole -> [x]
+        | Var x, `Var -> [x]
+        | _, _ -> [] )
   | Seq (p, q) ->
-     free_vars_of_expr p @ free_vars_of_expr q
+     free_of_expr typ p @ free_of_expr typ q
   | While (cond, body) ->
-     free_vars_of_test cond
-     @ free_vars_of_expr body
-  | Assert t | Assume t -> free_vars_of_test t
+     free_of_test typ cond
+     @ free_of_expr typ body
+  | Assert t | Assume t -> free_of_test typ t
   | PartialSelect ss 
-	| TotalSelect ss ->
-     List.fold ss ~init:[] ~f:(fun fvs (test, action) ->
-         free_vars_of_test test
-         @ free_vars_of_expr action
+  | TotalSelect ss ->
+    List.fold ss ~init:[] ~f:(fun fvs (test, action) ->
+        free_of_test typ test
+         @ free_of_expr typ action
          @ fvs
-       )
-           
+      )
+  end
+  |> dedup
+
+
+let free_vars_of_expr = free_of_expr `Var
+let holes_of_expr = free_of_expr `Hole
       
-                     
+let rec multi_ints_of_expr e =
+  match e with
+  | Skip
+  | SetLoc _ ->
+    []
+  | Assign (_, Int i) ->
+    [i]
+  | Assign _ ->
+    []
+  | Seq (p, q) ->
+    multi_ints_of_expr p
+    @ multi_ints_of_expr q
+  | While (cond, body) ->
+     multi_ints_of_test cond
+     @ multi_ints_of_expr body
+  | Assert t
+  | Assume t ->
+    multi_ints_of_test t
+  | PartialSelect ss 
+  | TotalSelect ss ->
+    concatMap ss ~init:(Some []) ~c:(@)
+      ~f:(fun (test, action) ->
+        multi_ints_of_test test
+        @ multi_ints_of_expr action
+        )
+ 
+  
