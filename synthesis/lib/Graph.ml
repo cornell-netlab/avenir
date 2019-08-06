@@ -16,20 +16,26 @@ type graph = (((test * expr) list) IntMap.t) IntMap.t
 type path = int list
 
 let string_of_graph (g : graph) =
-  IntMap.fold ~f:(fun ~key:k1 ~data:n1 acc1 -> 
-		acc1 ^ 
-		IntMap.fold ~f:(fun ~key:k2 ~data:n2 acc2 -> 
-			acc2 ^ (string_of_int k1) ^ "->" ^ 
-			(List.fold_left ~f:(fun acc3 (t,e) -> (acc3 ^ "(" ^ (string_of_test t) ^ "," ^ (string_of_expr e) ^ ")") ) ~init:"" n2) ^ "->" ^
-			(string_of_int k2) ^ "\n") n1 ~init:"") g ~init:""					                  
-
-let string_of_path (p : path) = List.fold_left ~f:(fun acc e -> acc ^ "->" ^ (string_of_int e)) p ~init:"";;
+  IntMap.fold
+    ~f:(fun ~key:k1 ~data:n1 acc1 -> 
+        acc1 ^ 
+	IntMap.fold ~f:(fun ~key:k2 ~data:n2 acc2 -> 
+	    acc2 ^ (string_of_int k1) ^ "->" ^ 
+     (List.fold_left ~f:(fun acc3 (t,e) ->
+          (acc3 ^ "(" ^ (string_of_test t) ^ "," ^ (string_of_expr e) ^ ")") ) ~init:"" n2) ^ "->" ^
+     (string_of_int k2) ^ "\n") n1 ~init:"") g ~init:""					                  
+    
+let string_of_path (p : path) =
+  List.fold_left ~f:(fun acc e -> acc ^ "->" ^ (string_of_int e)) p ~init:""
 
 let (%.) f g x = f (g x)
              
 let rec split_test_on_loc test =
   match test with
-  | Or _ -> failwith ("malformed test, || not allowed in if statement, please make a separate case (" ^ (string_of_test test) ^")")
+  | Or _ ->
+    failwith
+      ("malformed test, || not allowed in if statement, please make a separate case ("
+       ^ (string_of_test test) ^")")
   | True -> (None, True)
   | False -> (None, False)
   | LocEq l -> (Some l, True)
@@ -86,7 +92,7 @@ let rec get_selects (e : Ast.expr) =
   | Seq (firstdo, thendo) -> get_selects firstdo @ get_selects thendo
   | PartialSelect ss 
   | TotalSelect ss ->
-    List.map ss ~f:(fun (test, act) ->
+    List.map (normalize_selects ss) ~f:(fun (test, act) ->
         let loc, test = split_test_on_loc test in
         let act, loc' = split_expr_on_loc act in
         match loc, loc' with
@@ -98,9 +104,14 @@ let rec get_selects (e : Ast.expr) =
       
 
 let add_edge graph (src,test,act,dst) =
+  Printf.printf "[GRAPH] add_edge FROM:%d TO:%d IF:%s DO:%s\n%!"
+    src
+    dst
+    (string_of_test test)
+    (string_of_expr act);
   IntMap.update graph src
     ~f:(fun x -> IntMap.update (Option.value ~default:IntMap.empty x) dst
-                   ~f:(fun y -> (test, act) :: Option.value ~default:[] y))
+                   ~f:(fun y -> ((test, act) :: Option.value ~default:[] y) |> dedup))
   
 let make_graph (e : Ast.expr) : graph =
   let selects = get_selects e in
@@ -149,7 +160,11 @@ let get_edges (graph:graph) src dst =
   Printf.printf "[LOG] looking for edge from %d to %d\n%!" src dst;
   let succs = IntMap.find_exn graph src in
   let edges = IntMap.find_exn succs dst in
-  concatMap edges ~c:(%:%) ~f:(fun (cond, act) -> Assert cond %:% act)
+  if List.length edges > 1 then
+    mkTotal edges
+  else
+    concatMap edges ~c:(%:%) ~f:(fun (cond, act) -> Assert cond %:% act)
+
 
 let rec get_program_of_rev_path graph rev_path : expr =
   match rev_path with
@@ -159,4 +174,15 @@ let rec get_program_of_rev_path graph rev_path : expr =
      let edges = get_edges graph before after in
      get_program_of_rev_path graph (before :: rest) %:% edges     
 
-     
+let diameter (e:expr) =
+  (make_graph e
+   |> get_all_paths
+   |> List.fold
+     ~init:(0)
+     ~f:(fun curr_max p ->
+         let len = List.length p in
+         if len > curr_max then
+           len
+         else
+           curr_max)
+  ) - 1

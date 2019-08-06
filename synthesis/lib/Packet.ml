@@ -57,7 +57,10 @@ let generate ?bound:(bound=10000000) ?values:(values=[]) vars =
 
 let from_CE (model : value StringMap.t) : t =
   StringMap.fold model ~init:empty
-    ~f:(fun ~key ~data pkt -> set_field_of_value pkt key data)
+    ~f:(fun ~key ~data pkt ->
+        if String.get key 0 = '$'
+        then pkt
+        else set_field_of_value pkt key data)
 
         
         

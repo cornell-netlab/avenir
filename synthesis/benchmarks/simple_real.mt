@@ -1,6 +1,6 @@
 loc := 0;
 while (~ loc = 1 && ~ loc = -1 ) {
-  if 
+  if total
     loc = 0 && pkt = ?_0 -> loc := 1; pkt := ?_1 []
     loc = 0 && ~(pkt = ?_2) -> loc := -1 []
   fi

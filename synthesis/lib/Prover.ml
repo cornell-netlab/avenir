@@ -92,13 +92,13 @@ let mkMotleyModel model =
     ~f:(fun func_decl ->
       let name = (Z3.Symbol.get_string (Z3.FuncDecl.get_name func_decl)) in
       let value = Z3.Model.get_const_interp model func_decl in
-  		  (match value with
-		   | Some v -> name, (mkMotleyExpr v) 
-		   | None -> raise (Failure "Prover: empty model")))
+      (match value with
+       | Some v -> name, (mkMotleyExpr v) 
+       | None -> raise (Failure "Prover: empty model")))
     consts)
   in
   StringMap.of_alist_exn(name_vals)
-
+    
 (*
  Checks SMT query. Returns either None (UNSAT) or SAT (model map) 
 *)

@@ -19,6 +19,7 @@ rule tokens = parse
 | "true"          { TRUE }
 | "false"         { FALSE }
 | "while"         { WHILE }
+| "total"         { TOTAL }
 | "skip"          { SKIP }
 | "==>"           { IMPLIES }
 | ":="            { ASSIGN }

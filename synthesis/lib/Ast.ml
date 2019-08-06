@@ -29,9 +29,20 @@ type test =
 
 let mkEq v v' =
   if v = v' then True else
-    match v, v' with
+    match v, v' with 
     | Int _, Int _ -> False
-    | _, _ -> Eq(v, v')
+    | Hole x, Hole x'
+    | Var x, Var x' ->
+      if x < x' then Eq (v, v') else Eq (v', v)
+    (* Var < Int < Hole *)
+    | Hole _, Int _
+    | Hole _, Var _
+    | Int  _, Var _
+      ->  Eq(v', v)
+    | Int _, Hole _
+    | Var _, Hole _
+    | Var _, Int _
+      -> Eq (v, v')
 
 let mkLt v v' = match v, v' with
     | Int first, Int second -> 
@@ -177,18 +188,26 @@ type expr =
   | PartialSelect of (test * expr) list
   | TotalSelect of (test * expr) list 
 
-let mkPartial ss =
-  let selects = concatMap ss ~init:(Some []) ~c:(@)
+let mkSelects =
+  concatMap ~init:(Some []) ~c:(@)
     ~f:(fun (cond, act) ->
         if cond = False then
           []
         else
           [cond, act])
-  in
+let mkPartial ss =
+  let selects = mkSelects ss in
   if List.length selects = 0 then
     Skip
   else
     PartialSelect selects
+
+let mkTotal ss =
+  let selects = mkSelects ss in
+  if List.length selects = 0 then
+    Assert False
+  else
+    TotalSelect selects
 
 
 let mkIf cond tru = PartialSelect [(cond, tru)]
@@ -241,18 +260,18 @@ let rec string_of_expr ?depth:(depth=0) (e : expr) : string =
   | Assign (field, value) ->
     field ^ " := " ^ string_of_value value
   | PartialSelect es ->
-     string_of_select "if" depth es
+     string_of_select "if" "fi" depth es
   | TotalSelect es -> 
-     string_of_select "tif" depth es
+     string_of_select "if total" "fi" depth es
 
-and string_of_select openstr depth es =
+and string_of_select openstr closestr depth es =
   openstr ^
     List.fold_left es ~init:"" ~f:(fun str (cond, act)->
         str ^ "\n" ^
           repeat "\t" (depth + 1)
           ^ string_of_test cond  ^ " -> " ^ string_of_expr ~depth:(depth+2) act ^ " []"
       )
-    ^ "\n" ^ repeat "\t" depth ^ String.rev openstr
+    ^ "\n" ^ repeat "\t" depth ^ closestr
   
 let rec sexp_string_of_expr e : string =
   let string_select = concatMap 

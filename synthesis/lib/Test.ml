@@ -75,7 +75,26 @@ let simple_test =
    
 let test1 = string_of_expr simple_test
                 
-let test2 = wp ("h" %<-% Var "Ingress") True 
+let test2 = wp ("h" %<-% Var "Ingress") True
+
+let complete_test_with_drop_location_no_holes =
+  SetLoc 0 %:%
+  While(!%(LocEq 1) %&% !%(LocEq (-1)), 
+        mkPartial
+          [ LocEq 0 %&% (Var "pkt" %=% Int 42) ,  SetLoc 1 %:% ("pkt" %<-% Int 47)
+          ; LocEq 0 %&% !%(Var "pkt" %=% Int 42), SetLoc (-1) ]
+       )
+
+let complete_test_with_drop_location_holes =
+  let pkt_eq h = Var "pkt" %=% Hole h in
+  let pkt_gets h = "pkt" %<-% Hole h in
+  SetLoc 0 %:%
+  While(!%(LocEq 1) %&% !%(LocEq (-1)),
+        mkPartial 
+          [ LocEq 0 %&% (pkt_eq "_0")  , SetLoc 1 %:% pkt_gets "_1"
+          ; LocEq 0 %&% !%(pkt_eq "_0"), SetLoc (-1)]
+       )
+
 
              
 let%test _ = (* Testing unrolling *)
@@ -104,7 +123,15 @@ let%test _ = (*Selection unrolls works*)
   unroll 1 (TotalSelect [ selectCond, mkWhile cond loop_body;
                          True, mkWhile cond loop_body])
   = TotalSelect [selectCond, unroll 1 (mkWhile cond loop_body);
-                True, unroll 1 (mkWhile cond loop_body)]
+                 True, unroll 1 (mkWhile cond loop_body)]
+
+(* Testing equality smart constructor *)
+let%test _ =
+  let exp = Var "x" %=% Int 7 in
+  let got = Int 7 %=% Var "x" in
+  if exp = got then true else
+    (print_test_neq ~got ~exp;false)
+  
       
       
 
@@ -116,8 +143,15 @@ let%test _ = (*Skip behaves well *)
 let%test _ = (* Assign behaves well with integers *)
   let prog = "h" %<-% Int 7 in
   (* Printf.printf "%s\n" (string_of_test (wp prog (Var "h" %=% Int 7))); *)
-  Int 7 %=% Int 7 = wp prog (Var "h" %=% Int 7)
-  && Int 7 %=% Var "g" = wp prog (Var "h" %=% Var "g")
+  (* Int 7 %=% Int 7 = wp prog (Var "h" %=% Int 7) *)
+  if Int 7 %=% Var "g" = wp prog (Var "h" %=% Var "g") then true else
+    (print_test_neq
+       ~exp:(Int 7 %=% Var "g")
+       ~got:(wp prog (Var "h" %=% Var "g"))
+    ; false)
+  
+    
+    
 
 let%test _ = (* Assign behaves well with variables *)
   let prog = "h" %<-% Var "hgets" in
@@ -178,7 +212,21 @@ let%test _ = (* wp behaves well with partials *)
   let pre = wp prog cond in
   (* Printf.printf "EXPECTED:\n%s\n\nGOT:\n%s\n" (sexp_string_of_test expected) (sexp_string_of_test pre); *)
   expected = pre
+
+let%test _ =
+  let cond = Var "pkt" %=% Var "ALPHA" in
+  let prog = complete_test_with_drop_location_no_holes in
+  let u_prog = unroll (Graph.diameter prog) prog in
+  let expected =
+    ((Var "pkt" %=% Int 42) %=>% (Var "ALPHA" %=% Int 47 ))
+    %&% ( !%(Var "pkt" %=% Int 42) %=>% (Var "ALPHA" %=% Var "pkt" ))
+  in
+  let wp_got = wp u_prog cond in
+  if wp_got = expected
+  then true
+  else (print_test_neq ~exp:expected ~got:wp_got; false)
   
+
 
                            (* TEST PARSING *)
 
@@ -207,9 +255,10 @@ let%test _ =
  *   Printf.printf "%s\n" (make_graph e |> string_of_graph); true *)
 
 
-
-
-
+let%test _ = 1 = Graph.diameter complete_test_with_drop_location_no_holes
+let%test _ = 1 = Graph.diameter complete_test_with_drop_location_holes
+    
+    
   
                            (* TESTING SEMANTICS *)
 
@@ -248,9 +297,16 @@ let%test _ =
   let indices = mk_deBruijn (free_vars_of_test t) in
   let get = StringMap.find indices in
   let z3test = mkZ3Test `Sat t ctx indices in
-  let expz3string = "(let ((a!1 (not (or (= (:var 2) 5) (and (= (:var 2) 3) (= (:var 1) 6))))))\n  (or a!1 (not (or (= (:var 2) hole0) (= (:var 0) hole1)))))" in
+  let expz3string = "(let ((a!1 (not (or (= 5 (:var 2)) (and (= 3 (:var 2)) (= 6 (:var 1)))))))\n  (or a!1 (not (or (= hole0 (:var 2)) (= hole1 (:var 0))))))" in
   let qform = bind_vars ctx exp_fvs z3test in
-  let exp_qform_string ="(forall ((x Int) (z Int) (y Int))\n  (let ((a!1 (not (or (= x 5) (and (= x 3) (= z 6))))))\n    (or a!1 (not (or (= x hole0) (= y hole1))))))" in
+  let exp_qform_string ="(forall ((x Int) (z Int) (y Int))\n  (let ((a!1 (not (or (= 5 x) (and (= 3 x) (= 6 z))))))\n    (or a!1 (not (or (= hole0 x) (= hole1 y))))))" in
+  Printf.printf "FAILED TEST (deBruijn) -----\n%!";
+  Printf.printf "DE_BRUIJN :\n%!";
+  StringMap.iteri indices ~f:(fun ~key ~data ->
+      Printf.printf "\t %s -> %d\n%!" key data;
+    );
+  Printf.printf "Z3STRING:\n%s\n\n%!EXPECTED:\n%s\n\n%!" (Z3.Expr.to_string z3test) expz3string;
+  Printf.printf "----------------------------\n%!";
   free_vars_of_test t = exp_fvs
   && get "x" = Some 2 && get "y" = Some 0 && get "z" = Some 1
   && Z3.Expr.to_string z3test = expz3string
@@ -286,46 +342,42 @@ let%test _ =
   true
 
 
-let%test _ =
-  let x = "x" in
-  let y = "y" in
-  let vx = Var x in
-  let vy = Var y in
-  let pkt = Packet.(set_field (set_field empty "x" 3) "y" 1) in
-  let logical = SetLoc 0 %:%
-                  While(!%(LocEq 6),
-                        PartialSelect [
-                            LocEq 0 %&% (vx %=% Int 5), SetLoc 1 ;
-                            LocEq 0 %&% !%(vx %=% Int 5), SetLoc 2 ;
-                            LocEq 1 , y %<-% Int 0 %:% (SetLoc 6) ;
-                            LocEq 2 , y %<-% Int 1 %:% (SetLoc 6) ;
-                          ]
-                       )
-  in
-  let real = SetLoc 0 %:%
-               While ( !%(LocEq 6),
-                       PartialSelect [
-                           LocEq 0 %&% (vx %=% Int 5 ), SetLoc 1 ;
-                           LocEq 1 %&% (vy %=% Hole "_6"), SetLoc 2 ;
-                           LocEq 2 , y %<-% Int 1 %:% (SetLoc 6) ;
-                           LocEq 5 , y %<-% Int 0 %:% (SetLoc 6) ;
-                           LocEq 0 %&% (vx %=% Hole "_0"), SetLoc 3 ;
-                           LocEq 3 %&% (vx %=% Hole "_1" %&% (vy %=% Hole "_2")), SetLoc 5 ;
-                           LocEq 3 %&% (vx %=% Hole "_3" %&% (vy %=% Hole "_4")), SetLoc 4 ;
-                           LocEq 4 , (y %<-% Int 1 %:% (SetLoc 6))
-                 ])
-  in
-  let _ = Printf.printf "\n----- Testing Running Example----\n\n" in
-  let model = get_one_model pkt logical real in
-  Printf.printf "PACKET:\n%s\n%!\nLOGICAL PROGRAM:\n%s\n%!\nREAL PROGRAM:\n%s\n%!\n MODEL:\n%s\n%!\nNEWREAL:\n%s\n%!"
-    (Packet.string_of_packet pkt)
-    (string_of_expr logical)
-    (string_of_expr real)
-    (string_of_map model)
-    (string_of_expr (fixup real model)) ;
-  (match cegis ~gas:1 logical real with
-   | None -> Printf.printf "FINAL PROGRAM:\nNONE\n%!"
-   | Some final_program -> 
-     Printf.printf "FINAL PROGRAM:\n%s\n%!" (final_program |> string_of_expr));
-  true
+(* let%test _ =
+ *   let x = "x" in
+ *   let y = "y" in
+ *   let vx = Var x in
+ *   let vy = Var y in
+ *   let pkt = Packet.(set_field (set_field empty "x" 3) "y" 1) in
+ *   let logical = SetLoc 0 %:%
+ *                   While(!%(LocEq 6),
+ *                         PartialSelect [
+ *                             LocEq 0 %&% (vx %=% Int 5), SetLoc 1 ;
+ *                             LocEq 0 %&% !%(vx %=% Int 5), SetLoc 2 ;
+ *                             LocEq 1 , y %<-% Int 0 %:% (SetLoc 6) ;
+ *                             LocEq 2 , y %<-% Int 1 %:% (SetLoc 6) ;
+ *                           ]
+ *                        )
+ *   in
+ *   let real = SetLoc 0 %:%
+ *                While ( !%(LocEq 6),
+ *                        PartialSelect [
+ *                            LocEq 0 %&% (vx %=% Int 5 ), SetLoc 1 ;
+ *                            LocEq 1 %&% (vy %=% Hole "_6"), SetLoc 2 ;
+ *                            LocEq 2 , y %<-% Int 1 %:% (SetLoc 6) ;
+ *                            LocEq 5 , y %<-% Int 0 %:% (SetLoc 6) ;
+ *                            LocEq 0 %&% (vx %=% Hole "_0"), SetLoc 3 ;
+ *                            LocEq 3 %&% (vx %=% Hole "_1" %&% (vy %=% Hole "_2")), SetLoc 5 ;
+ *                            LocEq 3 %&% (vx %=% Hole "_3" %&% (vy %=% Hole "_4")), SetLoc 4 ;
+ *                            LocEq 4 , (y %<-% Int 1 %:% (SetLoc 6))
+ *                  ])
+ *   in
+ *   let _ = Printf.printf "\n----- Testing Running Example----\n\n" in
+ *   let model = get_one_model pkt logical real in
+ *   Printf.printf "PACKET:\n%s\n%!\nLOGICAL PROGRAM:\n%s\n%!\nREAL PROGRAM:\n%s\n%!\n MODEL:\n%s\n%!\nNEWREAL:\n%s\n%!"
+ *     (Packet.string_of_packet pkt)
+ *     (string_of_expr logical)
+ *     (string_of_expr real)
+ *     (string_of_map model)
+ *     (string_of_expr (fixup real model)) ;
+ *   true *)
   

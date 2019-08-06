@@ -55,7 +55,7 @@ let rec plug_holes real =
   | Seq (p, q) -> plug_holes p %:% plug_holes q
   | While (cond, body) -> While(plug_holes_test cond, plug_holes body)
   | PartialSelect es -> mkPartial (plug_holes_select es)
-  | TotalSelect es -> TotalSelect (plug_holes_select es)
+  | TotalSelect es -> mkTotal (plug_holes_select es)
 
 
 (** Solves the inner loop of the cegis procedure. 
@@ -148,12 +148,12 @@ and fixup (real:expr) (model : value StringMap.t) : expr =
   | Seq (p, q) -> Seq (fixup p model, fixup q model)
   | While (cond, body) -> While (fixup_test cond model, fixup body model)
   | PartialSelect exprs -> fixup_selects exprs model |> mkPartial
-  | TotalSelect exprs -> fixup_selects exprs model |> TotalSelect
+  | TotalSelect exprs -> fixup_selects exprs model |> mkTotal
 
 
-let implements n logical real =
-  let u_log = unroll n logical in
-  let u_rea = unroll n real |> plug_holes in
+let implements logical real =
+  let u_log = unroll (diameter logical) logical in
+  let u_rea = unroll (diameter real) real |> plug_holes in
   let fvs = List.dedup_and_sort ~compare (free_vars_of_expr u_log @ free_vars_of_expr u_rea) in
   let symbolic_pkt =
     List.fold fvs  ~init:(True, 0)
@@ -187,10 +187,10 @@ let solve_concrete ?packet:(packet=None) (logical : expr) (real : expr) =
   real'
 
 
-let cegis ?gas:(gas=1000) ?unroll:(unroll=10) (logical : expr) (real : expr) =
+let cegis ?gas:(gas=1000) (logical : expr) (real : expr) =
   let rec loop gas real =
     Printf.printf "======================= LOOP (%d) =======================\n%!" (gas);
-    match implements unroll logical real with
+    match implements logical real with
     | `Yes -> Some (real |> plug_holes) 
     | `NoAndCE counter ->
       if gas = 0 then Some real else
@@ -200,7 +200,7 @@ let cegis ?gas:(gas=1000) ?unroll:(unroll=10) (logical : expr) (real : expr) =
     
 let synthesize logical real =
   Printf.printf "\nSynthesized Program:\n%s\n\n%!"
-    (cegis ~gas:10 ~unroll:3 logical real
+    (cegis ~gas:10 logical real
      |> Option.value ~default:(Assert False)
      |> plug_holes
      |> string_of_expr)
