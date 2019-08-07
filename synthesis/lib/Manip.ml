@@ -122,29 +122,13 @@ let rec wp c phi =
   (* requires at least one guard to be true *)
   | TotalSelect [] -> False
   | TotalSelect exprs ->
-    let conditions = List.map exprs ~f:fst in
-    concatMap (List.cartesian_product conditions conditions) ~c:(%&%)
-      ~f:(fun (a, b) ->
-          if a = b then
-            True
-          else
-            False %<=>% (a %&% b)
-        )
-    %&% concatMap exprs ~c:(%+%) ~f:fst 
+    concatMap exprs ~c:(%+%) ~f:fst 
     %&% concatMap exprs ~c:(%&%) ~f:guarded_wp
     
   (* doesn't require at any guard to be true *)
   | PartialSelect [] -> True
   | PartialSelect exprs ->
-    let conditions = List.map exprs ~f:fst in
-    concatMap (List.cartesian_product conditions conditions) ~c:(%&%)
-      ~f:(fun (a, b) ->
-          if a = b then
-            True
-          else
-            False %<=>% (a %&% b)
-        )
-    %&% concatMap exprs ~c:(%&%) ~f:guarded_wp
+    concatMap exprs ~c:(%&%) ~f:guarded_wp
   | While _ ->
     Printf.printf "Warning: skipping While loop, because loops must be unrolled\n%!";
     phi

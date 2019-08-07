@@ -345,5 +345,127 @@ let rec multi_ints_of_expr e =
         multi_ints_of_test test
         @ multi_ints_of_expr action
         )
- 
-  
+
+
+let no_nesting ss =
+  let rec no_while_or_select_in_expr e =
+    match e with
+    | Skip
+    | SetLoc _
+    | Assign _
+    | Assert _
+    | Assume _
+      -> true
+    | Seq (p, q)
+      -> no_while_or_select_in_expr p
+         && no_while_or_select_in_expr q
+    | While _
+    | PartialSelect _
+    | TotalSelect _
+      -> false
+  in
+  concatMap ss ~init:(Some true) ~c:(&&)
+    ~f:(fun (_,act) -> no_while_or_select_in_expr act)
+
+let instrumented =
+  let rec instrumented_test found_loc t =
+    if found_loc then true else
+      match t with
+      | LocEq _
+        -> true
+      | True
+      | False
+      | Eq _
+      | Lt _
+        -> false
+      | And (a, b) ->
+        instrumented_test false a
+        || instrumented_test false b
+      | Or (a, b) ->
+        instrumented_test false a
+        && instrumented_test false b
+      | Neg _ ->
+        failwith "Borked, [instrumented] can only be called on a list of selects with no negative tests"
+  in
+  let rec instrumented_expr found_loc e =
+    if found_loc then found_loc else
+      match e with
+      | Skip
+      | Assign _
+      | Assert _
+      | Assume _
+        -> false
+      | SetLoc _
+        -> true
+      | Seq (p, q)
+        -> instrumented_expr false p
+           || instrumented_expr false q
+      | While _
+      | PartialSelect _
+      | TotalSelect _
+        -> failwith "Borked, instrumented can only be called on a list of selects with no nesting"
+  in
+  concatMap ~c:(&&)
+    ~f:(fun (cond, act) ->
+        instrumented_test false cond
+        && instrumented_expr false act)
+       
+let no_negated_holes ss =
+  let rec no_negated_holes_test t =
+    match t with
+    | True
+    | False
+    | LocEq _
+    | Eq _
+    | Lt _
+      -> true
+    | And (a, b)
+      -> no_negated_holes_test a && no_negated_holes_test b
+    | Or (a,b)
+      -> no_negated_holes_test a && no_negated_holes_test b
+    | Neg a ->
+      let rec has_hole t =
+        match t with
+        | True
+        | False
+        | LocEq _
+          -> false
+        | Eq (v, v')
+        | Lt (v, v')
+          -> begin match (v, v') with
+              | Hole _, _ | _, Hole _ ->
+                true
+              | _, _ ->
+                false
+            end
+        | Neg t' (* double-negation *)
+          -> not (has_hole t')
+        | And (a, b)
+        | Or (a, b)
+          -> has_hole a || has_hole b
+      in
+      not (has_hole a)
+  and no_negated_holes_expr e =
+    let gpair (t, e) =
+      no_negated_holes_test t && no_negated_holes_expr e
+    in
+    match e with
+    | Skip
+    | Assign _
+    | SetLoc _
+      -> true
+    | Assume t
+    | Assert t
+      -> no_negated_holes_test t
+    | Seq (p, q)
+      -> no_negated_holes_expr p && no_negated_holes_expr q
+    | While (cond, body)
+      -> gpair (cond, body)
+    | PartialSelect ss
+    | TotalSelect ss
+      -> concatMap ss ~init:(Some true) ~c:(&&) ~f:gpair
+  in
+  concatMap ss ~init:(Some true) ~c:(&&)
+    ~f:(fun (cond, act) ->
+        no_negated_holes_test cond
+          && no_negated_holes_expr act)

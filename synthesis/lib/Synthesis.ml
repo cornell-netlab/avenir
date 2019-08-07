@@ -5,6 +5,24 @@ open Graph
 open Prover
 open Manip
 
+let well_formed (e:expr) : bool =
+  let well_formed_selects (ss : (test * expr) list) : bool =
+    no_nesting ss
+    && instrumented ss
+    (* && no_topo_loops ss *)
+    && no_negated_holes ss
+  in
+  match e with
+  | Seq(SetLoc _, While (_, body)) ->
+    begin
+      match body with
+      | PartialSelect ss | TotalSelect ss ->
+        well_formed_selects ss
+      | _ -> false
+    end
+  | _ -> false
+
+
 
 (* Computes the traces between two points in graph *)
 let find_traces (graph:graph) (in_loc : int) (out_loc : int) =
@@ -15,8 +33,6 @@ let find_traces (graph:graph) (in_loc : int) (out_loc : int) =
               List.iter tr ~f:(Printf.printf "%d ");
               Printf.printf "]\n%!") in
   traces
-
-
 
 (** Plug_holes makes tests with holes always false assignemnts with holes abort **)
 let rec plug_holes real =

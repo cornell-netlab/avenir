@@ -160,6 +160,12 @@ let get_edges (graph:graph) src dst =
   Printf.printf "[LOG] looking for edge from %d to %d\n%!" src dst;
   let succs = IntMap.find_exn graph src in
   let edges = IntMap.find_exn succs dst in
+  (* let other_conditions = IntMap.fold succs
+   *     ~f:(fun ~key ~data others ->
+   *         if key = dst then others
+   *         else data @ others
+   *       )
+   * in *)
   if List.length edges > 1 then
     mkTotal edges
   else

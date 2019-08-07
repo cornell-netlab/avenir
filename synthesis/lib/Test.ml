@@ -297,9 +297,9 @@ let%test _ =
   let indices = mk_deBruijn (free_vars_of_test t) in
   let get = StringMap.find indices in
   let z3test = mkZ3Test `Sat t ctx indices in
-  let expz3string = "(let ((a!1 (not (or (= 5 (:var 2)) (and (= 3 (:var 2)) (= 6 (:var 1)))))))\n  (or a!1 (not (or (= hole0 (:var 2)) (= hole1 (:var 0))))))" in
+  let expz3string = "(let ((a!1 (not (or (= (:var 2) 5) (and (= (:var 2) 3) (= (:var 1) 6))))))\n  (or a!1 (not (or (= (:var 2) hole0) (= (:var 0) hole1)))))" in
   let qform = bind_vars ctx exp_fvs z3test in
-  let exp_qform_string ="(forall ((x Int) (z Int) (y Int))\n  (let ((a!1 (not (or (= 5 x) (and (= 3 x) (= 6 z))))))\n    (or a!1 (not (or (= hole0 x) (= hole1 y))))))" in
+  let exp_qform_string ="(forall ((x Int) (z Int) (y Int))\n  (let ((a!1 (not (or (= x 5) (and (= x 3) (= z 6))))))\n    (or a!1 (not (or (= x hole0) (= y hole1))))))" in
   Printf.printf "FAILED TEST (deBruijn) -----\n%!";
   Printf.printf "DE_BRUIJN :\n%!";
   StringMap.iteri indices ~f:(fun ~key ~data ->
@@ -329,9 +329,60 @@ let%test _ = (* Test deBruijn Indices*)
   | _, _, _ -> false
            
            
+(* TESTING WELL-FORMEDNESS CONDITIONS *)
+let%test _ = (* [no_nesting] accepts programs that have no nesting *)
+    [ Skip 
+    ; SetLoc 8
+    ; Assert (LocEq 9 %&% (Var "x" %=% Int 100))
+    ; Seq (Skip, Seq(SetLoc 100, "x" %<-% Int 200)) ]
+    |> List.map ~f:(fun x -> (True, x))
+    |> no_nesting
+
+let%test _ = (* [no_nesting] rejects programs that have nesting *)
+  let inj_nesting x =
+    [ SetLoc 8
+    ; Seq(Assert (LocEq 9), x)
+    ; Skip ]
+    |> List.map ~f:(fun x -> (True, x))
+    |> no_nesting
+  in
+  not (inj_nesting (While (True, Skip)))
+  && not (inj_nesting (PartialSelect [(True, Skip)]))
+  && not (inj_nesting (PartialSelect [(True, Skip)]))
+
+let%test _ = (* [instrumented] accepts fully instrumented programs *)
+  instrumented
+  [ (LocEq 0 %&% Eq(Var "x", Hole "_9")),
+    (Assign ("x", Hole "_10") %:% (SetLoc 100))
+  ; LocEq 9, SetLoc 99 ]
+
+let%test _ = (* [instrumented] rejects programs with missing instrumentation *)
+  not (instrumented
+         [ LocEq 9, SetLoc 99
+         ; (True, Skip) ])
+  && not (instrumented
+            [ LocEq 9, SetLoc 99
+            ; True, SetLoc 99 ])
+  && not (instrumented
+            [ LocEq 0, "x" %<-% Int 100 %:% Assert (LocEq 9)])
 
 
-                           (* TESTING FOR CEGIS PROCEDURE *)
+let%test _ = (* [no_negated_holes] accepts programs with no negated holes*)
+  no_negated_holes
+    [ (True, Skip)
+    ; (True, Assert (Hole "_0" %=% Hole "_1"))
+    ; (Hole "_0" %=% Int 100,  Assign ("x", Int 100))
+    ; (Neg(Neg(Hole "_0" %=% Int 99)), Skip)
+    ; (Neg(And(Neg (Hole "_0" %=% Int 99), True)), Skip)]
+
+
+let%test _ = (* [no_negated_holes] rejects programs with negated holes]*)
+  not (no_negated_holes [(Neg (Hole "_8" %=% Int 100), Skip)])
+  && not (no_negated_holes [(True, Assert (Hole "_8" %<>% Int 99))])
+  && not (no_negated_holes [(Neg (Neg (And (Hole "_8" %<>% Int 99, True))), Skip)])
+                                         
+    
+(* TESTING FOR CEGIS PROCEDURE *)
 
 let%test _ =
   let pkt = Packet.(set_field empty "pkt" 100) in
