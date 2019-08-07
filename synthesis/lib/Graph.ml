@@ -58,8 +58,7 @@ let rec split_test_on_loc test =
 let rec split_expr_on_loc (expr:expr) : (expr * int option) =
   match expr with
   | While _ -> failwith "cannot handle while nested under select"
-  | PartialSelect _
-  | TotalSelect _ -> failwith "Cannot handle nested selects"
+  | Select _ -> failwith "Cannot handle nested selects"
   | SetLoc l -> (Skip, Some l)
   | Assign _
     | Skip
@@ -90,17 +89,32 @@ let rec get_selects (e : Ast.expr) =
   | Skip | SetLoc _ | Assign _ | Assert _ | Assume _ -> []
   | While (_, body) -> get_selects body
   | Seq (firstdo, thendo) -> get_selects firstdo @ get_selects thendo
-  | PartialSelect ss 
-  | TotalSelect ss ->
-    List.map (normalize_selects ss) ~f:(fun (test, act) ->
-        let loc, test = split_test_on_loc test in
-        let act, loc' = split_expr_on_loc act in
-        match loc, loc' with
-        | None, _ | _, None ->
-          failwith ("could not find location for " ^ sexp_string_of_test test ^ " -> " ^ sexp_string_of_expr act ^ " []")
-        | Some l, Some l' ->
-          (l, test, act, l')
-      )
+  | Select (styp, ss) ->
+    let process ss =
+      List.map (normalize_selects ss) ~f:(fun (test, act) ->
+          let loc, test = split_test_on_loc test in
+          let act, loc' = split_expr_on_loc act in
+          match loc, loc' with
+          | None, _ | _, None ->
+            failwith ("could not find location for " ^ sexp_string_of_test test ^ " -> " ^ sexp_string_of_expr act ^ " []")
+          | Some l, Some l' ->
+            (l, test, act, l')
+        )
+    in
+    match styp with
+    | Partial
+    | Total 
+      -> process ss
+    | Ordered
+      -> let ordered_selects =
+           List.fold ss ~init:([], False)
+             ~f:(fun (prev_cases, prev_conds) (cond, act) ->
+                 (prev_cases @ [(cond %&% !%prev_conds, act)]
+                 , prev_conds %+% cond)
+               )
+      in
+      process (fst (ordered_selects))
+         
       
 
 let add_edge graph (src,test,act,dst) =

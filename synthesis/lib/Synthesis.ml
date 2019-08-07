@@ -16,9 +16,10 @@ let well_formed (e:expr) : bool =
   | Seq(SetLoc _, While (_, body)) ->
     begin
       match body with
-      | PartialSelect ss | TotalSelect ss ->
-        well_formed_selects ss
-      | _ -> false
+      | Select (_,ss)
+        -> well_formed_selects ss
+      | _
+        -> false
     end
   | _ -> false
 
@@ -70,8 +71,7 @@ let rec plug_holes real =
   | Assume t -> Assume (plug_holes_test t)
   | Seq (p, q) -> plug_holes p %:% plug_holes q
   | While (cond, body) -> While(plug_holes_test cond, plug_holes body)
-  | PartialSelect es -> mkPartial (plug_holes_select es)
-  | TotalSelect es -> mkTotal (plug_holes_select es)
+  | Select (styp,es) -> plug_holes_select es |> mkSelect styp
 
 
 (** Solves the inner loop of the cegis procedure. 
@@ -163,8 +163,8 @@ and fixup (real:expr) (model : value StringMap.t) : expr =
   | Assume t -> Assume (fixup_test t model)
   | Seq (p, q) -> Seq (fixup p model, fixup q model)
   | While (cond, body) -> While (fixup_test cond model, fixup body model)
-  | PartialSelect exprs -> fixup_selects exprs model |> mkPartial
-  | TotalSelect exprs -> fixup_selects exprs model |> mkTotal
+  | Select (styp,exprs) -> fixup_selects exprs model |> mkSelect styp
+
 
 
 let implements logical real =

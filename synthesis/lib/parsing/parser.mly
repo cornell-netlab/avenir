@@ -7,7 +7,7 @@
 %token LOC
 %token WHILE SKIP SEMICOLON ASSIGN
 %token ASSERT ASSUME ABORT
-%token IF CASE BRACKETS FI TOTAL
+%token IF TOTAL PARTIAL ORDERED CASE BRACKETS FI
 %token LPAREN RPAREN LBRACE RBRACE
 %token EOF
 
@@ -42,9 +42,11 @@ expression :
 | ASSUME; LPAREN; t = test; RPAREN
   { Ast.Assume (t) }
 | IF; TOTAL; s = select; FI
-  { Ast.TotalSelect s }
-| IF; s = select; FI
-  { Ast.PartialSelect s }
+  { Ast.(Select (Total, s)) }
+| IF; PARTIAL; s = select; FI
+  { Ast.(Select (Partial, s)) }
+| IF; ORDERED; s = select; FI
+  { Ast.(Select (Ordered, s)) }
 
 select :
 | t = test; CASE; e = expression; BRACKETS { [ t, e ] }

@@ -13,6 +13,8 @@ rule tokens = parse
 | [' ' '\t' '\n'] { tokens lexbuf }
 | '-'?['0'-'9']+ as i { INT (int_of_string i) }
 | "loc"           { LOC }
+| "partial"       { PARTIAL }
+| "ordered"       { ORDERED }
 | "assert"        { ASSERT }
 | "assume"        { ASSUME }
 | "abort"         { ABORT }

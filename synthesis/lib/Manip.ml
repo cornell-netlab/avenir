@@ -56,16 +56,13 @@ let rec unroll n p =
   match p, n with
   | While (_, _), 0 -> Skip
   | While (cond, body), _ -> 
-    cond %?% (body %:% unroll (n-1) p)
-  (* %:% assert (!% cond)*)
+    mkPartial [cond , (body %:% unroll (n-1) p)]
+  (* %:% Assert (!% cond)*)
   | Seq (firstdo, thendo), _ ->
     Seq (unroll n firstdo, unroll n thendo)
-  | TotalSelect exprs, _ ->
+  | Select (styp, exprs), _ ->
     List.map exprs ~f:(fun (cond, action) -> (cond, unroll n action))
-    |> TotalSelect
-	| PartialSelect exprs, _ ->			
-    List.map exprs ~f:(fun (cond, action) -> (cond, unroll n action))
-    |> PartialSelect
+    |> mkSelect styp
   | _ -> p (* Assign, Test, Assert cannot be unrolled *)
 
 let get_val subsMap str default =
@@ -120,17 +117,26 @@ let rec wp c phi =
   | Assume t -> t %=>% phi
               
   (* requires at least one guard to be true *)
-  | TotalSelect [] -> False
-  | TotalSelect exprs ->
+  | Select (Total, []) -> False
+  | Select (Total, exprs) ->
     concatMap exprs ~c:(%+%) ~f:fst 
     %&% concatMap exprs ~c:(%&%) ~f:guarded_wp
     
   (* doesn't require at any guard to be true *)
-  | PartialSelect [] -> True
-  | PartialSelect exprs ->
+  | Select (Partial, []) -> True
+  | Select (Partial, exprs) ->
     concatMap exprs ~c:(%&%) ~f:guarded_wp
+
+  (* negates the previous conditions *)
+  | Select (Ordered, exprs) ->
+    List.fold exprs ~init:(True, False) ~f:(fun (wp_so_far, prev_conds) (cond, act) ->
+        guarded_wp (cond %&% !%prev_conds, act) %&% wp_so_far
+      , prev_conds %+% cond
+      )
+    |> fst
+    
   | While _ ->
-    Printf.printf "Warning: skipping While loop, because loops must be unrolled\n%!";
+    Printf.printf "[WARNING] skipping While loop, because loops must be unrolled\n%!";
     phi
 
 let fill_holes_value v subst =
@@ -169,10 +175,8 @@ let rec fill_holes (c : expr) subst =
      fill_holes_test t subst |> Assert
   | Assume t ->
      fill_holes_test t subst |> Assume
-  | TotalSelect [] | PartialSelect [] | Skip ->
+  | Select (_,[]) | Skip ->
      c
-  | TotalSelect exprs ->
-     rec_select exprs |> TotalSelect
-  | PartialSelect exprs ->
-     rec_select exprs |> PartialSelect
+  | Select (styp, exprs) ->
+     rec_select exprs |> mkSelect styp
   | While (cond, body) -> While (fill_holes_test cond subst, fill_holes body subst)

@@ -176,7 +176,21 @@ let rec multi_ints_of_test test =
         [x]
       | _ -> []
   end
-           
+
+type select_typ =
+  | Partial
+  | Total
+  | Ordered
+
+let string_of_select_typ styp =
+  match styp with
+  | Partial -> "partial"
+  | Total -> "total"
+  | Ordered -> "ordered"
+
+let sexp_string_of_select_typ styp =
+  String.capitalize (string_of_select_typ styp)
+
 type expr =
   | Skip
   | SetLoc of int
@@ -185,33 +199,39 @@ type expr =
   | Assume of test
   | Seq of (expr * expr)
   | While of (test * expr)
-  | PartialSelect of (test * expr) list
-  | TotalSelect of (test * expr) list 
+  | Select of (select_typ * ((test * expr) list))
 
-let mkSelects =
+
+let clean_selects_list =
   concatMap ~init:(Some []) ~c:(@)
     ~f:(fun (cond, act) ->
         if cond = False then
           []
         else
           [cond, act])
+
+let mkSelect styp ss = Select (styp, clean_selects_list ss)
+
 let mkPartial ss =
-  let selects = mkSelects ss in
+  let selects = clean_selects_list ss in
   if List.length selects = 0 then
     Skip
   else
-    PartialSelect selects
+    mkSelect Partial selects
 
 let mkTotal ss =
-  let selects = mkSelects ss in
+  let selects = clean_selects_list ss in
   if List.length selects = 0 then
     Assert False
   else
-    TotalSelect selects
+    mkSelect Total selects
 
-
-let mkIf cond tru = PartialSelect [(cond, tru)]
-let (%?%) = mkIf
+let mkOrdered ss =
+  let selects = clean_selects_list ss in
+  if List.length selects = 0 then
+    Skip (* TODO -- is this right? *)
+  else
+    mkSelect Ordered selects
 
 let mkSeq first scnd =
   match first, scnd with
@@ -226,16 +246,21 @@ let (%<-%)= mkAssn
 
 let combineSelects e e' =
   match e, e' with
-  | PartialSelect xs, PartialSelect ys -> PartialSelect (xs @ ys)
+  | Select (xs_typ, xs), Select (ys_typ, ys) ->
+    if xs_typ = ys_typ then
+      mkSelect xs_typ (xs @ ys)
+    else
+      failwith ("[ERROR] Cannot combine selects with different types: "
+                ^ string_of_select_typ xs_typ
+                ^ " and "
+                ^ string_of_select_typ ys_typ)
   | _ -> failwith "Can only combine selects statements "
 
 let (%%) = combineSelects
 
 let mkWhile t e = While(t,e)
-
        
 let rec repeat c n =  if n = 0 then "" else c ^ repeat c (n-1)
-
                     
 let rec string_of_expr ?depth:(depth=0) (e : expr) : string =
   match e with
@@ -259,19 +284,15 @@ let rec string_of_expr ?depth:(depth=0) (e : expr) : string =
   | SetLoc i -> "loc := " ^ string_of_int i
   | Assign (field, value) ->
     field ^ " := " ^ string_of_value value
-  | PartialSelect es ->
-     string_of_select "if" "fi" depth es
-  | TotalSelect es -> 
-     string_of_select "if total" "fi" depth es
-
-and string_of_select openstr closestr depth es =
-  openstr ^
+  | Select (styp, es) ->
+    let modifier = (string_of_select_typ styp) in
+    "if " ^ modifier ^
     List.fold_left es ~init:"" ~f:(fun str (cond, act)->
         str ^ "\n" ^
-          repeat "\t" (depth + 1)
-          ^ string_of_test cond  ^ " -> " ^ string_of_expr ~depth:(depth+2) act ^ " []"
+        repeat "\t" (depth + 1)
+        ^ string_of_test cond  ^ " -> " ^ string_of_expr ~depth:(depth+2) act ^ " []"
       )
-    ^ "\n" ^ repeat "\t" depth ^ closestr
+    ^ "\n" ^ repeat "\t" depth ^ "fi"
   
 let rec sexp_string_of_expr e : string =
   let string_select = concatMap 
@@ -285,10 +306,12 @@ let rec sexp_string_of_expr e : string =
   | Assume t -> "Assume(" ^ sexp_string_of_test t ^ ")"
   | SetLoc l ->  "SetLoc(" ^ string_of_int l ^ ")"
   | Assign (f,v) -> "Assign(" ^ f ^ "," ^ string_of_value v ^")"
-  | PartialSelect [] -> "PartialSelect([])"
-  | PartialSelect exprs -> "PartialSelect([" ^ string_select exprs ^ "])"
-  | TotalSelect [] -> "TotalSelect([])"
-  | TotalSelect exprs -> "PartialSelect([" ^ string_select exprs ^ "])"
+  | Select (styp,es) ->
+    let cases_string = match es with
+      | [] -> "[]"
+      | _  -> "[" ^ string_select es ^ "]"
+    in
+    "Select (" ^ sexp_string_of_select_typ styp ^ "," ^ cases_string ^ ")"
 
   
 let rec free_of_expr typ (e:expr) : string list =
@@ -305,16 +328,14 @@ let rec free_of_expr typ (e:expr) : string list =
      free_of_test typ cond
      @ free_of_expr typ body
   | Assert t | Assume t -> free_of_test typ t
-  | PartialSelect ss 
-  | TotalSelect ss ->
+  | Select (_,ss) ->
     List.fold ss ~init:[] ~f:(fun fvs (test, action) ->
         free_of_test typ test
-         @ free_of_expr typ action
-         @ fvs
+        @ free_of_expr typ action
+        @ fvs
       )
   end
   |> dedup
-
 
 let free_vars_of_expr = free_of_expr `Var
 let holes_of_expr = free_of_expr `Hole
@@ -338,14 +359,12 @@ let rec multi_ints_of_expr e =
   | Assert t
   | Assume t ->
     multi_ints_of_test t
-  | PartialSelect ss 
-  | TotalSelect ss ->
+  | Select (_,ss) ->
     concatMap ss ~init:(Some []) ~c:(@)
       ~f:(fun (test, action) ->
-        multi_ints_of_test test
-        @ multi_ints_of_expr action
+          multi_ints_of_test test
+          @ multi_ints_of_expr action
         )
-
 
 let no_nesting ss =
   let rec no_while_or_select_in_expr e =
@@ -360,8 +379,7 @@ let no_nesting ss =
       -> no_while_or_select_in_expr p
          && no_while_or_select_in_expr q
     | While _
-    | PartialSelect _
-    | TotalSelect _
+    | Select _
       -> false
   in
   concatMap ss ~init:(Some true) ~c:(&&)
@@ -401,8 +419,7 @@ let instrumented =
         -> instrumented_expr false p
            || instrumented_expr false q
       | While _
-      | PartialSelect _
-      | TotalSelect _
+      | Select _
         -> failwith "Borked, instrumented can only be called on a list of selects with no nesting"
   in
   concatMap ~c:(&&)
@@ -461,8 +478,7 @@ let no_negated_holes ss =
       -> no_negated_holes_expr p && no_negated_holes_expr q
     | While (cond, body)
       -> gpair (cond, body)
-    | PartialSelect ss
-    | TotalSelect ss
+    | Select (_,ss)
       -> concatMap ss ~init:(Some true) ~c:(&&) ~f:gpair
   in
   concatMap ss ~init:(Some true) ~c:(&&)

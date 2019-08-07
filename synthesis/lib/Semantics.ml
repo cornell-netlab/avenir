@@ -75,12 +75,14 @@ let rec trace_eval ?gas:(gas=10) (expr : expr) (pkt_loc : Packet.located) : (Pac
       trace_eval ~gas firstdo pkt_loc >>= fun (pkt_loc', trace') ->
       trace_eval ~gas thendo pkt_loc' >>= fun (pkt_loc'', trace'') ->
       Some (pkt_loc'', trace' @ trace'')
-    | TotalSelect selects ->
-      let abort _ = failwith "SelectionError: Could not find match in select" in
-      trace_eval ~gas (find_match selects ~default:abort) pkt_loc
-    | PartialSelect selects ->
-      trace_eval (find_match selects ~default:(fun _ -> Skip)) pkt_loc
-    |  While ( cond , body ) ->
+    | Select (styp, selects) ->
+      let default _ = match styp with
+        | Total   -> failwith "SelectionError: Could not find match in [if total]"
+        | Partial
+        | Ordered -> Skip
+      in
+      trace_eval ~gas (find_match selects ~default) pkt_loc
+    | While ( cond , body ) ->
       if check_test cond pkt_loc then
         trace_eval ~gas:(gas-1) (Seq(body,expr)) pkt_loc
       else 

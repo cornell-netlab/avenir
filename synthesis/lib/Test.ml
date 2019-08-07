@@ -43,7 +43,14 @@ let rec generate_random_test size =
   | 5 -> Or (generate_random_test size', generate_random_test size')
   | 6 -> Neg (generate_random_test size')
   | _ -> failwith "generated random integer larger than 6"
-            
+
+let generate_random_select_type _ =
+  match Random.int 3 with
+  | 0 -> Total
+  | 1 -> Partial
+  | 2 -> Ordered
+  | _ -> failwith "generated random integer larger than 6"
+
 let rec generate_random_expr size =
   if size = 0 then Skip else 
   let size' = size - 1 in
@@ -58,17 +65,15 @@ let rec generate_random_expr size =
            if n = 0 then [] else 
            (generate_random_test size', generate_random_expr size') :: loop (n-1)
          in
-         TotalSelect (loop (1 + Random.int 4 ))
+         mkSelect (generate_random_select_type ()) (loop (1 + Random.int 4 ))
   | _ -> failwith "Should Not generate number larger than 5"
     
 
-            
 let loop_body =
-  combineSelects
-    (mkIf (Var "pkt" %=% Int 3) (("pkt" %<-% Int 6) %:% ("loc" %<-% Int 10)))
-    (mkIf (Var "pkt" %=% Int 4) (("pkt" %<-% Int 2) %:% ("loc" %<-% Int 11)))
-       
-   
+  mkSelect Partial
+    [ Var "pkt" %=% Int 3 , ("pkt" %<-% Int 6) %:% ("loc" %<-% Int 10)
+    ; Var "pkt" %=% Int 4 , ("pkt" %<-% Int 2) %:% ("loc" %<-% Int 11)]       
+    
 let simple_test =
   "h" %<-% Var "Ingress" %:%
     mkWhile (Var "h" %<>% Var "Egress") loop_body
@@ -99,7 +104,7 @@ let complete_test_with_drop_location_holes =
              
 let%test _ = (* Testing unrolling *)
   unroll 1 simple_test = "h" %<-% Var "Ingress" %:%
-                          (Var "h" %<>% Var "Egress" %?% loop_body)
+                          mkSelect Partial [Var "h" %<>% Var "Egress" , loop_body]
 
 let%test _= (* testing loop removal when n = 0*)
   unroll 0 simple_test = Seq(Assign("h",Var("Ingress")), Skip)
@@ -108,7 +113,7 @@ let%test _ = (* One unroll works *)
   let cond = Var "h" %<>% Var "Egress" in
   let input = ("h" %<-% Var "Ingress") %:% mkWhile cond loop_body in
   unroll 1 input
-  = ("h" %<-% Var "Ingress") %:%  mkIf cond (loop_body %:% Skip)
+  = ("h" %<-% Var "Ingress") %:%  mkSelect Partial [cond , loop_body %:% Skip]
   
 
 let%test _ = (*Sequencing unrolls works*)
@@ -120,10 +125,10 @@ let%test _ = (*Sequencing unrolls works*)
 let%test _ = (*Selection unrolls works*)
   let cond = Var "h" %<>% Var "Egress" in
   let selectCond = Var "h" %=% Int 5 in
-  unroll 1 (TotalSelect [ selectCond, mkWhile cond loop_body;
-                         True, mkWhile cond loop_body])
-  = TotalSelect [selectCond, unroll 1 (mkWhile cond loop_body);
-                 True, unroll 1 (mkWhile cond loop_body)]
+  unroll 1 (mkSelect Total [ selectCond, mkWhile cond loop_body
+                           ; True, mkWhile cond loop_body])
+  = mkSelect Total [selectCond, unroll 1 (mkWhile cond loop_body)
+                   ; True, unroll 1 (mkWhile cond loop_body)]
 
 (* Testing equality smart constructor *)
 let%test _ =
@@ -163,7 +168,7 @@ let%test _ = (* Assign behaves well with variables *)
 
   
 let%test _ =
-  let prog = TotalSelect [
+  let prog = mkSelect Total [
                  Var "h" %=% Var "g", "g" %<-% Int 8
                ] in
   let prec = wp prog (Var "g" %=% Int 8) in
@@ -172,11 +177,10 @@ let%test _ =
   prec = exp
   
 let%test _ = (* wp behaves well with selects *)
-  let prog =  TotalSelect[
-                  Var "h" %=%  Var "g" , "g" %<-% Int 8
-                ; Var "h" %=%  Int 99  , "h" %<-% Int 4
-                ; Var "h" %<>% Int 2   , "h" %<-% Var "g"
-                ] in
+  let prog = mkSelect Total [ Var "h" %=%  Var "g" , "g" %<-% Int 8
+                            ; Var "h" %=%  Int 99  , "h" %<-% Int 4
+                            ; Var "h" %<>% Int 2   , "h" %<-% Var "g"
+                            ] in
   let comp = wp prog (Var "g" %=% Int 8) in
   let all_conds =
     (Var "h" %=%  Var "g")
@@ -207,11 +211,39 @@ let%test _ = (* wp behaves well with assertions *)
 
 let%test _ = (* wp behaves well with partials *)
   let cond = Var "pkt" %=% Int 101 in
-  let prog = PartialSelect [ Var "pkt" %=% Hole "_hole0", "pkt" %<-% Hole "_hole1" ] in
-  let expected = Var "pkt" %=% Hole "_hole0" %=>% (Hole "_hole1" %=% Int 101) in
-  let pre = wp prog cond in
+  let prog = mkSelect Partial [ Var "pkt" %=% Hole "_hole0", "pkt" %<-% Hole "_hole1" ] in
+  let exp = Var "pkt" %=% Hole "_hole0" %=>% (Hole "_hole1" %=% Int 101) in
+  let got = wp prog cond in
+  if exp = got then true else(
+    print_test_neq ~exp ~got;
+    false
+  )
+
+
+let%test _ = (* wp behaves well with totals *)
+  let cond = Var "pkt" %=% Int 101 in
+  let prog = mkSelect Total [ Var "pkt" %=% Hole "_hole0", "pkt" %<-% Hole "_hole1" ] in
+  let exp = (Var "pkt" %=% Hole "_hole0") %&% (Var "pkt" %=% Hole "_hole0" %=>% (Hole "_hole1" %=% Int 101)) in
+  let got = wp prog cond in
+  if exp = got then true else(
+    print_test_neq ~exp ~got;
+    false
+  )
+
+let%test _ = (* wp behaves well with ordereds *)
+  let cond = Var "pkt" %=% Int 101 in
+  let prog = mkSelect Ordered [ Var "pkt" %=% Hole "_hole0", "pkt" %<-% Hole "_hole1"
+                              ; Var "pkt" %=% Int 99 , "pkt" %<-% Int 101] in
+  let exp = (Var "pkt" %=% Hole "_hole0" %=>% (Hole "_hole1" %=% Int 101))
+             %&% ((Var "pkt" %=% Int 99 %&% (Var "pkt" %<>% Hole "_hole0")) %=>% (Int 101 %=% Int 101))
+  in
+  let got = wp prog cond in
   (* Printf.printf "EXPECTED:\n%s\n\nGOT:\n%s\n" (sexp_string_of_test expected) (sexp_string_of_test pre); *)
-  expected = pre
+  if exp = got then true else (
+    print_test_neq ~exp ~got;
+    false
+  )
+
 
 let%test _ =
   let cond = Var "pkt" %=% Var "ALPHA" in
@@ -278,13 +310,13 @@ let%test _ = test_trace
                "loc:=0; loc := 1"
                [0; 1]
 let%test _ = test_trace
-               "loc:=0; if loc = 0 -> loc := 1 fi; loc := 2"
+               "loc:=0; if total loc = 0 -> loc := 1 fi; loc := 2"
                [0; 1; 2]
 let%test _ = test_trace
                "loc:=0; while (~ loc = 1) { loc := 1 }"
                [0; 1]
 let%test _ = test_trace
-               "loc := 0; while (~ loc = 1) { if loc = 0 && pkt = 100 -> pkt := 101; loc := 1 fi }"
+               "loc := 0; while (~ loc = 1) { if partial loc = 0 && pkt = 100 -> pkt := 101; loc := 1 fi }"
                [0;1]
 
                             (* TESTING Formula Construction *)
@@ -300,17 +332,21 @@ let%test _ =
   let expz3string = "(let ((a!1 (not (or (= (:var 2) 5) (and (= (:var 2) 3) (= (:var 1) 6))))))\n  (or a!1 (not (or (= (:var 2) hole0) (= (:var 0) hole1)))))" in
   let qform = bind_vars ctx exp_fvs z3test in
   let exp_qform_string ="(forall ((x Int) (z Int) (y Int))\n  (let ((a!1 (not (or (= x 5) (and (= x 3) (= z 6))))))\n    (or a!1 (not (or (= x hole0) (= y hole1))))))" in
-  Printf.printf "FAILED TEST (deBruijn) -----\n%!";
-  Printf.printf "DE_BRUIJN :\n%!";
-  StringMap.iteri indices ~f:(fun ~key ~data ->
-      Printf.printf "\t %s -> %d\n%!" key data;
-    );
-  Printf.printf "Z3STRING:\n%s\n\n%!EXPECTED:\n%s\n\n%!" (Z3.Expr.to_string z3test) expz3string;
-  Printf.printf "----------------------------\n%!";
-  free_vars_of_test t = exp_fvs
-  && get "x" = Some 2 && get "y" = Some 0 && get "z" = Some 1
-  && Z3.Expr.to_string z3test = expz3string
-  && Z3.Expr.to_string qform = exp_qform_string
+  let success = free_vars_of_test t = exp_fvs
+                && get "x" = Some 2 && get "y" = Some 0 && get "z" = Some 1
+                && Z3.Expr.to_string z3test = expz3string
+                && Z3.Expr.to_string qform = exp_qform_string
+  in
+  if success then success else (
+    Printf.printf "FAILED TEST (deBruijn) -----\n%!";
+    Printf.printf "DE_BRUIJN :\n%!";
+    StringMap.iteri indices ~f:(fun ~key ~data ->
+        Printf.printf "\t %s -> %d\n%!" key data;
+      );
+    Printf.printf "Z3STRING:\n%s\n\n%!EXPECTED:\n%s\n\n%!" (Z3.Expr.to_string z3test) expz3string;
+    Printf.printf "----------------------------\n%!";
+    success )
+
     
 let%test _ =
   let t = (!%( (Var "x" %=% Int 5) %+% ((Var "x" %=% Int 3) %&% (Var "z" %=% Int 6)))
@@ -347,8 +383,7 @@ let%test _ = (* [no_nesting] rejects programs that have nesting *)
     |> no_nesting
   in
   not (inj_nesting (While (True, Skip)))
-  && not (inj_nesting (PartialSelect [(True, Skip)]))
-  && not (inj_nesting (PartialSelect [(True, Skip)]))
+  && not (inj_nesting (mkSelect Total [(True, Skip)]))
 
 let%test _ = (* [instrumented] accepts fully instrumented programs *)
   instrumented
@@ -386,8 +421,8 @@ let%test _ = (* [no_negated_holes] rejects programs with negated holes]*)
 
 let%test _ =
   let pkt = Packet.(set_field empty "pkt" 100) in
-  let log  = parse "loc := 0; while (~ loc = 1) { if loc = 0 && pkt = 100 -> pkt := 101; loc := 1 fi } " in
-  let real = parse "loc := 0 ; while (~ loc = 1) { if loc = 0 && pkt = ?_hole0 -> pkt := ?_hole1; loc := 1 fi } " in
+  let log  = parse "loc := 0; while (~ loc = 1) { if partial loc = 0 && pkt = 100 -> pkt := 101; loc := 1 fi } " in
+  let real = parse "loc := 0 ; while (~ loc = 1) { if partial loc = 0 && pkt = ?_hole0 -> pkt := ?_hole1; loc := 1 fi } " in
   let model = get_one_model pkt log real in
   let _ = model in
   true
