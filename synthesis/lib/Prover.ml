@@ -62,7 +62,7 @@ let bind_vars ctx vs formula =
 
   
 let initSolver typ solver ctx test =
-  Printf.printf "SENDING TEST TO Z3: %s\n%!" (sexp_string_of_test test);
+  (* Printf.printf "SENDING TEST TO Z3: %s\n%!" (sexp_string_of_test test); *)
   let init bindable ctor =
     let phi = mkZ3Test typ test ctx (mk_deBruijn bindable) in
     Z3.Solver.add solver [ctor (bind_vars ctx bindable phi)]
@@ -120,6 +120,3 @@ let check typ test =
 
 (* Checks SMT Query for validity. Returns None (VALID) or Some model (Counter Example) *)          
 let check_valid test = check `Valid (test)
-  
-
-

@@ -57,7 +57,7 @@ let rec unroll n p =
   | While (_, _), 0 -> Skip
   | While (cond, body), _ -> 
     mkPartial [cond , (body %:% unroll (n-1) p)]
-  (* %:% Assert (!% cond)*)
+    (* %:% Assert (!% cond) *)
   | Seq (firstdo, thendo), _ ->
     Seq (unroll n firstdo, unroll n thendo)
   | Select (styp, exprs), _ ->

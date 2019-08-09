@@ -177,6 +177,23 @@ let rec multi_ints_of_test test =
       | _ -> []
   end
 
+let rec remove_locs_neq l (t:test) : test =
+  match t with
+  | LocEq l'
+    -> if l = l' then True else False
+  | True
+  | False
+  | Eq _
+  | Lt _
+    -> t
+  | Neg t
+    -> !%(remove_locs_neq l t)
+  | And (a, b)
+    -> remove_locs_neq l a %&% remove_locs_neq l b
+  | Or (a, b)
+    -> remove_locs_neq l a %+% remove_locs_neq l b
+
+
 type select_typ =
   | Partial
   | Total
@@ -485,3 +502,5 @@ let no_negated_holes ss =
     ~f:(fun (cond, act) ->
         no_negated_holes_test cond
           && no_negated_holes_expr act)
+
+

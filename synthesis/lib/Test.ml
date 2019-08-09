@@ -1,7 +1,7 @@
 open Core
 open Ast
 open Manip
-(* open Graph *)
+open Graph
 open Semantics
 open Synthesis
 open Prover
@@ -257,27 +257,56 @@ let%test _ =
   if wp_got = expected
   then true
   else (print_test_neq ~exp:expected ~got:wp_got; false)
-  
 
+
+let%test _ =
+  let x = Var "x" in
+  let alpha = Var "$0" in
+  let y = Var "y" in
+  let beta = Var "$1" in
+  let inner =
+        mkSelect Ordered
+          [ LocEq 0 %&% (x %=% Int 5), SetLoc 1
+          ; LocEq 0, SetLoc 3
+          ; LocEq 1, SetLoc 2
+          ; LocEq 2, "y" %<-% Int 1 %:% SetLoc 6
+          ; LocEq 3 %&% (x %=% Int 5), SetLoc 4
+          ; LocEq 3, SetLoc 5
+          ; LocEq 4, "y" %<-% Int 99 %:% SetLoc 6
+          ; LocEq 5, "y" %<-% Int 0  %:% SetLoc 6 ]
+  in
+  let cond = x %=% alpha %&% (y %=% beta)
+             %&% LocEq 6 in
+  let exp = (x %<>% Int 5
+             %=>% (alpha %=% x %&% (beta %=% Int 0)))
+            %&% (x %=% Int 5
+              %=>% (alpha %=% x %&% (beta %=% Int 1)))
+  in
+  let prog = SetLoc 0
+             %:% inner %:% inner %:% inner
+             %:% Assert (LocEq 6) in
+  let got = wp prog cond in
+  check_valid (exp %<=>% got) = None
+  
 
                            (* TEST PARSING *)
 
-let%test _ =
-  let rec loop n =
-    if n = 0 then true else
-      let e = generate_random_expr 3 in
-      let s = string_of_expr e in
-      try
-        let s' = parse s |> string_of_expr in
-        if s = s' then loop (n-1)
-        else
-          (Printf.printf "[PARSER ROUND TRIP] FAILED for:\n %s\n got %s" s  s';
-           false)
-      with _ ->
-        (Printf.printf "[PARSING FAILED] for expression:\n%s\n\n%s\n" s (sexp_string_of_expr e);
-        false)
-  in
-  loop 100
+(* let%test _ =
+ *   let rec loop n =
+ *     if n = 0 then true else
+ *       let e = generate_random_expr 3 in
+ *       let s = string_of_expr e in
+ *       try
+ *         let s' = parse s |> string_of_expr in
+ *         if s = s' then loop (n-1)
+ *         else
+ *           (Printf.printf "[PARSER ROUND TRIP] FAILED for:\n %s\n got %s" s  s';
+ *            false)
+ *       with _ ->
+ *         (Printf.printf "[PARSING FAILED] for expression:\n%s\n\n%s\n" s (sexp_string_of_expr e);
+ *         false)
+ *   in
+ *   loop 100 *)
   
 
 
@@ -289,6 +318,41 @@ let%test _ =
 
 let%test _ = 1 = Graph.diameter complete_test_with_drop_location_no_holes
 let%test _ = 1 = Graph.diameter complete_test_with_drop_location_holes
+
+let%test _ =
+  let x = Var "x" in
+  let y = "y" in
+  let hole1 = Hole "_1" in
+  let hole2 = Hole "_2" in
+  let hole5 = Hole "_5" in
+  let selects =
+    [ LocEq 0 %&% (x %=% Int 5), SetLoc 1
+    ; LocEq 0 , SetLoc 3
+    ; LocEq 1 , SetLoc 2
+    ; LocEq 2 , y %<-% Int 0 %:% SetLoc 0
+    ; LocEq 3 %&% Lt (x, hole1) %&% Lt(x, hole2), SetLoc 4
+    ; LocEq 3 , SetLoc 5
+    ; LocEq 4 , y %<-% hole5 %:% SetLoc 6
+    ; LocEq 5 , y %<-% Int 1 %:% SetLoc 6 ]
+  in
+  let expected = [ LocEq 0 %&% (x %=% Int 5), SetLoc 1
+                 ; LocEq 0 %&% !%(x %=% Int 5), SetLoc 3
+                 ; LocEq 1, SetLoc 2
+                 ; LocEq 2, y %<-% Int 0 %:% SetLoc 0
+                 ; LocEq 3 %&% Lt (x, hole1) %&% Lt(x, hole2), SetLoc 4
+                 ; LocEq 3 %&% !%(Lt (x, hole1) %&% Lt(x, hole2)), SetLoc 5
+                 ; LocEq 4, y %<-% hole5 %:% SetLoc 6
+                 ; LocEq 5, y %<-% Int 1 %:% SetLoc 6 ]
+  in
+  let got = ordered_selects selects in
+  if got = expected then true else begin
+    Printf.printf "---- FAILED TEST ------ \n%!";
+    Printf.printf "EXPECTED:\n%s\n%!\nGOT:\n%s\n%!\n"
+      (string_of_expr (Select (Partial, expected)))
+      (string_of_expr (Select (Partial, got)));
+    Printf.printf "----------------------- \n%!";
+    false
+  end
     
     
   

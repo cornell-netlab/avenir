@@ -79,7 +79,11 @@ let rec trace_eval ?gas:(gas=10) (expr : expr) (pkt_loc : Packet.located) : (Pac
       let default _ = match styp with
         | Total   -> failwith "SelectionError: Could not find match in [if total]"
         | Partial
-        | Ordered -> Skip
+        | Ordered ->
+          Printf.printf "[EVAL (%d)] Skipping selection, no match for %s\n"
+            (gas)
+            (string_of_test (Packet.to_test pkt %&% LocEq (Option.value loc_opt ~default:(-100))));
+          Skip
       in
       trace_eval ~gas (find_match selects ~default) pkt_loc
     | While ( cond , body ) ->
@@ -87,4 +91,3 @@ let rec trace_eval ?gas:(gas=10) (expr : expr) (pkt_loc : Packet.located) : (Pac
         trace_eval ~gas:(gas-1) (Seq(body,expr)) pkt_loc
       else 
         Some (pkt_loc, [])
-          

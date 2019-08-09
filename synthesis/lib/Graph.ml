@@ -41,9 +41,7 @@ let rec split_test_on_loc test =
   | LocEq l -> (Some l, True)
   | Eq (v, v') -> (None, mkEq v v')
   | Lt (v, v') -> (None, mkLt v v')
-  | Neg ((Eq (_, _))) -> (None, test)
-  | Neg ((LocEq _)) -> (None, test)
-  | Neg _ -> failwith ("malformed test " ^ sexp_string_of_test test ^ ", must be in NNF")
+  | Neg _ -> (None, test)
   | And (a, b) ->
      let loc_opt_a, test_a = split_test_on_loc a in
      let loc_opt_b, test_b = split_test_on_loc b in
@@ -83,6 +81,17 @@ let normalize_selects (ss : (test * expr) list) : (test * expr) list =
         )
     )
 
+let ordered_selects ss =
+  List.fold ss ~init:([], True)
+    ~f:(fun (prev_cases, prev_conds) (cond, act) ->
+        let loc_opt, _ = split_test_on_loc cond in
+        match loc_opt with
+        | None -> failwith ("[MALFORMED TEST ERROR] No Location found in " ^ string_of_test cond)
+        | Some loc ->
+          (prev_cases @ [(cond %&% (remove_locs_neq loc prev_conds), act)]
+          , prev_conds %&% !%(cond))
+      )
+  |> fst
        
 let rec get_selects (e : Ast.expr) =
   match e with
@@ -91,38 +100,41 @@ let rec get_selects (e : Ast.expr) =
   | Seq (firstdo, thendo) -> get_selects firstdo @ get_selects thendo
   | Select (styp, ss) ->
     let process ss =
-      List.map (normalize_selects ss) ~f:(fun (test, act) ->
+      List.map ss ~f:(fun (test, act) ->
           let loc, test = split_test_on_loc test in
           let act, loc' = split_expr_on_loc act in
           match loc, loc' with
           | None, _ | _, None ->
-            failwith ("could not find location for " ^ sexp_string_of_test test ^ " -> " ^ sexp_string_of_expr act ^ " []")
+            failwith ("could not find location for "
+                      ^ sexp_string_of_test test ^ " -> "
+                      ^ sexp_string_of_expr act ^ " in select statement "
+                      ^ string_of_expr e
+                     )
           | Some l, Some l' ->
             (l, test, act, l')
         )
     in
-    match styp with
+    (match styp with
     | Partial
     | Total 
       -> process ss
     | Ordered
-      -> let ordered_selects =
-           List.fold ss ~init:([], False)
-             ~f:(fun (prev_cases, prev_conds) (cond, act) ->
-                 (prev_cases @ [(cond %&% !%prev_conds, act)]
-                 , prev_conds %+% cond)
-               )
-      in
-      process (fst (ordered_selects))
+      -> 
+      (* Printf.printf "------------ADDING SELECTS-----------\nORDERED:\n%s\n%!\nPARTIAL:\n%s\n%!\n"
+       *   (string_of_expr (Select (Ordered, ss)))
+       *   (string_of_expr (Select (Partial, fst ordered_selects)));
+       *   (\* (string_of_expr (Select (Partial, normalize_selects (fst ordered_selects)))); *\) *)
+      process (ordered_selects ss)
+    ) |> dedup
          
       
 
 let add_edge graph (src,test,act,dst) =
-  Printf.printf "[GRAPH] add_edge FROM:%d TO:%d IF:%s DO:%s\n%!"
-    src
-    dst
-    (string_of_test test)
-    (string_of_expr act);
+  (* Printf.printf "[GRAPH] add_edge FROM:%d TO:%d IF:%s DO:%s\n%!"
+   *   src
+   *   dst
+   *   (string_of_test test)
+   *   (string_of_expr act); *)
   IntMap.update graph src
     ~f:(fun x -> IntMap.update (Option.value ~default:IntMap.empty x) dst
                    ~f:(fun y -> ((test, act) :: Option.value ~default:[] y) |> dedup))
@@ -181,7 +193,7 @@ let get_edges (graph:graph) src dst =
    *       )
    * in *)
   if List.length edges > 1 then
-    mkTotal edges
+    mkOrdered edges
   else
     concatMap edges ~c:(%:%) ~f:(fun (cond, act) -> Assert cond %:% act)
 

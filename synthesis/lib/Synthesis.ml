@@ -35,7 +35,7 @@ let find_traces (graph:graph) (in_loc : int) (out_loc : int) =
               Printf.printf "]\n%!") in
   traces
 
-(** Plug_holes makes tests with holes always false assignemnts with holes abort **)
+(** Plug_holes makes tests with holes always true and assignemnts with holes [skip] **)
 let rec plug_holes real =
   let binop ctor call left right = ctor (call left) (call right) in
   let rec plug_holes_test t =
@@ -56,8 +56,6 @@ let rec plug_holes real =
       else
         False
   in
-  (* let has_hole_test c = c = plug_holes_test c in
-   * let has_hole_expr e = e = plug_holes e in *)
   let plug_holes_select =
     List.map ~f:(fun (c, a) ->
         (plug_holes_test c, plug_holes a))
@@ -65,7 +63,7 @@ let rec plug_holes real =
   match real with
   | Skip -> Skip
   | SetLoc i -> SetLoc i
-  | Assign (_, Hole _) -> Skip
+  | Assign (_, Hole _) -> Assert False
   | Assign (_, _) -> real
   | Assert t -> Assert (plug_holes_test t)
   | Assume t -> Assume (plug_holes_test t)
@@ -182,15 +180,15 @@ let implements logical real =
   in
   let log_wp  = wp u_log symbolic_pkt in
   let real_wp = wp u_rea symbolic_pkt in
-  Printf.printf "SYMBOLIC PACKET:\n%s\n%!\n\nLOGICAL SPEC:\n%s\n\nLOGICAL PROGRAM:\n%s\n\nREAL SPEC: \n%s\n\nREAL PROGRAM:\n%s\n\n%!"
+  Printf.printf "\n==== Checking Implementation =====\n\nSYMBOLIC PACKET:\n%s\n%!\n\nLOGICAL SPEC:\n%s\n\nLOGICAL PROGRAM:\n%s\n\nREAL SPEC: \n%s\n\nREAL PROGRAM:\n%s\n\n%!"
     (string_of_test symbolic_pkt)
     (string_of_test log_wp)
     (string_of_expr u_log)
     (string_of_test real_wp)
     (string_of_expr u_rea);
   match check_valid (log_wp %=>% real_wp) with
-  | None -> Printf.printf "valid\n%!"; `Yes
-  | Some x -> `NoAndCE (Packet.from_CE x) 
+  | None   -> Printf.printf "++++++++++valid++++++++++++++++++\n%!"; `Yes
+  | Some x -> Printf.printf "----------invalid----------------\n%!";`NoAndCE (Packet.from_CE x) 
                    
 (** solves the inner loop **)
 let solve_concrete ?packet:(packet=None) (logical : expr) (real : expr) =
@@ -216,7 +214,7 @@ let cegis ?gas:(gas=1000) (logical : expr) (real : expr) =
     
 let synthesize logical real =
   Printf.printf "\nSynthesized Program:\n%s\n\n%!"
-    (cegis ~gas:10 logical real
+    (cegis ~gas:3 logical real
      |> Option.value ~default:(Assert False)
      |> plug_holes
      |> string_of_expr)
