@@ -208,15 +208,15 @@ let string_of_select_typ styp =
 let sexp_string_of_select_typ styp =
   String.capitalize (string_of_select_typ styp)
 
-type expr =
+type cmd =
   | Skip
   | SetLoc of int
   | Assign of (string * value)
   | Assert of test
   | Assume of test
-  | Seq of (expr * expr)
-  | While of (test * expr)
-  | Select of (select_typ * ((test * expr) list))
+  | Seq of (cmd * cmd)
+  | While of (test * cmd)
+  | Select of (select_typ * ((test * cmd) list))
 
 
 let clean_selects_list =
@@ -288,19 +288,19 @@ let mkWhile t e = While(t,e)
        
 let rec repeat c n =  if n = 0 then "" else c ^ repeat c (n-1)
                     
-let rec string_of_expr ?depth:(depth=0) (e : expr) : string =
+let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
   match e with
   | Skip -> "skip"
   | While (cond, body) ->
     "\n" ^ repeat "\t" depth ^
     "while(" ^ string_of_test cond ^ ") {\n"
       ^ repeat "\t" (depth+1)
-      ^ string_of_expr ~depth:(depth+1) body
+      ^ string_of_cmd ~depth:(depth+1) body
       ^ "\n" ^ repeat "\t" depth
       ^ "}\n" ^ repeat "\t" depth
   | Seq (firstdo, thendo) ->
-    string_of_expr ~depth firstdo ^ "; "
-    ^ string_of_expr ~depth thendo
+    string_of_cmd ~depth firstdo ^ "; "
+    ^ string_of_cmd ~depth thendo
   | Assert t ->
     (* repeat "\t" depth ^ *)
     "assert (" ^ string_of_test t ^ ")"
@@ -316,18 +316,18 @@ let rec string_of_expr ?depth:(depth=0) (e : expr) : string =
     List.fold_left es ~init:"" ~f:(fun str (cond, act)->
         str ^ "\n" ^
         repeat "\t" (depth + 1)
-        ^ string_of_test cond  ^ " -> " ^ string_of_expr ~depth:(depth+2) act ^ " []"
+        ^ string_of_test cond  ^ " -> " ^ string_of_cmd ~depth:(depth+2) act ^ " []"
       )
     ^ "\n" ^ repeat "\t" depth ^ "fi"
   
-let rec sexp_string_of_expr e : string =
+let rec sexp_string_of_cmd e : string =
   let string_select = concatMap 
-                        ~f:(fun (cond,act) -> "(" ^ sexp_string_of_test cond ^ "," ^ sexp_string_of_expr act ^ ")")
+                        ~f:(fun (cond,act) -> "(" ^ sexp_string_of_test cond ^ "," ^ sexp_string_of_cmd act ^ ")")
                         ~c:(fun acc d -> acc ^ ";" ^ d) in
   match e with
   | Skip -> "Skip"
-  | While (cond, body) -> "While("^ sexp_string_of_test cond ^ "," ^ sexp_string_of_expr body ^")"
-  | Seq (p, q) -> "Seq(" ^ sexp_string_of_expr p ^ "," ^ sexp_string_of_expr q ^ ")"
+  | While (cond, body) -> "While("^ sexp_string_of_test cond ^ "," ^ sexp_string_of_cmd body ^")"
+  | Seq (p, q) -> "Seq(" ^ sexp_string_of_cmd p ^ "," ^ sexp_string_of_cmd q ^ ")"
   | Assert t -> "Assert(" ^ sexp_string_of_test t ^ ")"
   | Assume t -> "Assume(" ^ sexp_string_of_test t ^ ")"
   | SetLoc l ->  "SetLoc(" ^ string_of_int l ^ ")"
@@ -340,34 +340,34 @@ let rec sexp_string_of_expr e : string =
     "Select (" ^ sexp_string_of_select_typ styp ^ "," ^ cases_string ^ ")"
 
   
-let rec free_of_expr typ (e:expr) : string list =
-  begin match e with
+let rec free_of_cmd typ (c:cmd) : string list =
+  begin match c with
   | Skip | SetLoc _ -> []
   | Assign (f, v) ->
      f :: (match v,typ with
         | Hole x,`Hole -> [x]
         | Var x, `Var -> [x]
         | _, _ -> [] )
-  | Seq (p, q) ->
-     free_of_expr typ p @ free_of_expr typ q
+  | Seq (c, c') ->
+     free_of_cmd typ c @ free_of_cmd typ c'
   | While (cond, body) ->
      free_of_test typ cond
-     @ free_of_expr typ body
+     @ free_of_cmd typ body
   | Assert t | Assume t -> free_of_test typ t
   | Select (_,ss) ->
     List.fold ss ~init:[] ~f:(fun fvs (test, action) ->
         free_of_test typ test
-        @ free_of_expr typ action
+        @ free_of_cmd typ action
         @ fvs
       )
   end
   |> dedup
 
-let free_vars_of_expr = free_of_expr `Var
-let holes_of_expr = free_of_expr `Hole
+let free_vars_of_cmd = free_of_cmd `Var
+let holes_of_cmd = free_of_cmd `Hole
       
-let rec multi_ints_of_expr e =
-  match e with
+let rec multi_ints_of_cmd c =
+  match c with
   | Skip
   | SetLoc _ ->
     []
@@ -376,12 +376,12 @@ let rec multi_ints_of_expr e =
   (* Only collect _tested_ inputs*)
   | Assign _ ->
     []
-  | Seq (p, q) ->
-    multi_ints_of_expr p
-    @ multi_ints_of_expr q
+  | Seq (c, c') ->
+    multi_ints_of_cmd c
+    @ multi_ints_of_cmd c'
   | While (cond, body) ->
      multi_ints_of_test cond
-     @ multi_ints_of_expr body
+     @ multi_ints_of_cmd body
   | Assert t
   | Assume t ->
     multi_ints_of_test t
@@ -389,27 +389,27 @@ let rec multi_ints_of_expr e =
     concatMap ss ~init:(Some []) ~c:(@)
       ~f:(fun (test, action) ->
           multi_ints_of_test test
-          @ multi_ints_of_expr action
+          @ multi_ints_of_cmd action
         )
 
 let no_nesting ss =
-  let rec no_while_or_select_in_expr e =
-    match e with
+  let rec no_while_or_select_in_cmd c =
+    match c with
     | Skip
     | SetLoc _
     | Assign _
     | Assert _
     | Assume _
       -> true
-    | Seq (p, q)
-      -> no_while_or_select_in_expr p
-         && no_while_or_select_in_expr q
+    | Seq (c, c')
+      -> no_while_or_select_in_cmd c
+         && no_while_or_select_in_cmd c'
     | While _
     | Select _
       -> false
   in
   concatMap ss ~init:(Some true) ~c:(&&)
-    ~f:(fun (_,act) -> no_while_or_select_in_expr act)
+    ~f:(fun (_,act) -> no_while_or_select_in_cmd act)
 
 let instrumented =
   let rec instrumented_test found_loc t =
@@ -431,9 +431,9 @@ let instrumented =
       | Neg _ ->
         failwith "Borked, [instrumented] can only be called on a list of selects with no negative tests"
   in
-  let rec instrumented_expr found_loc e =
+  let rec instrumented_cmd found_loc c =
     if found_loc then found_loc else
-      match e with
+      match c with
       | Skip
       | Assign _
       | Assert _
@@ -442,8 +442,8 @@ let instrumented =
       | SetLoc _
         -> true
       | Seq (p, q)
-        -> instrumented_expr false p
-           || instrumented_expr false q
+        -> instrumented_cmd false p
+           || instrumented_cmd false q
       | While _
       | Select _
         -> failwith "Borked, instrumented can only be called on a list of selects with no nesting"
@@ -451,7 +451,7 @@ let instrumented =
   concatMap ~c:(&&)
     ~f:(fun (cond, act) ->
         instrumented_test false cond
-        && instrumented_expr false act)
+        && instrumented_cmd false act)
        
 let no_negated_holes ss =
   let rec no_negated_holes_test t =
@@ -488,11 +488,11 @@ let no_negated_holes ss =
           -> has_hole a || has_hole b
       in
       not (has_hole a)
-  and no_negated_holes_expr e =
-    let gpair (t, e) =
-      no_negated_holes_test t && no_negated_holes_expr e
+  and no_negated_holes_cmd c =
+    let gpair (t, c) =
+      no_negated_holes_test t && no_negated_holes_cmd c
     in
-    match e with
+    match c with
     | Skip
     | Assign _
     | SetLoc _
@@ -500,8 +500,8 @@ let no_negated_holes ss =
     | Assume t
     | Assert t
       -> no_negated_holes_test t
-    | Seq (p, q)
-      -> no_negated_holes_expr p && no_negated_holes_expr q
+    | Seq (c, c')
+      -> no_negated_holes_cmd c && no_negated_holes_cmd c'
     | While (cond, body)
       -> gpair (cond, body)
     | Select (_,ss)
@@ -510,6 +510,6 @@ let no_negated_holes ss =
   concatMap ss ~init:(Some true) ~c:(&&)
     ~f:(fun (cond, act) ->
         no_negated_holes_test cond
-          && no_negated_holes_expr act)
+          && no_negated_holes_cmd act)
 
 

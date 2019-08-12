@@ -6,14 +6,14 @@ open Prover
 open Manip
 open Util
 
-let well_formed (e:expr) : bool =
-  let well_formed_selects (ss : (test * expr) list) : bool =
+let well_formed (c:cmd) : bool =
+  let well_formed_selects (ss : (test * cmd) list) : bool =
     no_nesting ss
     && instrumented ss
     (* && no_topo_loops ss *)
     && no_negated_holes ss
   in
-  match e with
+  match c with
   | Seq(SetLoc _, While (_, body)) ->
     begin
       match body with
@@ -81,8 +81,8 @@ let find_traces (graph:graph) (in_loc : int) (out_loc : int) =
    will notice and produce a counter example that will take this
    path. The optional [~falsify] flag will replace any [Eq] or [Lt]
    test containing a hole with [False] **)
-let complete_inner ~falsify (cmd : expr) =
-  let domain = multi_ints_of_expr cmd |> dedup in
+let complete_inner ~falsify (cmd : cmd) =
+  let domain = multi_ints_of_cmd cmd |> dedup in
   let rec complete_aux_test ~falsify cmd =
     let hole_replace x comp =
       if falsify
@@ -124,7 +124,7 @@ let complete cmd = complete_inner ~falsify:true cmd
 (** Solves the inner loop of the cegis procedure. 
  * pre-condition: pkt is at an ingress host 
 **)
-let get_one_model (pkt : Packet.t) (logical : expr) (real : expr) =
+let get_one_model (pkt : Packet.t) (logical : cmd) (real : cmd) =
   let pkt_loc', log_trace = trace_eval logical (pkt,None) |> Option.value_exn in
   let _ = Printf.printf "[LOG] get_program_of logical path ";
           List.iter log_trace ~f:(Printf.printf "%d ");
@@ -141,12 +141,12 @@ let get_one_model (pkt : Packet.t) (logical : expr) (real : expr) =
        let _ = Printf.printf "[LOG] Check real path ";
                List.iter (List.rev path) ~f:(Printf.printf "%d ");
                Printf.printf "\n%!" in
-       let path_expr = get_program_of_rev_path real_graph path in
+       let path_cmd = get_program_of_rev_path real_graph path in
        let condition = Packet.to_test (fst pkt_loc') in
-       let wp_of_path = wp path_expr condition in
+       let wp_of_path = wp path_cmd condition in
        let _ = Printf.printf "WEAKEST_PRECONDITION:\n(%s) =\nwp(%s, %s)\n\n%!"
                    (string_of_test wp_of_path)
-                   (string_of_expr path_expr)
+                   (string_of_cmd path_cmd)
                    (string_of_test condition) in
        if (wp_of_path = False) 
        then (Printf.printf "-- contradictory WP\n%!"; find_match rest_paths)
@@ -158,7 +158,7 @@ let get_one_model (pkt : Packet.t) (logical : expr) (real : expr) =
            | Some model ->
 	      (* Printf.printf "The model: %s\n" (string_of_map model); *)
              let real' = fill_holes real model |> complete in
-             Printf.printf "FILLED HOLES WITH %s TO GET:\n%s\n%!\n" (string_of_map model) (string_of_expr real');
+             Printf.printf "FILLED HOLES WITH %s TO GET:\n%s\n%!\n" (string_of_map model) (string_of_cmd real');
              match trace_eval real' (pkt,None) with
              | None ->
                Printf.printf "No Match!\n%!";
@@ -200,7 +200,7 @@ let rec fixup_selects es model =
         (cond, act) :: fixup_selects es' model
     )
     
-and fixup (real:expr) (model : value StringMap.t) : expr =
+and fixup (real:cmd) (model : value StringMap.t) : cmd =
   (* Printf.printf "FIXUP WITH MODEL: %s\n%!\n" (string_of_map model); *)
   match real with
   | Skip -> Skip
@@ -210,14 +210,14 @@ and fixup (real:expr) (model : value StringMap.t) : expr =
   | Assume t -> Assume (fixup_test t model)
   | Seq (p, q) -> Seq (fixup p model, fixup q model)
   | While (cond, body) -> While (fixup_test cond model, fixup body model)
-  | Select (styp,exprs) -> fixup_selects exprs model |> mkSelect styp
+  | Select (styp,cmds) -> fixup_selects cmds model |> mkSelect styp
 
 
 
 let implements logical real =
   let u_log = unroll (diameter logical) logical in
   let u_rea = unroll (diameter real) real |> complete in
-  let fvs = List.dedup_and_sort ~compare (free_vars_of_expr u_log @ free_vars_of_expr u_rea) in
+  let fvs = List.dedup_and_sort ~compare (free_vars_of_cmd u_log @ free_vars_of_cmd u_rea) in
   let symbolic_pkt =
     List.fold fvs  ~init:(True, 0)
       ~f:(fun (acc_test, fv_count) var ->
@@ -232,25 +232,25 @@ let implements logical real =
   Printf.printf "\n==== Checking Implementation =====\n\nSYMBOLIC PACKET:\n%s\n%!\n\nLOGICAL SPEC:\n%s\n\nLOGICAL PROGRAM:\n%s\n\nREAL SPEC: \n%s\n\nREAL PROGRAM:\n%s\n\n%!"
     (string_of_test symbolic_pkt)
     (string_of_test log_wp)
-    (string_of_expr u_log)
+    (string_of_cmd u_log)
     (string_of_test real_wp)
-    (string_of_expr u_rea);
+    (string_of_cmd u_rea);
   match check_valid (log_wp %=>% real_wp) with
   | None   -> Printf.printf "++++++++++valid++++++++++++++++++\n%!"; `Yes
   | Some x -> Printf.printf "----------invalid----------------\n%!";`NoAndCE (Packet.from_CE x) 
                    
 (** solves the inner loop **)
-let solve_concrete ?packet:(packet=None) (logical : expr) (real : expr) =
-  let fvs = free_vars_of_expr logical @ free_vars_of_expr real in
-  let values = multi_ints_of_expr logical in
+let solve_concrete ?packet:(packet=None) (logical : cmd) (real : cmd) =
+  let fvs = free_vars_of_cmd logical @ free_vars_of_cmd real in
+  let values = multi_ints_of_cmd logical in
   let pkt = packet |> Option.value ~default:(Packet.generate fvs ~values) in
   let model = get_one_model pkt logical real in
   let real' =  fixup real model in
-  Printf.printf "\n\nNEXT ITERATION OF REAL PROGRAM:\n%s\n%!\n" (string_of_expr real');
+  Printf.printf "\n\nNEXT ITERATION OF REAL PROGRAM:\n%s\n%!\n" (string_of_cmd real');
   real'
 
 
-let cegis ?gas:(gas=1000) (logical : expr) (real : expr) =
+let cegis ?gas:(gas=1000) (logical : cmd) (real : cmd) =
   let rec loop gas real =
     Printf.printf "======================= LOOP (%d) =======================\n%!" (gas);
     match implements logical real with
@@ -266,4 +266,4 @@ let synthesize logical real =
     (cegis ~gas:3 logical real
      |> Option.value ~default:(Assert False)
      |> complete
-     |> string_of_expr)
+     |> string_of_cmd)

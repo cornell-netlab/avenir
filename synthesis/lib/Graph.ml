@@ -12,7 +12,7 @@ end
    
 module IntMap = Map.Make (Int)
 
-type graph = (((test * expr) list) IntMap.t) IntMap.t
+type graph = (((test * cmd) list) IntMap.t) IntMap.t
 type path = int list
 
 let string_of_graph (g : graph) =
@@ -22,7 +22,7 @@ let string_of_graph (g : graph) =
 	IntMap.fold ~f:(fun ~key:k2 ~data:n2 acc2 -> 
 	    acc2 ^ (string_of_int k1) ^ "->" ^ 
      (List.fold_left ~f:(fun acc3 (t,e) ->
-          (acc3 ^ "(" ^ (string_of_test t) ^ "," ^ (string_of_expr e) ^ ")") ) ~init:"" n2) ^ "->" ^
+          (acc3 ^ "(" ^ (string_of_test t) ^ "," ^ (string_of_cmd e) ^ ")") ) ~init:"" n2) ^ "->" ^
      (string_of_int k2) ^ "\n") n1 ~init:"") g ~init:""					                  
     
 let string_of_path (p : path) =
@@ -53,31 +53,31 @@ let rec split_test_on_loc test =
         if l = l' then (Some l , test)
         else failwith "malformed test, cannot have multiple locs in if statement"
 
-let rec split_expr_on_loc (expr:expr) : (expr * int option) =
-  match expr with
+let rec split_cmd_on_loc (cmd:cmd) : (cmd * int option) =
+  match cmd with
   | While _ -> failwith "cannot handle while nested under select"
   | Select _ -> failwith "Cannot handle nested selects"
   | SetLoc l -> (Skip, Some l)
   | Assign _
     | Skip
     | Assert _
-    | Assume _ -> (expr, None)
+    | Assume _ -> (cmd, None)
   | Seq (p, q) ->
-     let (expr_p, loc_p) = split_expr_on_loc p in
-     let (expr_q, loc_q) = split_expr_on_loc q in
-     let expr = mkSeq expr_p expr_q in
+     let (cmd_p, loc_p) = split_cmd_on_loc p in
+     let (cmd_q, loc_q) = split_cmd_on_loc q in
+     let cmd = mkSeq cmd_p cmd_q in
      match loc_p, loc_q with
-     | None, None -> (expr, None)
-     | None,  l_opt | l_opt, None -> (expr, l_opt)
+     | None, None -> (cmd, None)
+     | None,  l_opt | l_opt, None -> (cmd, l_opt)
      | Some _, Some lq ->
         (* Take the latter update *)
-        (expr, Some lq)
+        (cmd, Some lq)
 
 
-let normalize_selects (ss : (test * expr) list) : (test * expr) list =
-  List.fold ss ~init:[] ~f:(fun ss' (test, expr) ->
+let normalize_selects (ss : (test * cmd) list) : (test * cmd) list =
+  List.fold ss ~init:[] ~f:(fun ss' (test, cmd) ->
       List.fold (dnf test) ~init:ss' ~f:(fun ss' test ->
-          (test, expr) :: ss'
+          (test, cmd) :: ss'
         )
     )
 
@@ -93,7 +93,7 @@ let ordered_selects ss =
       )
   |> fst
        
-let rec get_selects (e : Ast.expr) =
+let rec get_selects (e : Ast.cmd) =
   match e with
   | Skip | SetLoc _ | Assign _ | Assert _ | Assume _ -> []
   | While (_, body) -> get_selects body
@@ -102,7 +102,7 @@ let rec get_selects (e : Ast.expr) =
     let process ss =
       List.fold_left ss ~init:[] ~f:(fun ss' (test, act) ->
           let src, test' = split_test_on_loc test in
-          let act', dst = split_expr_on_loc act in
+          let act', dst = split_cmd_on_loc act in
           match src, dst with
           | None, _ | _, None ->
             if test = False then
@@ -110,8 +110,8 @@ let rec get_selects (e : Ast.expr) =
             else
               failwith ("could not find location for "
                         ^ sexp_string_of_test test ^ " -> "
-                        ^ sexp_string_of_expr act ^ " in select statement "
-                        ^ string_of_expr e
+                        ^ sexp_string_of_cmd act ^ " in select statement "
+                        ^ string_of_cmd e
                        )
           | Some s, Some d ->
             (s, test', act', d) :: ss'
@@ -124,9 +124,9 @@ let rec get_selects (e : Ast.expr) =
     | Ordered
       -> 
       (* Printf.printf "------------ADDING SELECTS-----------\nORDERED:\n%s\n%!\nPARTIAL:\n%s\n%!\n"
-       *   (string_of_expr (Select (Ordered, ss)))
-       *   (string_of_expr (Select (Partial, fst ordered_selects)));
-       *   (\* (string_of_expr (Select (Partial, normalize_selects (fst ordered_selects)))); *\) *)
+       *   (string_of_cmd (Select (Ordered, ss)))
+       *   (string_of_cmd (Select (Partial, fst ordered_selects)));
+       *   (\* (string_of_cmd (Select (Partial, normalize_selects (fst ordered_selects)))); *\) *)
       process (ordered_selects ss)
     ) |> dedup
          
@@ -137,12 +137,12 @@ let add_edge graph (src,test,act,dst) =
    *   src
    *   dst
    *   (string_of_test test)
-   *   (string_of_expr act); *)
+   *   (string_of_cmd act); *)
   IntMap.update graph src
     ~f:(fun x -> IntMap.update (Option.value ~default:IntMap.empty x) dst
                    ~f:(fun y -> ((test, act) :: Option.value ~default:[] y) |> dedup))
   
-let make_graph (e : Ast.expr) : graph =
+let make_graph (e : Ast.cmd) : graph =
   let selects = get_selects e in
   List.fold selects ~init:IntMap.empty ~f:add_edge
 
@@ -201,7 +201,7 @@ let get_edges (graph:graph) src dst =
     concatMap edges ~c:(%:%) ~f:(fun (cond, act) -> Assert cond %:% act)
 
 
-let rec get_program_of_rev_path graph rev_path : expr =
+let rec get_program_of_rev_path graph rev_path : cmd =
   match rev_path with
   | [] 
   | [_] -> Skip
@@ -209,8 +209,8 @@ let rec get_program_of_rev_path graph rev_path : expr =
      let edges = get_edges graph before after in
      get_program_of_rev_path graph (before :: rest) %:% edges     
 
-let diameter (e:expr) =
-  (make_graph e
+let diameter (c:cmd) =
+  (make_graph c
    |> get_all_paths
    |> List.fold
      ~init:(0)

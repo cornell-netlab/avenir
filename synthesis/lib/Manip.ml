@@ -60,8 +60,8 @@ let rec unroll n p =
     (* %:% Assert (!% cond) *)
   | Seq (firstdo, thendo), _ ->
     Seq (unroll n firstdo, unroll n thendo)
-  | Select (styp, exprs), _ ->
-    List.map exprs ~f:(fun (cond, action) -> (cond, unroll n action))
+  | Select (styp, cmds), _ ->
+    List.map cmds ~f:(fun (cond, action) -> (cond, unroll n action))
     |> mkSelect styp
   | _ -> p (* Assign, Test, Assert cannot be unrolled *)
 
@@ -118,18 +118,18 @@ let rec wp c phi =
               
   (* requires at least one guard to be true *)
   | Select (Total, []) -> False
-  | Select (Total, exprs) ->
-    concatMap exprs ~c:(%+%) ~f:fst 
-    %&% concatMap exprs ~c:(%&%) ~f:guarded_wp
+  | Select (Total, cmds) ->
+    concatMap cmds ~c:(%+%) ~f:fst 
+    %&% concatMap cmds ~c:(%&%) ~f:guarded_wp
     
   (* doesn't require at any guard to be true *)
   | Select (Partial, []) -> True
-  | Select (Partial, exprs) ->
-    concatMap exprs ~c:(%&%) ~f:guarded_wp
+  | Select (Partial, cmds) ->
+    concatMap cmds ~c:(%&%) ~f:guarded_wp
 
   (* negates the previous conditions *)
-  | Select (Ordered, exprs) ->
-    List.fold exprs ~init:(True, False) ~f:(fun (wp_so_far, prev_conds) (cond, act) ->
+  | Select (Ordered, cmds) ->
+    List.fold cmds ~init:(True, False) ~f:(fun (wp_so_far, prev_conds) (cond, act) ->
         guarded_wp (cond %&% !%prev_conds, act) %&% wp_so_far
       , prev_conds %+% cond
       )
@@ -158,7 +158,7 @@ let rec fill_holes_test t subst =
   | Lt (a, b)  -> binop mkLt  fill_holes_value a b
   | Eq (a, b)  -> binop mkEq  fill_holes_value a b
 
-let rec fill_holes (c : expr) subst =
+let rec fill_holes (c : cmd) subst =
   let rec_select = concatMap ~c:(@)
                      ~f:(fun (cond, act) ->
                        [(fill_holes_test cond subst, fill_holes act subst)]) in
@@ -177,6 +177,6 @@ let rec fill_holes (c : expr) subst =
      fill_holes_test t subst |> Assume
   | Select (_,[]) | Skip ->
      c
-  | Select (styp, exprs) ->
-     rec_select exprs |> mkSelect styp
+  | Select (styp, cmds) ->
+     rec_select cmds |> mkSelect styp
   | While (cond, body) -> While (fill_holes_test cond subst, fill_holes body subst)

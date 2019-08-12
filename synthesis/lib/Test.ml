@@ -51,7 +51,7 @@ let generate_random_select_type _ =
   | 2 -> Ordered
   | _ -> failwith "generated random integer larger than 6"
 
-let rec generate_random_expr size =
+let rec generate_random_cmd size =
   if size = 0 then Skip else 
   let size' = size - 1 in
   match Random.int 6 with
@@ -59,11 +59,11 @@ let rec generate_random_expr size =
   | 1 -> Assign (generate_random_string 3, generate_random_value 5)
   | 2 -> Assert (generate_random_test size')
   | 3 -> Assume (generate_random_test size')
-  | 4 -> Seq (generate_random_expr size', generate_random_expr size')
-  | 5 -> While (generate_random_test size', generate_random_expr size')
+  | 4 -> Seq (generate_random_cmd size', generate_random_cmd size')
+  | 5 -> While (generate_random_test size', generate_random_cmd size')
   | 6 -> let rec loop n =
            if n = 0 then [] else 
-           (generate_random_test size', generate_random_expr size') :: loop (n-1)
+           (generate_random_test size', generate_random_cmd size') :: loop (n-1)
          in
          mkSelect (generate_random_select_type ()) (loop (1 + Random.int 4 ))
   | _ -> failwith "Should Not generate number larger than 5"
@@ -78,7 +78,7 @@ let simple_test =
   "h" %<-% Var "Ingress" %:%
     mkWhile (Var "h" %<>% Var "Egress") loop_body
    
-let test1 = string_of_expr simple_test
+let test1 = string_of_cmd simple_test
                 
 let test2 = wp ("h" %<-% Var "Ingress") True
 
@@ -294,16 +294,16 @@ let%test _ =
 (* let%test _ =
  *   let rec loop n =
  *     if n = 0 then true else
- *       let e = generate_random_expr 3 in
- *       let s = string_of_expr e in
+ *       let e = generate_random_cmd 3 in
+ *       let s = string_of_cmd e in
  *       try
- *         let s' = parse s |> string_of_expr in
+ *         let s' = parse s |> string_of_cmd in
  *         if s = s' then loop (n-1)
  *         else
  *           (Printf.printf "[PARSER ROUND TRIP] FAILED for:\n %s\n got %s" s  s';
  *            false)
  *       with _ ->
- *         (Printf.printf "[PARSING FAILED] for expression:\n%s\n\n%s\n" s (sexp_string_of_expr e);
+ *         (Printf.printf "[PARSING FAILED] for cmdession:\n%s\n\n%s\n" s (sexp_string_of_cmd e);
  *         false)
  *   in
  *   loop 100 *)
@@ -348,8 +348,8 @@ let%test _ =
   if got = expected then true else begin
     Printf.printf "---- FAILED TEST ------ \n%!";
     Printf.printf "EXPECTED:\n%s\n%!\nGOT:\n%s\n%!\n"
-      (string_of_expr (Select (Partial, expected)))
-      (string_of_expr (Select (Partial, got)));
+      (string_of_cmd (Select (Partial, expected)))
+      (string_of_cmd (Select (Partial, got)));
     Printf.printf "----------------------- \n%!";
     false
   end
@@ -525,9 +525,9 @@ let%test _ =
  *   let model = get_one_model pkt logical real in
  *   Printf.printf "PACKET:\n%s\n%!\nLOGICAL PROGRAM:\n%s\n%!\nREAL PROGRAM:\n%s\n%!\n MODEL:\n%s\n%!\nNEWREAL:\n%s\n%!"
  *     (Packet.string_of_packet pkt)
- *     (string_of_expr logical)
- *     (string_of_expr real)
+ *     (string_of_cmd logical)
+ *     (string_of_cmd real)
  *     (string_of_map model)
- *     (string_of_expr (fixup real model)) ;
+ *     (string_of_cmd (fixup real model)) ;
  *   true *)
   

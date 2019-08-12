@@ -18,7 +18,7 @@
 %nonassoc NOT
 
 
-%start <Ast.expr> main
+%start <Ast.cmd> main
 %%
 
 main :

@@ -52,9 +52,9 @@ let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
 	2 - The semantics of assume and assert is different
 *)
 	 
-let rec trace_eval ?gas:(gas=10) (expr : expr) (pkt_loc : Packet.located) : (Packet.located * (int list)) option =
+let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packet.located * (int list)) option =
   (* Printf.printf "\n###TRACE EVAL\nPROGRAM:\n%s\n\tPACKET: %s\n\tLOCATION: %s\n%!"
-   *   (string_of_expr expr)
+   *   (string_of_cmd cmd)
    *   (Packet.string_of_packet (fst pkt_loc))
    *   (match snd pkt_loc with
    *    | None -> "None"
@@ -71,7 +71,7 @@ let rec trace_eval ?gas:(gas=10) (expr : expr) (pkt_loc : Packet.located) : (Pac
   let (pkt, loc_opt) = pkt_loc in
   if gas = 0
   then (Printf.printf "========OUT OF EVAL GAS============\n"; None)
-  else match expr with
+  else match cmd with
     | Skip ->
       Some (pkt_loc, [])
     | SetLoc i ->
@@ -104,6 +104,6 @@ let rec trace_eval ?gas:(gas=10) (expr : expr) (pkt_loc : Packet.located) : (Pac
       trace_eval ~gas (find_match selects ~default) pkt_loc
     | While ( cond , body ) ->
       if check_test cond pkt_loc then
-        trace_eval ~gas:(gas-1) (Seq(body,expr)) pkt_loc
+        trace_eval ~gas:(gas-1) (Seq(body,cmd)) pkt_loc
       else 
         Some (pkt_loc, [])

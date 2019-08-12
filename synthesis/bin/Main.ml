@@ -6,7 +6,7 @@ module Prover = Motley.Prover
 module Synthesis = Motley.Synthesis
 
 
-let parse_file (filename : string) : Ast.expr =
+let parse_file (filename : string) : Ast.cmd =
   let cts = In_channel.read_all filename in
   let lexbuf = Lexing.from_string cts in  
   Parser.main Lexer.tokens lexbuf
@@ -19,9 +19,9 @@ module Solver = struct
       +> anon ("real" %: string))
 
   let run logical real () =
-    let log_expr = parse_file logical in
-    let real_expr = parse_file real in
-    Synthesis.synthesize log_expr real_expr
+    let log_cmd = parse_file logical in
+    let real_cmd = parse_file real in
+    Synthesis.synthesize log_cmd real_cmd
            
 end
    
