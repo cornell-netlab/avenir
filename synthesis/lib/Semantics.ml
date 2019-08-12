@@ -25,10 +25,26 @@ let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   | Lt p ->
      let valOf = Packet.get_val pkt in
      match p with
-     | (Int i, Int i') -> i < i'
-     | (Var v, Var v') -> valOf v < valOf v'
-     | (Int i, Var v) | (Var v, Int i) -> i < valOf v
-     | (Hole _, _ ) | (_, Hole _) -> true
+     | (Int i, Int i')
+       -> i < i'
+     | (Var v, Var v')
+       -> valOf v < valOf v'
+     | (Int i, Var v)
+       -> Printf.printf "testing %d < %d\n%!" (i) (valOf v);
+       if i < valOf v then (
+         Printf.printf "\t true\n%!"; true
+       ) else (
+         Printf.printf "\t false\n%!"; false
+       ) 
+     | (Var v, Int i)
+       -> Printf.printf "testing %d < %d\n%!" (valOf v) (i);
+       if valOf v < i then (
+         Printf.printf "\t true\n%!"; true
+       ) else (
+         Printf.printf "\t false\n%!"; false
+       )
+     | (Hole _, _ )
+     | (_, Hole _) -> true
                         
 (*
   TODO:

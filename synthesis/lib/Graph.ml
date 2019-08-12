@@ -100,18 +100,21 @@ let rec get_selects (e : Ast.expr) =
   | Seq (firstdo, thendo) -> get_selects firstdo @ get_selects thendo
   | Select (styp, ss) ->
     let process ss =
-      List.map ss ~f:(fun (test, act) ->
-          let loc, test = split_test_on_loc test in
-          let act, loc' = split_expr_on_loc act in
-          match loc, loc' with
+      List.fold_left ss ~init:[] ~f:(fun ss' (test, act) ->
+          let src, test' = split_test_on_loc test in
+          let act', dst = split_expr_on_loc act in
+          match src, dst with
           | None, _ | _, None ->
-            failwith ("could not find location for "
-                      ^ sexp_string_of_test test ^ " -> "
-                      ^ sexp_string_of_expr act ^ " in select statement "
-                      ^ string_of_expr e
-                     )
-          | Some l, Some l' ->
-            (l, test, act, l')
+            if test = False then
+              ss'
+            else
+              failwith ("could not find location for "
+                        ^ sexp_string_of_test test ^ " -> "
+                        ^ sexp_string_of_expr act ^ " in select statement "
+                        ^ string_of_expr e
+                       )
+          | Some s, Some d ->
+            (s, test', act', d) :: ss'
         )
     in
     (match styp with

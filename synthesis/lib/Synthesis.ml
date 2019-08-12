@@ -4,6 +4,7 @@ open Semantics
 open Graph
 open Prover
 open Manip
+open Util
 
 let well_formed (e:expr) : bool =
   let well_formed_selects (ss : (test * expr) list) : bool =
@@ -36,41 +37,89 @@ let find_traces (graph:graph) (in_loc : int) (out_loc : int) =
   traces
 
 (** Plug_holes makes tests with holes always true and assignemnts with holes [skip] **)
-let rec plug_holes real =
-  let binop ctor call left right = ctor (call left) (call right) in
-  let rec plug_holes_test t =
-    match t with
-    (* Base *)
-    | True | False | LocEq _ -> t
-    (* The real work -- here we plug the holes in tests *)
-    | Eq (Hole _, _) | Eq (_, Hole _)
-    | Lt (Hole _, _) | Lt (_, Hole _)  -> False
-    (* If there's no hole, make no change *)
-    | Eq (_, _)      | Lt (_,_)        -> t
-    (* Homomorphic cases *)
-    | And (p, q) -> binop mkAnd plug_holes_test p q
-    | Or (p, q) -> binop mkAnd plug_holes_test p q
-    | Neg p ->
-      if plug_holes_test p = p then
-        Neg p
-      else
-        False
-  in
-  let plug_holes_select =
-    List.map ~f:(fun (c, a) ->
-        (plug_holes_test c, plug_holes a))
-  in
-  match real with
-  | Skip -> Skip
-  | SetLoc i -> SetLoc i
-  | Assign (_, Hole _) -> Assert False
-  | Assign (_, _) -> real
-  | Assert t -> Assert (plug_holes_test t)
-  | Assume t -> Assume (plug_holes_test t)
-  | Seq (p, q) -> plug_holes p %:% plug_holes q
-  | While (cond, body) -> While(plug_holes_test cond, plug_holes body)
-  | Select (styp,es) -> plug_holes_select es |> mkSelect styp
+(* let rec plug_holes real =
+ *   let binop ctor call left right = ctor (call left) (call right) in
+ *   let rec plug_holes_test t =
+ *     match t with
+ *     (\* Base *\)
+ *     | True | False | LocEq _ -> t
+ *     (\* The real work -- Tests are replaced with False *\)
+ *     | Eq (Hole _, _) | Eq (_, Hole _)
+ *     | Lt (Hole _, _) | Lt (_, Hole _)  -> False
+ *     (\* If there's no hole, make no change *\)
+ *     | Eq (_, _)      | Lt (_,_)        -> t
+ *     (\* Homomorphic cases *\)
+ *     | And (p, q) -> binop mkAnd plug_holes_test p q
+ *     | Or (p, q) -> binop mkAnd plug_holes_test p q
+ *     | Neg p ->
+ *       if plug_holes_test p = p then
+ *         Neg p
+ *       else
+ *         False
+ *   in
+ *   let plug_holes_select =
+ *     List.map ~f:(fun (c, a) ->
+ *         (plug_holes_test c, plug_holes a))
+ *   in
+ *   match real with
+ *   | Skip -> Skip
+ *   | SetLoc i -> SetLoc i
+ *   | Assign (_, Hole _) -> Skip
+ *   | Assign (_, _) -> real
+ *   | Assert t -> Assert (plug_holes_test t)
+ *   | Assume t -> Assume (plug_holes_test t)
+ *   | Seq (p, q) -> plug_holes p %:% plug_holes q
+ *   | While (cond, body) -> While(plug_holes_test cond, plug_holes body)
+ *   | Select (styp,es) -> plug_holes_select es |> mkSelect styp *)
 
+
+(** [complete] A completion takes a to which a substitution has
+   already been applied and replaces the remaining holes with integers
+   that are not in the "active domain" of the program. This is a kind
+   of an "educated un-guess" i.e. we're guessing values that are
+   almost certainly wrong so that on the next run of the CEGIS loop Z3
+   will notice and produce a counter example that will take this
+   path. The optional [~falsify] flag will replace any [Eq] or [Lt]
+   test containing a hole with [False] **)
+let complete_inner ~falsify (cmd : expr) =
+  let domain = multi_ints_of_expr cmd |> dedup in
+  let rec complete_aux_test ~falsify cmd =
+    let hole_replace x comp =
+      if falsify
+      then False
+      else comp x (Int (random_int_nin domain))
+    in
+    match cmd with
+    | True | False | LocEq _ -> cmd
+    | Neg b -> !%(complete_aux_test ~falsify b)
+    | And (a, b) -> complete_aux_test ~falsify a %&% complete_aux_test ~falsify b
+    | Or (a, b) -> complete_aux_test ~falsify a %+% complete_aux_test ~falsify b
+    | Eq (Hole _, x) | Eq (x, Hole _) -> hole_replace x (%=%)
+    | Lt (Hole _, x) | Lt (x, Hole _) -> hole_replace x (%<%)
+    | Eq _ | Lt _ -> cmd
+  in
+  let rec complete_aux ~falsify cmd =
+    match cmd with
+    | Skip | SetLoc _ -> cmd
+    | Assign (f, v) ->
+      begin
+        match v with
+        | Hole _ -> f %<-% Int (random_int_nin domain)
+        | _ -> cmd
+      end
+    | Assert b -> Assert (complete_aux_test ~falsify b)
+    | Assume b -> Assume (complete_aux_test ~falsify b)
+    | Seq (c, c') -> complete_aux ~falsify c %:% complete_aux ~falsify c'
+    | While (b, c) -> While (complete_aux_test ~falsify b, complete_aux ~falsify c)
+    | Select (styp, ss) ->
+      List.map ss
+        ~f:(fun (b, c) ->
+            complete_aux_test ~falsify b , complete_aux ~falsify c )
+      |> mkSelect styp
+  in
+  complete_aux ~falsify cmd
+
+let complete cmd = complete_inner ~falsify:true cmd   
 
 (** Solves the inner loop of the cegis procedure. 
  * pre-condition: pkt is at an ingress host 
@@ -108,7 +157,7 @@ let get_one_model (pkt : Packet.t) (logical : expr) (real : expr) =
            | None -> Printf.printf "unsat!\n%!"; (find_match rest_paths)
            | Some model ->
 	      (* Printf.printf "The model: %s\n" (string_of_map model); *)
-             let real' = fill_holes real model |> plug_holes in
+             let real' = fill_holes real model |> complete in
              Printf.printf "FILLED HOLES WITH %s TO GET:\n%s\n%!\n" (string_of_map model) (string_of_expr real');
              match trace_eval real' (pkt,None) with
              | None ->
@@ -167,7 +216,7 @@ and fixup (real:expr) (model : value StringMap.t) : expr =
 
 let implements logical real =
   let u_log = unroll (diameter logical) logical in
-  let u_rea = unroll (diameter real) real |> plug_holes in
+  let u_rea = unroll (diameter real) real |> complete in
   let fvs = List.dedup_and_sort ~compare (free_vars_of_expr u_log @ free_vars_of_expr u_rea) in
   let symbolic_pkt =
     List.fold fvs  ~init:(True, 0)
@@ -205,7 +254,7 @@ let cegis ?gas:(gas=1000) (logical : expr) (real : expr) =
   let rec loop gas real =
     Printf.printf "======================= LOOP (%d) =======================\n%!" (gas);
     match implements logical real with
-    | `Yes -> Some (real |> plug_holes) 
+    | `Yes -> Some (real) 
     | `NoAndCE counter ->
       if gas = 0 then Some real else
       solve_concrete ~packet:(Some counter) logical real |> loop (gas-1)
@@ -216,5 +265,5 @@ let synthesize logical real =
   Printf.printf "\nSynthesized Program:\n%s\n\n%!"
     (cegis ~gas:3 logical real
      |> Option.value ~default:(Assert False)
-     |> plug_holes
+     |> complete
      |> string_of_expr)
