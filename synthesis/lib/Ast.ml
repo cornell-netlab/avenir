@@ -227,33 +227,42 @@ let clean_selects_list =
         else
           [cond, act])
 
-let mkSelect styp ss = Select (styp, clean_selects_list ss)
-
 let mkPartial ss =
   let selects = clean_selects_list ss in
   if List.length selects = 0 then
     Skip
   else
-    mkSelect Partial selects
+    Select (Partial, selects)
 
 let mkTotal ss =
   let selects = clean_selects_list ss in
   if List.length selects = 0 then
     Assert False
   else
-    mkSelect Total selects
+    Select (Total, selects)
 
 let mkOrdered ss =
-  let selects = clean_selects_list ss in
+  let selects = clean_selects_list ss
+                |> List.remove_consecutive_duplicates
+                  ~which_to_keep:`First
+                  ~equal:(fun (cond,_) (cond',_) -> cond = cond')
+  in
   if List.length selects = 0 then
-    Skip (* TODO -- is this right? *)
+    Skip
   else
-    mkSelect Ordered selects
+    Select (Ordered, selects)
 
 let mkSeq first scnd =
   match first, scnd with
   | Skip, x | x, Skip -> x
   | _,_ -> Seq(first, scnd)
+
+let mkSelect styp =
+  match styp with
+  | Partial -> mkPartial
+  | Total -> mkTotal
+  | Ordered -> mkOrdered
+
          
 let (%:%) = mkSeq
 
