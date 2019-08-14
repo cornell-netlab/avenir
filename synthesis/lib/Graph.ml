@@ -25,6 +25,22 @@ let string_of_graph (g : graph) =
           (acc3 ^ "(" ^ (string_of_test t) ^ "," ^ (string_of_cmd e) ^ ")") ) ~init:"" n2) ^ "->" ^
      (string_of_int k2) ^ "\n") n1 ~init:"") g ~init:""					                  
     
+let to_dot (g : graph) =
+	let dot =
+  ((IntMap.fold
+    ~f:(fun ~key:k1 ~data:n1 acc1 -> 
+        acc1 ^ 
+	IntMap.fold ~f:(fun ~key:k2 ~data:n2 acc2 -> 
+	    acc2 ^ ("   " ^ string_of_int k1) ^ "->" ^ (string_of_int k2) ^ "  [label=\"" ^
+     (List.fold_left ~f:(fun acc3 (t,e) -> (acc3 ^ "(" ^ (string_of_test t) ^ "," ^ (string_of_cmd e) ^ ")") ) ~init:"" n2) ^ "\"]" ^
+      "\n") n1 ~init:"") g ~init:"digraph g {\n") ^ "}") in
+	let name = "output.viz" in
+	let file = Out_channel.create name in
+    Out_channel.output_string file dot;
+		Out_channel.flush file;
+		ignore( Sys.command (Printf.sprintf "dot %s -Tpng -o output.png && rm %s" name name) ) ;;
+  
+		
 let string_of_path (p : path) =
   List.fold_left ~f:(fun acc e -> acc ^ "->" ^ (string_of_int e)) p ~init:""
 
