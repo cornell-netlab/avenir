@@ -4,6 +4,7 @@ module Parser = Motley.Parser
 module Lexer = Motley.Lexer
 module Prover = Motley.Prover
 module Synthesis = Motley.Synthesis
+module Encode = Motley.Encode                     
 
 
 let parse_file (filename : string) : Ast.cmd =
@@ -24,14 +25,40 @@ module Solver = struct
     Synthesis.synthesize log_cmd real_cmd
            
 end
-   
-let command =
+
+
+let synthesize_cmd : Command.t = 
   Command.basic_spec
     ~summary:"Compute modifications to real program to implement logical program "
     Solver.spec
     Solver.run
+
+
+module Encoder = struct
+  let spec = Command.Spec.(
+      empty
+      +> flag "-I" (listed string) ~doc:"<dir> add directory to include search path"
+      +> flag "-v" no_arg ~doc:"verbose mode"
+      +> anon ("p4_file" %: string))
+
+  let run include_dirs verbose p4_file () =
     
-let () = Command.run command
+    ignore(Encode.encode_from_p4 include_dirs p4_file verbose)
+end
+
+let encode_cmd : Command.t =
+  Command.basic_spec
+    ~summary:"Convert P4 programs into their GCL-While interpretation"
+    Encoder.spec
+    Encoder.run
+   
+let main : Command.t =
+  Command.group
+    ~summary:"Invokes the specified Motley Command"
+    [ ("synthesize", synthesize_cmd)
+    ; ("encodep4", encode_cmd) ]
+    
+let () = Command.run main
 
 
 	

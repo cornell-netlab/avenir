@@ -30,4 +30,8 @@ let random_int_nin domain =
   in
   random_int_nin_rec domain
                   
-    
+(** constructs a pair from the arguments *)
+let mkPair a b = (a, b)
+
+(** constructs a reversed pair from the arguments *)
+let mkRevPair b a = (a, b)                 

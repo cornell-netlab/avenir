@@ -15,3 +15,5 @@ src/setup.ml
 /_boot
 _opam
 *.~
+motley
+

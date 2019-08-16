@@ -512,4 +512,39 @@ let no_negated_holes ss =
         no_negated_holes_test cond
           && no_negated_holes_cmd act)
 
-
+(** replace all vars in cmd that are also in holes with holes having the same name*)
+let holify holes c =
+  let holify_val v : value=
+    match v with
+    | Hole _ | Int _ -> v
+    | Var x ->
+      begin match List.find holes ~f:(fun elem -> x = elem)  with
+      | None -> v
+      | Some _ -> Hole ("?" ^ x)
+      end
+  in
+  let rec holify_test b : test =
+    match b with
+    | True | False | LocEq _ -> b
+    | Eq (v, v') -> holify_val v %=% holify_val v'
+    | Lt (v, v') -> holify_val v %<% holify_val v'
+    | And (b, b') -> holify_test b %&% holify_test b'
+    | Or (b, b')  -> holify_test b %+% holify_test b'
+    | Neg b       -> !%(holify_test b)
+  in
+  let rec holify_cmd c : cmd=
+    match c with
+    | Skip | SetLoc _ -> c
+    | Assign (f, v) -> f %<-% holify_val v
+    | Assert t -> Assert (holify_test t)
+    | Assume t -> Assume (holify_test t)
+    | Seq (c, c') ->
+      holify_cmd c %:% holify_cmd c'
+    | While (t, c) ->
+      mkWhile (holify_test t) (holify_cmd c)
+    | Select (styp, cases) ->
+      List.map cases ~f:(fun (t, c) -> holify_test t, holify_cmd c)
+      |> mkSelect styp
+  in
+  holify_cmd c
+        
