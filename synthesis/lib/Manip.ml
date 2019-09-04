@@ -68,9 +68,17 @@ let rec unroll n p =
 let get_val subsMap str default =
   StringMap.find subsMap str |> Option.value ~default
 
-(* computes ex[xs -> vs] *)
+(** computes ex[xs -> vs], replacing Vars only *)
 let rec substitute ex subsMap =
-  let subst = get_val subsMap in 
+  let subst = get_val subsMap in
+  let rec substituteE e =
+    match e with
+    | Var field -> subst field e
+    | Int _ | Hole _ -> e
+    | Plus (e, e') -> Plus (substituteE e, substituteE e')
+    | Times (e, e') -> Times (substituteE e, substituteE e')
+    | Minus (e, e') -> Minus (substituteE e, substituteE e')
+  in
   match ex with
   | True | False | LocEq _ -> ex
   (* Homomorphic Rules*)               
@@ -78,18 +86,8 @@ let rec substitute ex subsMap =
   | Or  (e, e') -> substitute e subsMap %+% substitute e' subsMap
   | And (e, e') -> substitute e subsMap %&% substitute e' subsMap
   (* Do the work *)
-  | Eq (v,v') -> 
-    (match v, v' with
-    | Var field, Var field' -> subst field v %=% subst field' v'
-    | Var field, _          -> subst field v %=% v'             
-    | _        , Var field' -> v %=% subst field' v'
-    | _        , _          -> v %=% v')
-  | Lt (v,v') -> 
-    (match v, v' with
-    | Var field, Var field' -> subst field v %<% subst field' v'
-    | Var field, _          -> subst field v %<% v'             
-    | _        , Var field' -> v %<% subst field' v'
-    | _        , _          -> v %<% v')
+  | Eq (e,e') ->  substituteE e %=% substituteE e'
+  | Lt (e,e') ->  substituteE e %<% substituteE e'
 
               
 (* computes weakest pre-condition of condition phi w.r.t command c *)
@@ -139,13 +137,23 @@ let rec wp c phi =
     Printf.printf "[WARNING] skipping While loop, because loops must be unrolled\n%!";
     phi
 
-let fill_holes_value v subst =
+
+
+(** [fill_holes(|_value|_test]) replace the applies the substitution
+   [subst] to the supplied cmd|value|test. It only replaces HOLES, and
+   has no effect n vars *)
+let rec fill_holes_value v subst =
+  let binop op e e' = op (fill_holes_value e subst) (fill_holes_value e' subst) in
   match v with
   | Int _ | Var _ -> v
   | Hole h ->
-     match StringMap.find subst h with
+     begin match StringMap.find subst h with
      | None -> v
      | Some v' -> v'
+     end
+  | Plus (e, e') -> binop mkPlus e e'
+  | Minus (e, e') -> binop mkMinus e e'
+  | Times (e, e') -> binop mkTimes e e'
       
     
 let rec fill_holes_test t subst =

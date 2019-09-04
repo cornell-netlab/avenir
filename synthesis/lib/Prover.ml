@@ -11,8 +11,11 @@ module StringMap = Map.Make (String)
 let string_of_map m =
   StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value v) ^ ") " ^ acc)) m ~init:""
    
-let mkZ3Value typ v ctx (deBruijn : int StringMap.t) : Z3.Expr.expr =
+let rec mkZ3Value typ v ctx (deBruijn : int StringMap.t) : Z3.Expr.expr =
   let open Z3.Arithmetic in
+  let binop op e e'=
+    op ctx [mkZ3Value typ e ctx deBruijn; mkZ3Value typ e' ctx deBruijn]
+  in
   match v, typ with
   | Int i, _ ->
     Integer.mk_numeral_i ctx i
@@ -21,9 +24,13 @@ let mkZ3Value typ v ctx (deBruijn : int StringMap.t) : Z3.Expr.expr =
     Integer.mk_const_s ctx x
   | Var x, `Sat
   | Hole x, `Valid  ->
-    match StringMap.find deBruijn x with
-    | None -> failwith ( "unbound variable " ^ x) 
-    | Some x' -> Z3.Quantifier.mk_bound ctx x' (Integer.mk_sort ctx)
+     begin match StringMap.find deBruijn x with
+     | None -> failwith ( "unbound variable " ^ x) 
+     | Some x' -> Z3.Quantifier.mk_bound ctx x' (Integer.mk_sort ctx)
+     end
+  | Plus (e,e'), _ -> binop mk_add e e'
+  | Times (e, e'), _ -> binop mk_mul e e'
+  | Minus (e, e'), _ -> binop mk_sub e e'
 
 let rec mkZ3Test typ t ctx deBruijn =
   let z3_value (v : value) = mkZ3Value typ v ctx deBruijn in

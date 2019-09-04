@@ -5,19 +5,35 @@ type value =
   | Var of string
   | Hole of string
   | Int of int
+  | Plus of (value * value)
+  | Times of (value * value)
+  | Minus of (value * value)
 
-let string_of_value v =
+let rec string_of_value v =
   match v with
   | Var s -> s
   | Hole s -> "?" ^ s
   | Int i -> string_of_int i
+  | Plus (e, e') -> string_of_value e ^ " + " ^ string_of_value e'
+  | Times (e, e') -> "(" ^ string_of_value e ^ " * " ^ string_of_value e' ^ ")"
+  | Minus (e, e') -> string_of_value e ^ " - " ^ string_of_value e'
 
-let sexp_string_of_value v =
+let rec sexp_string_of_value v =
   match v with
-  | Var s -> "(Var " ^ s ^ ")"
-  | Hole s -> "(Hole " ^ s ^ ")"  
-  | Int i -> "(Int " ^ string_of_int i ^ ")"
+  | Var s -> "Var(" ^ s ^ ")"
+  | Hole s -> "Hole(" ^ s ^ ")"  
+  | Int i -> "Int(" ^ string_of_int i ^ ")"
+  | Plus (e,e') ->
+     "Plus(" ^ sexp_string_of_value e ^ ", " ^ sexp_string_of_value e' ^ ")"
+  | Times (e,e') ->
+     "Times(" ^ sexp_string_of_value e ^ ", " ^ sexp_string_of_value e' ^ ")"
+  | Minus (e, e') ->
+     "Minus(" ^ sexp_string_of_value e ^ ", " ^ sexp_string_of_value e' ^ ")"
 
+let mkPlus e e' = Plus(e,e')
+let mkMinus e e' = Minus (e, e')
+let mkTimes e e' = Times (e, e')
+    
 type test =
   | True | False
   | LocEq of int
@@ -29,26 +45,27 @@ type test =
 
 let mkEq v v' =
   if v = v' then True else
+    let ord v = match v with
+      | Var _ -> 0
+      | Hole _ -> 1
+      | Int _ -> 2
+      | Plus _ -> 3
+      | Minus _ -> 4
+      | Times _ -> 5
+    in
     match v, v' with 
     | Int _, Int _ -> False
     | Hole x, Hole x'
     | Var x, Var x' ->
-      if x < x' then Eq (v, v') else Eq (v', v)
-    (* Var < Int < Hole *)
-    | Hole _, Int _
-    | Hole _, Var _
-    | Int  _, Var _
-      ->  Eq(v', v)
-    | Int _, Hole _
-    | Var _, Hole _
-    | Var _, Int _
-      -> Eq (v, v')
+       if x < x' then Eq (v, v') else Eq (v', v)
+    | _, _ ->
+       if ord v < ord v' then Eq (v, v') else Eq (v', v)
 
 let mkLt v v' = match v, v' with
     | Int first, Int second -> 
       if first < second then True else False
     | _, _ -> Lt(v, v')
-
+            
 let (%=%) = mkEq
 let (%<>%) v v' = Neg(v %=% v') 
 
@@ -514,7 +531,7 @@ let no_negated_holes ss =
 
 (** replace all vars in cmd that are also in holes with holes having the same name*)
 let holify holes c =
-  let holify_val v : value=
+  let rec holify_val v : value=
     match v with
     | Hole _ | Int _ -> v
     | Var x ->
@@ -522,6 +539,9 @@ let holify holes c =
       | None -> v
       | Some _ -> Hole ("?" ^ x)
       end
+    | Plus (e,e') -> Plus (holify_val e, holify_val e')
+    | Times (e,e') -> Times (holify_val e, holify_val e')
+    | Minus (e,e') -> Minus (holify_val e, holify_val e')
   in
   let rec holify_test b : test =
     match b with

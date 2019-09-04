@@ -17,7 +17,13 @@ let get_val pkt field =
     | None -> failwith ("UseBeforeDef error" ^ field)
     | Some v -> v
     
-let set_field_of_value pkt field value =
+let rec set_field_of_value pkt field value =
+  let binop op e e'=
+    let eVal = get_val (set_field_of_value pkt field e) field in
+    let eVal' = get_val (set_field_of_value pkt field e') field in
+    set_field_of_value pkt field (Int (op eVal eVal'))
+  in
+
   match value with
     | Int i -> set_field pkt field i
     | Var v ->
@@ -25,6 +31,9 @@ let set_field_of_value pkt field value =
        |> set_field pkt field
     | Hole _ ->
        failwith "Packets cannot have holes in them"
+    | Plus  (e, e') -> binop ( + ) e e'
+    | Times (e, e') -> binop ( * ) e e'
+    | Minus (e, e') -> binop ( - ) e e'
 
 let init_field_to_random bound pkt f =
   set_field pkt f (Random.int bound)

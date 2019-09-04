@@ -73,7 +73,7 @@ let find_traces (graph:graph) (in_loc : int) (out_loc : int) =
  *   | Select (styp,es) -> plug_holes_select es |> mkSelect styp *)
 
 
-(** [complete] A completion takes a to which a substitution has
+(** [complete] A completion takes a cmd to which a substitution has
    already been applied and replaces the remaining holes with integers
    that are not in the "active domain" of the program. This is a kind
    of an "educated un-guess" i.e. we're guessing values that are
@@ -169,13 +169,18 @@ let get_one_model (pkt : Packet.t) (logical : cmd) (real : cmd) =
   end in 
   find_match all_traces
 					
-let fixup_val v model : value =
+let rec fixup_val v model : value =
+  let binop op e e' = op (fixup_val e model) (fixup_val e' model) in
   match v with
   | Int _ | Var _ -> v
   | Hole h -> 
-    match StringMap.find model h with
-    | None -> v
-    | Some v' -> v'
+     begin match StringMap.find model h with
+     | None -> v
+     | Some v' -> v'
+     end
+  | Plus  (e, e') -> binop mkPlus  e e'
+  | Times (e, e') -> binop mkTimes e e'
+  | Minus (e, e') -> binop mkMinus e e'
 
 let rec fixup_test t model =
   let binop ctor call left right = ctor (call left model) (call right model) in 

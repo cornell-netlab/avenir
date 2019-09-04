@@ -1,56 +1,41 @@
 open Core
 open Ast    
+
+let rec evalExpr ( e : value ) (pkt_loc : Packet.located) : int option =
+  let binop op e e' = match evalExpr e pkt_loc, evalExpr e' pkt_loc with
+    | None, _ -> None
+    | _, None -> None
+    | Some x, Some y -> Some (op x y)
+  in
+  match e with
+  | Int i -> Some i
+  | Var v -> Some (Packet.get_val (fst pkt_loc) v)
+  | Hole _ -> None
+  | Plus  (e, e') -> binop ( + ) e e'
+  | Times (e, e') -> binop ( * ) e e'
+  | Minus (e, e') -> binop ( - ) e e'
    
 let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
-  let (pkt, loc) = pkt_loc in
+  let binopt op a b = op (check_test a pkt_loc) (check_test b pkt_loc) in
+  let binope op e e' = match evalExpr e pkt_loc, evalExpr e' pkt_loc with
+    | None, _ -> true
+    | _, None -> true
+    | Some x, Some y -> op x y
+  in
   match cond with
   | True -> true
   | False -> false
   | LocEq testLoc ->    
     (* Printf.printf "\tTESTING LOCATION: %d\n%!" testLoc; *)
-    begin match loc with
+    begin match snd pkt_loc with
          | None -> false
          | Some l -> (l = testLoc)
     end
   | Neg (cond) -> not (check_test cond pkt_loc)
-  | And (a, b) -> check_test a pkt_loc && check_test b pkt_loc
-  | Or (a, b) -> check_test a pkt_loc || check_test b pkt_loc
-  | Eq p ->
-     (let valOf = Packet.get_val pkt in
-     match p with
-     | (Int i, Int i') -> i = i'
-     | (Var v, Var v') -> valOf v = valOf v'
-     | (Int i, Var v) | (Var v, Int i) -> i = valOf v
-     | (Hole _, _ ) | (_, Hole _) -> true)
-  | Lt p ->
-     let valOf = Packet.get_val pkt in
-     match p with
-     | (Int i, Int i')
-       -> i < i'
-     | (Var v, Var v')
-       -> valOf v < valOf v'
-     | (Int i, Var v)
-       -> Printf.printf "testing %d < %d\n%!" (i) (valOf v);
-       if i < valOf v then (
-         Printf.printf "\t true\n%!"; true
-       ) else (
-         Printf.printf "\t false\n%!"; false
-       ) 
-     | (Var v, Int i)
-       -> Printf.printf "testing %d < %d\n%!" (valOf v) (i);
-       if valOf v < i then (
-         Printf.printf "\t true\n%!"; true
-       ) else (
-         Printf.printf "\t false\n%!"; false
-       )
-     | (Hole _, _ )
-     | (_, Hole _) -> true
-                        
-(*
-  TODO:
-	1 - This function assumes that "loc" is a field in the packet header which is incorrect in general
-	2 - The semantics of assume and assert is different
-*)
+  | And (a, b) -> binopt (&&) a b
+  | Or (a, b) -> binopt (||) a b
+  | Eq (e,e') -> binope (=) e e'
+  | Lt (e,e') -> binope (<) e e'
 	 
 let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packet.located * (int list)) option =
   (* Printf.printf "\n###TRACE EVAL\nPROGRAM:\n%s\n\tPACKET: %s\n\tLOCATION: %s\n%!"

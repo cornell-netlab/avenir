@@ -3,6 +3,7 @@ open Util
 open Petr4
 open Types
 open Ast
+open Manip
 
 let ctor_name_expression (e : Expression.t) : string =
   let module E = Expression in
@@ -27,7 +28,31 @@ let ctor_name_expression (e : Expression.t) : string =
   | E.NamelessInstantiation _ -> "NamelessInstantiation"
   | E.Mask _ -> "Mask"
   | E.Range _ -> "Range"
-  
+
+let string_of_binop (e : Op.bin) : string =
+  let open Op in 
+  match snd e with
+  | Plus -> "Plus"
+  | PlusSat -> "PlusSat"
+  | Minus -> "Minus"
+  | MinusSat -> "MinusSat"
+  | Mul -> "Mul"
+  | Div -> "Div"
+  | Mod -> "Mod"
+  | Shl -> "Shl"
+  | Shr -> "Shr"
+  | Le -> "Le"
+  | Ge -> "Ge"
+  | Lt -> "Lt"
+  | Gt -> "Gt"
+  | Eq -> "Eq"
+  | NotEq -> "NotEq"
+  | BitAnd -> "BitAnd"
+  | BitXor -> "BitXor"
+  | BitOr -> "BitOr"
+  | PlusPlus -> "PlusPlus"
+  | And -> "And"
+  | Or -> "Or"
   
 let rec dispatch_list ((info,expr) : Expression.t) : P4String.t list =
   let module E = Expression in
@@ -42,13 +67,16 @@ let rec dispatch_list ((info,expr) : Expression.t) : P4String.t list =
 let string_of_memberlist =
   concatMap ~f:(snd) ~c:(fun x y -> x ^ "." ^ y) 
    
-let encode_expression_to_value (e : Expression.t) : value =
+let rec encode_expression_to_value (e : Expression.t) : value =
   let module E= Expression in
   let unimplemented name =
     failwith ("[Unimplemented Expression->Value Encoding for " ^ name ^"] at " ^ Petr4.Info.to_string (fst e))
   in
   let type_error name =
-    failwith ("[TypeError] Expected integer value, but got " ^ name ^ " at " ^ Petr4.Info.to_string (fst e))
+    failwith ("[TypeError] Expected integer value (or operation), but got " ^ name ^ " at " ^ Petr4.Info.to_string (fst e))
+  in
+  let binop op e e' =
+    op (encode_expression_to_value e) (encode_expression_to_value e')
   in
   match snd e with
   | E.True -> type_error "True"
@@ -56,6 +84,18 @@ let encode_expression_to_value (e : Expression.t) : value =
   | E.Int (_,i) -> Int (Bigint.to_int_exn i.value)
   | E.Name (_,s) -> Var s
   | E.ExpressionMember _ -> dispatch_list e |> string_of_memberlist |> Var
+  | E.BinaryOp {op;args=(e, e')} ->
+     begin match snd op with
+     | Plus -> binop mkPlus e e'
+     | Minus -> binop mkMinus e e'
+     | Mul -> binop mkTimes e e'
+     | Div | Mod
+       -> unimplemented (string_of_binop op)
+     | Le | Ge | Lt | Gt | Eq | NotEq | And | Or
+       -> type_error (string_of_binop op)
+     | Shl | Shr | PlusSat | MinusSat | BitAnd | BitXor | BitOr | PlusPlus
+       -> unimplemented (string_of_binop op)
+     end
   | _ -> unimplemented (ctor_name_expression e)
 
 let get_decls : TopDeclaration.t list -> Declaration.t list =
@@ -195,7 +235,7 @@ let rec encode_statement prog (ctx : Declaration.t list) ((info, stmt) : Stateme
   | BlockStatement {block} ->
     encode_block prog ctx block
   | Exit ->
-    Assert False (* is this right? *)
+    Assert False (* TODO :: is this right? *)
   | EmptyStatement ->
     Skip
   | Return _ ->
@@ -250,9 +290,28 @@ and encode_table prog (ctx : Declaration.t list) (props : Table.property list) :
   (List.map action_cmds ~f:(fun act -> key_test, act) ) @ [(True, Skip)]
   |> mkSelect Ordered
 
-
-
-
+let read_lines filename =
+  let chan = In_channel.create filename in
+  Std.input_list chan
+  
+let apply_model_from_file (c : cmd) (model_file : string) : cmd =
+  let lines = read_lines model_file in
+  let parse_line l =
+    let words = String.split_on_chars l ~on:[' '] in
+    let nonempty_words = List.filter ~f:(fun f -> String.length f > 0) words in
+    match nonempty_words  with
+    | [] -> None
+    | [_] -> None
+    | [x;y] -> Some (x, int_of_string y)
+    | _ -> None
+  in
+  List.fold lines ~init:c
+    ~f:(fun c line ->
+      match parse_line line with
+      | None -> c
+      | Some (hole, data) ->
+         StringMap.singleton hole (Int data)
+         |> fill_holes c)  
 
 (* P4-PARSING *)
 let colorize colors s = ANSITerminal.sprintf colors "%s" s
@@ -285,13 +344,14 @@ let parse_p4 include_dirs p4_file verbose =
     `Error (Lexer.info lexbuf, err)
 
 
-let encode_from_p4 include_dirs p4_file verbose =
+let encode_from_p4 include_dirs p4_file verbose : Ast.cmd =
+  Format.printf "encoding file %s\n%!" p4_file;
   match parse_p4 include_dirs p4_file verbose with
-  | `Error _ ->
-    Format.eprintf "PARSING FAILED";
-    None
+  | `Error (info, _) ->
+     raise (Failure (Format.sprintf "at %s @\n%!" (Info.to_string info)))
   | `Ok p4_program ->
-    Format.printf "Encoded Program: \n%!\n %s%! \n%!" (encode_program p4_program |> string_of_cmd);
-    Some (p4_program)
+     let cmd = encode_program p4_program in
+    Format.printf "Encoded Program: \n%!\n %s%! \n%!" (string_of_cmd cmd);
+    cmd
       
                  
