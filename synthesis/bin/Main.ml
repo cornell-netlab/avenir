@@ -56,11 +56,32 @@ let encode_cmd : Command.t =
     Encoder.spec
     Encoder.run
 
+
+module WeakestPrecondition = struct
+  let spec = Command.Spec.(
+      empty
+      +> anon ("file" %: string))
+
+  let run file () =
+    let cmd = parse_file file |> Synthesis.unroll_fully in
+    let _ = Printf.printf "PROGRAM: %s \n%!" (Ast.string_of_cmd cmd) in
+    let wp = Synthesis.symb_wp cmd in
+    Printf.printf "wp: %s" (Ast.string_of_test wp)
+end
+
+let wp_cmd : Command.t =
+  Command.basic_spec
+    ~summary:"Convert P4 programs into their GCL-While interpretation"
+    WeakestPrecondition.spec
+    WeakestPrecondition.run
+
+  
 let main : Command.t =
   Command.group
     ~summary:"Invokes the specified Motley Command"
     [ ("synthesize", synthesize_cmd)
-    ; ("encodep4", encode_cmd) ]
+    ; ("encodep4", encode_cmd)
+    ; ("wp", wp_cmd)]
     
 let () = Command.run main
 

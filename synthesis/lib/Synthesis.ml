@@ -217,25 +217,30 @@ and fixup (real:cmd) (model : value StringMap.t) : cmd =
   | While (cond, body) -> While (fixup_test cond model, fixup body model)
   | Select (styp,cmds) -> fixup_selects cmds model |> mkSelect styp
 
+let unroll_fully c = unroll (diameter c) c 
 
-
-let implements logical real =
-  let u_log = unroll (diameter logical) logical in
-  let u_rea = unroll (diameter real) real |> complete in
-  let fvs = List.dedup_and_sort ~compare (free_vars_of_cmd u_log @ free_vars_of_cmd u_rea) in
-  let symbolic_pkt =
-    List.fold fvs  ~init:(True, 0)
+let symbolic_pkt fvs = 
+    List.fold fvs ~init:(True, 0)
       ~f:(fun (acc_test, fv_count) var ->
           (Var var %=% Var ("$" ^ string_of_int fv_count)
            %&% acc_test
           , fv_count + 1)
         )
     |> fst
-  in
-  let log_wp  = wp u_log symbolic_pkt in
-  let real_wp = wp u_rea symbolic_pkt in
-  Printf.printf "\n==== Checking Implementation =====\n\nSYMBOLIC PACKET:\n%s\n%!\n\nLOGICAL SPEC:\n%s\n\nLOGICAL PROGRAM:\n%s\n\nREAL SPEC: \n%s\n\nREAL PROGRAM:\n%s\n\n%!"
-    (string_of_test symbolic_pkt)
+
+let symb_wp ?fvs:(fvs=[]) cmd =
+  List.dedup_and_sort ~compare (free_vars_of_cmd cmd @ fvs)
+  |> symbolic_pkt
+  |> wp cmd
+  
+let implements logical real =
+  let u_log = unroll_fully logical in
+  let u_rea = unroll_fully real |> complete in
+  (* let fvs = List.dedup_and_sort ~compare (free_vars_of_cmd u_log @ free_vars_of_cmd u_rea) in
+   * let pkt = symbolic_pkt fvs in *)
+  let log_wp  = symb_wp u_log ~fvs:(free_vars_of_cmd u_rea) in
+  let real_wp = symb_wp u_rea ~fvs:(free_vars_of_cmd u_log) in
+  Printf.printf "\n==== Checking Implementation =====\n\nSYMBOLIC PACKET:\nOOPS\n%!\n\nLOGICAL SPEC:\n%s\n\nLOGICAL PROGRAM:\n%s\n\nREAL SPEC: \n%s\n\nREAL PROGRAM:\n%s\n\n%!"
     (string_of_test log_wp)
     (string_of_cmd u_log)
     (string_of_test real_wp)
