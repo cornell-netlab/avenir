@@ -40,6 +40,7 @@
 (declare-const h7 Int)
 (declare-const h8 Int)
 (declare-const g Int)
+(display (logical_prec))
 (assert (logical_prec 102 g h1 h2 h3 h4 h5 h6 h7 h8))
 (check-sat)
 (get-model)
@@ -92,32 +93,30 @@
 	    (= (logical_prec dest gamma ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8)
 	       (real_prec dest gamma ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8)))))
 
-(push)
-(echo "Implementation OK")
-(display (forall ((?1 Int) (?2 Int) (?3 Int) (?4 Int) (?5 Int) (?6 Int) (?7 Int) (?8 Int))
-		 (implements ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8)))
-(assert (forall ((?1 Int) (?2 Int) (?3 Int) (?4 Int) (?5 Int) (?6 Int) (?7 Int) (?8 Int))
-		 (implements ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8)))
-(check-sat)
-(get-model)
-(pop)
+;; (push)
+;; (echo "Implementing")
+;; (assert (forall ((?1 Int) (?2 Int) (?3 Int) (?4 Int) (?5 Int) (?6 Int) (?7 Int) (?8 Int))
+;; 		(implements ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8)))
+;; (check-sat)
+;; (get-model)
+;; (pop)
 
 ;; Makes sure x is a valid destination
-;; (define-fun isDest ((x Int)) Bool
-;;   (or (= x 101) (= x 102) (= x 103) (= x 104)))
+(define-fun isDest ((x Int)) Bool
+  (or (= x 101) (= x 102) (= x 103) (= x 104)))
 
-;; makes sure the holes satisfy the precondition
-;; (define-fun precondition ((?1 Int) (?2 Int) (?3 Int) (?4 Int) (?5 Int) (?6 Int) (?7 Int) (?8 Int)) Bool
-;;   (and (isDest ?1) (isDest ?2) (isDest ?3) (isDest ?4) (isDest ?5) (isDest ?6) (isDest ?7) (isDest ?8)
+;;makes sure the holes satisfy the precondition
+(define-fun precondition ((?1 Int) (?2 Int) (?3 Int) (?4 Int) (?5 Int) (?6 Int) (?7 Int) (?8 Int)) Bool
+  (and (isDest ?1) (isDest ?2) (isDest ?3) (isDest ?4) (isDest ?5) (isDest ?6) (isDest ?7) (isDest ?8)))
 ;;        (distinct ?1 ?2 ?5 ?6)
 ;;        (distinct ?3 ?4 ?7 ?8)))
 ;; the condition to check
-;; (assert (forall ((?1 Int) (?2 Int) (?3 Int) (?4 Int) (?5 Int) (?6 Int) (?7 Int) (?8 Int))
-;; 		(implies
-;; 		 (precondition ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8)
-;; 		 (not (implements ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8)))))
-;; ;; (not implements)))
-;; ;; (assert (exists ((?1 Int) (?2 Int) (?3 Int) (?4 Int) (?5 Int) (?6 Int) (?7 Int) (?8 Int))
-;; ;; 		(precondition ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8)))
-;; (check-sat)
-;; (get-model)
+(assert (forall ((?1 Int) (?2 Int) (?3 Int) (?4 Int) (?5 Int) (?6 Int) (?7 Int) (?8 Int))
+		(implies
+		 (precondition ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8)
+		 (not (implements ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8)))))
+;; (not implements)))
+;; (assert (exists ((?1 Int) (?2 Int) (?3 Int) (?4 Int) (?5 Int) (?6 Int) (?7 Int) (?8 Int))
+;; 		(precondition ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8)))
+(check-sat)
+(get-model)
