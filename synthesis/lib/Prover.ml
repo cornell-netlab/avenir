@@ -105,7 +105,13 @@ let mkMotleyModel model =
     consts)
   in
   StringMap.of_alist_exn(name_vals)
-    
+
+let toZ3String test =
+  let mySolver = solver () in
+  let _ = initSolver `Sat mySolver context test in
+  Printf.sprintf "%s" (Z3.Solver.to_string mySolver)
+
+                        
 (*
  Checks SMT query. Returns either None (UNSAT) or SAT (model map) 
 *)

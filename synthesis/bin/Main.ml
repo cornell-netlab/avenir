@@ -60,13 +60,17 @@ let encode_cmd : Command.t =
 module WeakestPrecondition = struct
   let spec = Command.Spec.(
       empty
-      +> anon ("file" %: string))
+      +> anon ("file" %: string)
+      +> flag "-z3" no_arg ~doc: "z3-ready output")
 
-  let run file () =
+  let run file z3 () =
     let cmd = parse_file file |> Synthesis.unroll_fully in
     let _ = Printf.printf "PROGRAM: %s \n%!" (Ast.string_of_cmd cmd) in
     let wp = Synthesis.symb_wp cmd in
-    Printf.printf "wp: %s" (Ast.string_of_test wp)
+    if z3 then
+      Printf.printf "wp: %s" (Ast.string_of_test wp)
+    else
+      Printf.printf "%s" (Prover.toZ3String wp)
 end
 
 let wp_cmd : Command.t =
