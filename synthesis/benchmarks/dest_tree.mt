@@ -1,6 +1,6 @@
 loc := 0;
 while (~(loc = 4 || loc = 5 || loc = 6 || loc = 7 || loc = 99)) {
-  if ordered
+  if total
     loc = 0 -> loc := 1 []
     loc = 1 && d = ?_21 -> loc := 2 []
     loc = 1 && d = ?_22 -> loc := 2 []
