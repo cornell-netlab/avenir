@@ -232,7 +232,7 @@ following formula.
 ```
 ∃ f : (TableName → TableRule⁺) → (TableName → TableRule⁺).
   ∀ x₁, …, xₙ.
-    implements(L τₗ, R f(τᵣ))
+    implements(L τₗ, R f(τₗ))
 ```
 
 Note that a witness `τᵣ` to _Online Synthesis 1_ can be made into a
@@ -248,8 +248,36 @@ following formula:
 ∃ f : (TableName → TableRule⁺) → (TableName → TableRule⁺).
   ∀ τₗ : TableName → TableRule⁺.
 	∀ x₁, …, xₙ.
-      implements(L τₗ, R f(τᵣ))
+      implements(L τₗ, R f(τₗ))
 ```
 
 This will compute a fast function that can run effectively translate
 the logical tables into real tables.
+
+#### Decomposing Offline Synthesis
+
+The domain of `f` is huge, so we'd like to not have to accomodate all
+of its possibilities. Nate's observation that "every packet only hits
+one rule per table" can help us here.
+
+We conjecture that we can synthesize a smaller function as
+follows. Let `τₗ` pick out a single rule for each table in the logical
+network, and `fₛ` constructs the rules required in the concrete
+tables.
+
+```
+∃ fₛ : (TableName → TableRule) → (TableName → TableRule⁺).
+  ∀ σₗ : TableName → TableRule.
+	∀ x₁, …, xₙ.
+      implements(L σₗ, R f(σₗ))
+```
+
+From this smaller `fₛ`, we can construct our runtime `f` where `f(τₗ)`
+is defined in the following way
+
+```
+f(τₗ)(x) = {fₛ(σ) | σ ⊆ τₗ}
+```
+
+Its not immediately clear that this `f` does the right thing. It needs
+more investigation.
