@@ -21,7 +21,6 @@ c ::=
   | skip   # Action
   | f := e # Action
   | c [] c'
-  | c ▷ c'
   | c ; c  # Action
   | assert e
   | assume e
@@ -60,12 +59,15 @@ Tables(AS e) = {}
 Tables(table x _) = {x}	
 ```
 
+We can define an ordered choice operator as syntactic sugar:
+`c ▷ c' =Δ= c ▷ (assert ¬wp(c,true); c')`
+
 We define `[]C` (sim `▷C`) where `C` is a set of commands to be the
 finite nondeterministic (ordered) choice. I.e. if `C = {c₁,…, cₙ}`,
-then `[]C =Δ= c₁ [] ⋯ [] cₙ` (sim` ▷C =Δ= c₁ ▷ ⋯ ▷ cₙ`).
+then `[]C =Δ= c₁ [] ⋯ [] cₙ` (sim` ▷C =Δ= c₁ ▷ ( c₂ ▷ ( ⋯ ▷ cₙ) ⋯ )`).
 
 We can also define `if e₁ → c₁ [] ⋯ [] eₙ → cₙ fi` as syntactic sugar
-for `assert(⋁eᵢ);((assume e₁; c₁) [] ⋯ [] (assume eₙ; cₙ)`. Sometimes
+for `assert(⋁eᵢ);((assume e₁; c₁) [] ⋯ [] (assume eₙ; cₙ))`. Sometimes
 we omit the `if` and `fi` for convenience. We define a similar
 construct with `▷`.
 
@@ -89,7 +91,12 @@ the corresponding table rules, which are combined via `▷`. The set of
 triples of the form `((mᵢ | kᵢ ∈ keys(t)), j, (n₁,…,nₙ))` is written
 `TableRule`. Each `(ms,j,ns) ∈ TableRule` has a corresponding command
 (as above), we denote this command `comm (ms,j,ns)`. We can also write
-`comm S =Δ= {comm (ms,j,ns) | (ms, j, ns) ∈ S}`.
+`comm S =Δ= []{comm (ms,j,ns) | (ms, j, ns) ∈ S}`.
+
+We also mimic P4's (statically enforcable) restriction that each `x ∈
+TableName` can only occur once in each trace though the program. I.e.,
+`x.apply() [] x.apply()` is okay, but `x.apply(); x.apply` is
+disallowed.
 
 We represent the controller's installation of rules via a mapping `τ :
 TableName → (TableRule⁺)`. Since every table has a default action, the
@@ -107,7 +114,6 @@ of a substitution). We can define `P τ` inductively as follows:
 (skip)      τ = skip
 (f := e)    τ = f := e
 (c [] c')   τ = c τ [] c' τ
-(c ▷ c')    τ = c τ ▷ c' τ
 (c ; c')    τ = c τ ; c' τ
 (assert e)  τ = assert e
 (assume e)  τ = assume e
@@ -269,15 +275,182 @@ tables.
 ∃ fₛ : (TableName → TableRule) → (TableName → TableRule⁺).
   ∀ σₗ : TableName → TableRule.
 	∀ x₁, …, xₙ.
-      implements(L σₗ, R f(σₗ))
+      implements(L σₗ, R fₛ(σₗ))
 ```
 
 From this smaller `fₛ`, we can construct our runtime `f` where `f(τₗ)`
 is defined in the following way
 
 ```
-f(τₗ)(x) = {fₛ(σ) | σ ⊆ τₗ}
+f(τₗ)(x) = { fₛ(σₗ)(x) | σₗ ⊆ τₗ, σₗ complete}
 ```
 
-Its not immediately clear that this `f` does the right thing. It needs
-more investigation.
+We write `σ ⊆ τ` since converting `τ` to a relation by reversing the
+powerset construction, i.e. `{(x, y) | x ∈ dom(τ), y ∈ τ(x)}` yields
+`σ` as a subset of `τ`. Notice that `σ` does not range over all
+subsets of `τ`, since it still must be a function.
+
+
+We can say this construction is correct if
+
+```
+∀ L, R ∈ Commands.
+  ∀ fₛ : (TableName → TableRule) → (TableName → TableRule⁺).
+    (∀ σₗ : TableName → TableRule.
+       ∀ x₁, …, xₙ. implements(L σₗ, R fₛ(σₗ)))
+	⇒ (∀ τₗ : TableName → TableRule⁺.
+		∀ x₁, …, xₙ. implements(L τₗ, R f(τₗ)))
+```
+
+
+_Proof Idea_. 
+Let `L` and `R` be commands (possibly with tables). 
+Let `fₛ` be a witness for  the offline synthesis problem s.t. the
+following holds (called *assm1*).
+```
+∀ σₗ : TableName → TableRule. 
+∀ x₁, …, xₙ. 
+implements(L σₗ, R fₛ(σₗ))
+```
+
+Let `τₗ` be a complete table instantiation for `L`. 
+
+We want to show that 
+```
+∀ x₁, …, xₙ. 
+wp(L τₗ) ⇔ wp(R f(τₗ))
+```
+
+We need a slightly different semantics for programs:
+
+```
+tr(skip, τ, pkt) = (pkt, [])
+tr(f:=e, τ, pkt) = (pkt[f↦eval(e, pkt)], [])
+tr(c;c', τ, pkt) = (pkt'', trace' ++ trace '')
+	where pkt', trace' = tr(c, τ, pkt)
+	      pkt'', trace'' = tr(c', τ, pkt')
+
+tr(assert e, τ, pkt) | eval(e, pkt) == #b1 = []
+                     | eval(e, pkt) == #b0 = ⊥
+
+tr(assume e, τ, pkt) = pkt
+
+tr(t.apply(), τ, pkt) = trₜ((comm∘τ) t, pkt)
+
+trₜ(rows, pkt) = ( [(t,((mᵢ)ₖ, j, (dᵢ)ₙ))]
+	             , snd tr(actⱼ(d₁,…,dₙ),pkt))
+	where
+	∧ₖ(κᵢ = mᵢ) → actⱼ(d₁,…,dₙ) in rows 
+	and eval(∧ₖ(κᵢ = mᵢ), pkt) == #b1 
+
+```
+
+Consider an input-outpu packet pair `pkt,pkt' =
+(x₁,…,xⱼ)(x'₁,…,x'ₙ)`. Now, we can observe a trace of which tables are
+executed and which table rule hit each action in the logical program,
+namely, `σ,pkt = tr(L, τₗ, pkt)`. Notice that `σ` can also be thought
+of as a partial single table instantiation for `L`. To extend it to a
+full table instantiation, we can add additional mappings `t ↦
+t.default` for every `t` not already in `σ`. We write this completed
+`σ` as `σₗ`.
+
+Consider the largest set `{σₗ₁,…, σₗₙ}` such that `⋃ᵢ₌₁ⁿσₗᵢ = τₗ`
+and every `σₗᵢ` is complete. Now, for every `σₗᵢ` there is a formula
+`φᵢ` such that `φᵢ = wp(L φₗᵢ)`. Show that `⋁ᵢⁿ φᵢ ⇔ wp(L τₗ)`.
+```
+wp(L τₗ)
+⇔ wp (L ⋃ᵢ₌₁ⁿσₗᵢ) (defn σₗᵢs)
+⇔ wp ([ᵢ₌₁]ⁿ L σₗᵢ) (by lemma1* (below))
+⇔ ⋁ᵢ₌₁ⁿ (wp(L σₗᵢ)) (defn  wp)
+⇔ ⋁ᵢⁿ φᵢ  (defn φᵢs)
+```
+
+We have one un-discharged goal from the above proof. The application
+of lemma1 requires that `{σₗ₁,…, σₗₙ}` is closed. Notice first that
+since every `σₗᵢ` is complete they all of the same domain, which is
+`Tables(L)`.  Given `σₗᵢ` and `σₗⱼ`, and two disjoint subsets of
+`Tables(τₗ)`, `D` and `D'` s.t. `D ∪ D = Tables(τₗ)`. Let `σₗ'` be defined as follows
+```
+σₗ'(x) = σₗᵢ(x) if x ∈ D
+σₗ'(x) = σₗₖ(x) if x ∈ D'
+```
+First observe that `σₗ'` is complete for `L`. Then observe that it is
+a subset of `τₗ`, so there is some `1 ≤ k ≤ n` such that `σₗ' =
+σₗₖ`. Conclude that `{σₗ₁,…, σₗₙ}` is closed.
+
+We've just shown that `⋁ᵢⁿ φᵢ ⇔ wp(L τₗ)`.
+
+So, now we have a set `{σₗᵢ}ᵢ` of (completed) traces corresponding to
+the `φᵢ`s. We can similarly decompose each `wp(R fₛ(σₗᵢ))` to get a
+set of traces `{σᵣᵢⱼ}ⱼ` with corresponding formulae `ψᵢⱼ` such that
+`wp(R fₛ(σₗᵢ)) ⇔ ⋁ⱼψᵢⱼ`. From *assm1*, we know `∀i.φᵢ ⇔ ⋁ⱼψᵢⱼ`, which
+says that `⋁ᵢⁿ φᵢ ⇔ ⋁ᵢ⋁ⱼψᵢⱼ`. Call this *prop1*.
+
+Now, all we need to show is `⋁ᵢ⋁ⱼ ψᵢⱼ ⇔ wp(R f(τₗ))`. The RHS is, by
+definition, `wp(R {x ↦ fₛ(σₗ)(x) | complete σₗ ⊆ τₗ})`. Which is
+equicalent to `wp(R ⋃ᵢ{x ↦ fₛ(σₗᵢ)(x)})`.
+
+We need to show that `{fₛ(σₗᵢ)(x)}ᵢ₌₁ⁿ` is *closed*, so that by
+*lemma1*, we can conclude `wp(R ⋃ᵢ₌₁ⁿ fₛ(σₗᵢ)(x)) ⇔ wp([]ᵢ₌₁ⁿ R
+fₛ(σₗᵢ)(x))`.
+
+By definition, `wp([]ᵢ R fₛ(σₗᵢ)) ⇔ ⋁ᵢwp(R fₛ(σₗᵢ)) ⇔ ⋁ᵢ⋁ⱼψᵢⱼ.` And
+we're done by *prop1*.
+
+*Q.E.D.*
+
+
+
+
+
+We say that a set `T` of `P`-complete table instantiation functions is
+*closed* iff for every `{τ₁,τ₂} ⊆ T` and for every partitioning `D, D'
+⊆ Tables(P)` such that `D ∩ D' = ∅` and `D ∪ D' = Tables(P)`, there
+exists a `τ₃ ∈ T` such that `τ₃(D) = τ₁(D)` and `τ₃(D') = τ₂(D')`.
+
+
+*lemma1* 
+For a program `P`, we need to show for every *closed* set of table
+instantiation functions `{τ₁,…,τₙ}`, all of which are complete for
+`R`, that `wp(P ⋃ₙτᵢ) ⇔ wp([]ₙ P τᵢ)`.
+
+
+Proceed by induction on `R`.
+```
+[SKP] immediate since ∀ τ. skip τ = skip.
+[ASN] immediate since ∀ τ, f, e. (f := e) τ = f := e 
+
+[AST] immediate since ∀ τ, e. (assert e) τ = (assert e)
+[ASM] immediate since ∀ τ, e. (assume e) τ = (assert e)
+
+[CHC] Recall that (c [] c') τ = c τ [] c' τ. 
+      We know wp(c  ⋃ₙτᵢ) ⇔ wp([]ₙ c  τᵢ) by IH(c)
+      Further wp(c' ⋃ₙτᵢ) ⇔ wp([]ₙ c' τᵢ) by IH(c')
+      So, wp((c [] c') ⋃ₙτᵢ)
+		   ⇔ wp(c ⋃ₙτᵢ [] c' ⋃ₙτᵢ)
+		   ⇔ wp([]ₙ c τᵢ [] []ᵢ c' τᵢ)
+		   ⇔ wp([]ₙ (c τᵢ [] c' τᵢ)) by assoc&comm of []
+		   ⇔ wp([]ₙ ((c [] c') τᵢ)) by def of subst.
+
+[SEQ] Recall that (c;c') τ = (c τ; c' τ)
+      We know  wp(c  ⋃ₙτᵢ) = wp([]ₙ c  τᵢ) by IH(c)
+      Further, wp(c' ⋃ₙτᵢ) = wp([]ₙ c' τᵢ) by IH(c')
+	  So, wp((c ; c') ⋃ₙτᵢ)
+	      ⇔ wp(c ⋃ₙτᵢ ; c' ⋃ₙτᵢ)
+		  ⇔ wp(([]ₙ c τᵢ) ; ([]ₙ c' τᵢ))
+		  ⇔ wp([]ₙ (c τᵢ;[]ₙ c' τᵢ))
+		  ⇔ wp([ᵢ]ⁿ (c τᵢ;[ⱼ]ⁿ c' τⱼ))
+		  ⇔ wp([ᵢ]ⁿ[ⱼ]ⁿ(c τᵢ; c' τⱼ))
+		  ⇔ ⋁ᵢⁿ⋁ⱼⁿ wp(c τᵢ; c' τⱼ))
+		  ⇔ ⋁ᵢⁿ⋁ⱼⁿ wp(c τᵢ; c' τⱼ)
+			  Since {τ₁,…,τₙ} is sequence closed, for every i, j, 
+			  there exists a 1 ≤ k ≤ n such that τₖ(Tables(c)) =
+			  τᵢ(Tables(c)) and τₖ(Tables(c')) = τⱼ(Tables(c')),so
+		  ⇔ ⋁ₖⁿwp(c τₖ; c' τₖ)
+		  ⇔ wp([ᵢ]ⁿ(c τᵢ; c' τᵢ)
+		  
+[TBL] Recall (x.apply()) τ = []{comm c | c ∈ τ(x)}
+	 So, wp(x.apply() ⋃ₙτᵢ) 
+		 = wp([ᵢ]ⁿ []{comm c | c ∈ τᵢ(x)})  by def, set theory
+		 = wp([ᵢ]ⁿ x.apply() τᵢ)
+```
