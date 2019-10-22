@@ -12,19 +12,19 @@ indicates the application of a table `t` defined as in P4.
 
 ```
 Var = Fields ∪ Holes
-f ∈ Var
+v ∈ Var
 n ∈ BitVec
-x ∈ TableName
+t ∈ TableName
 
 # Commands
 c ::=
   | skip   # Action
-  | f := e # Action
-  | c [] c'
+  | v := e # Action
+  | c [] c
   | c ; c  # Action
   | assert e
   | assume e
-  | x.apply()
+  | t.apply()
 
 # BitVec Expressions
 e ::= 
@@ -34,29 +34,29 @@ e ::=
   | f
   
 # Table Schemas
-t ::= table x (κ*, a⁺, a₀(n₁,…, nₙ))
+tbl ::= table t (κ*, a⁺, a₀(n₁,…, nₙ))
 
 # Keys
 κ ∈ Field List
 
 # Actions
-a ::= λx₁,…,xₙ. c
+a ::= λt₁,…,tₙ. c
 
 
 # Accessors
-name(table x _) = x
+name(table t _) = t
 keys(table _ (κ*, _, _)) = κ*
 acts(table _ (_, a⁺, _)) = a⁺
 defa(table _ (_, _, a₀(n₁,…, nₙ))) = a₀(n₁,…,nₙ)
 
 # Table Accumulator
 Tables(skip) = {}
-Tables(f:=v) = {}
+Tables(v:=e) = {}
 Tables(c ⊕ c') = Tables(c) ∪ Tables(c')
 	⊕ ∈ {[], ▷, ;}
 Tables(AS e) = {}
 	AS ∈ {assert, assume}
-Tables(table x _) = {x}	
+Tables(table t _) = {t}	
 ```
 
 We can define an ordered choice operator as syntactic sugar:
@@ -112,12 +112,12 @@ of a substitution). We can define `P τ` inductively as follows:
 
 ```
 (skip)      τ = skip
-(f := e)    τ = f := e
+(v := e)    τ = f := e
 (c [] c')   τ = c τ [] c' τ
 (c ; c')    τ = c τ ; c' τ
 (assert e)  τ = assert e
 (assume e)  τ = assume e
-(x.apply()) τ = ▷ comm τ(x)
+(t.apply()) τ = ▷ comm τ(t)
 ```
 
 We define our verification & synthesis problems in terms of this
@@ -140,7 +140,7 @@ tableless (assert e) = true
 tableless (assume e) = true
 tableless (c ⊕ c') for ⊕ ∈ {[], ▷, ;}
 	= tableless c ∧ tableless c'
-tableless (x.apply()) = false
+tableless (t.apply()) = false
 ```
 
 ### Implementation Predicate
@@ -221,7 +221,7 @@ following is SAT.
 
 ```
 ∃ τᵣ : (TableName → TableRule).
-  ∀ x₁, …, xₙ.
+  ∀ v₁, …, vₙ.
     implements(L τₗ, R τᵣ)
 ```
 
@@ -346,7 +346,7 @@ trₜ(rows, pkt) = ( [(t,((mᵢ)ₖ, j, (dᵢ)ₙ))]
 ```
 
 Consider an input-outpu packet pair `pkt,pkt' =
-(x₁,…,xⱼ)(x'₁,…,x'ₙ)`. Now, we can observe a trace of which tables are
+(v₁,…,vⱼ)(v'₁,…,v'ₙ)`. Now, we can observe a trace of which tables are
 executed and which table rule hit each action in the logical program,
 namely, `σ,pkt = tr(L, τₗ, pkt)`. Notice that `σ` can also be thought
 of as a partial single table instantiation for `L`. To extend it to a
@@ -369,13 +369,15 @@ We have one un-discharged goal from the above proof. The application
 of lemma1 requires that `{σₗ₁,…, σₗₙ}` is closed. Notice first that
 since every `σₗᵢ` is complete they all of the same domain, which is
 `Tables(L)`.  Given `σₗᵢ` and `σₗⱼ`, and two disjoint subsets of
-`Tables(τₗ)`, `D` and `D'` s.t. `D ∪ D = Tables(τₗ)`. Let `σₗ'` be defined as follows
-```
-σₗ'(x) = σₗᵢ(x) if x ∈ D
-σₗ'(x) = σₗₖ(x) if x ∈ D'
-```
-First observe that `σₗ'` is complete for `L`. Then observe that it is
-a subset of `τₗ`, so there is some `1 ≤ k ≤ n` such that `σₗ' =
+`Tables(L)`, `D` and `D'` s.t. `D ∪ D = Tables(τₗ)`. Let `σₗ'` be
+defined as follows 
+
+``` 
+σₗ'(x) = σₗᵢ(x) if x ∈ D σₗ'(x) = σₗₖ(x) if x ∈ D' 
+``` 
+
+First, observe that `σₗ'` is complete for `L`. Then, observe that it
+is a subset of `τₗ`, so there is some `1 ≤ k ≤ n` such that `σₗ' =
 σₗₖ`. Conclude that `{σₗ₁,…, σₗₙ}` is closed.
 
 We've just shown that `⋁ᵢⁿ φᵢ ⇔ wp(L τₗ)`.
