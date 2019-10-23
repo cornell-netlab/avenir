@@ -1,0 +1,103 @@
+\section{System}
+
+
+\begin{figure}[ht]
+  \[\begin{array}{l c l l}
+      \multicolumn{4}{l}{\textit{Commands}}\\
+      c & ::=& \\
+        & \mid & x := e & \textsc{Assignment}\\
+        & \mid & c;c & \textsc{Sequence} \\
+        & \mid & c \angel c & \textsc{Angelic Choice}\\
+        & \mid & \assert b & \textsc{Assertions} \\
+        & \mid & \assume b & \textsc{Assumptions} \\
+        & \mid & \apply t & \textsc{Table Application}\\
+      \multicolumn{4}{l}{\textit{Expressions}} \\
+      e & ::= & \\
+        & \mid & v            & \textsc{BitVector} \\
+        & \mid & x            & \textsc{Field} \\
+        & \mid & \hole h       & \textsc{Hole} \\
+        & \mid & e,e          & \textsc{Concatenation} \\
+        & \mid & e \oplus e   & \textsc{Operation} \\
+        & &  \multicolumn{2}{l}{\textit{where}\;\; \oplus \in \{+,0,\times, \div\}} \\
+      \multicolumn{4}{l}{\textit{Booleans}}\\
+      b & ::= & \\
+        & \mid & \TRUE & \textsc{Truth} \\
+        & \mid & \FALSE & \textsc{Falsity} \\
+        & \mid & b \wedge b & \textsc{Conjunction} \\
+        & \mid & b \vee b & \textsc{Disjunction} \\
+        & \mid & \neg b & \textsc{Negation} \\
+        & \mid & e = e & \textsc{Equality} \\
+        & \mid & e \in M & \textsc{Membership} \\
+      \multicolumn{2}{l}{Holes} & \multicolumn{2}{l}{\;\textit{Table Schemas}}  \\
+      \multicolumn{2}{l}{\hole h \in \mathsf{Hole}} & \multicolumn{2}{l}{\;t \;\; ::= \;\;(\vec x, \vec c, c_d)} \\
+      \multicolumn{2}{l}{\textit{Values}} & \multicolumn{1}{l}{\textit{Fields}} & \multicolumn{1}{l}{\textit{Matches}}\\
+      \multicolumn{2}{l}{v \in \mathbbm{2}^+} & \multicolumn{1}{l}{x \in \mathsf{Var}} & \multicolumn{1}{l}{M \in \mathsf{Hole} \cup \mathsf{Var}}
+    \end{array}\]
+
+  \caption{Syntax of GCL}
+  \label{fig:syntaxgcl}
+  
+\end{figure}
+
+
+\begin{figure}[ht]
+  \[\begin{array}{l >{\triangleq}c l}
+      \multicolumn 3 l {\textit{Tables}} \\
+      \multicolumn 3 l {t::= (\vec x, \vec c, c_d)}\\
+      \multicolumn 3 l {\textit{Accessors}}\\
+      \keys t && \vec x\\
+      \actions t && \vec c \\
+      \default t && c_d
+    \end{array}\]
+
+  \caption{Tables}
+  \label{fig:tables}
+\end{figure}
+
+\begin{figure}[ht]
+  \[\begin{array}{l >{\triangleq}c l}
+      \wp(x:=e, \phi) && \phi[x \mapsto e]\\
+      \wp(c;c', \phi) && \wp(c, \wp(c', \phi)) \\
+      \wp(c\angel c', \phi) && \wp(c, \phi) \wedge \wp(c',\phi) \\
+      \wp(\assert b, \phi) && b \wedge \phi \\
+      \wp(\assume b, \phi) && b \Rightarrow \phi \\
+      \wp(\apply t, \phi) && \wp(\parenbb t, \phi) \\
+    \end{array}\]
+  \caption{Weakest Preconditions}
+  \label{fig:wp}
+\end{figure}
+
+% \begin{figure}[ht]
+%   \[
+%     \begin{array}{l c l}
+%       \parenbb{(\overrightarrow{(\vec e, c)}, c_d)}
+%       &\triangleq& \assume {\left(\neg\bigvee_{c_i}\bigwedge_{e_{xi}} x = e_{xi}\right)};c_d  \\ 
+%       && \angel \Angel_{c_i} \assume{\bigwedge_{e_{xi}} x = e_{xi}}; c_i
+%     \end{array}
+%   \]
+  
+%   \caption{Table Encoding in GCL}
+%   \label{fig:tablesGCL}
+% \end{figure}
+
+\begin{figure}[ht]
+  \[\begin{array}{r c l l}
+      \multicolumn{4}{l}{\textit{Configurations}} \\
+      g & ::= & \langle\rangle \\
+        & \mid & (e,i)::g & i \in \mathbb N \\\\
+      \multicolumn{4}{l}{\textit{Table Encoding}} \\
+      \parenbb{t\; g}
+        & \triangleq
+        & \Angel_{} 
+                                   
+      
+                            
+    \end{array}\]
+
+  \caption{Configurations}
+  \label{fig:configs}n
+  
+\end{figure}
+
+A configuration $g$ is $i$-well-formed if it is empty and $i = 0$, or if
+$g = (e,i)::g'$, and $g'$ is $i-1$-well-formed. A configuration $g$ is well-formed if it is $|g|$-well-formed.
