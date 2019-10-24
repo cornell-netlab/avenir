@@ -18,7 +18,7 @@
         & \mid & \hole h       & \textsc{Hole} \\
         & \mid & e,e          & \textsc{Concatenation} \\
         & \mid & e \oplus e   & \textsc{Operation} \\
-        & &  \multicolumn{2}{l}{\textit{where}\;\; \oplus \in \{+,0,\times, \div\}} \\
+        & &  \multicolumn{2}{l}{\textit{where}\;\; \oplus \in \{+,-,\times, \div\}} \\
       \multicolumn{4}{l}{\textit{Booleans}}\\
       b & ::= & \\
         & \mid & \TRUE & \textsc{Truth} \\
@@ -28,26 +28,27 @@
         & \mid & \neg b & \textsc{Negation} \\
         & \mid & e = e & \textsc{Equality} \\
         & \mid & e \in M & \textsc{Membership} \\
-      \multicolumn{2}{l}{Holes} & \multicolumn{2}{l}{\;\textit{Table Schemas}}  \\
-      \multicolumn{2}{l}{\hole h \in \mathsf{Hole}} & \multicolumn{2}{l}{\;t \;\; ::= \;\;(\vec x, \vec c, c_d)} \\
-      \multicolumn{2}{l}{\textit{Values}} & \multicolumn{1}{l}{\textit{Fields}} & \multicolumn{1}{l}{\textit{Matches}}\\
-      \multicolumn{2}{l}{v \in \mathbbm{2}^+} & \multicolumn{1}{l}{x \in \mathsf{Var}} & \multicolumn{1}{l}{M \in \mathsf{Hole} \cup \mathsf{Var}}
+      & \multicolumn{2}{l}{Holes} &\multicolumn{1}{l}{\textit{Matches}} \\
+      & \multicolumn{2}{l}{\hole h \in \mathsf{Hole}} & \multicolumn{1}{l}{M \in \mathsf{Hole} \cup \mathsf{Var}}\\
+      & \multicolumn{2}{l}{\textit{Values}} &  \multicolumn{1}{l}{\textit{Fields}} \\
+      & \multicolumn{2}{l}{v \in \mathbbm{2}^+} & \multicolumn{1}{l}{x \in \mathsf{Var}}
     \end{array}\]
 
-  \caption{Syntax of GCL}
+  \caption{Syntax of GCL+Tables}
   \label{fig:syntaxgcl}
   
 \end{figure}
 
 
 \begin{figure}[ht]
-  \[\begin{array}{l >{\triangleq}c l}
-      \multicolumn 3 l {\textit{Tables}} \\
-      \multicolumn 3 l {t::= (\vec x, \vec c, c_d)}\\
-      \multicolumn 3 l {\textit{Accessors}}\\
-      \keys t && \vec x\\
-      \actions t && \vec c \\
-      \default t && c_d
+  \[\begin{array}{l >{\triangleq}c l l >{\triangleq}c l}
+      \multicolumn 3 l {\textit{Tables}}  & \multicolumn 3 l {\textit{Names}}\\
+      \multicolumn 3 l {t::= (s,\vec e, \vec c, c_d)} & \multicolumn 3 l {s \in \Name}\\
+      \multicolumn 6 c {\textit{Accessors}}\\
+      \keys t && \vec x &  \default t && c_d \\
+      \actions t && \vec c & \name t && s \\\\
+ \\
+      
     \end{array}\]
 
   \caption{Tables}
@@ -81,23 +82,268 @@
 % \end{figure}
 
 \begin{figure}[ht]
-  \[\begin{array}{r c l l}
-      \multicolumn{4}{l}{\textit{Configurations}} \\
+  \[\begin{array}{r c l}
+      \multicolumn{3}{l}{\textit{Configurations}} \\
       g & ::= & \langle\rangle \\
-        & \mid & (e,i)::g & i \in \mathbb N \\\\
-      \multicolumn{4}{l}{\textit{Table Encoding}} \\
-      \parenbb{t\; g}
-        & \triangleq
-        & \Angel_{} 
-                                   
-      
-                            
+        & \mid & (e,i)::g \quad i \in \mathbb N \\
+      g & \in & \mathsf{Config}\\
+      \multicolumn 3 l {\textit{Table Instantiation} \qquad \tau : \Name \rightharpoonup \mathsf{Config}}\\
+      \parenbb{c\; \tau} &\multicolumn 2 l {\in \mathsf{Cmd}} \\
+      \parenbb{(x:= e)\; \tau} &\triangleq& x := e \\
+      \parenbb{(c;c')\; \tau} &\triangleq& \parenbb{c\; \tau};\parenbb{c\; \tau} \\
+      \parenbb{(c\angel c')\; \tau} &\triangleq& \parenbb{c\; \tau} \angel \parenbb{c'\; \tau}\\
+      \parenbb{(\assert b)\; \tau} &\triangleq& \assert b \\
+      \parenbb{(\assume b)\; \tau} &\triangleq& \assume b \\
+      \parenbb{\apply t\; \tau} &\triangleq& \parenbb{t\; \tau(t)}
     \end{array}\]
 
-  \caption{Configurations}
-  \label{fig:configs}n
+  \caption{Configurations and Table Instantiations}
+  \label{fig:configs}
+
+  
   
 \end{figure}
 
-A configuration $g$ is $i$-well-formed if it is empty and $i = 0$, or if
-$g = (e,i)::g'$, and $g'$ is $i-1$-well-formed. A configuration $g$ is well-formed if it is $|g|$-well-formed.
+
+\todo[inline]{describe language~\ref{fig:syntaxGCL} and wp~\ref{fig:wp}}
+
+As shown in Figure~\ref{fig:tables}, a table is a triple
+$(s, \vec e, \vec c, c_d)$, where $s$ is the name of the table, the variables
+$e_1,\ldots,e_n$ represent the table keys, the commands $c_1,\ldots, c_m$
+represent table actions, and $c_d$ represents the default action, note that
+$c_d$ need not be equal to any of the other actions. Also notice that we have
+omitted any consideration of action data for the time being. This is because
+from a theoretical sense, we can remove action data by creating a new action for
+each possible parameter. In practice this is infeasible (an action with a single
+48 bit argument would elaborate to $2^{48}$ actions), we'll discuss our
+optimizations in a later section.
+
+A table $t$ cannot be executed it must have a configuration (even if that
+configuration is the empty config). A configuration is a list of pairs
+$(\vec e,i)$, which represents the match conditions for action $i$. The empty
+configuration specifies that the default action should be executed. A
+configuration $g$ is well-formed for a table $t$ if for every element
+$(\vec e, i)$ of $g$, $|\vec e| = |\keys t|$, and $i \leq |\actions t|$, and
+every $\vec e$ is a literal, i.e. no fields and no holes.
+
+Now we can use the table configurations to convert a table into a core GCL
+program, as depicted in Figure~\ref{fig:configs}. Essentially, we angelically
+choose between each of the actions $c_i$. However, there are many situations in
+which $c_i$ is executed, so we collect a \emph{match-set} $M_i$ of the $\vec e$s
+in config $g$ that trigger $c_i$. Precisely, for a configuration $g$, we define
+$M_i \triangleq \{ e | (e,j) \in g, i = j\}$. Then we check to see whether the
+current keys, indicated by $\keys t$, are in each set $M_i$, and when we find a
+match, we execute $c_i$. If we find no match, we have a final catch-all case,
+that executes $c_d$. A table-configuration pair is encoded as follows:
+
+\[ \begin{array}{lcl}
+     \parenbb{t\; g}
+     & \triangleq
+     & \assume{\forall i\neq j, \mathsf{disjoint}(M_i,M_j)}; \\
+     &&\left( \displaystyle \Angel_{c_i \in \actions t}
+        \assume{\left(\keys t \in M_i\right)}; c_i\right)\\
+     && \displaystyle \angel \assert{\left(\bigwedge_{c_i \in \actions t} \keys t \not\in M_i\right)}; c_d
+   \end{array}
+\]
+
+Notice the initial assume condition, which says that for distinct actions $c_i$
+and $c_j$, the corresponding match conditions $M_i$ and $M_j$ are disjiont. This
+ensures that the tables are deterministic, i.e. only one branch of the angelic
+execution will fire.
+
+We can lift configurations to \emph{table instantiations}
+$\tau : \Name \to \Config$, which are simply functions that map each table to a
+configuration. We say that a table instantiation $\tau$ is $c$-complete if
+$\tau$ is defined on $\name t$ for every table $t$ mentioned in the program
+$c$. Then, for a program $c$ and a $c$-complete $\tau$, we write
+$\parenbb{c\; \tau}$ for the command with all table applications compiled away.
+
+We want to show that our encoding is correct, so we introduce a semantics for
+commands $c$ and for $c,\tau$ pairs, and show that
+$\bracbb{\parenbb{c\; \tau}} = \bracbb{c\; \tau}$. The semantics for full
+programs are given in Figure~\ref{fig:semantics}, but the work is done on
+single-tables and single configurations. Figure~\ref{fig:tablesemantics} defines
+$\bracbb{t\; g} : \Pkt \to \Pkt$ for a table $t$ and configuration $g$.
+
+\begin{figure}[ht]
+  \[\begin{array}{lcl}
+      \bracbb{\apply t\; \langle\rangle}\; \pkt
+      &\triangleq& \bracbb{\default t\; \emptyset}\; \pkt \\
+      \bracbb{\apply t\; (\vec e, i)::g}\; \pkt
+      &\triangleq& \begin{cases}
+        c_i & \displaystyle \bigwedge_{e_j} \bracbb{k_j}\; \pkt = \bracbb{e_j}\; \pkt \\
+        \bracbb{t\; g}\; \pkt & \mathit{otherwise}
+      \end{cases}\\
+      && \mathit{where}\; t = (s, \vec k, \vec c, c_d)
+    \end{array}\]
+  \caption{Semantics for a Single Table}
+  \label{fig:tablesemantics}
+\end{figure}
+
+
+\begin{figure}[ht]
+  \[\begin{array}{lcl}
+      \multicolumn 3 l {\bracbb{c\; \tau} : \Pkt \to 2^\Pkt_\bot} \\
+      \bracbb{(x:=e)\; \tau}\; \pkt & \triangleq & (1,\pkt[x \mapsto e]) \\
+      \bracbb{(c;c')\; \tau}\; \pkt & \triangleq & \bracbb{c'\; \tau}^\dag(\bracbb{c\; \tau}\; pkt) \\
+      \bracbb{(c\angel c')\; \tau}\; pkt &\triangleq& \bracbb{c\; \tau} \cup \bracbb{c'\; \tau} \\
+      \bracbb{(\assert b)\; \tau}\; \pkt &\triangleq& \begin{cases}
+        \{pkt\}   & \bracbb{b}\; \pkt = \TRUE \\
+        \emptyset & \mathit{otherwise}
+      \end{cases} \\
+      \bracbb{(\assume b)\; \tau}\; \pkt &\triangleq& \begin{cases}
+        \{pkt\} & \bracbb{b}\; pkt = \TRUE \\
+        \bot    & \mathit{otherwise}
+      \end{cases} \\
+      \bracbb{(\apply t)\; \tau}\; \pkt &\triangleq& \bracbb{\apply t\; \tau(t)}
+    \end{array}\]
+  
+  \caption{Semantics}
+  \label{fig:semantics}
+
+\end{figure}
+
+Now we can show that our table encoding is sensible:
+
+\begin{proposition}
+  For a program $c$ and a $c$-complete table instantiation function $\tau$,
+  $\forall \pkt. \bracbb{c\; \tau};\pkt = \bracbb{\parenbb{c\; \tau}\; \tau}\; \pkt$.
+\end{proposition}
+
+\begin{proof}
+\todo[inline]{Do the Proof, should be straightforward induction.}
+\end{proof}
+
+
+\subsection{Verification and Synthesis Straw Men}
+
+We can use this calculus to construct some verification and synthesis
+problems. Broadly we want to take a logical program $c_l$ and a concrete program
+$c_r$, relate their respective table instantiations $\tau_l$, and $\tau_r$,
+where $\tau_i$ is $c_i$-complete.  We generate our verification conditions using
+Dijkstra's weakest precondition semantics, included for completeness in
+Figure~\ref{fig:wp}.
+
+The simplest problem is the verification problem \textsc{Verif} where we are
+given the table instantiations $\tau_l$ and $\tau_r$, and we want to verify that
+$c_l\; \tau_l$ is equivalent to $c_r\; \tau_r$. Since everything is concrete, we
+can encode this as a simple \textsc{sat} problem. If the following problem
+returns \texttt{unsat}, we conclude $c_l\; \tau_l$ and $c_r\; \tau_l$ are
+equivalent.
+\[\begin{array}{lcl}
+    \text{Given } c_l\; \tau_l, c_r\; tau_r \\
+    \exists \fvs(c_l), \fvs(c_r). \\
+    \qquad \neg(wp(c_l\; \tau_l) \iff wp(c_r\; \tau_r))
+  \end{array}
+\]
+
+One step up, we have the \textsc{OnlineSynth} problem, where only the logical
+table instantiation is given, and we must produce a $\tau_r$ satisfying the
+\textsc{Verif} condition. If we get \texttt{sat} and a model for $\tau_r$ from
+Z3 we conclude success.
+\[\begin{array}{lcl}
+    \text{Given } c_l\; \tau_l,c_r
+    \exists \tau_r.\\
+    \forall \fvs(c_l), \fvs(c_r). \\
+    \qquad wp(c_l\; \tau_l) \iff wp(c_r\; \tau_r)
+  \end{array}
+\]
+
+In a real network, this means that every time the
+controller changes the logical forwarding state, we must resynthesize the
+concrete forwarding state. However, network engineers care very deeply about the
+predictability of their networks, and inserting a heuristic shim in the middle
+of the network would make it very hard to exert the kind of control that network
+engineers rely on.
+
+To ameliorate this problem, we consider the \textsc{OfflineSynth} problem, which
+synthesizes a function $f$ from an arbitary logical instantiations $\tau_l$ to a
+concrete table instantiation that will implement the same functionality as
+$\tau_l$. The offline synthesis succeeds the following formula is \texttt{sat}
+and the witness for $f$ is the solution.
+\[\begin{array}{l}
+    \text{Given } c_l,c_r\\
+    \exists f. \forall \tau_l. \forall \fvs(c_l), \fvs(c_r). \\
+    \qquad wp(c_l\; \tau_l) \iff wp(c_r\; f(\tau_l))
+  \end{array}\]
+However this function $f$ is really quite large, and for even trivial
+examples causes Z3 to return \texttt{unknown}. So, we need to find a way of
+partitioning the \textsc{OfflineSynth} problem into more tractable
+components.
+
+\subsection{Edit-Based Synthesis}
+
+Instead of trying to synthesize an arbitrary function from table instantiations
+to table instantiations, we reframe the problem to examining only the table
+edits, and call it \textsc{EditSynth}. The idea is: given two equivalent
+programs, for every edit to a logical table, can we synthesize an equivalent set
+of edits to the concrete tables. This means we synthesize (offline!) two
+different functions for each table, one for additions and one for
+deletions. This works so long as we have a notion of transactions.
+
+\todo[inline]{The following functions and objects need types!}
+
+Formally an edit $\rho$ is a tuple $(\oplus,t,\vec e,i)$, where
+$\oplus \in \{+,-\}$ in the configuration that will be added $(+)$ or deleted
+$(-)$. Then given an table instantiation function $\tau$, we write
+$\tau \otimes \rho$ to update $\tau$ with $\rho$. Precisely,
+$\tau \otimes (+,t,\vec e, i) = \tau[t \mapsto (e,i)::\tau(t)$, and
+$\tau \otimes (-, t, \vec e, i) = \tau[t \mapsto \tau(t) \setminus (e,i)]$ where
+$l \setminus (e,i)$ removes all occurences $(e,i)$ from the list $l$.
+
+
+A solution for \textsc{EditSynth} is a witness $f$ for every table $t$ such that
+the following formula is satisfied:
+\[\begin{array}{l}
+    \text{Given } c_l,c_r, \exists \rho. \\
+    \forall \tau_l,\tau_r,\rho. \forall \fvs(c_l), \fvs(c_r). \\
+    \qquad \wp(c_l\; \tau_l) \iff wp(c_r\; \tau_l) \\
+    \qquad \Rightarrow \wp(c_l\; (\tau_l \otimes \rho)) \iff \wp(c_r\; \tau_r \otimes (f(\rho)))
+  \end{array}\]
+
+In practice, we will can even produce problems \textsc{EditSynth}$(\oplus,t)$
+where the $\rho$ is restricted so that its first two elements are $\oplus$ and
+$t$. For now we have only figured out how to address a simpler version of the
+problem:
+
+A solution for \textsc{EditSynth'} is a series of actions $\vec{\rho'}$ for every table $t$ such that
+the following formula is satisfied:
+\[\begin{array}{l}
+    \text{Given } c_l,c_r, \\
+    \forall \rho. \tau_r.\exists n.\exists \hole\rho_1,\ldots,\rho_n. \\ 
+    \quad \forall \tau_l, \forall \fvs(c_l), \fvs(c_r). \\
+    \qquad \wp(c_l\; \tau_l) \iff wp(c_r\; \tau_l) \\
+    \qquad \Rightarrow \wp(c_l\; (\tau_l \otimes \rho)) \iff \wp(c_r\; \tau_r
+    \otimes \hole\rho_1 \otimes \cdots \otimes \hole\rho_n )
+  \end{array}\]
+
+In practice, we will can even produce problems \textsc{EditSynth}$(\oplus,t)$
+where the universal $\rho$ is restricted so that its first two elements are
+$\oplus$ and $t$.
+
+
+
+\subsection{Defunctionalizing the Problem}
+
+Solvers don't like such high-order logic problems, so we'll describe how to
+convert these problems nearly into MSO.
+
+For every problem, we instrument the same concrete program in the same way, but
+we will instrument the logical program differently depending on the modification
+we are making to it.
+
+\paragraph{Concrete Program \textsc{EditSynth}$(\oplus, t)$}
+
+For every table $t$, insert a set $\hole{\mathit{Del}_t}$, which indicates the
+set of rows to be deleted, and further insert a new match set $\hole{M_{t,i}}$
+for every action $c_i \in \actions t$. These will be existentially quantified in
+the place of $\vec{\hole{\rho}}$.
+
+
+
+
+\paragraph{Logical Program for \textsc{EditSynth}$(+,t)$}
+
+
+\paragraph{Logical Program for \textsc{EditSynth}$(-,t)$}
+
