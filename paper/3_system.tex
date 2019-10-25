@@ -62,32 +62,22 @@
       \wp(c\angel c', \phi) && \wp(c, \phi) \wedge \wp(c',\phi) \\
       \wp(\assert b, \phi) && b \wedge \phi \\
       \wp(\assume b, \phi) && b \Rightarrow \phi \\
-      \wp(\apply t, \phi) && \wp(\parenbb t, \phi) \\
+      \wp(\apply t, \phi) && \wp(\parenbb t, \phi) \\\\
+      
+      \wp(c) && \wp(c,\displaystyle \bigwedge_{\substack{v \in \fvs(c) \\ \mathsf{fresh} v'}}
+      v = v')
     \end{array}\]
   \caption{Weakest Preconditions}
   \label{fig:wp}
 \end{figure}
 
-% \begin{figure}[ht]
-%   \[
-%     \begin{array}{l c l}
-%       \parenbb{(\overrightarrow{(\vec e, c)}, c_d)}
-%       &\triangleq& \assume {\left(\neg\bigvee_{c_i}\bigwedge_{e_{xi}} x = e_{xi}\right)};c_d  \\ 
-%       && \angel \Angel_{c_i} \assume{\bigwedge_{e_{xi}} x = e_{xi}}; c_i
-%     \end{array}
-%   \]
-  
-%   \caption{Table Encoding in GCL}
-%   \label{fig:tablesGCL}
-% \end{figure}
-
 \begin{figure}[ht]
-  \[\begin{array}{r c l}
-      \multicolumn{3}{l}{\textit{Configurations}} \\
-      g & ::= & \langle\rangle \\
+  \[\begin{array}{l c l}
+      \multicolumn{3}{c}{\textit{Configurations}} \\
+      \multicolumn 1 r g & ::= & \langle\rangle \\
         & \mid & (e,i)::g \quad i \in \mathbb N \\
-      g & \in & \mathsf{Config}\\
-      \multicolumn 3 l {\textit{Table Instantiation} \qquad \tau : \Name \rightharpoonup \mathsf{Config}}\\
+      \multicolumn 1 r g & \in & \mathsf{Config}\\
+      \multicolumn 3 l {\textit{Table Instantiations} \qquad \tau : \Name \rightharpoonup \mathsf{Config}}\\
       \parenbb{c\; \tau} &\multicolumn 2 l {\in \mathsf{Cmd}} \\
       \parenbb{(x:= e)\; \tau} &\triangleq& x := e \\
       \parenbb{(c;c')\; \tau} &\triangleq& \parenbb{c\; \tau};\parenbb{c\; \tau} \\
@@ -198,7 +188,7 @@ $\bracbb{t\; g} : \Pkt \to \Pkt$ for a table $t$ and configuration $g$.
       \bracbb{(\apply t)\; \tau}\; \pkt &\triangleq& \bracbb{\apply t\; \tau(t)}
     \end{array}\]
   
-  \caption{Semantics}
+  \caption{Semantics????????}
   \label{fig:semantics}
 
 \end{figure}
@@ -231,7 +221,7 @@ can encode this as a simple \textsc{sat} problem. If the following problem
 returns \texttt{unsat}, we conclude $c_l\; \tau_l$ and $c_r\; \tau_l$ are
 equivalent.
 \[\begin{array}{lcl}
-    \text{Given } c_l\; \tau_l, c_r\; tau_r \\
+    \text{Given }( c_l\; \tau_l), (c_r\; \tau_r) \\
     \exists \fvs(c_l), \fvs(c_r). \\
     \qquad \neg(wp(c_l\; \tau_l) \iff wp(c_r\; \tau_r))
   \end{array}
@@ -283,10 +273,10 @@ deletions. This works so long as we have a notion of transactions.
 
 \todo[inline]{The following functions and objects need types!}
 
-Formally an edit $\rho$ is a tuple $(\oplus,t,\vec e,i)$, where
-$\oplus \in \{+,-\}$ in the configuration that will be added $(+)$ or deleted
-$(-)$. Then given an table instantiation function $\tau$, we write
-$\tau \otimes \rho$ to update $\tau$ with $\rho$. Precisely,
+Formally an edit $\rho$ is a tuple $(\oplus,s,\vec e,i)$, where
+$\oplus \in \{+,-\}$, $s$ is the name of the table being edited, and
+$(\vec e, i)$ is thr row to add. Then given an table instantiation function
+$\tau$, we write $\tau \otimes \rho$ to update $\tau$ with $\rho$. Precisely,
 $\tau \otimes (+,t,\vec e, i) = \tau[t \mapsto (e,i)::\tau(t)$, and
 $\tau \otimes (-, t, \vec e, i) = \tau[t \mapsto \tau(t) \setminus (e,i)]$ where
 $l \setminus (e,i)$ removes all occurences $(e,i)$ from the list $l$.
@@ -301,25 +291,23 @@ the following formula is satisfied:
     \qquad \Rightarrow \wp(c_l\; (\tau_l \otimes \rho)) \iff \wp(c_r\; \tau_r \otimes (f(\rho)))
   \end{array}\]
 
-In practice, we will can even produce problems \textsc{EditSynth}$(\oplus,t)$
-where the $\rho$ is restricted so that its first two elements are $\oplus$ and
-$t$. For now we have only figured out how to address a simpler version of the
+For now we have only figured out how to address a simpler version of the
 problem:
 
 A solution for \textsc{EditSynth'} is a series of actions $\vec{\rho'}$ for every table $t$ such that
-the following formula is satisfied:
+the following formula is valid:
 \[\begin{array}{l}
     \text{Given } c_l,c_r, \\
-    \forall \rho. \tau_r.\exists n.\exists \hole\rho_1,\ldots,\rho_n. \\ 
-    \quad \forall \tau_l, \forall \fvs(c_l), \fvs(c_r). \\
+    \forall \rho, \tau_r, \tau_l.\, \exists n.\, \exists \hole\rho_1,\ldots,\hole\rho_n. \\ 
+    \quad \forall \fvs(c_l), \fvs(c_r). \\
     \qquad \wp(c_l\; \tau_l) \iff wp(c_r\; \tau_l) \\
     \qquad \Rightarrow \wp(c_l\; (\tau_l \otimes \rho)) \iff \wp(c_r\; \tau_r
     \otimes \hole\rho_1 \otimes \cdots \otimes \hole\rho_n )
   \end{array}\]
 
-In practice, we will can even produce problems \textsc{EditSynth}$(\oplus,t)$
+In practice, we will can even produce problems \textsc{EditSynth}$(\oplus,s)$
 where the universal $\rho$ is restricted so that its first two elements are
-$\oplus$ and $t$.
+$\oplus$ and $s$.
 
 
 
@@ -339,11 +327,108 @@ set of rows to be deleted, and further insert a new match set $\hole{M_{t,i}}$
 for every action $c_i \in \actions t$. These will be existentially quantified in
 the place of $\vec{\hole{\rho}}$.
 
+Concretely, we can define a new translation $\hole{}\parenbb{t\; g}$,
+which inserts these existential holes:
+
+\[\begin{array}{lcl}
+    \hole\parenbb{t\; g}
+    & \triangleq
+    & \assume{\forall i\neq j. \textsf{disjoint}(M_i,M_j)}; \\
+    && \assume{\forall i\neq j. \textsf{disjoint}(\hole M_i,\hole M_j)};\\
+    && \assume{\forall i,j. \textsf{disjoint}(\hole M_i, M_j)} \\
+    && \assume{\forall i. \textsf{disjoint}(\hole M_i, \hole{Del})} \\
+    && \displaystyle \Angel_{c_i \in \actions t}
+       \left(\begin{array}{c}
+         \assume{\keys t \in M_i}; \\
+         \assume{\keys t \not\in \hole{\mathit{Del}}};\\
+         c_i \\
+       \end{array}\right)\\
+    && \angel \displaystyle \Angel_{c_i \in \actions t}
+       \left(\begin{array}{c}
+               \assume{\keys t \in \hole{M_i}}; \\
+               c_i \\
+             \end{array}\right)\\
+    && \displaystyle \angel \left(\assume{\bigwedge_{c_i \in \actions t}
+       \begin{array}{c}
+         \keys t \not\in M_i\\
+         \wedge \keys t \not\in \hole M_i
+       \end{array}}; c_d\right)
+    %    \assume(\keys t \in M_i\right)}; c_i\right)     
+\end{array}\]
+
+
+We can then lift $\hole\parenbb{t\; g}$ to whole programs and table
+instantiation functions in the same way we did for $\parenbb{t\; g}$.
 
 
 
-\paragraph{Logical Program for \textsc{EditSynth}$(+,t)$}
+\paragraph{Logical Program for \textsc{EditSynth}$(+,s)$}
+
+To solve the \textsc{EditSynth}$(+,x)$, we add a single new rule to the table
+$t$. To do this, we produce a (universally-quantified) symbolic match value
+$m_i$ key $e_i$. We also need so specify which action we want to take, which is
+specified by the index $a$. As above, we replace $\parenbb{t\;g}$ with
+$s^+\parenbb{t\; g}$, which is defined as follows:
+\[\begin{array}{lcl}
+    s^+\parenbb{(s,\vec e, \vec c, c_d) \; g}
+    &\triangleq
+    & \parenbb{(s,\vec e, \vec c, c_d) \; g} \\
+    s^+\parenbb{(s',\vec e, \vec c, c_d) \; g}
+    &\triangleq
+    & \assume{\forall i\neq j. \mathsf{disjoint}(M_i,M_j)}; \\
+    && \assume{\forall i. \hole{\vec e} \not\in M_i};\\
+    && \displaystyle \Angel_{c_i}
+       \assume{\left(\vec e \in M_i\right)}; c_i\\
+    && \displaystyle \angel \assert{\vec e = \vec m}; c_{\hole a}\\
+    && \displaystyle \angel \assert{\bigwedge_{c_i} \vec e \not\in M_i}; c_d
+\end{array}\]
+
+Now we can synthesize check whether a solution to \textsc{EditSynth}$(+,s)$
+exists by validating the following formula. We universally quantify over the new
+matches $\vec m$ and action $i$ as well as the existing logical match sets
+$M^l_{i,t}$ for each table $t$ in $c_r$, with $c_i \in \actions t$, and the
+existing concrete match sets $M^r_{i,t}$ for each table $t$ in $c_l$, with
+$c_i \in \actions t$. Then we existentially quantify (these are the holes) over
+match sets $\hole{M_{t,i}}$ for each table $t$ and $c_i \in \actions t$, and
+deletion sets $\hole{Del_t}$ for each table $t$ in $c_r$
+
+\[\begin{array}{l}
+    \text{Given}\; (c_r), (c_l) \\
+    \forall \vec m, i.\\
+    \quad \forall M^r_{t_1,0},\ldots,M^r_{t_n,n_m}. \\
+    \qquad \forall M^l_{t'_1,0}, \ldots M^l_{t'_n,n'_m}. \\
+    \qquad \quad \exists \hole{\mathit{Del}_{t'_1}}, \ldots,
+    \hole{\mathit{Del}_{t'_n}} \\
+    \qquad \quad \exists \hole{M^l_{t'_1,0}},\ldots, \hole{M^l_{t'_n,n'_m}}\\
+    \qquad \qquad \forall \fvs(c_r),\fvs(c_l).\\
+    \qquad \qquad \quad (\wp(\parenbb{c\; \tau_r}) \Leftrightarrow \wp(\parenbb{c\; \tau_l})) \\
+    \qquad \qquad \qquad \Rightarrow (s^+\parenbb{c_l\; \tau_l}) \Leftrightarrow (\hole\parenbb{c_r\; \tau_r}) \\
+  \end{array}\]
 
 
-\paragraph{Logical Program for \textsc{EditSynth}$(-,t)$}
+\paragraph{Logical Program for \textsc{EditSynth}$(-,s)$}
 
+We do a similar thing when we need to remove a row from a table, except we only
+have check that each set does not contain the single row. As before, we replace
+$\parenbb{t\;g}$ with $s^-\parenbb{t\; g}$, which is defined as follows:
+\[\begin{array}{lcl}
+    s^-\parenbb{(s,\vec e, \vec c, c_d) \; g}
+    &\triangleq
+    & \parenbb{(s,\vec e, \vec c, c_d) \; g} \\
+    s^-\parenbb{(s',\vec e, \vec c, c_d) \; g}
+    &\triangleq
+    & \assume{\forall i\neq j. \mathsf{disjoint}(M_i,M_j)}; \\
+    && \assume{\exists! i. \hole{\vec e} \in M_i};\\
+    && \displaystyle \Angel_{c_i}
+       \assume{\left(\vec e \in M_i\wedge \vec e \neq \vec m \right )}; c_i\\
+    && \angel \assume{\vec e = \vec m}; c_d \\
+    && \displaystyle \angel \assert{\bigwedge_{c_i \in \actions t} \vec e \not\in M_i}; c_d
+\end{array}\]
+
+Then the problem is the same as the previous section replacing $s^+$ for $s^-$.
+
+\paragraph{Generalizing to full synthesis}
+
+We can state the problem as a synthesis problem by observing that
+$\exists f. \forall \vec x. \phi(\vec x, f(\vec x))$ is a proof of
+$\forall \vec x. \exists y. \phi(\vec x, y)$, but this, perhaps, leaves MSO.
