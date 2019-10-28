@@ -87,7 +87,9 @@
       \parenbb{\apply t\; \tau} &\triangleq& \parenbb{t\; \tau(t)}
     \end{array}\]
 
-  \caption{Configurations and Table Instantiations}
+  \caption{Configurations and Table Instantiations. A configuration is
+    \emph{$t$-well-formed} if the $\vec e$s are unique and for every
+    $i$, there is an action $c_i \in \actions t$.}
   \label{fig:configs}
 
   
@@ -108,13 +110,14 @@ each possible parameter. In practice this is infeasible (an action with a single
 48 bit argument would elaborate to $2^{48}$ actions), we'll discuss our
 optimizations in a later section.
 
-A table $t$ cannot be executed it must have a configuration (even if that
-configuration is the empty config). A configuration is a list of pairs
-$(\vec e,i)$, which represents the match conditions for action $i$. The empty
-configuration specifies that the default action should be executed. A
-configuration $g$ is well-formed for a table $t$ if for every element
-$(\vec e, i)$ of $g$, $|\vec e| = |\keys t|$, and $i \leq |\actions t|$, and
-every $\vec e$ is a literal, i.e. no fields and no holes.
+A table $t$ cannot be executed alone; it must have a configuration
+(even if that configuration is empty). A configuration is a list of
+pairs $(\vec e,i)$, which represents the match conditions for action
+$i$. The empty configuration specifies that the default action should
+be executed. A configuration $g$ is well-formed for a table $t$ if for
+every element $(\vec e, i)$ of $g$, $|\vec e| = |\keys t|$, and
+$i \leq |\actions t|$, and every $\vec e$ is a literal, i.e. no fields
+and no holes.
 
 Now we can use the table configurations to convert a table into a core GCL
 program, as depicted in Figure~\ref{fig:configs}. Essentially, we angelically
@@ -129,8 +132,7 @@ that executes $c_d$. A table-configuration pair is encoded as follows:
 \[ \begin{array}{lcl}
      \parenbb{t\; g}
      & \triangleq
-     & \assume{\forall i\neq j, \mathsf{disjoint}(M_i,M_j)}; \\
-     &&\left( \displaystyle \Angel_{c_i \in \actions t}
+     & \left( \displaystyle \Angel_{c_i \in \actions t}
         \assume{\left(\keys t \in M_i\right)}; c_i\right)\\
      && \displaystyle \angel \assert{\left(\bigwedge_{c_i \in \actions t} \keys t \not\in M_i\right)}; c_d
    \end{array}
@@ -157,11 +159,11 @@ $\bracbb{t\; g} : \Pkt \to \Pkt$ for a table $t$ and configuration $g$.
 
 \begin{figure}[ht]
   \[\begin{array}{lcl}
-      \bracbb{\apply t\; \langle\rangle}\; \pkt
+      \bracbb{t\; \langle\rangle}\; \pkt
       &\triangleq& \bracbb{\default t\; \emptyset}\; \pkt \\
-      \bracbb{\apply t\; (\vec e, i)::g}\; \pkt
+      \bracbb{ t\; (\vec e, i)::g}\; \pkt
       &\triangleq& \begin{cases}
-        c_i & \displaystyle \bigwedge_{e_j} \bracbb{k_j}\; \pkt = \bracbb{e_j}\; \pkt \\
+        \bracbb{c_i}\; \pkt & \displaystyle \bigwedge_{e_j} \bracbb{k_j = e_j}\; \pkt \\
         \bracbb{t\; g}\; \pkt & \mathit{otherwise}
       \end{cases}\\
       && \mathit{where}\; t = (s, \vec k, \vec c, c_d)
@@ -173,35 +175,108 @@ $\bracbb{t\; g} : \Pkt \to \Pkt$ for a table $t$ and configuration $g$.
 
 \begin{figure}[ht]
   \[\begin{array}{lcl}
-      \multicolumn 3 l {\bracbb{c\; \tau} : \Pkt \to 2^\Pkt_\bot} \\
+      \multicolumn 3 l {\bracbb{c\; \tau} : \Pkt \rightharpoonup 2^\Pkt_\bot} \\
       \bracbb{(x:=e)\; \tau}\; \pkt & \triangleq & (1,\pkt[x \mapsto e]) \\
       \bracbb{(c;c')\; \tau}\; \pkt & \triangleq & \bracbb{c'\; \tau}^\dag(\bracbb{c\; \tau}\; pkt) \\
-      \bracbb{(c\angel c')\; \tau}\; pkt &\triangleq& \bracbb{c\; \tau} \cup \bracbb{c'\; \tau} \\
+      \bracbb{(c\angel c')\; \tau}\; pkt &\triangleq& \bracbb{c\; \tau}\; \pkt \cup \bracbb{c'\; \tau}\; \pkt \\
       \bracbb{(\assert b)\; \tau}\; \pkt &\triangleq& \begin{cases}
         \{pkt\}   & \bracbb{b}\; \pkt = \TRUE \\
-        \emptyset & \mathit{otherwise}
+        \bot & \mathit{otherwise}
       \end{cases} \\
       \bracbb{(\assume b)\; \tau}\; \pkt &\triangleq& \begin{cases}
         \{pkt\} & \bracbb{b}\; pkt = \TRUE \\
-        \bot    & \mathit{otherwise}
+        \emptyset    & \mathit{otherwise}
       \end{cases} \\
-      \bracbb{(\apply t)\; \tau}\; \pkt &\triangleq& \bracbb{\apply t\; \tau(t)}
+      \bracbb{(\apply t)\; \tau}\; \pkt &\triangleq& \bracbb{\apply t\; \tau(t)} \\\\
+      \bracbb c \; \pkt & \triangleq& \bracbb{c\; (\lambda x. \;\bot)}\; \pkt
+
     \end{array}\]
   
-  \caption{Semantics????????}
+  \caption{Semantics????????. }
   \label{fig:semantics}
 
 \end{figure}
 
 Now we can show that our table encoding is sensible:
 
+\begin{lemma}
+  \label{lem:table-encoding}
+  For a table $t$ and a well-formed configuration $g$,
+  \[\forall \pkt. \bracbb{t\; g}\; \pkt = \bracbb{\parenbb{t\; g}}\;
+  \pkt.\]
+
+\end{lemma}
+
+\begin{proof}
+  Let table $t$, and packet $\pkt$ be given. Proceed by induction on
+  $g$.
+  \begin{enumerate}[align=left]
+  \item[($g = \langle \rangle$)] Equivalently,
+    $\bracbb{c_d}\;\pkt = \bracbb{\assume\TRUE; c_d}\; \pkt$, for
+    $c_d = \default t$. This is true by definition of $\bracbb{}$.
+
+  \item[($g = (\vec e,i)::g')$] 
+    
+    If $\bracbb{\keys t = \vec e}\; \pkt = 1$, then,
+    $\bracbb{t\; (\vec e, i)::g'}\;\pkt = \bracbb{c_i}\; \pkt$, by
+    Figure~\ref{fig:tablesemantics}.
+
+    Now, by definition of $M_i$,$\bracbb{\keys t \in M_i}\; \pkt =
+    1$. The well-formedness of $(\vec e, i)::g'$ means that there's no
+    conflicting $(\vec{e'}, j) \in g'$ s.t.
+    $\exists \pkt. \bracbb{\keys t = \vec{e}}\; \pkt = \bracbb{\keys t
+      = \vec{e'}}\; \pkt$.  So, $\bracbb{t\; (\vec e,i)::g'}\; \pkt$
+    equals $\bracbb{\assume{\keys t \in M_i}; c_i}\;\pkt$ which in
+    turn equals $\bracbb{c_i}\; \pkt$, which finishes this case.
+    
+    Conversely, if $\bracbb{\keys t = \vec e}\; \pkt = 0$, then
+    $\bracbb{t\; (\vec e, i)::g'}\;\pkt = \bracbb{t\;g'}\;\pkt$.
+
+    Now, by definition of $M_i$,
+    $\bracbb{\keys t \in M_i}\; \pkt = 0$, so
+    $\bracbb{\keys t \in M_i}\; \pkt = 0$, which means that we can
+    remove $\keys t$ from $M_i$. In fact, this is the only difference
+    between $\parenbb{t\;g}$ and $\parenbb{t\;g'}$, so we can conclude
+    that
+    $\bracbb{\parenbb{t\;(e,i)::g}}\;\pkt =
+    \bracbb{\parenbb{t\;g'}}\;\pkt$. The result follows by the
+    inductive hypothesis.
+  \end{enumerate}
+  
+\end{proof}
+
 \begin{proposition}
-  For a program $c$ and a $c$-complete table instantiation function $\tau$,
-  $\forall \pkt. \bracbb{c\; \tau};\pkt = \bracbb{\parenbb{c\; \tau}\; \tau}\; \pkt$.
+  For a program $c$ and a well-formed, $c$-complete table
+  instantiation function $\tau$,
+  $\forall \pkt. \bracbb{c\; \tau}\;\pkt = \bracbb{\parenbb{c\;
+      \tau}}\; \pkt$.
 \end{proposition}
 
 \begin{proof}
-\todo[inline]{Do the Proof, should be straightforward induction.}
+
+  Proceed by induction on the structure of $c$.
+  \begin{enumerate}[align=left]
+  \item[($x:=e$)] Immediate since $\parenbb{(x:=e)\; \tau} \triangleq x := e$.
+  \item[($\assert b$)] Immediate since $\parenbb{(\assert b)\; \tau} \triangleq \assert b$.
+  \item[($\assume b$)] Immediate since $\parenbb{(\assume b)\; \tau} \triangleq \assume b$.
+  \item[($c;c'$)] By the definition of the translation function,
+    $\parenbb{c;c'\; \tau} = \parenbb{c\; \tau};\parenbb{c\;\tau}$,
+    and by the definition of the denotation function, we need to show
+    that
+    $\forall \pkt. \bracbb{c\; \tau}^\dag\left(\;\bracbb{c'\;
+        \tau}\;\pkt\right) = \bracbb{\parenbb{c\;
+        \tau}}^\dag\left(\;\bracbb{\parenbb{c'\; \tau}}\;\pkt\right)$,
+    which follows by the inductive hypotheses.
+  \item[($c \angel c'$)] By definitions, we must show
+    $\forall \pkt. \bracbb{c\; \tau}\; \pkt \cup \bracbb{c\; \tau}\;
+    \pkt = \forall \pkt. \bracbb{\parenbb{c\; \tau}}\; \pkt \cup
+    \bracbb{\parenbb{c\; \tau}}$, which follows by the inductive
+    hypotheses.
+  \item[$(\apply t)$] By definitions, we must show
+    $\forall \pkt. \bracbb{t\; \tau(\name t)} = \bracbb{\parenbb{t\;
+        \tau(\name t)}\; g}$. Note that $\tau(\name t)$ is defined since $\tau$ is
+    complete. The result follows by Lemma~\ref{lem:table-encoding}.
+  \end{enumerate}
 \end{proof}
 
 
@@ -430,5 +505,10 @@ Then the problem is the same as the previous section replacing $s^+$ for $s^-$.
 \paragraph{Generalizing to full synthesis}
 
 We can state the problem as a synthesis problem by observing that
-$\exists f. \forall \vec x. \phi(\vec x, f(\vec x))$ is a proof of
-$\forall \vec x. \exists y. \phi(\vec x, y)$, but this, perhaps, leaves MSO.
+$\exists f. \forall \vec x. \exists y \phi(\vec x, (\vec x,\vec y) \in
+f)$ is a proof of $\forall \vec x. \exists y. \phi(\vec x, y)$. In
+practice we will conjoin the constraint
+$\forall \vec x, \vec y, \vec z.\; (\vec x, \vec y) \in f \wedge (\vec
+x, \vec z) \in f \Rightarrow y = z$ to ensure that $f$ is a function.
+
+
