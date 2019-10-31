@@ -27,10 +27,13 @@
         & \mid & \neg b & \textsc{Negation} \\
         & \mid & e = e & \textsc{Equality} \\
         & \mid & e \in X & \textsc{Membership} \\
-      & \multicolumn 3 l{\textit{Sets}} \\
-      & \multicolumn 3 l {X,M ::= \emptyset \mid \{e\} \mid X \cup X}\\
-      & \multicolumn{2}{l}{\textit{Values}} &  \multicolumn{1}{l}{\textit{Fields}} \\
-      & \multicolumn{2}{l}{v \in \mathbbm{2}^+} & \multicolumn{1}{l}{x \in \mathsf{Var}}
+      \multicolumn 3 l{\textit{Sets}} \\
+      X &::=& \emptyset & \textsc{Empty} \\
+        & \mid & \{e\} & \textsc{Singleton}\\
+        & \mid & M & \textsc{Variable} \\
+        & \mid & X \cup X & \textsc{Union}\\
+     \multicolumn{2}{l}{\textit{Values}} & \textit{Fields}  & \textit{Variables}\\
+     \multicolumn{2}{l}{v \in \mathbbm{2}^+} & x \in \mathsf{Var}_1 & M \in \mathsf{Var}_2
     \end{array}\]
 
   \caption{Syntax of GCL+Tables}
@@ -45,9 +48,7 @@
       \multicolumn 3 l {t::= (s,\vec e, \vec c, c_d)} & \multicolumn 3 l {s \in \Name}\\
       \multicolumn 6 c {\textit{Accessors}}\\
       \keys t && \vec x &  \default t && c_d \\
-      \actions t && \vec c & \name t && s \\\\
- \\
-      
+      \actions t && \vec c & \name t && s
     \end{array}\]
 
   \caption{Tables}
@@ -56,15 +57,15 @@
 
 \begin{figure}[ht]
   \[\begin{array}{l >{\triangleq}c l}
-      \wp(x:=e, \phi) && \phi[x \mapsto e]\\
-      \wp(c;c', \phi) && \wp(c, \wp(c', \phi)) \\
-      \wp(c\angel c', \phi) && \wp(c, \phi) \wedge \wp(c',\phi) \\
-      \wp(\assert b, \phi) && b \wedge \phi \\
-      \wp(\assume b, \phi) && b \Rightarrow \phi \\
-      \wp(\apply t, \phi) && c_d \angel \displaystyle \Angel_{c \in \actions t}c\\\\\hline\\
+      \wp_\tau(x:=e, \phi) && \phi[x \mapsto e]\\
+      \wp_\tau(c;c', \phi) && \wp_\tau(c, \wp_\tau(c', \phi)) \\
+      \wp_\tau(c\angel c', \phi) && \wp_\tau(c, \phi) \wedge \wp_\tau(c',\phi) \\
+      \wp_\tau(\assert b, \phi) && b \wedge \phi \\
+      \wp_\tau(\assume b, \phi) && b \Rightarrow \phi \\
+      \wp_\tau(\apply t, \phi) && \wp_\tau(\parenbb{\apply t}_\tau, \phi)\\\\\hline\\
       
-      \wp(c) && \wp(c,\displaystyle \bigwedge_{\substack{v \in \fvs(c) \\ \mathsf{fresh} v'}}
-      v = v')
+      \wp_\tau(c) && \wp_\tau(c,\displaystyle \bigwedge_{\substack{v \in \fvs(c) \\ \mathsf{fresh} v'}} v = v') \\
+      \wp(c) && \wp_\bot(c), \quad c \text{ is table-free}
     \end{array}\]
   \caption{Weakest Preconditions}
   \label{fig:wp}
@@ -76,13 +77,16 @@
       \multicolumn 1 r g & ::= & \langle\rangle \\
         & \mid & (e,i)::g \quad i \in \mathbb N \\\\
       \multicolumn 3 l {\textit{Table Instantiations} \qquad \tau : \Name \rightharpoonup \mathsf{Config}}\\
-      \parenbb{c\; \tau} &\multicolumn 2 l {\in \mathsf{Cmd}} \\
-      \parenbb{(x:= e)\; \tau} &\triangleq& x := e \\
-      \parenbb{(c;c')\; \tau} &\triangleq& \parenbb{c\; \tau};\parenbb{c\; \tau} \\
-      \parenbb{(c\angel c')\; \tau} &\triangleq& \parenbb{c\; \tau} \angel \parenbb{c'\; \tau}\\
-      \parenbb{(\assert b)\; \tau} &\triangleq& \assert b \\
-      \parenbb{(\assume b)\; \tau} &\triangleq& \assume b \\
-      \parenbb{\apply t\; \tau} &\triangleq& \parenbb{t\; \tau(\name t)}
+      \parenbb{c}_\tau &\multicolumn 2 l {\in \mathsf{Cmd}} \\
+      \parenbb{(x:= e)}_\tau &\triangleq& x := e \\
+      \parenbb{(c;c')}_\tau &\triangleq& \parenbb{c\; \tau};\parenbb{c\; \tau} \\
+      \parenbb{(c\angel c')}_\tau &\triangleq& \parenbb{c\; \tau} \angel \parenbb{c'\; \tau}\\
+      \parenbb{(\assert b)}_\tau &\triangleq& \assert b \\
+      \parenbb{(\assume b)}_\tau &\triangleq& \assume b \\
+      \parenbb{\apply t}_\tau &\triangleq\\
+      \multicolumn 3 l {\qquad\qquad \left( \displaystyle \Angel_{c_i \in \actions t}
+      \assume{\left(\keys t \in M_i(g)\right)}; c_i\right)}\\
+      \multicolumn 3 l {\qquad\qquad \displaystyle \angel \assert{\left(\bigwedge_{c_i \in \actions t} \keys t \not\in M_i(g)\right)}; c_d}
     \end{array}\]
 
   \caption{Configurations and Table Instantiations. A configuration is
@@ -132,24 +136,13 @@ define a function $M_i$ as follows:
 Now, the we can translate the matches, we check to see whether the
 current keys, indicated by $\keys t$, are in each set $M_i$, and when
 we find a match, we execute $c_i$. If we find no match, we have a
-final catch-all case, that executes $c_d$. A table-configuration pair
-is encoded as follows:
-
-\[ \begin{array}{lcl}
-     \parenbb{t\; g}
-     & \triangleq
-     & \left( \displaystyle \Angel_{c_i \in \actions t}
-        \assume{\left(\keys t \in M_i(g)\right)}; c_i\right)\\
-     && \displaystyle \angel \assert{\left(\bigwedge_{c_i \in \actions t} \keys t \not\in M_i(g)\right)}; c_d
-   \end{array}
-\]
-
-We can lift configurations to \emph{table instantiations}
-$\tau : \Name \to \Config$, which are simply functions that map each table to a
-configuration. We say that a table instantiation $\tau$ is $c$-complete if
-$\tau$ is defined on $\name t$ for every table $t$ mentioned in the program
-$c$. Then, for a program $c$ and a $c$-complete $\tau$, we write
-$\parenbb{c\; \tau}$ for the command with all table applications compiled away.
+final catch-all case, that executes $c_d$. We can lift configurations
+to \emph{table instantiations} $\tau : \Name \to \Config$, which are
+simply functions that map each table to a configuration. We say that a
+table instantiation $\tau$ is $c$-complete if $\tau$ is defined on
+$\name t$ for every table $t$ mentioned in the program $c$. Then, for
+a program $c$ and a $c$-complete $\tau$, we write $\parenbb{c\; \tau}$
+for the command with all table applications compiled away.
 
 We want to show that our encoding is correct, so we introduce a semantics for
 commands $c$ and for $c,\tau$ pairs, and show that
@@ -160,12 +153,12 @@ $\bracbb{t\; g} : \Pkt \to \Pkt$ for a table $t$ and configuration $g$.
 
 \begin{figure}[ht]
   \[\begin{array}{lcl}
-      \bracbb{t\; \langle\rangle}\; \pkt
+      \bracbb{t}_{\langle\rangle}\; \pkt
       &\triangleq& \bracbb{\default t}\; \pkt \\
-      \bracbb{ t\; (\vec e, i)::g}\; \pkt
+      \bracbb{ t }_{(\vec e, i)::g}\; \pkt
       &\triangleq& \begin{cases}
         \bracbb{c_i}\; \pkt & \displaystyle \bigwedge_{e_j} \bracbb{k_j = e_j}\; \pkt \\
-        \bracbb{t\; g}\; \pkt & \mathit{otherwise}
+        \bracbb{t}_{g}\; \pkt & \mathit{otherwise}
       \end{cases}\\
       && \mathit{where}\; t = (s, \vec k, \vec c, c_d)
     \end{array}\]
@@ -176,24 +169,24 @@ $\bracbb{t\; g} : \Pkt \to \Pkt$ for a table $t$ and configuration $g$.
 
 \begin{figure}[ht]
   \[\begin{array}{lcl}
-      \multicolumn 3 l {\bracbb{c\; \tau} : \Pkt \rightharpoonup 2^\Pkt_\bot} \\
-      \bracbb{(x:=e)\; \tau}\; \pkt & \triangleq & (1,\pkt[x \mapsto e]) \\
-      \bracbb{(c;c')\; \tau}\; \pkt & \triangleq & \bracbb{c'\; \tau}^\dag(\bracbb{c\; \tau}\; pkt) \\
-      \bracbb{(c\angel c')\; \tau}\; pkt &\triangleq& \bracbb{c\; \tau}\; \pkt \cup \bracbb{c'\; \tau}\; \pkt \\
-      \bracbb{(\assert b)\; \tau}\; \pkt &\triangleq& \begin{cases}
+      \multicolumn 3 l {\bracbb{c}_\tau : \Pkt \rightharpoonup 2^\Pkt_\bot} \\
+      \bracbb{(x:=e)}_\tau\; \pkt & \triangleq & (1,\pkt[x \mapsto e]) \\
+      \bracbb{(c;c')}_\tau\; \pkt & \triangleq & \bracbb{c'\; \tau}^\dag(\bracbb{c\; \tau}\; pkt) \\
+      \bracbb{(c\angel c')}_\tau\; pkt &\triangleq& \bracbb{c\; \tau}\; \pkt \cup \bracbb{c'\; \tau}\; \pkt \\
+      \bracbb{(\assert b)}_\tau\; \pkt &\triangleq& \begin{cases}
         \{pkt\}   & \bracbb{b}\; \pkt = \TRUE \\
         \bot & \mathit{otherwise}
       \end{cases} \\
-      \bracbb{(\assume b)\; \tau}\; \pkt &\triangleq& \begin{cases}
+      \bracbb{(\assume b)}_\tau\; \pkt &\triangleq& \begin{cases}
         \{pkt\} & \bracbb{b}\; pkt = \TRUE \\
         \emptyset    & \mathit{otherwise}
       \end{cases} \\
-      \bracbb{(\apply t)\; \tau}\; \pkt &\triangleq& \bracbb{\apply t\; \tau(t)} \\\\\hline\\
-      \bracbb c \; \pkt & \triangleq& \bracbb{c\; (\lambda x. \;\bot)}\; \pkt
+      \bracbb{(\apply t)}_\tau\; \pkt &\triangleq& \bracbb{\apply t\; \tau(t)} \\\\\hline\\
+      \bracbb c \; \pkt & \triangleq& \bracbb{c}_\bot\; \pkt
 
     \end{array}\]
   
-  \caption{Semantics????????}
+  \caption{Semantics}
   \label{fig:semantics}
 
 \end{figure}
@@ -203,7 +196,7 @@ Now we can show that our table encoding is sensible:
 \begin{lemma}
   \label{lem:table-encoding}
   For a table $t$ and a well-formed configuration $g$,
-  \[\forall \pkt. \bracbb{t\; g}\; \pkt = \bracbb{\parenbb{t\; g}}\;
+  \[\forall \pkt. \bracbb{t}_{g}\; \pkt = \bracbb{\parenbb{t}_g}\;
   \pkt.\]
 
 \end{lemma}
@@ -219,28 +212,27 @@ Now we can show that our table encoding is sensible:
   \item[($g = (\vec e,i)::g')$] 
     
     If $\bracbb{\keys t = \vec e}\; \pkt = 1$, then,
-    $\bracbb{t\; (\vec e, i)::g'}\;\pkt = \bracbb{c_i}\; \pkt$, by
+    $\bracbb{t}_{(\vec e, i)::g'}\;\pkt = \bracbb{c_i}\; \pkt$, by
     Figure~\ref{fig:tablesemantics}.
 
     Now, by definition of $M_i$,$\bracbb{\keys t \in M_i}\; \pkt =
     1$. The well-formedness of $(\vec e, i)::g'$ means that there's no
     conflicting $(\vec{e'}, j) \in g'$ s.t.
     $\exists \pkt. \bracbb{\keys t = \vec{e}}\; \pkt = \bracbb{\keys t
-      = \vec{e'}}\; \pkt$.  So, $\bracbb{t\; (\vec e,i)::g'}\; \pkt$
+      = \vec{e'}}\; \pkt$.  So, $\bracbb{t}_{(\vec e,i)::g'}\; \pkt$
     equals $\bracbb{\assume{\keys t \in M_i}; c_i}\;\pkt$ which in
     turn equals $\bracbb{c_i}\; \pkt$, which finishes this case.
     
     Conversely, if $\bracbb{\keys t = \vec e}\; \pkt = 0$, then
-    $\bracbb{t\; (\vec e, i)::g'}\;\pkt = \bracbb{t\;g'}\;\pkt$.
-
-    Now, by definition of $M_i$,
+    $\bracbb{\apply t}_{(\vec e, i)::g'}\;\pkt =
+    \bracbb{t}_{g'}\;\pkt$.  Now, by definition of $M_i$,
     $\bracbb{\keys t \in M_i}\; \pkt = 0$, so
     $\bracbb{\keys t \in M_i}\; \pkt = 0$, which means that we can
-    remove $\keys t$ from $M_i$. In fact, this is the only difference
-    between $\parenbb{t\;g}$ and $\parenbb{t\;g'}$, so we can conclude
+    remove $\vec e$ from $M_i$. In fact, this is the only difference
+    between $\parenbb{t}_{g}$ and $\parenbb{t}_{g'}$, so we can conclude
     that
-    $\bracbb{\parenbb{t\;(e,i)::g}}\;\pkt =
-    \bracbb{\parenbb{t\;g'}}\;\pkt$. The result follows by the
+    $\bracbb{\parenbb{t}_{(e,i)::g}}\;\pkt =
+    \bracbb{\parenbb{t}_{g'}}\;\pkt$. The result follows by the
     inductive hypothesis.
   \end{enumerate}
   
@@ -249,34 +241,36 @@ Now we can show that our table encoding is sensible:
 \begin{proposition}
   For a program $c$ and a well-formed, $c$-complete table
   instantiation function $\tau$,
-  $\forall \pkt. \bracbb{c\; \tau}\;\pkt = \bracbb{\parenbb{c\;
-      \tau}}\; \pkt$.
+  $\forall \pkt. \bracbb{c}_{\tau}\;\pkt =
+  \bracbb{\parenbb{c}_{\tau}}\; \pkt$.
 \end{proposition}
 
 \begin{proof}
 
   Proceed by induction on the structure of $c$.
   \begin{enumerate}[align=left]
-  \item[($x:=e$)] Immediate since $\parenbb{(x:=e)\; \tau} \triangleq x := e$.
-  \item[($\assert b$)] Immediate since $\parenbb{(\assert b)\; \tau} \triangleq \assert b$.
-  \item[($\assume b$)] Immediate since $\parenbb{(\assume b)\; \tau} \triangleq \assume b$.
+  \item[($x:=e$)] Immediate since $\parenbb{x:=e}_{\tau} \triangleq x := e$.
+  \item[($\assert b$)] Immediate since
+    $\parenbb{\assert b}_{\tau} \triangleq \assert b$.
+  \item[($\assume b$)] Immediate since $\parenbb{\assume b}_{\tau} \triangleq \assume b$.
   \item[($c;c'$)] By the definition of the translation function,
-    $\parenbb{c;c'\; \tau} = \parenbb{c\; \tau};\parenbb{c\;\tau}$,
+    $\parenbb{c;c'}_{\tau} = \parenbb{c}_{\tau};\parenbb{c'}_{\tau}$,
     and by the definition of the denotation function, we need to show
     that
-    $\forall \pkt. \bracbb{c\; \tau}^\dag\left(\;\bracbb{c'\;
-        \tau}\;\pkt\right) = \bracbb{\parenbb{c\;
-        \tau}}^\dag\left(\;\bracbb{\parenbb{c'\; \tau}}\;\pkt\right)$,
-    which follows by the inductive hypotheses.
+    $\forall
+    \pkt. \bracbb{c}_\tau^\dag\left(\;\bracbb{c'}_\tau\;\pkt\right) =
+    \bracbb{\parenbb{c}_\tau}^\dag\left(\bracbb{\parenbb{c'}_\tau}\;\pkt\right)$,
+  which follows by the inductive hypotheses.
   \item[($c \angel c'$)] By definitions, we must show
-    $\forall \pkt. \bracbb{c\; \tau}\; \pkt \cup \bracbb{c\; \tau}\;
-    \pkt = \forall \pkt. \bracbb{\parenbb{c\; \tau}}\; \pkt \cup
-    \bracbb{\parenbb{c\; \tau}}$, which follows by the inductive
+    $\forall \pkt. \bracbb{c}_\tau\; \pkt \cup \bracbb{c}_\tau\;
+    \pkt = \forall \pkt. \bracbb{\parenbb{c}_\tau}\; \pkt \cup
+    \bracbb{\parenbb{c}_\tau}$, which follows by the inductive
     hypotheses.
   \item[$(\apply t)$] By definitions, we must show
-    $\forall \pkt. \bracbb{t\; \tau(\name t)} = \bracbb{\parenbb{t\;
-        \tau(\name t)}\; g}$. Note that $\tau(\name t)$ is defined since $\tau$ is
-    complete. The result follows by Lemma~\ref{lem:table-encoding}.
+    $\forall \pkt. \bracbb{t}_{\tau(\name t)} =
+    \bracbb{\parenbb{t}_{\tau(\name t)}}$. Note that $\tau(\name t)$
+    is defined since $\tau$ is complete. The result follows by
+    Lemma~\ref{lem:table-encoding}.
   \end{enumerate}
 \end{proof}
 
@@ -295,36 +289,49 @@ Now we can show that our table encoding is sensible:
     \textsc{Verif}
     & $\tau_l$, $\tau_r$
     & n/a
-    & n/a
-    & $\wp(c_l\; \tau_l) \Leftrightarrow \wp(c_r\; \tau_r)$ \\
+    & \texttt{sat}/\texttt{unsat}
+    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$ \\
     \textsc{OnlineSynth}
     & $\tau_l$
     & n/a
     & $\tau_r \in \mathsf{TInst}$
-    & $\wp(c_l\; \tau_l) \Leftrightarrow \wp(c_r\; \tau_r)$ \\
+    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$ \\
     \textsc{OfflineSynth}
     & n/a
     & n/a
     & $f : \mathsf{TInst} \to \mathsf{TInst}$
-    & $\forall \tau_l. \wp(c_l\; \tau_l) \Leftrightarrow \wp(c_r\; f(\tau_l))$ \\
+    & $\forall \tau_l. \wp_{\tau_l}(c_l) \Leftrightarrow \wp_{f(\tau_l)}(c_r)$ \\
     \textsc{EditSynth}
     & n/a
-    & $\wp(c_l\; \tau_l) \Leftrightarrow \wp(c_r\; \tau_r)$
+    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
     & $f : \mathsf{Edit} \to 2^{\mathsf{Edit}}$
-    & $\forall \rho. \wp(c_l\; (\tau_l \otimes \rho))$ \\
-    &&&&\qquad $\Leftrightarrow \wp\left(\hole\parenbb{c_r\; \left(\tau_r\otimes \bigotimes_{\rho' \in f(\rho)} \rho'\right)}\right)$ \\
+    & $\forall \rho. \wp_{(\tau_l \otimes \rho)}(c_l)$ \\
+    &&&&\qquad $\Leftrightarrow \wp\left(\hole\parenbb{c_r}_{\left(\tau_r\otimes \bigotimes f(\rho)\right)}\right)$ \\
     \textsc{EditSynth}$(\oplus, s)$
     & n/a
     & $\wp(c_l\; \tau_l) \Leftrightarrow \wp(c_r\; \tau_r)$
     & $f : \mathsf{Edit}_s \to 2^{\mathsf{Edit}}$
-    & $\forall \rho_{s}. \wp(s^\oplus\parenbb{c_l\; (\tau_l \oplus \rho_s)})$ \\
-    &&&&\qquad$\Leftrightarrow \wp\left(\hole\parenbb{c_r\;\left(\tau_r\otimes \bigotimes_{\rho' \in f(\rho_{s})} \rho'\right)}\right)$ \\
-    \textsc{EditVerif}$(\oplus, s, n)$
-    & n/a
-    & $\wp(c_l\; \tau_l) \Leftrightarrow \wp(c_r\; \tau_r)$
-    & $\rho_1, \ldots, \rho_n \in \mathsf{Edit}$
-    & $\forall \rho_s. \wp(s^\oplus\parenbb{c_l\; (\tau_l \oplus \rho_s)})$\\
-    &&&&$\Leftrightarrow \wp(\hole\parenbb{c_r\; (\tau_r \otimes \rho_1 \cdots \otimes \rho_n)})$ \\
+    & $\forall \rho_{s}. \wp(s^\oplus\parenbb{c_l}_{(\tau_l \oplus \rho_s)})$ \\
+    &&&&\qquad$\Leftrightarrow \wp\left(\hole\parenbb{c_r}_{\left(\tau_r\otimes \bigotimes f(\rho_s)\right)}\right)$ \\
+    \textsc{BoundEditPoss}$(\oplus, s, n)$
+    & $n$ 
+    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
+    & \texttt{unsat}
+    & $\forall \rho_s. \exists \rho_1, \ldots, \rho_n.$\\
+    &&&&\quad$\wp(s^\oplus\parenbb{c_l}_{(\tau_l \oplus \rho_s)})$\\
+    &&&&\qquad $\Leftrightarrow \wp(\hole\parenbb{c_r}_{(\tau_r \otimes \rho_1 \cdots \otimes \rho_n)})$ \\
+    \textsc{BoundEditSynth}$(\oplus, s, n)$
+    & $n$
+    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
+    & $f_i : \Edit_s \to \Edit$,
+    & $\forall \rho_s. \wp(s^\oplus\parenbb{c_l}_{(\tau_l \oplus \rho_s)})$\\
+    &&&\hfill $i \in [n]$
+    &\qquad $\Leftrightarrow \wp(\hole\parenbb{c_r}_{(\tau_r \otimes f_1(\rho) \cdots \otimes f_n(\rho))})$ \\
+    \textsc{BoundEditVerif}$(\oplus, s, n)$
+    & $f_i : \Edit_s \to \Edit$
+    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
+    & \texttt{unsat}
+    & \textit{sim.}\\
     \bottomrule
   \end{tabular}
   \caption{Cheat Sheet for the Verification and Synthesis
@@ -397,13 +404,40 @@ deletions. This works so long as we have a notion of transactions.
 
 \todo[inline]{The following functions and objects need types!}
 
-Formally an edit $\rho$ is a tuple $(\oplus,s,\vec e,i)$, where
-$\oplus \in \{+,-\}$, $s$ is the name of the table being edited, and
-$(\vec e, i)$ is thr row to add. Then given an table instantiation function
-$\tau$, we write $\tau \odot \rho$ to update $\tau$ with $\rho$. Precisely,
-$\tau \odot (+,t,\vec e, i) = \tau[t \mapsto (e,i)::\tau(t)$, and
-$\tau \odot (-, t, \vec e, i) = \tau[t \mapsto \tau(t) \setminus (e,i)]$ where
-$l \setminus (e,i)$ removes all occurences $(e,i)$ from the list $l$.
+
+\begin{figure}[pt]
+  \[\rho \in \Edit = \{ +, -\} \times \Name \times \Expr^n \times \mathbb N \]
+  \[\begin{array}{lcl}
+      \tau \otimes (+,s,\vec e, i) & \triangleq & \tau[s \mapsto (e,i)::\tau(s)] \\
+      \tau \otimes (-,s,\vec e, i) & \triangleq & \tau[s \mapsto \tau(s) \setminus (e,i)] \\
+      \tau + (+, s, \vec, e, i) & \triangleq & \tau \otimes (+,s, \vec e,i) \\
+      \tau - (-, s, \vec, e, i) & \triangleq & \tau \otimes (-, s, \vec e, i) 
+    \end{array}\]
+
+  \[\begin{array}{lcl}
+      \rho_s & \triangleq & (\oplus, s', \vec e, i), \text{where } s = s'\\
+      \Edit_s &\triangleq & \{\rho_s \mid \rho_s\in \Edit\} \\
+    \end{array}\]
+  \caption{Edits}
+  \label{fig:edits}
+\end{figure}
+
+Formally, an edit $\rho \in \mathsf{Edit}$ is a tuple
+$(\oplus,s,\vec e,i)$, where $\oplus \in \{+,-\}$, $s$ is the name of
+the table being edited, and $(\vec e, i)$ is the row to add. Then,
+given a table instantiation function $\tau$, we write
+$\tau \otimes \rho$ to update $\tau$ with $\rho$. Precisely,
+$\tau \otimes (+,t,\vec e, i) = \tau[t \mapsto (e,i)::\tau(t)]$, and
+$\tau \otimes (-, t, \vec e, i) = \tau[t \mapsto \tau(t) \setminus
+(e,i)]$ where $l \setminus (e,i)$ removes all occurences $(e,i)$ from
+the list $l$. As syntactic sugar, we'll write $\tau + \rho$ to mean
+$\tau \otimes \rho$ when $\rho = (+, s, \vec e, i)$, and $\tau - \rho$
+to mean $\tau \otimes \rho$ when $\rho = (-, s, \vec e,
+i)$. Additionally, we adopt the convention that $\rho_s$ indicates an
+edit to all tables named $s$, i.e. that
+$\rho_s = (\oplus, s, \vec e, i)$. Similarly, $\mathsf{Edit}_s$ is the
+set of all such edits. Edits are summarized in Figure~\ref{fig:edits}.
+
 
 
 A solution for \textsc{EditSynth} is a witness $f$ for every table $t$ such that
@@ -412,7 +446,7 @@ the following formula is satisfied:
     \text{Given } c_l,c_r, \exists \rho. \\
     \forall \tau_l,\tau_r,\rho. \forall \fvs(c_l), \fvs(c_r). \\
     \qquad \wp(c_l\; \tau_l) \iff wp(c_r\; \tau_l) \\
-    \qquad \Rightarrow \wp(c_l\; (\tau_l \odot \rho)) \iff \wp(c_r\; \tau_r \odot (f(\rho)))
+    \qquad \Rightarrow \wp(c_l\; (\tau_l \otimes \rho)) \iff \wp(c_r\; \tau_r \otimes (f(\rho)))
   \end{array}\]
 
 For now we have only figured out how to address a simpler version of the
@@ -425,8 +459,8 @@ the following formula is valid:
     \forall \rho, \tau_r, \tau_l.\, \exists n.\, \exists \hole\rho_1,\ldots,\hole\rho_n. \\ 
     \quad \forall \fvs(c_l), \fvs(c_r). \\
     \qquad \wp(c_l\; \tau_l) \iff wp(c_r\; \tau_l) \\
-    \qquad \Rightarrow \wp(c_l\; (\tau_l \odot \rho)) \iff \wp(c_r\; \tau_r
-    \odot \hole\rho_1 \odot \cdots \odot \hole\rho_n )
+    \qquad \Rightarrow \wp(c_l\; (\tau_l \otimes \rho)) \iff \wp(c_r\; \tau_r
+    \otimes \hole\rho_1 \otimes \cdots \otimes \hole\rho_n )
   \end{array}\]
 
 In practice, we will can even produce problems \textsc{EditSynth}$(\oplus,s)$
@@ -551,13 +585,7 @@ $\parenbb{t\;g}$ with $s^-\parenbb{t\; g}$, which is defined as follows:
 
 Then the problem is the same as the previous section replacing $s^+$ for $s^-$.
 
-\paragraph{Generalizing to full synthesis}
-
-We can state the problem as a synthesis problem by observing that
-$\exists f. \forall \vec x. \exists y \phi(\vec x, (\vec x,\vec y) \in
-f)$ is a proof of $\forall \vec x. \exists y. \phi(\vec x, y)$. In
-practice we will conjoin the constraint
-$\forall \vec x, \vec y, \vec z.\; (\vec x, \vec y) \in f \wedge (\vec
-x, \vec z) \in f \Rightarrow y = z$ to ensure that $f$ is a function.
+\subsection{Bounded Model Checking}
 
 
+\subsection{Sketching the Function}
