@@ -279,63 +279,51 @@ Now we can show that our table encoding is sensible:
 
 
 \begin{figure*}
-  \begin{tabular}{c c c l l}
+  \begin{tabular}{l l c c r >{$ \Leftrightarrow$}c l}
     \toprule
-    Problem
-    & Givens
+    && Problem
     & Assumption
-    & Synthesize
-    & Validity Condition \\ \midrule
-    \textsc{Verif}
-    & $\tau_l$, $\tau_r$
+    & \multicolumn{3}{c}{Validity Condition} \\ \midrule
+    \multirow{3}{*}{\rotatebox[origin=c]{90}{\it Basic}} 
+    && $\textsc{Verif}(\tau_l, \tau_r)$
     & n/a
-    & \texttt{sat}/\texttt{unsat}
-    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$ \\
-    \textsc{OnlineSynth}
-    & $\tau_l$
+    & $\wp_{\tau_l}(c_l)$ && $\wp_{\tau_r}(c_r)$ \\
+    && $\textsc{InstSynth}(\tau_l) = \tau_r$
     & n/a
-    & $\tau_r \in \mathsf{TInst}$
-    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$ \\
-    \textsc{OfflineSynth}
+    & $\wp_{\tau_l}(c_l)$ && $\wp_{\tau_r}(c_r)$ \\
+    && $\textsc{MapSynth}() = F$
     & n/a
-    & n/a
-    & $f : \mathsf{TInst} \to \mathsf{TInst}$
-    & $\forall \tau_l. \wp_{\tau_l}(c_l) \Leftrightarrow \wp_{f(\tau_l)}(c_r)$ \\
-    \textsc{EditSynth}
-    & n/a
+    & $\forall \tau_l. \wp_{\tau_l}(c_l)$ && $\wp_{f(\tau_l)}(c_r)$ \\ \midrule
+    \multirow{3}{*}{\rotatebox[origin=r]{90}{\it Edit-based}}
+    && $\textsc{EditSynth}() = f$
     & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
-    & $f : \mathsf{Edit} \to 2^{\mathsf{Edit}}$
-    & $\forall \rho. \wp_{(\tau_l \otimes \rho)}(c_l)$ \\
-    &&&&\qquad $\Leftrightarrow \wp\left(\hole\parenbb{c_r}_{\left(\tau_r\otimes \bigotimes f(\rho)\right)}\right)$ \\
-    \textsc{EditSynth}$(\oplus, s)$
-    & n/a
-    & $\wp(c_l\; \tau_l) \Leftrightarrow \wp(c_r\; \tau_r)$
-    & $f : \mathsf{Edit}_s \to 2^{\mathsf{Edit}}$
-    & $\forall \rho_{s}. \wp(s^\oplus\parenbb{c_l}_{(\tau_l \oplus \rho_s)})$ \\
-    &&&&\qquad$\Leftrightarrow \wp\left(\hole\parenbb{c_r}_{\left(\tau_r\otimes \bigotimes f(\rho_s)\right)}\right)$ \\
-    \textsc{BoundEditPoss}$(\oplus, s, n)$
-    & $n$ 
+    & $\forall \rho. \wp_{(\tau_l \otimes \rho)}(c_l)$ && $\wp_{\left(\tau_r\otimes \bigotimes f(\rho)\right)}(c_r)$ \\ \cmidrule(r){2-7}
+    % & \textsc{EditSynth}$(\oplus, s)$
+    % & n/a
+    % & $\wp(c_l\; \tau_l) \Leftrightarrow \wp(c_r\; \tau_r)$
+    % & $f : \mathsf{Edit}_s \to 2^{\mathsf{Edit}}$
+    % & $\forall \rho_{s}. \wp(s^\oplus\parenbb{c_l}_{(\tau_l \oplus \rho_s)})$ \\
+    % &&&&\qquad$\Leftrightarrow \wp\left(\hole\parenbb{c_r}_{\left(\tau_r\otimes \bigotimes f(\rho_s)\right)}\right)$ \\
+    % & \textsc{BoundEditPoss}$(\oplus, s, n)$
+    % & $n$ 
+    % & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
+    % & \texttt{unsat}
+    % & $\forall \rho_s. \exists \rho_1, \ldots, \rho_n.$\\
+    % &&&&\quad$\wp(s^\oplus\parenbb{c_l}_{(\tau_l \oplus \rho_s)})$\\
+    % &&&&\qquad $\Leftrightarrow \wp(\hole\parenbb{c_r}_{(\tau_r \otimes \rho_1 \cdots \otimes \rho_n)})$ \\
+    & \multirow{2}{*}{\rotatebox[origin=c]{90}{\it Bound}}
+    & $\textsc{EditSynth}[n]() = f_1,\ldots, f_n$
     & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
-    & \texttt{unsat}
-    & $\forall \rho_s. \exists \rho_1, \ldots, \rho_n.$\\
-    &&&&\quad$\wp(s^\oplus\parenbb{c_l}_{(\tau_l \oplus \rho_s)})$\\
-    &&&&\qquad $\Leftrightarrow \wp(\hole\parenbb{c_r}_{(\tau_r \otimes \rho_1 \cdots \otimes \rho_n)})$ \\
-    \textsc{BoundEditSynth}$(\oplus, s, n)$
-    & $n$
+    & $\forall \rho. \wp(\parenbb{c_l}_{\tau_l}^\rho))$ && $\wp(\parenbb{c_r}_{\tau_r}^{f_1(\rho),\ldots,f_n(\rho)})$ \\
+    && $\textsc{EditVerif}[n](f_1,...,f_n)$
     & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
-    & $f_i : \Edit_s \to \Edit$,
-    & $\forall \rho_s. \wp(s^\oplus\parenbb{c_l}_{(\tau_l \oplus \rho_s)})$\\
-    &&&\hfill $i \in [n]$
-    &\qquad $\Leftrightarrow \wp(\hole\parenbb{c_r}_{(\tau_r \otimes f_1(\rho) \cdots \otimes f_n(\rho))})$ \\
-    \textsc{BoundEditVerif}$(\oplus, s, n)$
-    & $f_i : \Edit_s \to \Edit$
-    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
-    & \texttt{unsat}
-    & \textit{sim.}\\
+    & $\forall \rho. \wp(\parenbb{c_l}_{\tau_l}^\rho))$ && $\wp(\parenbb{c_r}_{\tau_r}^{f_1(\rho),\ldots,f_n(\rho)})$\\ \addlinespace
     \bottomrule
   \end{tabular}
   \caption{Cheat Sheet for the Verification and Synthesis
-    problems. All problems take $c_r$ and $c_l$ as given}
+    problems.\textit{ All problems take $c_r$ and $c_l$ as given. Additional
+    givens are in parentheses.  Problem parameters are given in square
+    brackets. Note, $F : \mathsf{Inst} \to \mathsf{Inst}$, $f : \Edit \to 2^\Edit$ and $f_i : \Edit \to \Edit$ }}
 \end{figure*}
 
 We can use this calculus to construct some verification and synthesis
