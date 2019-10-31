@@ -86,7 +86,7 @@
       \parenbb{\apply t}_\tau &\triangleq\\
       \multicolumn 3 l {\qquad\qquad \left( \displaystyle \Angel_{c_i \in \actions t}
       \assume{\left(\keys t \in M_i(g)\right)}; c_i\right)}\\
-      \multicolumn 3 l {\qquad\qquad \displaystyle \angel \assert{\left(\bigwedge_{c_i \in \actions t} \keys t \not\in M_i(g)\right)}; c_d}
+      \multicolumn 3 l {\qquad\qquad \displaystyle \angel \assume{\left(\bigwedge_{c_i \in \actions t} \keys t \not\in M_i(g)\right)}; c_d}
     \end{array}\]
 
   \caption{Configurations and Table Instantiations. A configuration is
@@ -294,7 +294,7 @@ Now we can show that our table encoding is sensible:
     && $\textsc{MapSynth}() = F$
     & n/a
     & $\forall \tau_l. \wp_{\tau_l}(c_l)$ && $\wp_{f(\tau_l)}(c_r)$ \\ \midrule
-    \multirow{3}{*}{\rotatebox[origin=r]{90}{\it Edit-based}}
+    \multirow{4}{*}{\rotatebox[origin=r]{90}{\it Edit-based}}
     && $\textsc{EditSynth}() = f$
     & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
     & $\forall \rho. \wp_{(\tau_l \otimes \rho)}(c_l)$ && $\wp_{\left(\tau_r\otimes \bigotimes f(\rho)\right)}(c_r)$ \\ \cmidrule(r){2-7}
@@ -304,15 +304,12 @@ Now we can show that our table encoding is sensible:
     % & $f : \mathsf{Edit}_s \to 2^{\mathsf{Edit}}$
     % & $\forall \rho_{s}. \wp(s^\oplus\parenbb{c_l}_{(\tau_l \oplus \rho_s)})$ \\
     % &&&&\qquad$\Leftrightarrow \wp\left(\hole\parenbb{c_r}_{\left(\tau_r\otimes \bigotimes f(\rho_s)\right)}\right)$ \\
-    % & \textsc{BoundEditPoss}$(\oplus, s, n)$
-    % & $n$ 
-    % & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
-    % & \texttt{unsat}
-    % & $\forall \rho_s. \exists \rho_1, \ldots, \rho_n.$\\
-    % &&&&\quad$\wp(s^\oplus\parenbb{c_l}_{(\tau_l \oplus \rho_s)})$\\
-    % &&&&\qquad $\Leftrightarrow \wp(\hole\parenbb{c_r}_{(\tau_r \otimes \rho_1 \cdots \otimes \rho_n)})$ \\
-    & \multirow{2}{*}{\rotatebox[origin=c]{90}{\it Bound}}
-    & $\textsc{EditSynth}[n]() = f_1,\ldots, f_n$
+    & \multirow{3}{*}{\rotatebox[origin=r]{90}{\it Bound}}
+    & $\textsc{EditCheck}[n]()$
+    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
+    & $\forall \rho_s. \exists \rho_1, \ldots, \rho_n. \wp(\parenbb{c_l}_{\tau_l}^\rho)$
+    &&$\wp(\parenbb{c_r}_{\tau_r}^{\rho_1,\ldots,\rho_n})$ \\
+    && $\textsc{EditSynth}[n]() = f_1,\ldots, f_n$
     & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
     & $\forall \rho. \wp(\parenbb{c_l}_{\tau_l}^\rho))$ && $\wp(\parenbb{c_r}_{\tau_r}^{f_1(\rho),\ldots,f_n(\rho)})$ \\
     && $\textsc{EditVerif}[n](f_1,...,f_n)$
@@ -320,10 +317,12 @@ Now we can show that our table encoding is sensible:
     & $\forall \rho. \wp(\parenbb{c_l}_{\tau_l}^\rho))$ && $\wp(\parenbb{c_r}_{\tau_r}^{f_1(\rho),\ldots,f_n(\rho)})$\\ \addlinespace
     \bottomrule
   \end{tabular}
-  \caption{Cheat Sheet for the Verification and Synthesis
-    problems.\textit{ All problems take $c_r$ and $c_l$ as given. Additional
-    givens are in parentheses.  Problem parameters are given in square
-    brackets. Note, $F : \mathsf{Inst} \to \mathsf{Inst}$, $f : \Edit \to 2^\Edit$ and $f_i : \Edit \to \Edit$ }}
+  \caption{Cheat Sheet for the Verification and Synthesis problems.\textit{ All
+      problems take $c_r$ and $c_l$ as given. Additional givens are in
+      parentheses.  Problem parameters are given in square brackets. Note,
+      $F : \mathsf{Inst} \to \mathsf{Inst}$, $f : \Edit \to 2^\Edit$ and
+      $f_i : \Edit \to \Edit$ }}
+  \label{fig:problems}
 \end{figure*}
 
 We can use this calculus to construct some verification and synthesis
@@ -333,12 +332,12 @@ where $\tau_i$ is $c_i$-complete.  We generate our verification conditions using
 Dijkstra's weakest precondition semantics, included for completeness in
 Figure~\ref{fig:wp}.
 
-The simplest problem is the verification problem \textsc{Verif} where we are
-given the table instantiations $\tau_l$ and $\tau_r$, and we want to verify that
-$c_l\; \tau_l$ is equivalent to $c_r\; \tau_r$. Since everything is concrete, we
-can encode this as a simple \textsc{sat} problem. If the following problem
-returns \texttt{unsat}, we conclude $c_l\; \tau_l$ and $c_r\; \tau_l$ are
-equivalent.
+\paragraph{Verification} The simplest problem is the verification problem
+\textsc{Verif} where we are given the table instantiations $\tau_l$ and
+$\tau_r$, and we want to verify that $c_l\; \tau_l$ is equivalent to
+$c_r\; \tau_r$. Since everything is concrete, we can encode this as a simple
+\textsc{sat} problem. If the following problem returns \texttt{unsat}, we
+conclude $c_l\; \tau_l$ and $c_r\; \tau_l$ are equivalent.
 \[\begin{array}{lcl}
     \text{Given }( c_l\; \tau_l), (c_r\; \tau_r) \\
     \exists \fvs(c_l), \fvs(c_r). \\
@@ -346,10 +345,10 @@ equivalent.
   \end{array}
 \]
 
-One step up, we have the \textsc{OnlineSynth} problem, where only the logical
-table instantiation is given, and we must produce a $\tau_r$ satisfying the
-\textsc{Verif} condition. If we get \texttt{sat} and a model for $\tau_r$ from
-Z3 we conclude success.
+\paragraph{Synthesizing a Concrete Instance} One step up, we have the
+\textsc{InstSynth} problem, where only the logical table instantiation is given,
+and we must produce a $\tau_r$ satisfying the \textsc{Verif} condition. If we
+get \texttt{sat} and a model for $\tau_r$ from Z3 we conclude success.
 \[\begin{array}{lcl}
     \text{Given } c_l\; \tau_l,c_r
     \exists \tau_r.\\
@@ -365,7 +364,7 @@ predictability of their networks, and inserting a heuristic shim in the middle
 of the network would make it very hard to exert the kind of control that network
 engineers rely on.
 
-To ameliorate this problem, we consider the \textsc{OfflineSynth} problem, which
+\paragraph{Synthesizing an Instance Mapping} To ameliorate this problem, we consider the \textsc{MapSynth} problem, which
 synthesizes a function $f$ from an arbitary logical instantiations $\tau_l$ to a
 concrete table instantiation that will implement the same functionality as
 $\tau_l$. The offline synthesis succeeds the following formula is \texttt{sat}
@@ -380,15 +379,13 @@ examples causes Z3 to return \texttt{unknown}. So, we need to find a way of
 partitioning the \textsc{OfflineSynth} problem into more tractable
 components.
 
-\subsection{Edit-Based Synthesis}
-
-Instead of trying to synthesize an arbitrary function from table instantiations
-to table instantiations, we reframe the problem to examining only the table
-edits, and call it \textsc{EditSynth}. The idea is: given two equivalent
-programs, for every edit to a logical table, can we synthesize an equivalent set
-of edits to the concrete tables. This means we synthesize (offline!) two
-different functions for each table, one for additions and one for
-deletions. This works so long as we have a notion of transactions.
+\paragraph{Edit-Based Synthesis} Instead of trying to synthesize an arbitrary
+function from table instantiations to table instantiations, we reframe the
+problem to examining only the table edits, and call it \textsc{EditSynth}. The
+idea is: given two equivalent programs, for every edit to a logical table, can
+we synthesize an equivalent set of edits to the concrete tables. This means we
+synthesize (offline!) two different functions for each table, one for additions
+and one for deletions. This works so long as we have a notion of transactions.
 
 \todo[inline]{The following functions and objects need types!}
 
@@ -457,123 +454,99 @@ $\oplus$ and $s$.
 
 
 
-\subsection{Defunctionalizing the Problem}
+\subsection{Synthesis via Bounded Model Checking}
 
-Solvers don't like such high-order logic problems, so we'll describe how to
-convert these problems nearly into MSO.
+\todo[inline]{explain why this problem is too big}
 
-For every problem, we instrument the same concrete program in the same way, but
-we will instrument the logical program differently depending on the modification
-we are making to it.
+In order to shrink the complexity of the problem, we leverage the finiteness of
+updates. A single update to a single table can only affect finitely many
+tables. We suspect that there is a concrete upper bound on the number of
+concrete rules will need to be inserted or deleted for any single logical rule
+update. \todo[inline]{Think about this more deeply}
 
-\paragraph{Concrete Program \textsc{EditSynth}$(\oplus, t)$}
+We use a technique similar to \emph{bounded model checking} to exploit the
+finite effect of each rule. In bounded model checking are asking the question
+for a given model size $n$. That is, \emph{for every logical edit $\rho$, does
+  there exists a sequence of exactly $n$ concrete edits $\rho_1, \ldots, \rho_n$
+  that produce equivalent changes}?
 
-For every table $t$, insert a set $\hole{\mathit{Del}_t}$, which indicates the
-set of rows to be deleted, and further insert a new match set $\hole{M_{t,i}}$
-for every action $c_i \in \actions t$. These will be existentially quantified in
-the place of $\vec{\hole{\rho}}$.
+To lift this to a synthesis problem, called $\textsc{EditSynth}[n]$ for a given
+$n$, we will instead synthesize a sequence of $n$ functions
+$f_i : \Edit \to \Edit$, each producing a single $\rho$, such that applying the
+sequence of edits $f_1(\rho), \ldots, f_n(\rho)$ to the concrete network has the
+same effect as applying $\rho$ to the logical network. This problem is described
+in Figure~\ref{fig:problems}.
 
-Concretely, we can define a new translation $\hole{}\parenbb{t\; g}$,
-which inserts these existential holes:
+Our compilation of GCL programs with tables to GCL programs without tables so
+far only works with concrete encodings. Figure~\ref{fig:symbolic-encoding} presents a
+symbolic encoding that allows for symbolic (or concrete) edits to be inserted.
 
-\[\begin{array}{lcl}
-    \hole\parenbb{t\; g}
-    & \triangleq
-    & \assume{\forall i\neq j. \textsf{disjoint}(M_i,M_j)}; \\
-    && \assume{\forall i\neq j. \textsf{disjoint}(\hole M_i,\hole M_j)};\\
-    && \assume{\forall i,j. \textsf{disjoint}(\hole M_i, M_j)} \\
-    && \assume{\forall i. \textsf{disjoint}(\hole M_i, \hole{Del})} \\
-    && \displaystyle \Angel_{c_i \in \actions t}
-       \left(\begin{array}{c}
-         \assume{\keys t \in M_i}; \\
-         \assume{\keys t \not\in \hole{\mathit{Del}}};\\
-         c_i \\
-       \end{array}\right)\\
-    && \angel \displaystyle \Angel_{c_i \in \actions t}
-       \left(\begin{array}{c}
-               \assume{\keys t \in \hole{M_i}}; \\
-               c_i \\
-             \end{array}\right)\\
-    && \displaystyle \angel \left(\assume{\bigwedge_{c_i \in \actions t}
-       \begin{array}{c}
-         \keys t \not\in M_i\\
-         \wedge \keys t \not\in \hole M_i
-       \end{array}}; c_d\right)
-    %    \assume(\keys t \in M_i\right)}; c_i\right)     
-\end{array}\]
+\begin{figure}[ht]
+  \[\begin{array}{r >{\triangleq}c l}
+      \parenbb{x:=e}_\tau^{\vec\rho}
+      && x:=e\\
+      \parenbb{c;c'}_\tau^{\vec\rho}
+      && \parenbb{c}_\tau^{\vec\rho};\parenbb{c'}_\tau^{\vec\rho} \\
+      \parenbb{c \angel c'}_\tau^{\vec\rho}
+      && \parenbb{c}_\tau^{\vec\rho} \angel \parenbb{c'}_\tau^{\vec\rho} \\
+      \parenbb{\assert b}_\tau^{\vec\rho}
+      && \assert b\\
+      \parenbb{\assume b}_\tau^{\vec\rho}
+      && \assume b\\
+      \parenbb{\apply {s,\vec k, \vec c, c_d}}_\tau^{\vec\rho}
+      && \Angel_{c_i}\mathsf{matchDel}(\tau, \vec\rho, s, c_i) \\
+      \multicolumn 2 l {} & \angel \mathsf{newMatches}(\vec\rho, \vec k, s, \vec c) \\
+      \multicolumn 2 l {} & \angel \mathsf{newDefault}(\tau, \vec\rho, \vec k,s, \vec c, c_d)\end{array}\]
+  \[\begin{array}{r c l}
+      \hline\\
+      \mathsf{matchDel}(\tau,\vec\rho,s,c_i)
+      &\triangleq
+      &\assume{\vec k \in M_i(\tau(s))} \\
+      &;&\assume{\bigwedge_{(-,s,\vec e, i) \in \vec \rho} \vec k \neq \vec e}\\
+      &;&c_i \\
+      \mathsf{newMatches}(\vec\rho, \vec k, s, \vec c)
+      &\triangleq
+      &\Angel_{(+,s,\vec e, i) \in \rho} \assume {\vec k = \vec e}; c_i \\
+      \mathsf{newDefault}(\tau, \vec\rho,\vec k, s, \vec c, c_d) &\triangleq& \assume \bigwedge_{c_i}k\not\in M_i(\tau_s) \\
+      && \qquad\;\;\vee \bigvee_{(-,s,\vec e, i) \in \rho} \vec k = \vec e\\
+      &;& c_d
+    \end{array}\]
+  \caption{Symbolic Encoding of Tables, and helper functions}
+  \label{fig:symbolic-encoding}
 
+\end{figure}
 
-We can then lift $\hole\parenbb{t\; g}$ to whole programs and table
-instantiation functions in the same way we did for $\parenbb{t\; g}$.
+In order to properly synthesize these $f_i$s, we leverage both Counter Example
+Guided Inductive Synthesis (CEGIS)~\cite{CEGIS}, and Sketch~\cite{Sketch}. We
+describe the algorithm in $N$ steps.
 
+\paragraph{Step 0: Initialization.} The inputs are we are given two unconfigured
+network programs, a \textbf{l}ogical program $c_l$ and a conc\textbf{r}ete
+program $c_r$. When a network begins running, every table starts off with the
+empty configuration: $\langle\rangle$. So, we provide $c_l$ with such an
+instantiation: $\lambda s. \langle \rangle$. Since we have this concrete
+instantiation, we can solve $\textsc{InstSynth}(\lambda s. \langle\rangle)$ to
+produce a configuration $\tau_l$ such that
+$\wp_{\langle\rangle}(c_r) \Leftrightarrow \wp_{\tau_l}(c_l)$.
 
+\paragraph{Step 1: Search for Model Size.} Now that the assumption for
+$\textsc{EditCheck}[n]$, for all $n$ is satisfied, we can attempt to solve for
+both $n$, by searching for the minimum $n$ via a grid search.
 
-\paragraph{Logical Program for \textsc{EditSynth}$(+,s)$}
+\paragraph{Step 2: Synthesize $f_i$s.} Now, we can solve $\textsc{EditSynth}[n]$
+for the $n$ we computed in the previous step. To do this, we leverage
+Synthesis-by-Sketching and CEGIS. The sketch that we use to model each $f_i$ is
+the following:
+\[f_i(\rho) \triangleq \texttt{repeat}(*)\left(\texttt{if }(?\rho_i = \rho)\;\{\texttt{return }?\rho'_i\}\right)\]
 
-To solve the \textsc{EditSynth}$(+,x)$, we add a single new rule to the table
-$t$. To do this, we produce a (universally-quantified) symbolic match value
-$m_i$ key $e_i$. We also need so specify which action we want to take, which is
-specified by the index $a$. As above, we replace $\parenbb{t\;g}$ with
-$s^+\parenbb{t\; g}$, which is defined as follows:
-\[\begin{array}{lcl}
-    s^+\parenbb{(s,\vec e, \vec c, c_d) \; g}
-    &\triangleq
-    & \parenbb{(s,\vec e, \vec c, c_d) \; g} \\
-    s^+\parenbb{(s',\vec e, \vec c, c_d) \; g}
-    &\triangleq
-    & \assume{\forall i\neq j. \mathsf{disjoint}(M_i,M_j)}; \\
-    && \assume{\forall i. \hole{\vec e} \not\in M_i};\\
-    && \displaystyle \Angel_{c_i}
-       \assume{\left(\vec e \in M_i\right)}; c_i\\
-    && \displaystyle \angel \assert{\vec e = \vec m}; c_{\hole a}\\
-    && \displaystyle \angel \assert{\bigwedge_{c_i} \vec e \not\in M_i}; c_d
-\end{array}\]
+which examines the value of $\rho$ some number () of times by comparing it with
+the hole $?\rho_i$ and producing a corresponding hole $?\rho'$. We generate
+candidate solutions $f_1,\ldots, f_n$ by solving $\textsc{EditSynth}[n](\rho)$
+for a randomly generated $\rho$. Now we can generate counter-examples $\rho_c$
+by having Z3 attempt to solve $\textsc{EditVerif}[n](f_1,\ldots,f_n)$; we
+terminate if Z3 proves that there is no counter example, otherwise, we loop back
+to $\textsc{EditSynth}[n](\rho_c)$. \todo[inline]{widening? Narrowing?}
 
-Now we can synthesize check whether a solution to \textsc{EditSynth}$(+,s)$
-exists by validating the following formula. We universally quantify over the new
-matches $\vec m$ and action $i$ as well as the existing logical match sets
-$M^l_{i,t}$ for each table $t$ in $c_r$, with $c_i \in \actions t$, and the
-existing concrete match sets $M^r_{i,t}$ for each table $t$ in $c_l$, with
-$c_i \in \actions t$. Then we existentially quantify (these are the holes) over
-match sets $\hole{M_{t,i}}$ for each table $t$ and $c_i \in \actions t$, and
-deletion sets $\hole{Del_t}$ for each table $t$ in $c_r$
-
-\[\begin{array}{l}
-    \text{Given}\; (c_r), (c_l) \\
-    \forall \vec m, i.\\
-    \quad \forall M^r_{t_1,0},\ldots,M^r_{t_n,n_m}. \\
-    \qquad \forall M^l_{t'_1,0}, \ldots M^l_{t'_n,n'_m}. \\
-    \qquad \quad \exists \hole{\mathit{Del}_{t'_1}}, \ldots,
-    \hole{\mathit{Del}_{t'_n}} \\
-    \qquad \quad \exists \hole{M^l_{t'_1,0}},\ldots, \hole{M^l_{t'_n,n'_m}}\\
-    \qquad \qquad \forall \fvs(c_r),\fvs(c_l).\\
-    \qquad \qquad \quad (\wp(\parenbb{c\; \tau_r}) \Leftrightarrow \wp(\parenbb{c\; \tau_l})) \\
-    \qquad \qquad \qquad \Rightarrow (s^+\parenbb{c_l\; \tau_l}) \Leftrightarrow (\hole\parenbb{c_r\; \tau_r}) \\
-  \end{array}\]
-
-
-\paragraph{Logical Program for \textsc{EditSynth}$(-,s)$}
-
-We do a similar thing when we need to remove a row from a table, except we only
-have check that each set does not contain the single row. As before, we replace
-$\parenbb{t\;g}$ with $s^-\parenbb{t\; g}$, which is defined as follows:
-\[\begin{array}{lcl}
-    s^-\parenbb{(s,\vec e, \vec c, c_d) \; g}
-    &\triangleq
-    & \parenbb{(s,\vec e, \vec c, c_d) \; g} \\
-    s^-\parenbb{(s',\vec e, \vec c, c_d) \; g}
-    &\triangleq
-    & \assume{\forall i\neq j. \mathsf{disjoint}(M_i,M_j)}; \\
-    && \assume{\exists! i. \hole{\vec e} \in M_i};\\
-    && \displaystyle \Angel_{c_i}
-       \assume{\left(\vec e \in M_i\wedge \vec e \neq \vec m \right )}; c_i\\
-    && \angel \assume{\vec e = \vec m}; c_d \\
-    && \displaystyle \angel \assert{\bigwedge_{c_i \in \actions t} \vec e \not\in M_i}; c_d
-\end{array}\]
-
-Then the problem is the same as the previous section replacing $s^+$ for $s^-$.
-
-\subsection{Bounded Model Checking}
-
-
-\subsection{Sketching the Function}
+\paragraph{Step 3: Produce $f$} Once we've synthesized the collection of
+$f_1, \ldots, f_n$, we can produce $f = \textsc{EditSynth}()$ by setting
+\[f(\rho) = \{f_1(\rho), \ldots, f_n(\rho)\}\]
