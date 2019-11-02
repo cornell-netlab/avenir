@@ -1,9 +1,11 @@
 %token <int> INT
 %token <string> ID
-%token QUESTION
+%token QUESTION COMMA
 %token TRUE
 %token FALSE
-%token OR AND NOT EQ LESS GREATER LEQ GEQ NEQ IMPLIES
+%token OR AND NOT IMPLIES
+%token EQ LESS GREATER LEQ GEQ NEQ
+%token PLUS TIMES MINUS
 %token LOC
 %token WHILE SKIP SEMICOLON ASSIGN
 %token ASSERT ASSUME ABORT
@@ -22,19 +24,19 @@
 %%
 
 main :
-| expression EOF  { $1 }
+| command EOF  { $1 }
 
-expression :
+command :
 | SKIP
   { Ast.Skip }
-| e = expression; SEMICOLON; ee = expression
-  { Ast.Seq (e, ee) }
-| WHILE; LPAREN; t = test; RPAREN; LBRACE; e = expression; RBRACE
-  { Ast.mkWhile t e }
+| c = command; SEMICOLON; cs = command
+  { Ast.Seq (c, cs) }
+| WHILE; LPAREN; t = test; RPAREN; LBRACE; c = command; RBRACE
+  { Ast.mkWhile t c }
 | LOC; ASSIGN; i = INT
   { Ast.SetLoc i }
-| f = ID; ASSIGN; v = value
-  { Ast.Assign (f, v) }
+| f = ID; ASSIGN; e = expr
+  { Ast.Assign (f, e) }
 | ASSERT; LPAREN; t = test ; RPAREN
   { Ast.Assert (t) }
 | ABORT
@@ -49,15 +51,24 @@ expression :
   { Ast.(Select (Ordered, s)) }
 
 select :
-| t = test; CASE; e = expression; BRACKETS { [ t, e ] }
-| t = test; CASE; e = expression { [ t, e ] }
-| t = test; CASE; e = expression; BRACKETS; s = select
-  { (t, e) :: s }
+| t = test; CASE; c = command; BRACKETS { [ t, c ] }
+| t = test; CASE; c = command;          { [ t, c ] }
+| t = test; CASE; c = command; BRACKETS; s = select
+  { (t, c) :: s }
 
-value :
-| i = INT { Ast.Int (i) }
-| x = ID  { Ast.Var (x) }
-| QUESTION; x = ID { Ast.Hole (x) }
+tuple :
+| e = expr; COMMA; e1 = expr { [e; e1] }
+| e = expr; COMMA; t = tuple { e :: t  }
+  
+expr :
+| i = INT { Ast.(Value1 (Int i)) }
+| x = ID  { Ast.Var1 (x) }
+| e = expr; PLUS; e1 = expr { Ast.(mkPlus e e1) }
+| e = expr; MINUS; e1 = expr { Ast.(mkPlus e e1) }
+| e = expr; TIMES; e1 = expr { Ast.(mkTimes e e1) }
+| LPAREN; t = tuple; RPAREN { Ast.(mkTuple t) }
+| LPAREN; e = expr; RPAREN { e }
+| QUESTION; x = ID { Ast.Hole1 (x) }
 
 test :
 | TRUE
@@ -72,18 +83,18 @@ test :
   { Ast.And (t, tt) }
 | NOT; t = test
   { Ast.Neg t }
-| v = value; EQ; vv = value
-  { Ast.Eq (v, vv) }
-| v = value; NEQ; vv = value
-  { Ast.Neg(Ast.Eq (v, vv)) }
-| v = value; LESS; vv = value
-  { Ast.Lt (v, vv) }
-| v = value; GREATER; vv = value
-  { Ast.Lt (vv, v) }
-| v = value; GEQ; vv = value
-  { Ast.Or(Ast.Lt(vv, v), Ast.Eq(vv, v)) }
-| v = value; LEQ; vv = value
-  { Ast.Or(Ast.Lt(v, vv), Ast.Eq(v, vv)) }
+| e = expr; EQ; ee = expr
+  { Ast.Eq (e, ee) }
+| e = expr; NEQ; ee = expr
+  { Ast.Neg(Ast.Eq (e, ee)) }
+| e = expr; LESS; ee = expr
+  { Ast.Lt (e, ee) }
+| e = expr; GREATER; ee = expr
+  { Ast.Lt (ee, e) }
+| e = expr; GEQ; ee = expr
+  { Ast.Or(Ast.Lt(ee, e), Ast.Eq(ee, e)) }
+| e = expr; LEQ; ee = expr
+  { Ast.Or(Ast.Lt(e, ee), Ast.Eq(e, ee)) }
 | LPAREN; t = test; RPAREN
   { t }
 | t = test; IMPLIES; tt = test

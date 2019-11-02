@@ -9,21 +9,22 @@ open Ast
 module StringMap = Map.Make (String)
     
 let string_of_map m =
-  StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value v) ^ ") " ^ acc)) m ~init:""
+  StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value1 v) ^ ") " ^ acc)) m ~init:""
    
-let rec mkZ3Value typ v ctx (deBruijn : int StringMap.t) : Z3.Expr.expr =
+let rec mkZ3Value typ (v : expr1) ctx (deBruijn : int StringMap.t) : Z3.Expr.expr =
   let open Z3.Arithmetic in
   let binop op e e'=
     op ctx [mkZ3Value typ e ctx deBruijn; mkZ3Value typ e' ctx deBruijn]
   in
   match v, typ with
-  | Int i, _ ->
-    Integer.mk_numeral_i ctx i
-  | Hole x, `Sat
-  | Var x, `Valid ->
+  | Value1 (Int i), _ ->
+     Integer.mk_numeral_i ctx i
+  | Value1 (VTuple _ ), _  | Tuple _, _ -> failwith "Don't know how to convert tuples to Z3 yet"
+  | Hole1 x, `Sat
+  | Var1 x, `Valid ->
     Integer.mk_const_s ctx x
-  | Var x, `Sat
-  | Hole x, `Valid  ->
+  | Var1 x, `Sat
+  | Hole1 x, `Valid  ->
      begin match StringMap.find deBruijn x with
      | None -> failwith ( "unbound variable " ^ x) 
      | Some x' -> Z3.Quantifier.mk_bound ctx x' (Integer.mk_sort ctx)
@@ -32,27 +33,35 @@ let rec mkZ3Value typ v ctx (deBruijn : int StringMap.t) : Z3.Expr.expr =
   | Times (e, e'), _ -> binop mk_mul e e'
   | Minus (e, e'), _ -> binop mk_sub e e'
 
+let emptyset ctx = Z3.Z3Array.mk_const_array ctx (Z3.Arithmetic.Integer.mk_sort ctx) (Z3.Boolean.mk_false ctx)
 
+let rec value2_to_list (set : value2) : value1 list =
+  match set with
+  | Empty -> []
+  | VSingle v -> [v]
+  | VUnion (setL,setR) -> value2_to_list setL @ value2_to_list setR
+                 
 let rec mkZ3Value2 typ set ctx (deBruijn : int StringMap.t) : Z3.Expr.expr =
   match set, typ with
+  | Value2 (vSet), _ -> List.fold (value2_to_list vSet) ~init:(emptyset ctx)
+                       ~f:(fun acc v -> Z3.Z3Array.mk_store ctx acc (mkZ3Value typ (Value1 v) ctx deBruijn) (Z3.Boolean.mk_true ctx))
+     
   | Var2 x, `Sat | Hole2 x, `Valid -> Z3.Z3Array.mk_const_s ctx x (Z3.Arithmetic.Integer.mk_sort ctx) (Z3.Arithmetic.Integer.mk_sort ctx)
   | Var2 x, `Valid | Hole2 x, `Sat ->
      begin match StringMap.find deBruijn x with
      | None -> failwith ("unbound second-order variable" ^ x)
      | Some x' -> Z3.Quantifier.mk_bound ctx x' (Z3.Z3Array.mk_sort ctx (Z3.Arithmetic.Integer.mk_sort ctx) (Z3.Arithmetic.Integer.mk_sort ctx))
      end
-  | Singleton e, _ ->
-     let open Z3.Z3Array in
-     let emptyset = mk_const_array ctx (Z3.Arithmetic.Integer.mk_sort ctx) (Z3.Boolean.mk_false ctx) in
-     Z3.Z3Array.mk_store ctx emptyset (mkZ3Value typ e ctx deBruijn) (Z3.Boolean.mk_true ctx)
+  | Single e, _ ->
+     Z3.Z3Array.mk_store ctx (emptyset ctx) (mkZ3Value typ e ctx deBruijn) (Z3.Boolean.mk_true ctx)
   | Union (s,s'), _ -> Z3.Z3Array.mk_map ctx
                          (Z3.Expr.get_func_decl (Z3.Boolean.mk_and ctx []))
                          [ mkZ3Value2 typ s ctx deBruijn
                          ; mkZ3Value2 typ s' ctx deBruijn]
                       
 let rec mkZ3Test typ t ctx deBruijn =
-  let z3_value (v : value) = mkZ3Value typ v ctx deBruijn in
-  let z3_value2 (set : value2) = mkZ3Value2 typ set ctx deBruijn in 
+  let z3_value (v : expr1) = mkZ3Value typ v ctx deBruijn in
+  let z3_value2 (set : expr2) = mkZ3Value2 typ set ctx deBruijn in 
   let z3_test t = mkZ3Test typ t ctx deBruijn in 
   match t with 
   | True -> Z3.Boolean.mk_true ctx
@@ -115,7 +124,7 @@ let mkMotleyExpr expr =
 *) 
 let mkMotleyModel model = 
   let consts = Z3.Model.get_const_decls model in
-  let name_vals: (string * value) list = (List.map
+  let name_vals: (string * value1) list = (List.map
     ~f:(fun func_decl ->
       let name = (Z3.Symbol.get_string (Z3.FuncDecl.get_name func_decl)) in
       let value = Z3.Model.get_const_interp model func_decl in

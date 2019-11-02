@@ -1,48 +1,39 @@
 open Core
 open Ast    
 
-let rec evalExpr (pkt_loc : Packet.located) ( e : value ) : int option =
-  let binop op e e' = match evalExpr pkt_loc e, evalExpr pkt_loc e' with
-    | None, _ -> None
-    | _, None -> None
-    | Some x, Some y -> Some (op x y)
-  in
+let rec eval_expr1 (pkt_loc : Packet.located) ( e : expr1 ) : value1 =
+  let binop op e e' = op (eval_expr1 pkt_loc e) (eval_expr1 pkt_loc e') in
   match e with
-  | Int i -> Some i
-  | Var v -> Some (Packet.get_val (fst pkt_loc) v)
-  | Hole _ -> None
-  | Plus  (e, e') -> binop ( + ) e e'
-  | Times (e, e') -> binop ( * ) e e'
-  | Minus (e, e') -> binop ( - ) e e'
+  | Value1 v -> v
+  | Var1 v -> Packet.get_val (fst pkt_loc) v
+  | Hole1 h -> failwith ("Cannot evaluate symbolic hole " ^ h)
+  | Plus  (e, e') -> binop add_values1 e e'
+  | Times (e, e') -> binop multiply_values1 e e'
+  | Minus (e, e') -> binop subtract_values1 e e'
+  | Tuple es -> List.map es ~f:(eval_expr1 pkt_loc) |> VTuple
 
 
-let rec evalExpr2 (pkt_loc : Packet.located) ( e : value2 ) : int list =
+let rec eval_expr2 (pkt_loc : Packet.located) ( e : expr2 ) : value2 =
   match e with
-  | Var2 s -> Printf.printf "Warning::Cannot evaluate (symbolic) second-order variable %s, skipping ...\n%!" s;
-              []
-  | Hole2 s -> Printf.printf "Warning::Cannot evaluate (symbolic) second-order hole %s, skipping ...\n%!" s;
-               []
-  | Singleton e -> begin match evalExpr pkt_loc e with
-                   | None -> []
-                   | Some i -> [i]
-                   end
-  | Union (set, set') -> evalExpr2 pkt_loc set @ evalExpr2 pkt_loc set'
+  | Value2 v -> v
+  | Var2 s -> failwith ("Cannot evaluate (symbolic) second-order variable " ^ s)
+  | Hole2 s -> failwith("Cannot evaluate (symbolic) second-order hole " ^ s)
+  | Single e -> eval_expr1 pkt_loc e  |> VSingle
+  | Union (set, set') -> VUnion(eval_expr2 pkt_loc set, eval_expr2 pkt_loc set')
   
-                   
-let member (pkt_loc : Packet.located) (e : value) (set : value2) =
-  match evalExpr pkt_loc e with
-  | None -> false
-  | (Some i) -> List.exists ~f:((=) i) (evalExpr2 pkt_loc set)
-      
-  
+
+let rec memberVal (elem : value1) (set : value2) : bool =
+  match set with
+  | Empty -> false
+  | VSingle v -> elem = v
+  | VUnion (setl, setr) -> memberVal elem setl || memberVal elem setr
+                       
+let member (pkt_loc : Packet.located) (e : expr1) (set : expr2) : bool =
+  memberVal (eval_expr1 pkt_loc e) (eval_expr2 pkt_loc set)
                    
 let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   let binopt op a b = op (check_test a pkt_loc) (check_test b pkt_loc) in
-  let binope op e e' = match evalExpr pkt_loc e, evalExpr pkt_loc e' with
-    | None, _ -> true
-    | _, None -> true
-    | Some x, Some y -> op x y
-  in
+  let binope op e e' = op (eval_expr1 pkt_loc e) (eval_expr1 pkt_loc e') in
   match cond with
   | True -> true
   | False -> false
@@ -55,8 +46,8 @@ let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   | Neg (cond) -> not (check_test cond pkt_loc)
   | And (a, b) -> binopt (&&) a b
   | Or (a, b) -> binopt (||) a b
-  | Eq (e,e') -> binope (=) e e'
-  | Lt (e,e') -> binope (<) e e'
+  | Eq (e,e') -> binope (equal_values1) e e'
+  | Lt (e,e') -> binope (lt_values1) e e'
   | Member (e, set) -> member pkt_loc e set
 	 
 let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packet.located * (int list)) option =
@@ -84,8 +75,8 @@ let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packe
     | SetLoc i ->
       (* Printf.printf "\tSetting Loc to %d\n" i; *)
       Some ((pkt, Some i), [i])
-    | Assign (f, v) ->
-      Some ((Packet.set_field_of_value pkt f v, loc_opt), [])
+    | Assign (f, e) ->
+      Some ((Packet.set_field_of_expr1 pkt f e, loc_opt), [])
     | Assert (t) ->
       if check_test t pkt_loc then
         Some (pkt_loc, [])

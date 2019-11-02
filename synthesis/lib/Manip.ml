@@ -76,11 +76,12 @@ let rec substitute ex subsMap =
   let subst = get_val subsMap in
   let rec substituteE e =
     match e with
-    | Var field -> subst field e
-    | Int _ | Hole _ -> e
+    | Var1 field -> subst field e
+    | Value1 _ | Hole1 _ -> e
     | Plus (e, e') -> Plus (substituteE e, substituteE e')
     | Times (e, e') -> Times (substituteE e, substituteE e')
     | Minus (e, e') -> Minus (substituteE e, substituteE e')
+    | Tuple es -> List.map es ~f:substituteE |> Tuple
   in
   match ex with
   | True | False | LocEq _ -> ex
@@ -148,19 +149,21 @@ let rec wp c phi =
 
 (** [fill_holes(|_value|_test]) replace the applies the substitution
    [subst] to the supplied cmd|value|test. It only replaces HOLES, and
-   has no effect n vars *)
-let rec fill_holes_value v subst =
-  let binop op e e' = op (fill_holes_value e subst) (fill_holes_value e' subst) in
-  match v with
-  | Int _ | Var _ -> v
-  | Hole h ->
+   has no effect on vars *)
+let rec fill_holes_expr1 e (subst : value1 StringMap.t) =
+  let fill_holesS e = fill_holes_expr1 e subst in
+  let binop op e e' = op (fill_holesS e) (fill_holesS e') in
+  match e with
+  | Value1 _ | Var1 _ -> e
+  | Hole1 h ->
      begin match StringMap.find subst h with
-     | None -> v
-     | Some v' -> v'
+     | None -> e
+     | Some v -> Value1 v
      end
   | Plus (e, e') -> binop mkPlus e e'
   | Minus (e, e') -> binop mkMinus e e'
   | Times (e, e') -> binop mkTimes e e'
+  | Tuple es -> List.map es ~f:(fill_holesS) |> Tuple
 
 
 (* Fills in first-order holes according to subst  *)                  
@@ -171,19 +174,19 @@ let rec fill_holes_test t subst =
   | Neg a -> mkNeg (fill_holes_test a subst)
   | And (a, b) -> binop mkAnd fill_holes_test  a b
   | Or (a, b)  -> binop mkOr  fill_holes_test  a b
-  | Lt (a, b)  -> binop mkLt  fill_holes_value a b
-  | Eq (a, b)  -> binop mkEq  fill_holes_value a b
-  | Member (a, s) -> Member(fill_holes_value a subst, s)
+  | Lt (a, b)  -> binop mkLt  fill_holes_expr1 a b
+  | Eq (a, b)  -> binop mkEq  fill_holes_expr1 a b
+  | Member (a, s) -> Member(fill_holes_expr1 a subst, s)
 
 let rec fill_holes (c : cmd) subst =
   let rec_select = concatMap ~c:(@)
                      ~f:(fun (cond, act) ->
                        [(fill_holes_test cond subst, fill_holes act subst)]) in
   match c with
-  | Assign (f, Hole h) ->
+  | Assign (f, Hole1 h) ->
      begin match StringMap.find subst h with
      | None -> c
-     | Some v -> Assign (f, v)
+     | Some v -> Assign (f, Value1 v)
      end
   | SetLoc _ | Assign (_, _) -> c
   | Seq (firstdo, thendo) ->

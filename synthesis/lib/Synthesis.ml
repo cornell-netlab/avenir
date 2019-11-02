@@ -87,15 +87,15 @@ let complete_inner ~falsify (cmd : cmd) =
     let hole_replace x comp =
       if falsify
       then False
-      else comp x (Int (random_int_nin domain))
+      else comp x (Value1 (Int (random_int_nin domain)))
     in
     match t with
     | True | False | LocEq _ -> t
     | Neg b -> !%(complete_aux_test ~falsify b)
     | And (a, b) -> complete_aux_test ~falsify a %&% complete_aux_test ~falsify b
     | Or (a, b) -> complete_aux_test ~falsify a %+% complete_aux_test ~falsify b
-    | Eq (Hole _, x) | Eq (x, Hole _) -> hole_replace x (%=%)
-    | Lt (Hole _, x) | Lt (x, Hole _) -> hole_replace x (%<%)
+    | Eq (Hole1 _, x) | Eq (x, Hole1 _) -> hole_replace x (%=%)
+    | Lt (Hole1 _, x) | Lt (x, Hole1 _) -> hole_replace x (%<%)
     | Eq _ | Lt _ -> t
     | Member _ -> failwith "What do?"
   and complete_aux ~falsify cmd =
@@ -104,7 +104,7 @@ let complete_inner ~falsify (cmd : cmd) =
     | Assign (f, v) ->
       begin
         match v with
-        | Hole _ -> f %<-% Int (random_int_nin domain)
+        | Hole1 _ -> f %<-% Value1 (Int (random_int_nin domain))
         | _ -> cmd
       end
     | Assert b -> Assert (complete_aux_test ~falsify b)
@@ -174,65 +174,62 @@ let get_one_model (pkt : Packet.t) (logical : cmd) (real : cmd) =
   end in 
   find_match all_traces
 					
-let rec fixup_val v model : value =
-  let binop op e e' = op (fixup_val e model) (fixup_val e' model) in
-  match v with
-  | Int _ | Var _ -> v
-  | Hole h -> 
+let rec fixup_val (model : value1 StringMap.t) (e : expr1)  : expr1 =
+  let binop op e e' = op (fixup_val model e) (fixup_val model e') in
+  match e with
+  | Value1 _ | Var1 _ -> e
+  | Hole1 h -> 
      begin match StringMap.find model h with
-     | None -> v
-     | Some v' -> v'
+     | None -> e
+     | Some v' -> Value1 v'
      end
   | Plus  (e, e') -> binop mkPlus  e e'
   | Times (e, e') -> binop mkTimes e e'
   | Minus (e, e') -> binop mkMinus e e'
+  | Tuple es -> List.map es ~f:(fixup_val model) |> Tuple
 
-let rec fixup_val2 set model : value2 =
+let rec fixup_val2 (model : value1 StringMap.t) (set : expr2) : expr2 =
   match set with
-  | Var2 x -> Var2 x
+  | Value2 _ | Var2 _ -> set
   | Hole2 _ -> failwith "Second-order holes not supported"
-     (* begin match StringMap.find model h with
-      * | None -> v
-      * | Some v -> failwith "Model Construction is incomplete"
-      * end *)
-  | Singleton e -> Singleton (fixup_val e model)
-  | Union (s,s') -> Union (fixup_val2 s model, fixup_val2 s' model)
+  | Single e -> Single (fixup_val model e)
+  | Union (s,s') -> Union (fixup_val2 model s, fixup_val2 model s')
 
-let rec fixup_test t model =
-  let binop ctor call left right = ctor (call left model) (call right model) in 
+let rec fixup_test (model : value1 StringMap.t) (t : test) : test =
+  let binop ctor call left right = ctor (call left) (call right) in 
   match t with
   | True | False | LocEq _ -> t
-  | Neg p -> mkNeg (fixup_test p model)
-  | And(p, q) -> binop mkAnd fixup_test p q
-  | Or(p, q) -> binop mkOr fixup_test p q
-  | Eq (v, w) -> binop mkEq fixup_val v w
-  | Lt (v, w) -> binop mkLt fixup_val v w
-  | Member(v,set) -> Member (fixup_val v model, fixup_val2 set model)
+  | Neg p -> mkNeg (fixup_test model p)
+  | And(p, q) -> binop mkAnd (fixup_test model) p q
+  | Or(p, q) -> binop mkOr (fixup_test model) p q
+  | Eq (v, w) -> binop mkEq (fixup_val model) v w
+  | Lt (v, w) -> binop mkLt (fixup_val model) v w
+  | Member(v,set) -> Member (fixup_val model v, fixup_val2 model set)
 
-let rec fixup_selects es model =
+let rec fixup_selects (model : value1 StringMap.t) (es : (test * cmd) list) =
   match es with
   | [] -> []
   | (cond, act)::es' ->
-    let cond' = fixup_test cond model in
+    let cond' = fixup_test model cond in
     let act' = fixup act model in
     (cond', act') :: (
       if cond = cond' && act = act' then
-        fixup_selects es' model
+        fixup_selects model es'
       else
-        (cond, act) :: fixup_selects es' model
+        (cond, act) :: fixup_selects model es'
     )
     
-and fixup (real:cmd) (model : value StringMap.t) : cmd =
+and fixup (real:cmd) (model : value1 StringMap.t) : cmd =
   (* Printf.printf "FIXUP WITH MODEL: %s\n%!\n" (string_of_map model); *)
   match real with
   | Skip -> Skip
   | SetLoc l -> SetLoc l
-  | Assign (f, v) -> Assign(f, fixup_val v model)
-  | Assert t -> Assert (fixup_test t model)
-  | Assume t -> Assume (fixup_test t model)
+  | Assign (f, v) -> Assign(f, fixup_val model v)
+  | Assert t -> Assert (fixup_test model t)
+  | Assume t -> Assume (fixup_test model t)
   | Seq (p, q) -> Seq (fixup p model, fixup q model)
-  | While (cond, body) -> While (fixup_test cond model, fixup body model)
-  | Select (styp,cmds) -> fixup_selects cmds model |> mkSelect styp
+  | While (cond, body) -> While (fixup_test model cond, fixup body model)
+  | Select (styp,cmds) -> fixup_selects model cmds |> mkSelect styp
   | Apply (name, keys, acts, dflt)
     -> Apply (name
             , keys
@@ -244,7 +241,7 @@ let unroll_fully c = unroll (diameter c) c
 let symbolic_pkt fvs = 
     List.fold fvs ~init:(True, 0)
       ~f:(fun (acc_test, fv_count) var ->
-          (Var var %=% Var ("$" ^ string_of_int fv_count)
+          (Var1 var %=% Var1 ("$" ^ string_of_int fv_count)
            %&% acc_test
           , fv_count + 1)
         )
@@ -274,7 +271,7 @@ let implements logical real =
 (** solves the inner loop **)
 let solve_concrete ?packet:(packet=None) (logical : cmd) (real : cmd) =
   let fvs = free_vars_of_cmd logical @ free_vars_of_cmd real in
-  let values = multi_ints_of_cmd logical in
+  let values = multi_ints_of_cmd logical |> List.map ~f:(fun x -> Int x) in
   let pkt = packet |> Option.value ~default:(Packet.generate fvs ~values) in
   let model = get_one_model pkt logical real in
   let real' =  fixup real model in
@@ -299,7 +296,16 @@ let rec add_symbolic_row (name:string) (c:cmd) =
   | While (b, c)
     -> While (b, add_symbolic_row name c) 
   | Apply (name', keys, actions, default)
-    -> if name = name' then  failwith "TODO:: IMPLEMENT THE ADDING"
+    -> if name = name' then
+         let () = Printf.printf "WARNING::ASSUMING THERE IS EXACTLY ONE KEY IN TABLE %s" name in
+         let matchExpr ks =  List.map ks ~f:(fun x -> Var1 x) |> Tuple in
+         let rho = List.map keys ~f:(fun k -> Var1 (k^"!new")) |> Tuple in
+         List.foldi actions ~init:[]
+           ~f:(fun i acc act ->
+             (Member(matchExpr keys, Var2 ("M_"^name^string_of_int i))
+              %&% ((matchExpr keys) %<>% rho)
+             , act) :: acc )
+         |> mkSelect Partial
        else Apply (name', keys, actions, default)
 
 (* enables at most [n] additions to each table in [c] *)

@@ -1,98 +1,217 @@
 open Core
 open Util
 
-type value =
-  | Var of string
-  | Hole of string
+type value1 =
   | Int of int
-  | Plus of (value * value)
-  | Times of (value * value)
-  | Minus of (value * value)
+  | VTuple of (value1 list)
+   
+type expr1 =
+  | Value1 of value1
+  | Var1 of string
+  | Hole1 of string
+  | Plus of (expr1 * expr1)
+  | Times of (expr1 * expr1)
+  | Minus of (expr1 * expr1)
+  | Tuple of (expr1 list)
 
-let rec string_of_value v =
+let mkTuple es =
+  let rec all_val acc es = match es with
+    | [] -> Some acc
+    | ((Value1 v)::es) -> all_val (v::acc) es
+    | _  -> None 
+  in
+  match all_val [] es with
+  | None -> Tuple es
+  | Some vs -> Value1 (VTuple vs)
+
+type value2 =
+  | Empty
+  | VSingle of value1
+  | VUnion of (value2 * value2)
+           
+type expr2 =
+  | Value2 of value2
+  | Hole2 of string
+  | Var2 of string
+  | Single of expr1
+  | Union of (expr2 * expr2)
+
+let mkSingle (e : expr1) =
+  match e with
+  | Value1 v -> Value2 (VSingle v)
+  | _ -> Single e
+
+let mkUnion (e : expr2) (e' : expr2) =
+  match e, e' with
+  | Value2 v, Value2 v' -> VUnion (v, v') |> Value2
+  | _, _ -> Union (e, e')
+
+let mkEmpty : expr2 = Value2 Empty          
+           
+let rec string_of_value1 (v : value1) : string =
   match v with
-  | Var s -> s
-  | Hole s -> "?" ^ s
   | Int i -> string_of_int i
-  | Plus (e, e') -> string_of_value e ^ " + " ^ string_of_value e'
-  | Times (e, e') -> "(" ^ string_of_value e ^ " * " ^ string_of_value e' ^ ")"
-  | Minus (e, e') -> string_of_value e ^ " - " ^ string_of_value e'
+  | VTuple vs -> "(" ^ concatMap vs
+                         ~c:(fun s s' -> s ^ "," ^ s')
+                         ~f:(string_of_value1)
+                 ^ ")"
+let rec string_of_expr1 (e : expr1) : string =
+  match e with
+  | Value1 v -> string_of_value1 v
+  | Var1 s -> s
+  | Hole1 s -> "?" ^ s
+  | Tuple es -> "(" ^ concatMap es
+                        ~c:(fun c c' -> c ^ "," ^ c')
+                        ~f:(string_of_expr1)
+                ^ ")"
+  | Plus (e, e') -> "(" ^ string_of_expr1 e ^ " + " ^ string_of_expr1 e' ^ ")"
+  | Times (e, e') -> string_of_expr1 e ^ " * " ^ string_of_expr1 e'
+  | Minus (e, e') -> "(" ^ string_of_expr1 e ^ " - " ^ string_of_expr1 e' ^ ")"
 
-let rec sexp_string_of_value v =
+let rec sexp_string_of_value1 (v : value1) =
   match v with
-  | Var s -> "Var(" ^ s ^ ")"
-  | Hole s -> "Hole(" ^ s ^ ")"  
   | Int i -> "Int(" ^ string_of_int i ^ ")"
+  | VTuple vs -> "VTuple([" ^ concatMap vs
+                                ~c:(fun s s' -> s ^ "," ^ s')
+                                ~f:(sexp_string_of_value1)
+                 ^ "])"
+                   
+let rec sexp_string_of_expr1 (e : expr1) =
+  match e with
+  | Value1 v -> "Value1(" ^ sexp_string_of_value1 v ^ ")"
+  | Var1 s -> "Var(" ^ s ^ ")"
+  | Hole1 s -> "Hole(" ^ s ^ ")"  
+  | Tuple es -> "Tuple([" ^
+                  concatMap es ~c:(fun c c' -> c ^ "," ^ c')
+                    ~f:sexp_string_of_expr1
+                  ^ "])"
   | Plus (e,e') ->
-     "Plus(" ^ sexp_string_of_value e ^ ", " ^ sexp_string_of_value e' ^ ")"
+     "Plus(" ^ sexp_string_of_expr1 e ^ ", " ^ sexp_string_of_expr1 e' ^ ")"
   | Times (e,e') ->
-     "Times(" ^ sexp_string_of_value e ^ ", " ^ sexp_string_of_value e' ^ ")"
+     "Times(" ^ sexp_string_of_expr1 e ^ ", " ^ sexp_string_of_expr1 e' ^ ")"
   | Minus (e, e') ->
-     "Minus(" ^ sexp_string_of_value e ^ ", " ^ sexp_string_of_value e' ^ ")"
+     "Minus(" ^ sexp_string_of_expr1 e ^ ", " ^ sexp_string_of_expr1 e' ^ ")"
 
+let mkInt i = Int i     
+let mkVInt i = Value1 (mkInt i)    
 let mkPlus e e' = Plus(e,e')
 let mkMinus e e' = Minus (e, e')
 let mkTimes e e' = Times (e, e')
 
-type value2 =
-  | Var2 of string
-  | Hole2 of string
-  | Singleton of value
-  | Union of (value2 * value2)
 
-let rec string_of_value2 v2 =
-  match v2 with
+let rec string_of_value2 (v : value2) : string =
+  match v with
+  | Empty -> "{}"
+  | VSingle v -> "{" ^ string_of_value1 v ^ "}"
+  | VUnion (v,v') -> string_of_value2 v ^ " U " ^ string_of_value2 v'
+
+let rec string_of_expr2 (e : expr2) : string =
+  match e with
+  | Value2 v2 -> string_of_value2 v2
   | Var2 s -> s
   | Hole2 s -> "?" ^ s
-  | Singleton v -> "{" ^ string_of_value v ^ "}"
-  | Union (v2, v2') -> string_of_value2 v2 ^ " U " ^ string_of_value2 v2'
+  | Single e1 -> "{" ^ string_of_expr1 e1 ^ "}"
+  | Union (e2, e2') -> string_of_expr2 e2 ^ " U " ^ string_of_expr2 e2'
 
-let rec sexp_string_of_value2 v2 =
-  match v2 with
+
+let rec sexp_string_of_value2 (v : value2) : string =
+  match v with
+  | Empty -> "Empty"
+  | VSingle v -> "VSingle(" ^ sexp_string_of_value1 v ^ "}"
+  | VUnion (v,v') -> "VUnion("
+                     ^ sexp_string_of_value2 v
+                     ^ "," ^ sexp_string_of_value2 v' ^ ")"
+                                               
+                     
+let rec sexp_string_of_expr2 (e : expr2) : string =
+  match e with
+  | Value2 v2 -> "Value2(" ^ sexp_string_of_value2 v2 ^")"
   | Var2 s -> "Var2("^ s ^")"
   | Hole2 s -> "Hole2(" ^ s ^ ")"
-  | Singleton v -> "Singleton(" ^ sexp_string_of_value v ^ ")"
-  | Union(v2, v2') -> "Union(" ^ sexp_string_of_value2 v2 ^ "," ^ sexp_string_of_value2 v2' ^")"
-                 
+  | Single e -> "Single(" ^ sexp_string_of_expr1 e ^ ")"
+  | Union(e, e') -> "Union(" ^ sexp_string_of_expr2 e ^ "," ^ sexp_string_of_expr2 e' ^")"
+
+
+let rec add_values1 (v : value1) (v' : value1) : value1 =
+  match v, v' with
+  | Int x, Int x' -> Int (x + x')
+  | Int _, VTuple vs | VTuple vs, Int _ -> VTuple (List.map ~f:(add_values1 v) vs)
+  | VTuple vs, VTuple vs' -> VTuple (vs @ vs')
+
+let rec multiply_values1 (v : value1) (v' : value1) : value1 =
+  match v, v' with
+  | Int x, Int x' -> Int (x * x')
+  | Int _, VTuple vs | VTuple vs, Int _ -> VTuple (List.map vs ~f:(multiply_values1 v))
+  | VTuple vs, VTuple vs' -> List.cartesian_product vs vs'
+                             |> List.map ~f:(fun (v,v') -> VTuple [v;v'])
+                             |> VTuple
+
+let rec subtract_values1 (v : value1) (v' : value1) : value1 =
+  match v, v' with
+  | Int x, Int x' -> Int (x - x')
+  | Int _, VTuple vs' -> VTuple (List.map vs' ~f:(fun v' -> subtract_values1 v v'))
+  | VTuple vs, Int _ -> VTuple (List.map vs ~f:(fun v -> subtract_values1 v v'))
+  | VTuple vs, VTuple vs' -> List.filter vs ~f:(fun v -> not (List.exists vs' ~f:(fun v' -> v = v')))
+                             |> VTuple
+
+let equal_values1 (v : value1) (v' : value1) : bool =
+  match v, v' with
+  | Int x, Int x' -> x = x'
+  | Int _ , VTuple _ | VTuple _, Int _ -> false
+  | VTuple vs, VTuple vs' -> List.equal (=) vs vs'
+  
+let rec lt_values1 (v : value1) (v' : value1) : bool =
+  match v, v' with
+  | Int x, Int x' -> x < x'
+  | Int _, VTuple _ | VTuple _, Int _ -> failwith "Incomparable, tuple and int"
+  | VTuple vs, VTuple vs' ->  List.compare (fun v v' ->
+                                  if equal_values1 v v' then
+                                    0
+                                  else if lt_values1 v v' then
+                                    -1
+                                  else
+                                    1) vs vs' < 0
+                  
 type test =
   | True | False
   | LocEq of int
-  | Eq of (value * value)
-  | Lt of (value * value)
-  | Member of (value * value2)
+  | Eq of (expr1 * expr1)
+  | Lt of (expr1 * expr1)
+  | Member of (expr1 * expr2)
   | And of (test * test)
   | Or of (test * test)
   | Neg of test       
 
-let mkEq v v' =
-  if v = v' then True else
-    let ord v = match v with
-      | Var _ -> 0
-      | Hole _ -> 1
-      | Int _ -> 2
+let mkEq (e : expr1) (e':expr1) =
+  if e = e' then True else
+    let ord e = match e with
+      | Var1 _ -> 0
+      | Hole1 _ -> 1
       | Plus _ -> 3
       | Minus _ -> 4
       | Times _ -> 5
+      | Tuple _ -> 6
+      | Value1 _ -> 7
     in
-    match v, v' with 
-    | Int _, Int _ -> False
-    | Hole x, Hole x'
-    | Var x, Var x' ->
-       if x < x' then Eq (v, v') else Eq (v', v)
+    match e, e' with 
+    | Value1 _, Value1 _ -> False
+    | Hole1 x , Hole1 x'
+    | Var1 x, Var1 x' ->
+       if x < x' then Eq (e, e') else Eq (e', e)
     | _, _ ->
-       if ord v < ord v' then Eq (v, v') else Eq (v', v)
+       if ord e < ord e' then Eq (e, e') else Eq (e', e)
 
-let mkLt v v' = match v, v' with
-    | Int first, Int second -> 
-      if first < second then True else False
-    | _, _ -> Lt(v, v')
+let mkLt (e : expr1) (e' : expr1) : test = match e, e' with
+    | Value1(Int first), Value1(Int second) -> 
+       if first < second then True else False
+    | _, _ -> Lt(e, e')
             
 let (%=%) = mkEq
 let (%<>%) v v' = Neg(v %=% v') 
 
 let (%<%) = mkLt
 
-let rec mkOr t t' =
+let rec mkOr (t : test) (t' : test) : test =
   match t, t' with
   | False, x  | x, False -> x
   | True, _ | _, True -> True
@@ -102,7 +221,7 @@ let rec mkOr t t' =
 
 let (%+%) = mkOr
 
-let rec mkAnd t t' =
+let rec mkAnd (t : test) (t' : test) =
   match t, t' with
   | True, x | x, True -> x
   | False, _ | _, False -> False
@@ -132,9 +251,9 @@ let rec string_of_test t =
   | True -> "true"
   | False -> "false"
   | LocEq i -> "loc = " ^ string_of_int i
-  | Eq (left, right) -> string_of_value left ^ " = " ^ string_of_value right
-  | Lt (left, right) -> string_of_value left ^ " < " ^ string_of_value right
-  | Member (expr, set) -> string_of_value expr ^ " in " ^ string_of_value2 set
+  | Eq (left, right) -> string_of_expr1 left ^ " = " ^ string_of_expr1 right
+  | Lt (left, right) -> string_of_expr1 left ^ " < " ^ string_of_expr1 right
+  | Member (expr, set) -> string_of_expr1 expr ^ " in " ^ string_of_expr2 set
   | Or (Neg(assum), conseq) -> "(" ^ string_of_test assum ^ " ==> " ^ string_of_test conseq ^ ")"
   | Or (left, right) -> "(" ^ string_of_test left ^ " || " ^ string_of_test right ^ ")"
   | And (left, right) -> "(" ^ string_of_test left ^ "&&" ^ string_of_test right ^ ")"
@@ -147,9 +266,9 @@ let rec sexp_string_of_test t =
   | True -> "True"
   | False -> "False"
   | LocEq l -> "LocEq(" ^ string_of_int l ^ ")"
-  | Eq  (left, right) -> binop "Eq" left right sexp_string_of_value
-  | Lt  (left, right) -> binop "Lt" left right sexp_string_of_value
-  | Member (expr, set) -> "Member(" ^ string_of_value expr ^ "," ^ string_of_value2 set ^ ")" 
+  | Eq  (left, right) -> binop "Eq" left right sexp_string_of_expr1
+  | Lt  (left, right) -> binop "Lt" left right sexp_string_of_expr1
+  | Member (expr, set) -> "Member(" ^ string_of_expr1 expr ^ "," ^ string_of_expr2 set ^ ")" 
   | Or  (left, right) -> binop "Or" left right sexp_string_of_test
   | And (left, right) -> binop "And" left right sexp_string_of_test
   | Neg t -> "Neg(" ^ sexp_string_of_test t ^ ")"
@@ -181,15 +300,15 @@ let rec free_of_test typ test =
   | Member _ -> Printf.printf "Warning [Ast.free_of_test] Dont know how to collect free variables from a membership query"; []
   | Eq (v, v') | Lt (v, v') ->
     match typ, v, v'  with
-    | `Var, Var x, Var x' ->
+    | `Var, Var1 x, Var1 x' ->
       [x; x']
-    | `Var, _, Var x
-    | `Var, Var x, _ ->
+    | `Var, _, Var1 x
+    | `Var, Var1 x, _ ->
       [x]
-    | `Hole, Hole x, Hole x' ->
+    | `Hole, Hole1 x, Hole1 x' ->
       [x; x']
-    | `Hole, Hole x, _
-    | `Hole, _, Hole x ->
+    | `Hole, Hole1 x, _
+    | `Hole, _, Hole1 x ->
       [x]
     | _ -> []
   end
@@ -198,18 +317,31 @@ let rec free_of_test typ test =
 let free_vars_of_test = free_of_test `Var
 let holes_of_test = free_of_test `Hole
 
-
-let rec multi_ints_of_expr v =
-  match v with
-  | Var _ | Hole _ -> []
+let rec multi_ints_of_value1 e =
+  match e with
   | Int i -> [i]
-  | Plus (v,v') | Times (v,v') | Minus (v,v')
-    -> multi_ints_of_expr v @ multi_ints_of_expr v'
+  | VTuple vs -> concatMap vs ~c:(@) ~f:multi_ints_of_value1
 
-let rec multi_ints_of_expr2 v2 =
+let rec multi_ints_of_expr1 e =
+  match e with
+  | Value1 v -> multi_ints_of_value1 v
+  | Var1 _ | Hole1 _ -> []
+  | Plus (e,e') | Times (e,e') | Minus (e,e')
+    -> multi_ints_of_expr1 e @ multi_ints_of_expr1 e'
+  | Tuple es ->
+     concatMap es ~init:(Some []) ~c:(@) ~f:multi_ints_of_expr1
+
+let rec multi_ints_of_value2 v2 =
   match v2 with
+  | Empty -> []
+  | VSingle v -> multi_ints_of_value1 v
+  | VUnion (v,v') -> multi_ints_of_value2 v @ multi_ints_of_value2 v'
+    
+let rec multi_ints_of_expr2 e2 =
+  match e2 with
   | Var2 _ | Hole2 _ -> []
-  | Singleton v -> multi_ints_of_expr v
+  | Value2 v -> multi_ints_of_value2 v 
+  | Single e -> multi_ints_of_expr1 e
   | Union (v,v') -> multi_ints_of_expr2 v @ multi_ints_of_expr2 v'
                   
 let rec multi_ints_of_test test =
@@ -222,9 +354,9 @@ let rec multi_ints_of_test test =
     | Neg t ->
        multi_ints_of_test t
     | Member (expr, set) ->
-       multi_ints_of_expr expr @ multi_ints_of_expr2 set
-    | Eq (v, v') | Lt (v, v') ->
-       multi_ints_of_expr v @ multi_ints_of_expr v'
+       multi_ints_of_expr1 expr @ multi_ints_of_expr2 set
+    | Eq (e, e') | Lt (e, e') ->
+       multi_ints_of_expr1 e @ multi_ints_of_expr1 e'
   end
 
 let rec remove_locs_neq l (t:test) : test =
@@ -262,7 +394,7 @@ let sexp_string_of_select_typ styp =
 type cmd =
   | Skip
   | SetLoc of int
-  | Assign of (string * value)
+  | Assign of (string * expr1)
   | Assert of test
   | Assume of test
   | Seq of (cmd * cmd)
@@ -360,8 +492,8 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
     (* repeat "\t" depth ^ *)
     "assume (" ^ string_of_test t ^ ")"
   | SetLoc i -> "loc := " ^ string_of_int i
-  | Assign (field, value) ->
-    field ^ " := " ^ string_of_value value
+  | Assign (field, expr) ->
+    field ^ " := " ^ string_of_expr1 expr
   | Select (styp, es) ->
     let modifier = (string_of_select_typ styp) in
     "if " ^ modifier ^
@@ -394,7 +526,7 @@ let rec sexp_string_of_cmd e : string =
   | Assert t -> "Assert(" ^ sexp_string_of_test t ^ ")"
   | Assume t -> "Assume(" ^ sexp_string_of_test t ^ ")"
   | SetLoc l ->  "SetLoc(" ^ string_of_int l ^ ")"
-  | Assign (f,v) -> "Assign(" ^ f ^ "," ^ string_of_value v ^")"
+  | Assign (f,e) -> "Assign(" ^ f ^ "," ^ string_of_expr1 e ^")"
   | Select (styp,es) ->
     let cases_string = match es with
       | [] -> "[]"
@@ -423,10 +555,10 @@ let rec tables_of_cmd (c:cmd) : string list =
 let rec free_of_cmd typ (c:cmd) : string list =
   begin match c with
   | Skip | SetLoc _ -> []
-  | Assign (f, v) ->
-     f :: (match v,typ with
-        | Hole x,`Hole -> [x]
-        | Var x, `Var -> [x]
+  | Assign (f, e) ->
+     f :: (match e,typ with
+        | Hole1 x,`Hole -> [x]
+        | Var1 x, `Var -> [x]
         | _, _ -> [] )
   | Seq (c, c') ->
      free_of_cmd typ c @ free_of_cmd typ c'
@@ -569,17 +701,17 @@ let no_negated_holes ss =
         | False
         | LocEq _
           -> false
-        | Eq (v, v')
-        | Lt (v, v')
-          -> begin match (v, v') with
-              | Hole _, _ | _, Hole _ ->
+        | Eq (e, e')
+        | Lt (e, e')
+          -> begin match (e, e') with
+              | Hole1 _, _ | _, Hole1 _ ->
                 true
               | _, _ ->
                 false
              end
         | Member (expr, set)
           -> begin match (expr, set) with
-             | Hole _, _ | _, Hole2 _ ->  true
+             | Hole1 _, _ | _, Hole2 _ ->  true
              | _ ,_ -> false
              end
         | Neg t' (* double-negation *)
@@ -618,35 +750,37 @@ let no_negated_holes ss =
 
 (** replace all vars in cmd that are also in holes with holes having the same name*)
 let holify holes c =
-  let rec holify_val v : value=
-    match v with
-    | Hole _ | Int _ -> v
-    | Var x ->
+  let rec holify_expr1 (e : expr1) : expr1 =
+    match e with
+    | Hole1 _ | Value1 _ -> e
+    | Var1 x ->
       begin match List.find holes ~f:(fun elem -> x = elem)  with
-      | None -> v
-      | Some _ -> Hole ("?" ^ x)
+      | None -> e
+      | Some _ -> Hole1 ("?" ^ x)
       end
-    | Plus (e,e') -> Plus (holify_val e, holify_val e')
-    | Times (e,e') -> Times (holify_val e, holify_val e')
-    | Minus (e,e') -> Minus (holify_val e, holify_val e')
+    | Plus (e,e') -> Plus (holify_expr1 e, holify_expr1 e')
+    | Times (e,e') -> Times (holify_expr1 e, holify_expr1 e')
+    | Minus (e,e') -> Minus (holify_expr1 e, holify_expr1 e')
+    | Tuple es -> List.map es ~f:holify_expr1 |>  Tuple 
   in
-  let rec holify_val2 v : value2 =
-    match v with
-    | Hole2 _ -> v
+  let rec holify_expr2 (e : expr2) : expr2 =
+    match e with
+    | Value2 _ -> e
+    | Hole2 _ -> e
     | Var2 x ->
        begin match List.find holes ~f:(fun elem -> x = elem) with
-       | None -> v
+       | None -> e
        | Some _ -> Hole2 ("?" ^ x)
        end
-    | Singleton e -> Singleton (holify_val e)
-    | Union (e,e') -> Union (holify_val2 e, holify_val2 e')
+    | Single e -> Single (holify_expr1 e)
+    | Union (e,e') -> Union (holify_expr2 e, holify_expr2 e')
   in
   let rec holify_test b : test =
     match b with
     | True | False | LocEq _ -> b
-    | Eq (v, v') -> holify_val v %=% holify_val v'
-    | Lt (v, v') -> holify_val v %<% holify_val v'
-    | Member (expr, set) -> Member(holify_val expr, holify_val2 set)
+    | Eq (e, e') -> holify_expr1 e %=% holify_expr1 e'
+    | Lt (e, e') -> holify_expr1 e %<% holify_expr1 e'
+    | Member (expr, set) -> Member(holify_expr1 expr, holify_expr2 set)
     | And (b, b') -> holify_test b %&% holify_test b'
     | Or (b, b')  -> holify_test b %+% holify_test b'
     | Neg b       -> !%(holify_test b)
@@ -654,7 +788,7 @@ let holify holes c =
   let rec holify_cmd c : cmd=
     match c with
     | Skip | SetLoc _ -> c
-    | Assign (f, v) -> f %<-% holify_val v
+    | Assign (f, e) -> f %<-% holify_expr1 e
     | Assert t -> Assert (holify_test t)
     | Assume t -> Assume (holify_test t)
     | Seq (c, c') ->
