@@ -92,3 +92,4 @@ let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packe
         trace_eval ~gas:(gas-1) (Seq(body,cmd)) pkt_loc
       else 
         Some (pkt_loc, [])
+    | Apply _ -> failwith "Cannot Evaluate table -- need configuration"

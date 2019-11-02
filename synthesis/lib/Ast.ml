@@ -234,6 +234,7 @@ type cmd =
   | Seq of (cmd * cmd)
   | While of (test * cmd)
   | Select of (select_typ * ((test * cmd) list))
+  | Apply of (string * string list * cmd list * cmd)
 
 
 let clean_selects_list =
@@ -336,6 +337,17 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
         ^ string_of_test cond  ^ " -> " ^ string_of_cmd ~depth:(depth+2) act ^ " []"
       )
     ^ "\n" ^ repeat "\t" depth ^ "fi"
+  | Apply (name, keys, acts, default) ->
+      name ^ "apply ("
+      ^ List.fold_left keys ~init:""
+          ~f:(fun str k ->
+            str ^ ";" ^ k)
+      ^ "," ^ List.fold_left acts ~init:""
+                ~f:(fun str a ->
+                  str ^ ";" ^ string_of_cmd a)
+      ^ "," ^ string_of_cmd default
+                                       
+            
   
 let rec sexp_string_of_cmd e : string =
   let string_select = concatMap 
@@ -355,6 +367,14 @@ let rec sexp_string_of_cmd e : string =
       | _  -> "[" ^ string_select es ^ "]"
     in
     "Select (" ^ sexp_string_of_select_typ styp ^ "," ^ cases_string ^ ")"
+  | Apply (name, keys, actions, default) ->
+     "Apply("
+     ^ name ^ ",["
+     ^ List.fold_left keys ~init:"" ~f:(fun str k -> str ^ ";\"" ^ k ^ "\"")
+     ^ "],["
+     ^ List.fold_left actions ~init:"" ~f:(fun str a -> str ^ ";" ^ sexp_string_of_cmd a)
+     ^ "]," ^ sexp_string_of_cmd default
+     ^ ")"
 
   
 let rec free_of_cmd typ (c:cmd) : string list =
@@ -377,8 +397,13 @@ let rec free_of_cmd typ (c:cmd) : string list =
         @ free_of_cmd typ action
         @ fvs
       )
+  | Apply (_,_,actions, default) ->
+     List.fold actions
+       ~init:(free_of_cmd typ default)
+       ~f:(fun acc a -> acc @ (free_of_cmd typ a))
   end
   |> dedup
+
 
 let free_vars_of_cmd = free_of_cmd `Var
 let holes_of_cmd = free_of_cmd `Hole
@@ -407,7 +432,10 @@ let rec multi_ints_of_cmd c =
       ~f:(fun (test, action) ->
           multi_ints_of_test test
           @ multi_ints_of_cmd action
-        )
+      )
+  | Apply (_,_,actions, default) ->
+     List.fold actions ~init:(multi_ints_of_cmd default)
+       ~f:(fun rst act -> rst @ multi_ints_of_cmd act)
 
 let no_nesting ss =
   let rec no_while_or_select_in_cmd c =
@@ -421,6 +449,9 @@ let no_nesting ss =
     | Seq (c, c')
       -> no_while_or_select_in_cmd c
          && no_while_or_select_in_cmd c'
+    | Apply (_,_,actions, default)
+      -> List.fold actions ~init:(no_while_or_select_in_cmd default)
+           ~f:(fun acc act -> acc && no_while_or_select_in_cmd act)
     | While _
     | Select _
       -> false
@@ -458,6 +489,9 @@ let instrumented =
         -> false
       | SetLoc _
         -> true
+      | Apply (_,_,acts,dflt)
+        -> List.fold acts  ~init:(instrumented_cmd found_loc dflt)
+             ~f:(fun found act -> found || instrumented_cmd found act)
       | Seq (p, q)
         -> instrumented_cmd false p
            || instrumented_cmd false q
@@ -523,6 +557,9 @@ let no_negated_holes ss =
       -> gpair (cond, body)
     | Select (_,ss)
       -> concatMap ss ~init:(Some true) ~c:(&&) ~f:gpair
+    | Apply (_,_,acts,dflt)
+      -> List.fold acts ~init:(no_negated_holes_cmd dflt)
+           ~f:(fun acc act -> acc && no_negated_holes_cmd act )
   in
   concatMap ss ~init:(Some true) ~c:(&&)
     ~f:(fun (cond, act) ->
@@ -565,6 +602,8 @@ let holify holes c =
     | Select (styp, cases) ->
       List.map cases ~f:(fun (t, c) -> holify_test t, holify_cmd c)
       |> mkSelect styp
+    | Apply (name,keys,acts,dflt)
+      -> Apply(name, keys, List.map acts ~f:holify_cmd, holify_cmd dflt)
   in
   holify_cmd c
         

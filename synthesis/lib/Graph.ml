@@ -77,7 +77,8 @@ let rec split_cmd_on_loc (cmd:cmd) : (cmd * int option) =
   | Assign _
     | Skip
     | Assert _
-    | Assume _ -> (cmd, None)
+    | Assume _
+    | Apply _ -> (cmd, None)
   | Seq (p, q) ->
      let (cmd_p, loc_p) = split_cmd_on_loc p in
      let (cmd_q, loc_q) = split_cmd_on_loc q in
@@ -111,7 +112,7 @@ let ordered_selects ss =
        
 let rec get_selects (e : Ast.cmd) =
   match e with
-  | Skip | SetLoc _ | Assign _ | Assert _ | Assume _ -> []
+  | Skip | SetLoc _ | Assign _ | Assert _ | Assume _ | Apply _ -> []
   | While (_, body) -> get_selects body
   | Seq (firstdo, thendo) -> get_selects firstdo @ get_selects thendo
   | Select (styp, ss) ->

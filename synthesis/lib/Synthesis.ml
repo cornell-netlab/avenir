@@ -116,6 +116,11 @@ let complete_inner ~falsify (cmd : cmd) =
         ~f:(fun (b, c) ->
             complete_aux_test ~falsify b , complete_aux ~falsify c )
       |> mkSelect styp
+    | Apply (name, keys, acts, dflt)
+      -> Apply (name
+              , keys
+              , List.map acts ~f:(complete_aux ~falsify)
+              , complete_aux ~falsify dflt)
   in
   complete_aux ~falsify cmd
 
@@ -216,6 +221,11 @@ and fixup (real:cmd) (model : value StringMap.t) : cmd =
   | Seq (p, q) -> Seq (fixup p model, fixup q model)
   | While (cond, body) -> While (fixup_test cond model, fixup body model)
   | Select (styp,cmds) -> fixup_selects cmds model |> mkSelect styp
+  | Apply (name, keys, acts, dflt)
+    -> Apply (name
+            , keys
+            , List.map acts ~f:(fun a -> fixup a model)
+            , fixup dflt model)
 
 let unroll_fully c = unroll (diameter c) c 
 
@@ -259,7 +269,32 @@ let solve_concrete ?packet:(packet=None) (logical : cmd) (real : cmd) =
   Printf.printf "\n\nNEXT ITERATION OF REAL PROGRAM:\n%s\n%!\n" (string_of_cmd real');
   real'
 
+let check_edit (_:int) (_:cmd) (_:cmd) = failwith ""
 
+let logically_instrument (_:string) (_:cmd) = failwith "unimplemented"
+                                
+let concretely_instrument (_:int) (_:cmd) = failwith "unimplemented"
+                             
+(* Pre :: neither program has any holes in it *)
+(* Currently assume that no deletions are required to Real   *)
+let check_add n name logical real = 
+  let u_log = unroll_fully logical in
+  let u_log_add1 = logically_instrument name u_log in
+  let u_rea = unroll_fully real in
+  let u_rea_addn = concretely_instrument n u_rea in
+  let fvs = free_vars_of_cmd u_rea
+            @ free_vars_of_cmd u_log
+            @ free_vars_of_cmd u_log_add1
+            @ free_vars_of_cmd u_rea_addn in
+  let log_wp = symb_wp u_log ~fvs in
+  let real_wp = symb_wp u_rea ~fvs in
+  let log1_wp = symb_wp u_log_add1 ~fvs in
+  let rean_wp = symb_wp u_rea_addn ~fvs in
+  match check_valid ((log_wp %<=>% real_wp) %=>% (log1_wp %<=>% rean_wp)) with
+  | None -> Printf.printf "+++++valid+++++\n%!"; `Yes
+  | Some x -> Printf.printf "-----invalid---\n%!"; `NoAndCE (Packet.from_CE x)
+              
+  
 let cegis ?gas:(gas=1000) (logical : cmd) (real : cmd) =
   let rec loop gas real =
     Printf.printf "======================= LOOP (%d) =======================\n%!" (gas);

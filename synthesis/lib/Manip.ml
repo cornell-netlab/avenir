@@ -132,7 +132,10 @@ let rec wp c phi =
       , prev_conds %+% cond
       )
     |> fst
-    
+
+  | Apply (_, _, acts, dflt)
+    -> concatMap acts  ~f:(fun a -> wp a phi) ~c:(mkAnd) ~init:(Some True)
+      %&% wp dflt phi
   | While _ ->
     Printf.printf "[WARNING] skipping While loop, because loops must be unrolled\n%!";
     phi
@@ -188,3 +191,8 @@ let rec fill_holes (c : cmd) subst =
   | Select (styp, cmds) ->
      rec_select cmds |> mkSelect styp
   | While (cond, body) -> While (fill_holes_test cond subst, fill_holes body subst)
+  | Apply (n,keys, acts, dflt)
+    -> Apply(n, keys
+             , List.map acts ~f:(fun act -> fill_holes act subst)
+             , fill_holes dflt subst)
+     
