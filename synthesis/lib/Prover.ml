@@ -32,8 +32,27 @@ let rec mkZ3Value typ v ctx (deBruijn : int StringMap.t) : Z3.Expr.expr =
   | Times (e, e'), _ -> binop mk_mul e e'
   | Minus (e, e'), _ -> binop mk_sub e e'
 
+
+let rec mkZ3Value2 typ set ctx (deBruijn : int StringMap.t) : Z3.Expr.expr =
+  match set, typ with
+  | Var2 x, `Sat | Hole2 x, `Valid -> Z3.Z3Array.mk_const_s ctx x (Z3.Arithmetic.Integer.mk_sort ctx) (Z3.Arithmetic.Integer.mk_sort ctx)
+  | Var2 x, `Valid | Hole2 x, `Sat ->
+     begin match StringMap.find deBruijn x with
+     | None -> failwith ("unbound second-order variable" ^ x)
+     | Some x' -> Z3.Quantifier.mk_bound ctx x' (Z3.Z3Array.mk_sort ctx (Z3.Arithmetic.Integer.mk_sort ctx) (Z3.Arithmetic.Integer.mk_sort ctx))
+     end
+  | Singleton e, _ ->
+     let open Z3.Z3Array in
+     let emptyset = mk_const_array ctx (Z3.Arithmetic.Integer.mk_sort ctx) (Z3.Boolean.mk_false ctx) in
+     Z3.Z3Array.mk_store ctx emptyset (mkZ3Value typ e ctx deBruijn) (Z3.Boolean.mk_true ctx)
+  | Union (s,s'), _ -> Z3.Z3Array.mk_map ctx
+                         (Z3.Expr.get_func_decl (Z3.Boolean.mk_and ctx []))
+                         [ mkZ3Value2 typ s ctx deBruijn
+                         ; mkZ3Value2 typ s' ctx deBruijn]
+                      
 let rec mkZ3Test typ t ctx deBruijn =
   let z3_value (v : value) = mkZ3Value typ v ctx deBruijn in
+  let z3_value2 (set : value2) = mkZ3Value2 typ set ctx deBruijn in 
   let z3_test t = mkZ3Test typ t ctx deBruijn in 
   match t with 
   | True -> Z3.Boolean.mk_true ctx
@@ -41,6 +60,7 @@ let rec mkZ3Test typ t ctx deBruijn =
   | LocEq _ -> failwith "dont know how to insert locations into tests"
   | Eq (left, right) -> Z3.Boolean.mk_eq ctx   (z3_value left) (z3_value right)
   | Lt (left, right) -> Z3.Arithmetic.mk_lt ctx   (z3_value left) (z3_value right)
+  | Member (expr, set) -> Z3.Z3Array.mk_select ctx (z3_value2 set) (z3_value expr)
   | Or (left, right) -> Z3.Boolean.mk_or ctx   [(z3_test left); (z3_test right)]
   | And (left, right) -> Z3.Boolean.mk_and ctx [(z3_test left); (z3_test right)]
   | Neg tt -> Z3.Boolean.mk_not ctx (z3_test tt) 

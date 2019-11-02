@@ -33,12 +33,33 @@ let rec sexp_string_of_value v =
 let mkPlus e e' = Plus(e,e')
 let mkMinus e e' = Minus (e, e')
 let mkTimes e e' = Times (e, e')
-    
+
+type value2 =
+  | Var2 of string
+  | Hole2 of string
+  | Singleton of value
+  | Union of (value2 * value2)
+
+let rec string_of_value2 v2 =
+  match v2 with
+  | Var2 s -> s
+  | Hole2 s -> "?" ^ s
+  | Singleton v -> "{" ^ string_of_value v ^ "}"
+  | Union (v2, v2') -> string_of_value2 v2 ^ " U " ^ string_of_value2 v2'
+
+let rec sexp_string_of_value2 v2 =
+  match v2 with
+  | Var2 s -> "Var2("^ s ^")"
+  | Hole2 s -> "Hole2(" ^ s ^ ")"
+  | Singleton v -> "Singleton(" ^ sexp_string_of_value v ^ ")"
+  | Union(v2, v2') -> "Union(" ^ sexp_string_of_value2 v2 ^ "," ^ sexp_string_of_value2 v2' ^")"
+                 
 type test =
   | True | False
   | LocEq of int
   | Eq of (value * value)
   | Lt of (value * value)
+  | Member of (value * value2)
   | And of (test * test)
   | Or of (test * test)
   | Neg of test       
@@ -113,6 +134,7 @@ let rec string_of_test t =
   | LocEq i -> "loc = " ^ string_of_int i
   | Eq (left, right) -> string_of_value left ^ " = " ^ string_of_value right
   | Lt (left, right) -> string_of_value left ^ " < " ^ string_of_value right
+  | Member (expr, set) -> string_of_value expr ^ " in " ^ string_of_value2 set
   | Or (Neg(assum), conseq) -> "(" ^ string_of_test assum ^ " ==> " ^ string_of_test conseq ^ ")"
   | Or (left, right) -> "(" ^ string_of_test left ^ " || " ^ string_of_test right ^ ")"
   | And (left, right) -> "(" ^ string_of_test left ^ "&&" ^ string_of_test right ^ ")"
@@ -127,6 +149,7 @@ let rec sexp_string_of_test t =
   | LocEq l -> "LocEq(" ^ string_of_int l ^ ")"
   | Eq  (left, right) -> binop "Eq" left right sexp_string_of_value
   | Lt  (left, right) -> binop "Lt" left right sexp_string_of_value
+  | Member (expr, set) -> "Member(" ^ string_of_value expr ^ "," ^ string_of_value2 set ^ ")" 
   | Or  (left, right) -> binop "Or" left right sexp_string_of_test
   | And (left, right) -> binop "And" left right sexp_string_of_test
   | Neg t -> "Neg(" ^ sexp_string_of_test t ^ ")"
@@ -154,7 +177,8 @@ let rec free_of_test typ test =
   | Or (l,r) | And (l, r) ->
      free_of_test typ l @ free_of_test typ r
   | Neg t ->
-    free_of_test typ t
+     free_of_test typ t
+  | Member _ -> Printf.printf "Warning [Ast.free_of_test] Dont know how to collect free variables from a membership query"; []
   | Eq (v, v') | Lt (v, v') ->
     match typ, v, v'  with
     | `Var, Var x, Var x' ->
@@ -167,14 +191,27 @@ let rec free_of_test typ test =
     | `Hole, Hole x, _
     | `Hole, _, Hole x ->
       [x]
-    | _ ->
-      []
+    | _ -> []
   end
   |> dedup
 
 let free_vars_of_test = free_of_test `Var
 let holes_of_test = free_of_test `Hole
 
+
+let rec multi_ints_of_expr v =
+  match v with
+  | Var _ | Hole _ -> []
+  | Int i -> [i]
+  | Plus (v,v') | Times (v,v') | Minus (v,v')
+    -> multi_ints_of_expr v @ multi_ints_of_expr v'
+
+let rec multi_ints_of_expr2 v2 =
+  match v2 with
+  | Var2 _ | Hole2 _ -> []
+  | Singleton v -> multi_ints_of_expr v
+  | Union (v,v') -> multi_ints_of_expr2 v @ multi_ints_of_expr2 v'
+                  
 let rec multi_ints_of_test test =
   begin match test with
     | True | False | LocEq _ ->
@@ -183,15 +220,11 @@ let rec multi_ints_of_test test =
       multi_ints_of_test l
       @ multi_ints_of_test r
     | Neg t ->
-      multi_ints_of_test t
+       multi_ints_of_test t
+    | Member (expr, set) ->
+       multi_ints_of_expr expr @ multi_ints_of_expr2 set
     | Eq (v, v') | Lt (v, v') ->
-      match v, v' with
-      | Int x, Int y ->
-        [x; y]
-      | Int x, _
-      | _, Int x ->
-        [x]
-      | _ -> []
+       multi_ints_of_expr v @ multi_ints_of_expr v'
   end
 
 let rec remove_locs_neq l (t:test) : test =
@@ -202,6 +235,7 @@ let rec remove_locs_neq l (t:test) : test =
   | False
   | Eq _
   | Lt _
+  | Member _
     -> t
   | Neg t
     -> !%(remove_locs_neq l t)
@@ -376,7 +410,16 @@ let rec sexp_string_of_cmd e : string =
      ^ "]," ^ sexp_string_of_cmd default
      ^ ")"
 
-  
+let rec tables_of_cmd (c:cmd) : string list =
+  match c with
+  | Skip | SetLoc _ | Assign _  | Assume _ | Assert _  -> []
+  | Seq (c,c') -> tables_of_cmd c @ tables_of_cmd c'
+  | Select (_, cs) -> concatMap cs ~c:(@) ~init:(Some []) ~f:(fun (_, c) -> tables_of_cmd c)
+  | While (_,c) -> tables_of_cmd c
+  | Apply (s,_,_,_) -> [s]
+                                                              
+
+    
 let rec free_of_cmd typ (c:cmd) : string list =
   begin match c with
   | Skip | SetLoc _ -> []
@@ -469,6 +512,7 @@ let instrumented =
       | False
       | Eq _
       | Lt _
+      | Member _
         -> false
       | And (a, b) ->
         instrumented_test false a
@@ -512,6 +556,7 @@ let no_negated_holes ss =
     | LocEq _
     | Eq _
     | Lt _
+    | Member _
       -> true
     | And (a, b)
       -> no_negated_holes_test a && no_negated_holes_test b
@@ -531,7 +576,12 @@ let no_negated_holes ss =
                 true
               | _, _ ->
                 false
-            end
+             end
+        | Member (expr, set)
+          -> begin match (expr, set) with
+             | Hole _, _ | _, Hole2 _ ->  true
+             | _ ,_ -> false
+             end
         | Neg t' (* double-negation *)
           -> not (has_hole t')
         | And (a, b)
@@ -580,11 +630,23 @@ let holify holes c =
     | Times (e,e') -> Times (holify_val e, holify_val e')
     | Minus (e,e') -> Minus (holify_val e, holify_val e')
   in
+  let rec holify_val2 v : value2 =
+    match v with
+    | Hole2 _ -> v
+    | Var2 x ->
+       begin match List.find holes ~f:(fun elem -> x = elem) with
+       | None -> v
+       | Some _ -> Hole2 ("?" ^ x)
+       end
+    | Singleton e -> Singleton (holify_val e)
+    | Union (e,e') -> Union (holify_val2 e, holify_val2 e')
+  in
   let rec holify_test b : test =
     match b with
     | True | False | LocEq _ -> b
     | Eq (v, v') -> holify_val v %=% holify_val v'
     | Lt (v, v') -> holify_val v %<% holify_val v'
+    | Member (expr, set) -> Member(holify_val expr, holify_val2 set)
     | And (b, b') -> holify_test b %&% holify_test b'
     | Or (b, b')  -> holify_test b %+% holify_test b'
     | Neg b       -> !%(holify_test b)

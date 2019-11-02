@@ -83,22 +83,22 @@ let find_traces (graph:graph) (in_loc : int) (out_loc : int) =
    test containing a hole with [False] **)
 let complete_inner ~falsify (cmd : cmd) =
   let domain = multi_ints_of_cmd cmd |> dedup in
-  let rec complete_aux_test ~falsify cmd =
+  let rec complete_aux_test ~falsify t =
     let hole_replace x comp =
       if falsify
       then False
       else comp x (Int (random_int_nin domain))
     in
-    match cmd with
-    | True | False | LocEq _ -> cmd
+    match t with
+    | True | False | LocEq _ -> t
     | Neg b -> !%(complete_aux_test ~falsify b)
     | And (a, b) -> complete_aux_test ~falsify a %&% complete_aux_test ~falsify b
     | Or (a, b) -> complete_aux_test ~falsify a %+% complete_aux_test ~falsify b
     | Eq (Hole _, x) | Eq (x, Hole _) -> hole_replace x (%=%)
     | Lt (Hole _, x) | Lt (x, Hole _) -> hole_replace x (%<%)
-    | Eq _ | Lt _ -> cmd
-  in
-  let rec complete_aux ~falsify cmd =
+    | Eq _ | Lt _ -> t
+    | Member _ -> failwith "What do?"
+  and complete_aux ~falsify cmd =
     match cmd with
     | Skip | SetLoc _ -> cmd
     | Assign (f, v) ->
@@ -187,6 +187,17 @@ let rec fixup_val v model : value =
   | Times (e, e') -> binop mkTimes e e'
   | Minus (e, e') -> binop mkMinus e e'
 
+let rec fixup_val2 set model : value2 =
+  match set with
+  | Var2 x -> Var2 x
+  | Hole2 _ -> failwith "Second-order holes not supported"
+     (* begin match StringMap.find model h with
+      * | None -> v
+      * | Some v -> failwith "Model Construction is incomplete"
+      * end *)
+  | Singleton e -> Singleton (fixup_val e model)
+  | Union (s,s') -> Union (fixup_val2 s model, fixup_val2 s' model)
+
 let rec fixup_test t model =
   let binop ctor call left right = ctor (call left model) (call right model) in 
   match t with
@@ -196,6 +207,7 @@ let rec fixup_test t model =
   | Or(p, q) -> binop mkOr fixup_test p q
   | Eq (v, w) -> binop mkEq fixup_val v w
   | Lt (v, w) -> binop mkLt fixup_val v w
+  | Member(v,set) -> Member (fixup_val v model, fixup_val2 set model)
 
 let rec fixup_selects es model =
   match es with
@@ -271,15 +283,52 @@ let solve_concrete ?packet:(packet=None) (logical : cmd) (real : cmd) =
 
 let check_edit (_:int) (_:cmd) (_:cmd) = failwith ""
 
-let logically_instrument (_:string) (_:cmd) = failwith "unimplemented"
-                                
-let concretely_instrument (_:int) (_:cmd) = failwith "unimplemented"
+let rec add_symbolic_row (name:string) (c:cmd) =
+  match c with
+  | Skip
+    | SetLoc _
+    | Assign _
+    | Assume _
+    | Assert _ -> c
+  | Select (styp, cmds) ->
+    List.map cmds
+      ~f:(fun (t, c) -> (t, add_symbolic_row name c))
+    |> mkSelect styp
+  | Seq (c, c')
+    -> Seq(add_symbolic_row name c, add_symbolic_row name c')
+  | While (b, c)
+    -> While (b, add_symbolic_row name c) 
+  | Apply (name', keys, actions, default)
+    -> if name = name' then  failwith "TODO:: IMPLEMENT THE ADDING"
+       else Apply (name', keys, actions, default)
+
+(* enables at most [n] additions to each table in [c] *)
+let rec concretely_instrument (n:int) (c:cmd) =  
+  match c with
+  | Skip
+    | SetLoc _
+    | Assign _
+    | Assume _
+    | Assert _ -> c
+  | Select (styp, cmds) ->
+    List.map cmds
+      ~f:(fun (t, c) -> (t, concretely_instrument n c))
+    |> mkSelect styp
+  | Seq (c, c')
+    -> Seq(concretely_instrument n c, concretely_instrument n c')
+  | While (b, c)
+    -> While (b, concretely_instrument n c) 
+  | Apply _
+    -> failwith "TODO:: IMPLEMENT THE ADDING"
+  
+  
+  
                              
 (* Pre :: neither program has any holes in it *)
 (* Currently assume that no deletions are required to Real   *)
 let check_add n name logical real = 
   let u_log = unroll_fully logical in
-  let u_log_add1 = logically_instrument name u_log in
+  let u_log_add1 = add_symbolic_row name u_log in
   let u_rea = unroll_fully real in
   let u_rea_addn = concretely_instrument n u_rea in
   let fvs = free_vars_of_cmd u_rea

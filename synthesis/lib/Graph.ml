@@ -57,6 +57,7 @@ let rec split_test_on_loc test =
   | LocEq l -> (Some l, True)
   | Eq (v, v') -> (None, mkEq v v')
   | Lt (v, v') -> (None, mkLt v v')
+  | Member (v, set) -> (None, Member (v, set))
   | Neg _ -> (None, test)
   | And (a, b) ->
      let loc_opt_a, test_a = split_test_on_loc a in

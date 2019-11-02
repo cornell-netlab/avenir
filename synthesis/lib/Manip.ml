@@ -22,12 +22,14 @@ let rec nnf t : test =
   match t with
   | LocEq _
   | Eq(_, _)
-  | Lt(_, _) 
+  | Lt(_, _)
+  | Member(_,_)
   | True
   | False
   | Neg(Eq(_, _))
   | Neg(LocEq _)
   | Neg(Lt(_, _))
+  | Neg(Member(_,_))
   | Neg(True)
   | Neg(False) -> t
   | Neg (Neg t) -> nnf t
@@ -43,6 +45,7 @@ let rec dnf t : test list =
   match t' with
   | And(a, b) -> multiply (dnf a) (dnf b)
   | Or (a, b) -> dnf a @ dnf b
+  | Member (_,_)
   | LocEq _
   | Eq _
   | Lt _ 
@@ -88,6 +91,7 @@ let rec substitute ex subsMap =
   (* Do the work *)
   | Eq (e,e') ->  substituteE e %=% substituteE e'
   | Lt (e,e') ->  substituteE e %<% substituteE e'
+  | Member(e,set) -> Member(substituteE e, set)
 
               
 (* computes weakest pre-condition of condition phi w.r.t command c *)
@@ -98,7 +102,7 @@ let rec wp c phi =
     (* Do the Work *)
     | LocEq l' -> if l' = l then True else False
     (* Do nothing *)
-    | True | False | Eq _ | Lt _ -> phi
+    | True | False | Eq _ | Lt _ | Member _ -> phi
     (* Homorphically recurse *)
     | And (p, q) -> subst_location l p %&% subst_location l q
     | Or (p, q) -> subst_location l p %+% subst_location l q
@@ -157,8 +161,9 @@ let rec fill_holes_value v subst =
   | Plus (e, e') -> binop mkPlus e e'
   | Minus (e, e') -> binop mkMinus e e'
   | Times (e, e') -> binop mkTimes e e'
-      
-    
+
+
+(* Fills in first-order holes according to subst  *)                  
 let rec fill_holes_test t subst =
   let binop cnstr rcall left right = cnstr (rcall left subst) (rcall right subst) in
   match t with
@@ -168,6 +173,7 @@ let rec fill_holes_test t subst =
   | Or (a, b)  -> binop mkOr  fill_holes_test  a b
   | Lt (a, b)  -> binop mkLt  fill_holes_value a b
   | Eq (a, b)  -> binop mkEq  fill_holes_value a b
+  | Member (a, s) -> Member(fill_holes_value a subst, s)
 
 let rec fill_holes (c : cmd) subst =
   let rec_select = concatMap ~c:(@)

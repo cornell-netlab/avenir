@@ -1,8 +1,8 @@
 open Core
 open Ast    
 
-let rec evalExpr ( e : value ) (pkt_loc : Packet.located) : int option =
-  let binop op e e' = match evalExpr e pkt_loc, evalExpr e' pkt_loc with
+let rec evalExpr (pkt_loc : Packet.located) ( e : value ) : int option =
+  let binop op e e' = match evalExpr pkt_loc e, evalExpr pkt_loc e' with
     | None, _ -> None
     | _, None -> None
     | Some x, Some y -> Some (op x y)
@@ -14,10 +14,31 @@ let rec evalExpr ( e : value ) (pkt_loc : Packet.located) : int option =
   | Plus  (e, e') -> binop ( + ) e e'
   | Times (e, e') -> binop ( * ) e e'
   | Minus (e, e') -> binop ( - ) e e'
-   
+
+
+let rec evalExpr2 (pkt_loc : Packet.located) ( e : value2 ) : int list =
+  match e with
+  | Var2 s -> Printf.printf "Warning::Cannot evaluate (symbolic) second-order variable %s, skipping ...\n%!" s;
+              []
+  | Hole2 s -> Printf.printf "Warning::Cannot evaluate (symbolic) second-order hole %s, skipping ...\n%!" s;
+               []
+  | Singleton e -> begin match evalExpr pkt_loc e with
+                   | None -> []
+                   | Some i -> [i]
+                   end
+  | Union (set, set') -> evalExpr2 pkt_loc set @ evalExpr2 pkt_loc set'
+  
+                   
+let member (pkt_loc : Packet.located) (e : value) (set : value2) =
+  match evalExpr pkt_loc e with
+  | None -> false
+  | (Some i) -> List.exists ~f:((=) i) (evalExpr2 pkt_loc set)
+      
+  
+                   
 let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   let binopt op a b = op (check_test a pkt_loc) (check_test b pkt_loc) in
-  let binope op e e' = match evalExpr e pkt_loc, evalExpr e' pkt_loc with
+  let binope op e e' = match evalExpr pkt_loc e, evalExpr pkt_loc e' with
     | None, _ -> true
     | _, None -> true
     | Some x, Some y -> op x y
@@ -36,6 +57,7 @@ let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   | Or (a, b) -> binopt (||) a b
   | Eq (e,e') -> binope (=) e e'
   | Lt (e,e') -> binope (<) e e'
+  | Member (e, set) -> member pkt_loc e set
 	 
 let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packet.located * (int list)) option =
   (* Printf.printf "\n###TRACE EVAL\nPROGRAM:\n%s\n\tPACKET: %s\n\tLOCATION: %s\n%!"
