@@ -24,6 +24,11 @@ let mkTuple es =
   | None -> Tuple es
   | Some vs -> Value1 (VTuple vs)
 
+let (%@%) e e' =
+  match e, e' with
+  | Tuple es, Tuple es' -> Tuple (es @ es')
+  | _, _ -> failwith "Must Concat tuples"
+                      
 type value2 =
   | Empty
   | VSingle of value1
@@ -41,12 +46,15 @@ let mkSingle (e : expr1) =
   | Value1 v -> Value2 (VSingle v)
   | _ -> Single e
 
-let mkUnion (e : expr2) (e' : expr2) =
+let mkUnion (e : expr2) (e' : expr2) : expr2 =
   match e, e' with
+  | Value2 Empty, o | o, Value2 Empty -> o
   | Value2 v, Value2 v' -> VUnion (v, v') |> Value2
   | _, _ -> Union (e, e')
 
-let mkEmpty : expr2 = Value2 Empty          
+let mkEmpty : expr2 = Value2 Empty
+let mkInsert (el : expr1) (set: expr2) : expr2 =
+  mkSingle el |> mkUnion set
            
 let rec string_of_value1 (v : value1) : string =
   match v with
@@ -288,7 +296,27 @@ let rec dedup xs =
   | x::xs ->
      let xs' = remove_dups x xs in
      x :: dedup xs'
+
+let rec free_of_expr1 typ e =
+  match e, typ with
+  | Value1 _, _ -> []
+  | Var1 x, `Var -> [x]
+  | Hole1 x, `Hole -> [x]
+  | Var1 _ , `Hole -> []
+  | Hole1 _ , `Var -> []
+  | Tuple es, _ -> concatMap es ~c:(@) ~f:(free_of_expr1 typ)
+  | Plus(e,e'),_| Times (e,e'),_ | Minus(e,e'),_ ->
+     free_of_expr1 typ e @ free_of_expr1 typ e'
+
+let rec free_of_expr2 typ set =
+  match set,typ with
+  | Value2 _,_ -> []
+  | Var2 x, `Var | Hole2 x, `Hole -> [x]
+  | Var2 _, `Hole | Hole2 _, `Var -> []
+  | Single e, _ -> free_of_expr1 typ e
+  | Union (e,e'),_ -> free_of_expr2 typ e @ free_of_expr2 typ e'
   
+                
 let rec free_of_test typ test =
   begin match test with
   | True | False | LocEq _ ->
@@ -297,20 +325,9 @@ let rec free_of_test typ test =
      free_of_test typ l @ free_of_test typ r
   | Neg t ->
      free_of_test typ t
-  | Member _ -> Printf.printf "Warning [Ast.free_of_test] Dont know how to collect free variables from a membership query"; []
-  | Eq (v, v') | Lt (v, v') ->
-    match typ, v, v'  with
-    | `Var, Var1 x, Var1 x' ->
-      [x; x']
-    | `Var, _, Var1 x
-    | `Var, Var1 x, _ ->
-      [x]
-    | `Hole, Hole1 x, Hole1 x' ->
-      [x; x']
-    | `Hole, Hole1 x, _
-    | `Hole, _, Hole1 x ->
-      [x]
-    | _ -> []
+  | Member (el, set) -> free_of_expr1 typ el @ free_of_expr2 typ set
+  | Eq (e, e') | Lt (e, e') ->
+     free_of_expr1 typ e @ free_of_expr1 typ e'
   end
   |> dedup
 

@@ -193,7 +193,7 @@ let rec fixup_val2 (model : value1 StringMap.t) (set : expr2) : expr2 =
   | Value2 _ | Var2 _ -> set
   | Hole2 _ -> failwith "Second-order holes not supported"
   | Single e -> Single (fixup_val model e)
-  | Union (s,s') -> Union (fixup_val2 model s, fixup_val2 model s')
+  | Union (s,s') -> mkUnion (fixup_val2 model s) (fixup_val2 model s')
 
 let rec fixup_test (model : value1 StringMap.t) (t : test) : test =
   let binop ctor call left right = ctor (call left) (call right) in 
@@ -280,6 +280,47 @@ let solve_concrete ?packet:(packet=None) (logical : cmd) (real : cmd) =
 
 let check_edit (_:int) (_:cmd) (_:cmd) = failwith ""
 
+
+let matchExpr ks =  List.map ks ~f:(fun x -> Var1 x)
+
+let rec matchWF keys mVar2 i j =
+  if i = j then matchWF keys mVar2 (i-1) j %&% matchWF keys mVar2 i (j-1)
+  else if i < 0 || j < 0 then True
+  else (Member(matchExpr keys |> Tuple, mVar2 i) %=>% !%(Member (matchExpr keys |> Tuple, mVar2 j)))
+
+let catchAll rows = List.fold rows ~init:True ~f:(fun acc (k,_) -> (!% k) %&% acc)
+
+
+let rec base_translation (c:cmd) =
+  match c with
+  | Skip
+    | SetLoc _
+    | Assign _
+    | Assume _
+    | Assert _ -> c
+  | Select (styp, cmds) ->
+    List.map cmds
+      ~f:(fun (t, c) -> (t, base_translation c))
+    |> mkSelect styp
+  | Seq (c, c')
+    -> Seq(base_translation c, base_translation c')
+  | While (b, c)
+    -> While (b, base_translation c) 
+  | Apply (name, keys, actions, default)
+    ->
+     let mVar2 i = Var2 ("M_"^name^"_"^string_of_int i) in
+     let positiveRows : (test * cmd) list =
+       List.foldi actions ~init:[]
+         ~f:(fun i acc act ->
+           (Member(matchExpr keys |> Tuple, mVar2 i)
+           , act) :: acc )
+     in
+     let n = (List.length actions) - 1 in
+     Assume (matchWF keys mVar2 n n)
+     %:% (positiveRows @ ([catchAll positiveRows, default])
+          |> mkSelect Partial)
+           
+                                                  
 let rec add_symbolic_row (name:string) (c:cmd) =
   match c with
   | Skip
@@ -295,19 +336,38 @@ let rec add_symbolic_row (name:string) (c:cmd) =
     -> Seq(add_symbolic_row name c, add_symbolic_row name c')
   | While (b, c)
     -> While (b, add_symbolic_row name c) 
-  | Apply (name', keys, actions, default)
-    -> if name = name' then
-         let () = Printf.printf "WARNING::ASSUMING THERE IS EXACTLY ONE KEY IN TABLE %s" name in
-         let matchExpr ks =  List.map ks ~f:(fun x -> Var1 x) |> Tuple in
-         let rho = List.map keys ~f:(fun k -> Var1 (k^"!new")) |> Tuple in
-         List.foldi actions ~init:[]
-           ~f:(fun i acc act ->
-             (Member(matchExpr keys, Var2 ("M_"^name^string_of_int i))
-              %&% ((matchExpr keys) %<>% rho)
-             , act) :: acc )
-         |> mkSelect Partial
-       else Apply (name', keys, actions, default)
+  | Apply (name', keys, actions, default) as table
+    ->
+     let mVar2 i = Var2 ("M_"^name^"_"^string_of_int i) in
+     let fillVar1 k =  Var1 (k^"_"^name^"!FILL")in
+     let actionVar = Var1 "action!FILL" in
+     if name = name' then
+         let row = List.map keys ~f:(fillVar1) in
+         let positiveRows : (test * cmd) list =
+           List.foldi actions ~init:[]
+             ~f:(fun i acc act ->
+               (Member(matchExpr keys |> Tuple, mVar2 i)
+                %&% ((matchExpr keys |> Tuple) %<>% Tuple row)
+               , act) :: acc )
+           @ List.foldi actions ~init:[]
+               ~f:(fun i acc act ->
+                 ((actionVar :: matchExpr keys |> Tuple) %=% (mkVInt i :: row |> Tuple )
+                 , act) :: acc)
+         in
+         let actionWF = Member(actionVar,
+                                 List.foldi actions
+                                   ~init:(Value2 Empty)
+                                   ~f:(fun i acc _ -> mkInsert (Value1 (Int i)) acc)) in
+         let n = (List.length actions) - 1 in
+         Assume actionWF
+         %:% Assume (matchWF keys mVar2 n n)
+         %:% (positiveRows @ ([catchAll positiveRows, default])
+              |> mkSelect Partial)
+     else
+       table
 
+
+         
 (* enables at most [n] additions to each table in [c] *)
 let rec concretely_instrument (n:int) (c:cmd) =  
   match c with
@@ -324,9 +384,47 @@ let rec concretely_instrument (n:int) (c:cmd) =
     -> Seq(concretely_instrument n c, concretely_instrument n c')
   | While (b, c)
     -> While (b, concretely_instrument n c) 
-  | Apply _
-    -> failwith "TODO:: IMPLEMENT THE ADDING"
-  
+  | Apply (name, keys, actions, default)
+    ->
+     let mVar2 actId = Var2 ("M_"^name^"_"^string_of_int actId) in
+     let fillVar1 rowId key =  Var1 (key^"_"^string_of_int rowId^"_"^name^"!FILL") in
+     let actionVar rowId = Var1 ("action_"^name ^string_of_int rowId ^ "!FILL") in
+
+     (* let delSet = Var2 ("Del_" ^ name ^"!FILL") in *)
+     let rec modifiedRows i =
+       if i = 0 then Value2 Empty
+       else List.map keys ~f:(fillVar1 i) |> Tuple |> Single |> mkUnion (modifiedRows (i-1))
+     in
+       
+     let positiveRows : (test * cmd) list =
+       List.foldi actions ~init:[]
+         ~f:(fun i acc act ->
+           (Member(matchExpr keys |> Tuple, mVar2 i)
+            %&% (!%(Member(matchExpr keys |> Tuple, modifiedRows n))) (*modifiedRows are new!*)
+           , act) :: acc )
+       @ List.foldi actions ~init:[]
+           ~f:(fun actId acc act ->
+             let rec newRow rowId   =
+               if rowId <= 0 then []
+               else (Tuple (mkVInt actId :: matchExpr keys)
+                     %=% Tuple(actionVar rowId :: List.map keys ~f:(fillVar1 rowId))
+                    , act) :: newRow (rowId - 1)
+             in newRow n @ acc)
+     in
+     let l = List.length actions - 1 in
+     (* let rec matchUnion i =
+      *   if n < 0 then Value2 Empty
+      *   else Union(mVar2 i, matchUnion (i-1))
+      * in *)
+     (* let delWF i =  Member(matchExpr keys |> Tuple, delSet) %=>% (Member(matchExpr keys |> Tuple, matchUnion i)) in *)
+
+     Assume (matchWF keys mVar2 l l)
+     (* %:% Assume (delWF l) *)
+     %:% (positiveRows @ ([catchAll positiveRows, default])
+          |> mkSelect Partial)
+
+     
+     
   
   
                              
@@ -341,8 +439,8 @@ let check_add n name logical real =
             @ free_vars_of_cmd u_log
             @ free_vars_of_cmd u_log_add1
             @ free_vars_of_cmd u_rea_addn in
-  let log_wp = symb_wp u_log ~fvs in
-  let real_wp = symb_wp u_rea ~fvs in
+  let log_wp  = base_translation u_log |> symb_wp ~fvs in
+  let real_wp = base_translation u_rea |> symb_wp ~fvs in
   let log1_wp = symb_wp u_log_add1 ~fvs in
   let rean_wp = symb_wp u_rea_addn ~fvs in
   match check_valid ((log_wp %<=>% real_wp) %=>% (log1_wp %<=>% rean_wp)) with

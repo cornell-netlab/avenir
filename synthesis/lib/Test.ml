@@ -395,11 +395,11 @@ let%test _ =
   let z3test = mkZ3Test `Sat t ctx indices in
   let expz3string = "(let ((a!1 (not (or (= (:var 2) 5) (and (= (:var 2) 3) (= (:var 1) 6))))))\n  (or a!1 (not (or (= (:var 2) hole0) (= (:var 0) hole1)))))" in
   let qform = bind_vars ctx exp_fvs z3test in
-  let exp_qform_string ="(forall ((x mkVInt) (z mkVInt) (y mkVInt))\n  (let ((a!1 (not (or (= x 5) (and (= x 3) (= z 6))))))\n    (or a!1 (not (or (= x hole0) (= y hole1))))))" in
+  let exp_qform_string ="(forall ((x Int) (z Int) (y Int))\n  (let ((a!1 (not (or (= x 5) (and (= x 3) (= z 6))))))\n    (or a!1 (not (or (= x hole0) (= y hole1))))))" in
   let success = free_vars_of_test t = exp_fvs
-                && get "x" = Some 2 && get "y" = Some 0 && get "z" = Some 1
-                && Z3.Expr.to_string z3test = expz3string
-                && Z3.Expr.to_string qform = exp_qform_string
+                &&  get "x" = Some 2 && get "y" = Some 0 && get "z" = Some 1
+                && String.strip(Z3.Expr.to_string z3test) = String.strip(expz3string)
+                && String.strip(Z3.Expr.to_string qform) = String.strip (exp_qform_string)
   in
   if success then success else (
     Printf.printf "FAILED TEST (deBruijn) -----\n%!";

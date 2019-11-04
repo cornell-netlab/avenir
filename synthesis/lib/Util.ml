@@ -9,7 +9,7 @@ open Core
 exception EmptyList of string
 let rec concatMap ?init:(init=None) ~f:(f: 'a -> 'b)  ~c:(c : 'b -> 'b -> 'b) (xs : 'a list) : 'b =
   match xs, init with
-  | [], None -> raise (EmptyList "called concatMap on an empty list")
+  | [], None -> failwith ("called concatMap on an empty list")
   | [], Some y -> y
   | [x], None -> f x
   | [x], Some y -> c (f x) y

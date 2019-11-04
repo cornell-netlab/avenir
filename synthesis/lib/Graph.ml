@@ -198,10 +198,12 @@ let all_locations graph : int list =
 let get_all_paths graph =
   let nodes = all_locations graph in
   let all_endpoints = List.cartesian_product nodes nodes in
-  concatMap all_endpoints ~c:(@)
+  concatMap all_endpoints
+    ~init:(Some [])
+    ~c:(@)
     ~f:(fun (src, dst) ->
         get_all_paths_between graph src dst
-      )
+    )
 
 let get_edges (graph:graph) src dst =
   Printf.printf "[LOG] looking for edge from %d to %d\n%!" src dst;

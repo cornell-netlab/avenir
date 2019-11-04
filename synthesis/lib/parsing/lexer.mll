@@ -18,6 +18,7 @@ rule tokens = parse
 | "assert"        { ASSERT }
 | "assume"        { ASSUME }
 | "abort"         { ABORT }
+| "apply"         { APPLY }
 | "true"          { TRUE }
 | "false"         { FALSE }
 | "while"         { WHILE }
@@ -42,6 +43,8 @@ rule tokens = parse
 | "{"             { LBRACE }
 | "}"             { RBRACE }
 | ";"             { SEMICOLON }
+| ","             { COMMA }
+| "|"             { BAR }
 | "?"             { QUESTION }
 | ">"             { GREATER }
 | "<"             { LESS }

@@ -1,6 +1,6 @@
 %token <int> INT
 %token <string> ID
-%token QUESTION COMMA
+%token QUESTION COMMA BAR
 %token TRUE
 %token FALSE
 %token OR AND NOT IMPLIES
@@ -8,7 +8,7 @@
 %token PLUS TIMES MINUS
 %token LOC
 %token WHILE SKIP SEMICOLON ASSIGN
-%token ASSERT ASSUME ABORT
+%token ASSERT ASSUME ABORT APPLY
 %token IF TOTAL PARTIAL ORDERED CASE BRACKETS FI
 %token LPAREN RPAREN LBRACE RBRACE
 %token EOF
@@ -49,7 +49,17 @@ command :
   { Ast.(Select (Partial, s)) }
 | IF; ORDERED; s = select; FI
   { Ast.(Select (Ordered, s)) }
+| APPLY; LPAREN; s = ID; COMMA; LPAREN; ks = keys; RPAREN; COMMA; LPAREN; a = actions; RPAREN; COMMA; LBRACE; d = command; RBRACE; RPAREN
+  { Ast.(Apply(s,ks,a,d)) }
 
+keys :
+| { [] }
+| k = ID; COMMA; ks = keys { (k::ks) }
+
+actions :
+| LBRACE; c = command; RBRACE; { [c] }
+| LBRACE; c = command; RBRACE; BAR; a = actions { c::a }
+                        
 select :
 | t = test; CASE; c = command; BRACKETS { [ t, c ] }
 | t = test; CASE; c = command;          { [ t, c ] }
