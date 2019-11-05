@@ -211,7 +211,7 @@ let rec fixup_test (model : value1 StringMap.t) (t : test) : test =
   | Or(p, q) -> binop mkOr (fixup_test model) p q
   | Eq (v, w) -> binop mkEq (fixup_val model) v w
   | Lt (v, w) -> binop mkLt (fixup_val model) v w
-  | Member(v,set) -> Member (fixup_val model v, fixup_val2 model set)
+  | Member(v,set) -> mkMember (fixup_val model v) (fixup_val2 model set)
 
 let rec fixup_selects (model : value1 StringMap.t) (es : (test * cmd) list) =
   match es with
@@ -248,7 +248,8 @@ let unroll_fully c = unroll (diameter c) c
 let symbolic_pkt fvs = 
     List.fold fvs ~init:True
       ~f:(fun acc_test (var,sz) ->
-        Var1 (var,sz) %=% Var1 ("$" ^ var, sz)
+        if String.get var 0 |> Char.is_uppercase then acc_test else
+        Var1 (var,sz) %=% Var1 (var ^ "_SYMBOLIC", sz)
         %&% acc_test)
 
 let symb_wp ?fvs:(fvs=[]) cmd =
@@ -290,7 +291,8 @@ let bitLen keys = size_of_expr1 (matchExpr keys |> Tuple)
 let rec matchWF keys mVar2 i j =
   if i = j then matchWF keys mVar2 (i-1) j %&% matchWF keys mVar2 i (j-1)
   else if i < 0 || j < 0 then True
-  else (Member(matchExpr keys |> Tuple, mVar2 i) %=>% !%(Member (matchExpr keys |> Tuple, mVar2 j)))
+  else !%(mkMember (matchExpr keys |> Tuple) (mVar2 i)
+          %&% mkMember (matchExpr keys |> Tuple) (mVar2 j))
 
 let catchAll rows = List.fold rows ~init:True ~f:(fun acc (k,_) -> (!% k) %&% acc)
 
@@ -316,7 +318,7 @@ let rec base_translation (c:cmd) =
      let positiveRows : (test * cmd) list =
        List.foldi actions ~init:[]
          ~f:(fun i acc act ->
-           (Member(matchExpr keys |> Tuple, mVar2 i)
+           (mkMember (matchExpr keys |> Tuple) (mVar2 i)
            , act) :: acc )
      in
      let n = (List.length actions) - 1 in
@@ -343,16 +345,16 @@ let rec add_symbolic_row (name:string) (c:cmd) =
   | Apply (name', keys, actions, default) as table
     ->
      let mVar2 i = Var2 ("M_"^name^"_"^string_of_int i, bitLen keys) in
-     let fillVar1 (k,sz) =  Var1 (k^"_"^name^"!NEW", sz)in
+     let fillVar1 (k,sz) =  Var1 (k^"_"^name^"_NEW", sz)in
      let n = (List.length actions) - 1 in
      let actionSize = int_of_float(2. ** (float_of_int(n + 1))) - 1 in
-     let actionVar = Var1 ("action!NEW", actionSize) in
+     let actionVar = Var1 ("action_NEW", actionSize) in
      if name = name' then
          let row = List.map keys ~f:(fillVar1) in
          let positiveRows : (test * cmd) list =
            List.foldi actions ~init:[]
              ~f:(fun i acc act ->
-               (Member(matchExpr keys |> Tuple, mVar2 i)
+               (mkMember (matchExpr keys |> Tuple) (mVar2 i)
                 %&% ((matchExpr keys |> Tuple) %<>% Tuple row)
                , act) :: acc )
            @ List.foldi actions ~init:[]
@@ -360,10 +362,10 @@ let rec add_symbolic_row (name:string) (c:cmd) =
                  ((actionVar :: matchExpr keys |> Tuple) %=% (mkVInt (i,actionSize) :: row |> Tuple )
                  , act) :: acc)
          in
-         let actionWF = Member(actionVar,
-                                 List.foldi actions
-                                   ~init:(Value2 Empty)
-                                   ~f:(fun i acc _ -> mkInsert (mkVInt (i, actionSize)) acc)) in
+         let actionWF =  List.foldi actions
+                           ~init:(Value2 Empty)
+                           ~f:(fun i acc _ -> mkInsert (mkVInt (i, actionSize)) acc)
+                         |> mkMember actionVar in
          Assume actionWF
          %:% Assume (matchWF keys mVar2 n n)
          %:% (positiveRows @ ([catchAll positiveRows, default])
@@ -389,14 +391,14 @@ let rec concretely_instrument (n:int) (c:cmd) =
     -> Seq(concretely_instrument n c, concretely_instrument n c')
   | While (b, c)
     -> While (b, concretely_instrument n c) 
-  | Apply (name, keys, actions, default)
-    ->
+  | Apply  (name, keys, actions,default)
+    -> 
      let mVar2 actId = Var2 ("M_"^name^"_"^string_of_int actId, bitLen keys) in
-     let fillVar1 rowId (key, sz) =  Var1 (key^"_"^string_of_int rowId^"_"^name^"!FILL", sz) in
+     let fillVar1 rowId (key, sz) =  Var1 (key^"_"^string_of_int rowId^"_"^name^"_FILL", sz) in
      let l = List.length actions - 1 in
      let actionSize = int_of_float(2. ** (float_of_int(l + 1))) - 1 in
-     let actionVar rowId = Var1 ("action_"^name ^string_of_int rowId ^ "!FILL", actionSize) in
-
+     let actionVar rowId = Var1 ("action_"^name ^string_of_int rowId ^ "_FILL", actionSize) in
+     
      let rec modifiedRows i =
        if i = 0 then Value2 Empty
        else List.map keys ~f:(fillVar1 i) |> Tuple |> Single |> mkUnion (modifiedRows (i-1))
@@ -405,8 +407,8 @@ let rec concretely_instrument (n:int) (c:cmd) =
      let positiveRows : (test * cmd) list =
        List.foldi actions ~init:[]
          ~f:(fun i acc act ->
-           (Member(matchExpr keys |> Tuple, mVar2 i)
-            %&% (!%(Member(matchExpr keys |> Tuple, modifiedRows n))) (*modifiedRows are new!*)
+           (mkMember (matchExpr keys |> Tuple) (mVar2 i)
+            %&% (!%(mkMember(matchExpr keys |> Tuple) (modifiedRows n))) (*modifiedRows are new!*)
            , act) :: acc )
        @ List.foldi actions ~init:[]
            ~f:(fun actId acc act ->
@@ -417,16 +419,11 @@ let rec concretely_instrument (n:int) (c:cmd) =
                     , act) :: newRow (rowId - 1)
              in newRow n @ acc)
      in
-     (* let rec matchUnion i =
-      *   if n < 0 then Value2 Empty
-      *   else Union(mVar2 i, matchUnion (i-1))
-      * in *)
      (* let delWF i =  Member(matchExpr keys |> Tuple, delSet) %=>% (Member(matchExpr keys |> Tuple, matchUnion i)) in *)
-
-     Assume (matchWF keys mVar2 l l)
+     Assume (matchWF keys mVar2 l l) %:% Skip
      (* %:% Assume (delWF l) *)
      %:% (positiveRows @ ([catchAll positiveRows, default])
-          |> mkSelect Partial)
+      |> mkSelect Partial)
 
      
      

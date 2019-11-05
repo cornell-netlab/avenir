@@ -309,8 +309,17 @@ let mkNeg t =
   | Neg t -> t
   | _ -> Neg t
 
-let (!%) = mkNeg      
-  
+let (!%) = mkNeg
+
+let rec mkMember el set =
+  match set with
+  | Value2 Empty ->  False
+  | Value2 (VSingle v) ->  el %=% Value1 v
+  | Value2 (VUnion (v,v')) -> mkMember el (Value2 v) %+% mkMember el (Value2 v')
+  | Single e -> el %=% e
+  | Union (set, set') -> mkMember el set %+% mkMember el set'
+  | _ -> Member(el, set)
+               
 let mkImplies assum conseq = mkOr (mkNeg assum) conseq
 let (%=>%) = mkImplies
 
@@ -859,7 +868,7 @@ let holify holes c =
     | True | False | LocEq _ -> b
     | Eq (e, e') -> holify_expr1 e %=% holify_expr1 e'
     | Lt (e, e') -> holify_expr1 e %<% holify_expr1 e'
-    | Member (expr, set) -> Member(holify_expr1 expr, holify_expr2 set)
+    | Member (expr, set) -> mkMember (holify_expr1 expr) (holify_expr2 set)
     | And (b, b') -> holify_test b %&% holify_test b'
     | Or (b, b')  -> holify_test b %+% holify_test b'
     | Neg b       -> !%(holify_test b)

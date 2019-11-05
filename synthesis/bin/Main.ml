@@ -71,6 +71,8 @@ module EditCheck = struct
     let log_cmd = parse_file logical_fp in
     let real_cmd = parse_file concrete_fp in
     if d then begin
+        Printf.printf "Logical: \n %s \n%!" (Ast.string_of_cmd (Synthesis.base_translation log_cmd));
+        Printf.printf "Real : \n %s \n %!" (Ast.string_of_cmd (Synthesis.base_translation real_cmd));
         Printf.printf "ADD1 to Logical:\n %s\n%!" (Ast.string_of_cmd (Synthesis.add_symbolic_row name log_cmd));
         Printf.printf "ADD<N to Concrete:\n %s \n%!" (Ast.string_of_cmd (Synthesis.concretely_instrument n real_cmd))
       end else ignore(Synthesis.check_add n name log_cmd real_cmd)
