@@ -1,6 +1,6 @@
 %token <int> INT
 %token <string> ID
-%token QUESTION COMMA BAR
+%token QUESTION COMMA BAR POUND
 %token TRUE
 %token FALSE
 %token OR AND NOT IMPLIES
@@ -54,7 +54,7 @@ command :
 
 keys :
 | { [] }
-| k = ID; COMMA; ks = keys { (k::ks) }
+| k = ID; POUND; size = INT; COMMA; ks = keys { ((k, size)::ks) }
 
 actions :
 | LBRACE; c = command; RBRACE; { [c] }
@@ -71,14 +71,14 @@ tuple :
 | e = expr; COMMA; t = tuple { e :: t  }
   
 expr :
-| i = INT { Ast.(Value1 (Int i)) }
-| x = ID  { Ast.Var1 (x) }
+| i = INT; POUND; size = INT { Ast.(Value1 (Int (i,size))) }
+| x = ID; POUND; size = INT  { Ast.Var1 (x, size) }
 | e = expr; PLUS; e1 = expr { Ast.(mkPlus e e1) }
 | e = expr; MINUS; e1 = expr { Ast.(mkPlus e e1) }
 | e = expr; TIMES; e1 = expr { Ast.(mkTimes e e1) }
 | LPAREN; t = tuple; RPAREN { Ast.(mkTuple t) }
 | LPAREN; e = expr; RPAREN { e }
-| QUESTION; x = ID { Ast.Hole1 (x) }
+| QUESTION; x = ID; POUND; size = INT { Ast.Hole1 (x, size) }
 
 test :
 | TRUE

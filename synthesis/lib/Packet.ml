@@ -26,8 +26,8 @@ let rec set_field_of_expr1 (pkt : t) (field : string) (e : expr1) : t =
   in
   match e with
   | Value1 v -> set_field pkt field v
-  | Var1 v ->
-     get_val pkt v
+  | Var1 (x,_) ->
+     get_val pkt x
      |> set_field pkt field
   | Hole1 _ ->
      failwith "Packets cannot have holes in them"
@@ -41,13 +41,19 @@ let rec set_field_of_expr1 (pkt : t) (field : string) (e : expr1) : t =
                   
                 
 
-let init_field_to_random bound pkt f =
-  set_field pkt f (Int (Random.int bound))
+let init_field_to_random bound pkt (f,sz) =
+  set_field pkt f (Int (Random.int bound, sz))
 
-let init_field_to_value_in values pkt f =
-  Random.int (List.length values)
-  |> List.nth_exn values
-  |> set_field pkt f
+let rec init_field_to_value_in (values : value1 list) pkt (f, sz) =
+  match values with
+  | [] -> init_field_to_random 10000000 pkt (f,sz)
+  | _ -> 
+     let i = Random.int (List.length values) in
+     let vi = List.nth_exn values i in
+     if size_of_value1 vi = sz then
+       set_field pkt f vi
+     else
+       init_field_to_value_in (List.filter values ~f:(fun x -> x <> vi)) pkt (f, sz)
 
 let to_test (pkt : t) =
   StringMap.fold pkt ~init:True
@@ -55,7 +61,7 @@ let to_test (pkt : t) =
       if key = "loc" then
         test
       else 
-        Var1 key %=% Value1 data
+        Var1 (key,size_of_value1 data) %=% Value1 data
         %&% test
     )
 
@@ -63,7 +69,7 @@ let empty = StringMap.empty
 
 let equal (pkt:t) (pkt':t) = StringMap.equal (=) pkt pkt'
   
-let generate ?bound:(bound=10000000) ?values:(values=[]) vars =
+let generate ?bound:(bound=10000000) ?values:(values=([] : value1 list))  (vars : (string * size) list) =
   match values with
   | [] ->
     List.fold vars ~init:empty ~f:(init_field_to_random bound)

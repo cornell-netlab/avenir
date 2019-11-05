@@ -1,14 +1,16 @@
 open Core
 open Util
 
+type size = int
+       
 type value1 =
-  | Int of int
+  | Int of (int * size)
   | VTuple of (value1 list)
    
 type expr1 =
   | Value1 of value1
-  | Var1 of string
-  | Hole1 of string
+  | Var1 of (string * size)
+  | Hole1 of (string * size)
   | Plus of (expr1 * expr1)
   | Times of (expr1 * expr1)
   | Minus of (expr1 * expr1)
@@ -28,7 +30,8 @@ let (%@%) e e' =
   match e, e' with
   | Tuple es, Tuple es' -> Tuple (es @ es')
   | _, _ -> failwith "Must Concat tuples"
-                      
+
+                     
 type value2 =
   | Empty
   | VSingle of value1
@@ -36,11 +39,14 @@ type value2 =
            
 type expr2 =
   | Value2 of value2
-  | Hole2 of string
-  | Var2 of string
+  | Hole2 of (string * size)
+  | Var2 of (string * size)
   | Single of expr1
   | Union of (expr2 * expr2)
 
+
+
+               
 let mkSingle (e : expr1) =
   match e with
   | Value1 v -> Value2 (VSingle v)
@@ -58,7 +64,7 @@ let mkInsert (el : expr1) (set: expr2) : expr2 =
            
 let rec string_of_value1 (v : value1) : string =
   match v with
-  | Int i -> string_of_int i
+  | Int (i,x) -> string_of_int i ^ "#" ^ string_of_int x
   | VTuple vs -> "(" ^ concatMap vs
                          ~c:(fun s s' -> s ^ "," ^ s')
                          ~f:(string_of_value1)
@@ -66,8 +72,8 @@ let rec string_of_value1 (v : value1) : string =
 let rec string_of_expr1 (e : expr1) : string =
   match e with
   | Value1 v -> string_of_value1 v
-  | Var1 s -> s
-  | Hole1 s -> "?" ^ s
+  | Var1 (x,s) -> x ^ "#" ^ string_of_int s
+  | Hole1 (x,s) -> "?" ^ x ^ "#" ^ string_of_int s
   | Tuple es -> "(" ^ concatMap es
                         ~c:(fun c c' -> c ^ "," ^ c')
                         ~f:(string_of_expr1)
@@ -78,7 +84,7 @@ let rec string_of_expr1 (e : expr1) : string =
 
 let rec sexp_string_of_value1 (v : value1) =
   match v with
-  | Int i -> "Int(" ^ string_of_int i ^ ")"
+  | Int (i,sz) -> "Int(" ^ string_of_int i ^ "," ^ string_of_int sz ^ ")"
   | VTuple vs -> "VTuple([" ^ concatMap vs
                                 ~c:(fun s s' -> s ^ "," ^ s')
                                 ~f:(sexp_string_of_value1)
@@ -87,8 +93,8 @@ let rec sexp_string_of_value1 (v : value1) =
 let rec sexp_string_of_expr1 (e : expr1) =
   match e with
   | Value1 v -> "Value1(" ^ sexp_string_of_value1 v ^ ")"
-  | Var1 s -> "Var(" ^ s ^ ")"
-  | Hole1 s -> "Hole(" ^ s ^ ")"  
+  | Var1 (x, s) -> "Var(\"" ^ x ^ "\"," ^ string_of_int s ^ ")"
+  | Hole1 (x, s) -> "Hole(\"" ^ x ^ "\"," ^ string_of_int s ^ ")"  
   | Tuple es -> "Tuple([" ^
                   concatMap es ~c:(fun c c' -> c ^ "," ^ c')
                     ~f:sexp_string_of_expr1
@@ -100,6 +106,29 @@ let rec sexp_string_of_expr1 (e : expr1) =
   | Minus (e, e') ->
      "Minus(" ^ sexp_string_of_expr1 e ^ ", " ^ sexp_string_of_expr1 e' ^ ")"
 
+
+
+let rec size_of_value1 (v : value1) : size =
+  match v with
+  | Int (_, s) -> s
+  | VTuple vs -> List.fold vs ~init:0 ~f:(fun sum v -> size_of_value1 v + sum)
+                           
+let rec size_of_expr1 (e : expr1) : size =
+  match e with
+  | Value1 v -> size_of_value1 v
+  | Var1 (_,s) -> s
+  | Hole1 (_,s) -> s
+  | Plus (e, e') | Minus(e,e') | Times (e,e') ->
+     let s = size_of_expr1 e in
+     let s' = size_of_expr1 e' in
+     if s = s' then s
+     else failwith (Printf.sprintf "size of expressions: %s, and %s differs (%d and %d)"
+                      (string_of_expr1 e)
+                      (string_of_expr1 e')
+                      s s')
+  | Tuple es -> List.fold es ~init:0 ~f:(fun sum e -> size_of_expr1 e + sum)
+
+                                                                            
 let mkInt i = Int i     
 let mkVInt i = Value1 (mkInt i)    
 let mkPlus e e' = Plus(e,e')
@@ -116,8 +145,8 @@ let rec string_of_value2 (v : value2) : string =
 let rec string_of_expr2 (e : expr2) : string =
   match e with
   | Value2 v2 -> string_of_value2 v2
-  | Var2 s -> s
-  | Hole2 s -> "?" ^ s
+  | Var2 (x,sz) -> x ^ "#" ^ string_of_int sz
+  | Hole2 (x,sz) -> "?" ^ x ^ "#" ^ string_of_int sz
   | Single e1 -> "{" ^ string_of_expr1 e1 ^ "}"
   | Union (e2, e2') -> string_of_expr2 e2 ^ " U " ^ string_of_expr2 e2'
 
@@ -134,21 +163,52 @@ let rec sexp_string_of_value2 (v : value2) : string =
 let rec sexp_string_of_expr2 (e : expr2) : string =
   match e with
   | Value2 v2 -> "Value2(" ^ sexp_string_of_value2 v2 ^")"
-  | Var2 s -> "Var2("^ s ^")"
-  | Hole2 s -> "Hole2(" ^ s ^ ")"
+  | Var2 (x,sz) -> "Var2(\""^ x ^ "\"," ^ string_of_int sz  ^")"
+  | Hole2 (x,sz) -> "Hole2(\"" ^ x ^ "\","^ string_of_int sz ^ ")"
   | Single e -> "Single(" ^ sexp_string_of_expr1 e ^ ")"
   | Union(e, e') -> "Union(" ^ sexp_string_of_expr2 e ^ "," ^ sexp_string_of_expr2 e' ^")"
 
+let rec size_of_value2 (v : value2) : size =
+  match v with
+  | Empty -> -1
+  | VSingle x -> size_of_value1 x
+  | VUnion (v,v') ->
+     let s = size_of_value2 v in
+     let s' = size_of_value2 v' in
+     if s = s' || s < 0 || s' < 0 then if s > s' then s else s'
+     else failwith (Printf.sprintf "Size of values %s and %s are different (%d and %d)"
+                      (string_of_value2 v) (string_of_value2 v')
+                      s s')
 
+let rec size_of_expr2 (e : expr2) : size =
+  match e with
+  | Value2 v -> size_of_value2 v
+  | Var2 (_, s) -> s
+  | Hole2 (_, s) -> s
+  | Single e -> size_of_expr1 e
+  | Union (e, e') ->
+     let s = size_of_expr2 e in
+     let s' = size_of_expr2 e' in
+     if s = s' || s < 0 || s' < 0 then if s > s' then s else s'                      
+     else failwith (Printf.sprintf "Size of values %s and %s are different (%d and %d)"
+                                   (string_of_expr2 e) (string_of_expr2 e) s s')
+                   
 let rec add_values1 (v : value1) (v' : value1) : value1 =
   match v, v' with
-  | Int x, Int x' -> Int (x + x')
+  | Int (x, sz), Int (x',sz') -> if sz = sz'
+                                 then Int (x + x',sz)
+                                 else
+                                   failwith (Printf.sprintf "Type error %d#%d and %d#%d have different bitvec sizes"
+                                               x sz x' sz')
   | Int _, VTuple vs | VTuple vs, Int _ -> VTuple (List.map ~f:(add_values1 v) vs)
   | VTuple vs, VTuple vs' -> VTuple (vs @ vs')
 
 let rec multiply_values1 (v : value1) (v' : value1) : value1 =
   match v, v' with
-  | Int x, Int x' -> Int (x * x')
+  | Int (x, sz), Int (x',sz') -> if sz = sz' then Int (x * x', sz) else
+                                   failwith (Printf.sprintf "Type error %d#%d and %d#%d have different file sizes"
+                                               x sz x' sz')
+
   | Int _, VTuple vs | VTuple vs, Int _ -> VTuple (List.map vs ~f:(multiply_values1 v))
   | VTuple vs, VTuple vs' -> List.cartesian_product vs vs'
                              |> List.map ~f:(fun (v,v') -> VTuple [v;v'])
@@ -156,7 +216,10 @@ let rec multiply_values1 (v : value1) (v' : value1) : value1 =
 
 let rec subtract_values1 (v : value1) (v' : value1) : value1 =
   match v, v' with
-  | Int x, Int x' -> Int (x - x')
+  | Int (x, sz), Int (x',sz') -> if sz = sz' then Int (x - x', sz) else
+                                   failwith (Printf.sprintf "Type error %d#%d and %d#%d have different file sizes"
+                                               x sz x' sz')
+
   | Int _, VTuple vs' -> VTuple (List.map vs' ~f:(fun v' -> subtract_values1 v v'))
   | VTuple vs, Int _ -> VTuple (List.map vs ~f:(fun v -> subtract_values1 v v'))
   | VTuple vs, VTuple vs' -> List.filter vs ~f:(fun v -> not (List.exists vs' ~f:(fun v' -> v = v')))
@@ -297,11 +360,10 @@ let rec dedup xs =
      let xs' = remove_dups x xs in
      x :: dedup xs'
 
-let rec free_of_expr1 typ e =
+let rec free_of_expr1 typ e : (string * size) list =
   match e, typ with
   | Value1 _, _ -> []
-  | Var1 x, `Var -> [x]
-  | Hole1 x, `Hole -> [x]
+  | Var1 (x,sz), `Var  | Hole1 (x,sz), `Hole -> [x,sz]
   | Var1 _ , `Hole -> []
   | Hole1 _ , `Var -> []
   | Tuple es, _ -> concatMap es ~c:(@) ~f:(free_of_expr1 typ)
@@ -311,13 +373,13 @@ let rec free_of_expr1 typ e =
 let rec free_of_expr2 typ set =
   match set,typ with
   | Value2 _,_ -> []
-  | Var2 x, `Var | Hole2 x, `Hole -> [x]
+  | Var2 (x,sz), `Var | Hole2 (x,sz), `Hole -> [x,sz]
   | Var2 _, `Hole | Hole2 _, `Var -> []
   | Single e, _ -> free_of_expr1 typ e
   | Union (e,e'),_ -> free_of_expr2 typ e @ free_of_expr2 typ e'
   
                 
-let rec free_of_test typ test =
+let rec free_of_test typ test : (string * size) list =
   begin match test with
   | True | False | LocEq _ ->
     []
@@ -331,15 +393,19 @@ let rec free_of_test typ test =
   end
   |> dedup
 
-let free_vars_of_test = free_of_test `Var
+let free_vars_of_test t : (string * size) list=
+  let vs = free_of_test `Var t in
+  vs
+            
+                
 let holes_of_test = free_of_test `Hole
 
-let rec multi_ints_of_value1 e =
+let rec multi_ints_of_value1 e : (int * size) list =
   match e with
-  | Int i -> [i]
+  | Int (i,sz) -> [i,sz]
   | VTuple vs -> concatMap vs ~c:(@) ~f:multi_ints_of_value1
 
-let rec multi_ints_of_expr1 e =
+let rec multi_ints_of_expr1 e : (int * size) list =
   match e with
   | Value1 v -> multi_ints_of_value1 v
   | Var1 _ | Hole1 _ -> []
@@ -348,20 +414,20 @@ let rec multi_ints_of_expr1 e =
   | Tuple es ->
      concatMap es ~init:(Some []) ~c:(@) ~f:multi_ints_of_expr1
 
-let rec multi_ints_of_value2 v2 =
+let rec multi_ints_of_value2 v2 : (int * size) list =
   match v2 with
   | Empty -> []
   | VSingle v -> multi_ints_of_value1 v
   | VUnion (v,v') -> multi_ints_of_value2 v @ multi_ints_of_value2 v'
     
-let rec multi_ints_of_expr2 e2 =
+let rec multi_ints_of_expr2 e2 : (int * size) list =
   match e2 with
   | Var2 _ | Hole2 _ -> []
   | Value2 v -> multi_ints_of_value2 v 
   | Single e -> multi_ints_of_expr1 e
   | Union (v,v') -> multi_ints_of_expr2 v @ multi_ints_of_expr2 v'
                   
-let rec multi_ints_of_test test =
+let rec multi_ints_of_test test : (int * size) list =
   begin match test with
     | True | False | LocEq _ ->
       []
@@ -417,7 +483,7 @@ type cmd =
   | Seq of (cmd * cmd)
   | While of (test * cmd)
   | Select of (select_typ * ((test * cmd) list))
-  | Apply of (string * string list * cmd list * cmd)
+  | Apply of (string * (string * size) list * cmd list * cmd)
 
 
 let clean_selects_list =
@@ -521,14 +587,14 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
       )
     ^ "\n" ^ repeat "\t" depth ^ "fi"
   | Apply (name, keys, acts, default) ->
-      name ^ "apply ("
+      "apply (" ^ name ^ ",("
       ^ List.fold_left keys ~init:""
-          ~f:(fun str k ->
-            str ^ ";" ^ k)
+          ~f:(fun str (k,sz) ->
+            str ^ "," ^ k ^ "#" ^ string_of_int sz) ^ ")"
       ^ "," ^ List.fold_left acts ~init:""
                 ~f:(fun str a ->
-                  str ^ ";" ^ string_of_cmd a)
-      ^ "," ^ string_of_cmd default
+                  str ^ " | {" ^ string_of_cmd a ^ "}")
+      ^ ", {" ^ string_of_cmd default ^ "})"
                                        
             
   
@@ -553,7 +619,7 @@ let rec sexp_string_of_cmd e : string =
   | Apply (name, keys, actions, default) ->
      "Apply("
      ^ name ^ ",["
-     ^ List.fold_left keys ~init:"" ~f:(fun str k -> str ^ ";\"" ^ k ^ "\"")
+     ^ List.fold_left keys ~init:"" ~f:(fun str (k,sz) -> str ^ ";\"" ^ k ^ "\"," ^ string_of_int sz ^ "")
      ^ "],["
      ^ List.fold_left actions ~init:"" ~f:(fun str a -> str ^ ";" ^ sexp_string_of_cmd a)
      ^ "]," ^ sexp_string_of_cmd default
@@ -569,14 +635,10 @@ let rec tables_of_cmd (c:cmd) : string list =
                                                               
 
     
-let rec free_of_cmd typ (c:cmd) : string list =
+let rec free_of_cmd typ (c:cmd) : (string * size) list =
   begin match c with
   | Skip | SetLoc _ -> []
-  | Assign (f, e) ->
-     f :: (match e,typ with
-        | Hole1 x,`Hole -> [x]
-        | Var1 x, `Var -> [x]
-        | _, _ -> [] )
+  | Assign (f, e) ->  (f,size_of_expr1 e) :: free_of_expr1 typ e
   | Seq (c, c') ->
      free_of_cmd typ c @ free_of_cmd typ c'
   | While (cond, body) ->
@@ -600,7 +662,7 @@ let rec free_of_cmd typ (c:cmd) : string list =
 let free_vars_of_cmd = free_of_cmd `Var
 let holes_of_cmd = free_of_cmd `Hole
       
-let rec multi_ints_of_cmd c =
+let rec multi_ints_of_cmd c : (int * size) list =
   match c with
   | Skip
   | SetLoc _ ->
@@ -770,10 +832,10 @@ let holify holes c =
   let rec holify_expr1 (e : expr1) : expr1 =
     match e with
     | Hole1 _ | Value1 _ -> e
-    | Var1 x ->
+    | Var1 (x,sz) ->
       begin match List.find holes ~f:(fun elem -> x = elem)  with
       | None -> e
-      | Some _ -> Hole1 ("?" ^ x)
+      | Some _ -> Hole1 ("?" ^ x, sz)
       end
     | Plus (e,e') -> Plus (holify_expr1 e, holify_expr1 e')
     | Times (e,e') -> Times (holify_expr1 e, holify_expr1 e')
@@ -784,10 +846,10 @@ let holify holes c =
     match e with
     | Value2 _ -> e
     | Hole2 _ -> e
-    | Var2 x ->
+    | Var2 (x,sz) ->
        begin match List.find holes ~f:(fun elem -> x = elem) with
-       | None -> e
-       | Some _ -> Hole2 ("?" ^ x)
+       | None -> e 
+       | Some _ -> Hole2 ("?" ^ x,sz)
        end
     | Single e -> Single (holify_expr1 e)
     | Union (e,e') -> Union (holify_expr2 e, holify_expr2 e')

@@ -34,4 +34,14 @@ let random_int_nin domain =
 let mkPair a b = (a, b)
 
 (** constructs a reversed pair from the arguments *)
-let mkRevPair b a = (a, b)                 
+let mkRevPair b a = (a, b)
+
+
+let rec difference (xs : 'a list) (ys : 'a list) : 'a list =
+  match xs,ys with
+  | [],_ | _,[] -> xs
+  | (x::xs'),_ ->
+     if List.exists ys ~f:((=) x) then
+       difference xs' ys
+     else
+       x :: difference xs' ys

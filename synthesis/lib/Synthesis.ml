@@ -84,18 +84,19 @@ let find_traces (graph:graph) (in_loc : int) (out_loc : int) =
 let complete_inner ~falsify (cmd : cmd) =
   let domain = multi_ints_of_cmd cmd |> dedup in
   let rec complete_aux_test ~falsify t =
-    let hole_replace x comp =
+    let hole_replace x sz comp =
       if falsify
       then False
-      else comp x (Value1 (Int (random_int_nin domain)))
+      else let i = random_int_nin (List.map ~f:fst domain) in
+           comp x (Value1 (Int (i,sz)))
     in
     match t with
     | True | False | LocEq _ -> t
     | Neg b -> !%(complete_aux_test ~falsify b)
     | And (a, b) -> complete_aux_test ~falsify a %&% complete_aux_test ~falsify b
     | Or (a, b) -> complete_aux_test ~falsify a %+% complete_aux_test ~falsify b
-    | Eq (Hole1 _, x) | Eq (x, Hole1 _) -> hole_replace x (%=%)
-    | Lt (Hole1 _, x) | Lt (x, Hole1 _) -> hole_replace x (%<%)
+    | Eq (Hole1 (_,sz), x) | Eq (x, Hole1 (_,sz)) -> hole_replace x sz (%=%)
+    | Lt (Hole1 (_,sz), x) | Lt (x, Hole1 (_,sz)) -> hole_replace x sz (%<%)
     | Eq _ | Lt _ -> t
     | Member _ -> failwith "What do?"
   and complete_aux ~falsify cmd =
@@ -104,7 +105,10 @@ let complete_inner ~falsify (cmd : cmd) =
     | Assign (f, v) ->
       begin
         match v with
-        | Hole1 _ -> f %<-% Value1 (Int (random_int_nin domain))
+        | Hole1 _ ->
+           let i = random_int_nin (List.map ~f:fst domain) in
+           let sz = int_of_float (2. ** float_of_int i) in
+           f %<-% Value1 (Int (i,sz))
         | _ -> cmd
       end
     | Assert b -> Assert (complete_aux_test ~falsify b)
@@ -178,10 +182,13 @@ let rec fixup_val (model : value1 StringMap.t) (e : expr1)  : expr1 =
   let binop op e e' = op (fixup_val model e) (fixup_val model e') in
   match e with
   | Value1 _ | Var1 _ -> e
-  | Hole1 h -> 
+  | Hole1 (h,sz) -> 
      begin match StringMap.find model h with
      | None -> e
-     | Some v' -> Value1 v'
+     | Some v -> let sz' = size_of_value1 v in
+                 let strv = string_of_value1 v in
+                 (if sz <> sz' then (Printf.printf "[Warning] replacing %s#%d with %s#%d, but the sizes may be different, taking the size of %s to be ground truth" h sz strv (size_of_value1 v) strv));
+                 Value1 v
      end
   | Plus  (e, e') -> binop mkPlus  e e'
   | Times (e, e') -> binop mkTimes e e'
@@ -239,13 +246,10 @@ and fixup (real:cmd) (model : value1 StringMap.t) : cmd =
 let unroll_fully c = unroll (diameter c) c 
 
 let symbolic_pkt fvs = 
-    List.fold fvs ~init:(True, 0)
-      ~f:(fun (acc_test, fv_count) var ->
-          (Var1 var %=% Var1 ("$" ^ string_of_int fv_count)
-           %&% acc_test
-          , fv_count + 1)
-        )
-    |> fst
+    List.fold fvs ~init:True
+      ~f:(fun acc_test (var,sz) ->
+        Var1 (var,sz) %=% Var1 ("$" ^ var, sz)
+        %&% acc_test)
 
 let symb_wp ?fvs:(fvs=[]) cmd =
   List.dedup_and_sort ~compare (free_vars_of_cmd cmd @ fvs)
@@ -282,7 +286,7 @@ let check_edit (_:int) (_:cmd) (_:cmd) = failwith ""
 
 
 let matchExpr ks =  List.map ks ~f:(fun x -> Var1 x)
-
+let bitLen keys = size_of_expr1 (matchExpr keys |> Tuple) 
 let rec matchWF keys mVar2 i j =
   if i = j then matchWF keys mVar2 (i-1) j %&% matchWF keys mVar2 i (j-1)
   else if i < 0 || j < 0 then True
@@ -308,7 +312,7 @@ let rec base_translation (c:cmd) =
     -> While (b, base_translation c) 
   | Apply (name, keys, actions, default)
     ->
-     let mVar2 i = Var2 ("M_"^name^"_"^string_of_int i) in
+     let mVar2 i = Var2 ("M_"^name^"_"^string_of_int i, bitLen keys) in
      let positiveRows : (test * cmd) list =
        List.foldi actions ~init:[]
          ~f:(fun i acc act ->
@@ -338,9 +342,11 @@ let rec add_symbolic_row (name:string) (c:cmd) =
     -> While (b, add_symbolic_row name c) 
   | Apply (name', keys, actions, default) as table
     ->
-     let mVar2 i = Var2 ("M_"^name^"_"^string_of_int i) in
-     let fillVar1 k =  Var1 (k^"_"^name^"!FILL")in
-     let actionVar = Var1 "action!FILL" in
+     let mVar2 i = Var2 ("M_"^name^"_"^string_of_int i, bitLen keys) in
+     let fillVar1 (k,sz) =  Var1 (k^"_"^name^"!NEW", sz)in
+     let n = (List.length actions) - 1 in
+     let actionSize = int_of_float(2. ** (float_of_int(n + 1))) - 1 in
+     let actionVar = Var1 ("action!NEW", actionSize) in
      if name = name' then
          let row = List.map keys ~f:(fillVar1) in
          let positiveRows : (test * cmd) list =
@@ -351,14 +357,13 @@ let rec add_symbolic_row (name:string) (c:cmd) =
                , act) :: acc )
            @ List.foldi actions ~init:[]
                ~f:(fun i acc act ->
-                 ((actionVar :: matchExpr keys |> Tuple) %=% (mkVInt i :: row |> Tuple )
+                 ((actionVar :: matchExpr keys |> Tuple) %=% (mkVInt (i,actionSize) :: row |> Tuple )
                  , act) :: acc)
          in
          let actionWF = Member(actionVar,
                                  List.foldi actions
                                    ~init:(Value2 Empty)
-                                   ~f:(fun i acc _ -> mkInsert (Value1 (Int i)) acc)) in
-         let n = (List.length actions) - 1 in
+                                   ~f:(fun i acc _ -> mkInsert (mkVInt (i, actionSize)) acc)) in
          Assume actionWF
          %:% Assume (matchWF keys mVar2 n n)
          %:% (positiveRows @ ([catchAll positiveRows, default])
@@ -386,11 +391,12 @@ let rec concretely_instrument (n:int) (c:cmd) =
     -> While (b, concretely_instrument n c) 
   | Apply (name, keys, actions, default)
     ->
-     let mVar2 actId = Var2 ("M_"^name^"_"^string_of_int actId) in
-     let fillVar1 rowId key =  Var1 (key^"_"^string_of_int rowId^"_"^name^"!FILL") in
-     let actionVar rowId = Var1 ("action_"^name ^string_of_int rowId ^ "!FILL") in
+     let mVar2 actId = Var2 ("M_"^name^"_"^string_of_int actId, bitLen keys) in
+     let fillVar1 rowId (key, sz) =  Var1 (key^"_"^string_of_int rowId^"_"^name^"!FILL", sz) in
+     let l = List.length actions - 1 in
+     let actionSize = int_of_float(2. ** (float_of_int(l + 1))) - 1 in
+     let actionVar rowId = Var1 ("action_"^name ^string_of_int rowId ^ "!FILL", actionSize) in
 
-     (* let delSet = Var2 ("Del_" ^ name ^"!FILL") in *)
      let rec modifiedRows i =
        if i = 0 then Value2 Empty
        else List.map keys ~f:(fillVar1 i) |> Tuple |> Single |> mkUnion (modifiedRows (i-1))
@@ -406,12 +412,11 @@ let rec concretely_instrument (n:int) (c:cmd) =
            ~f:(fun actId acc act ->
              let rec newRow rowId   =
                if rowId <= 0 then []
-               else (Tuple (mkVInt actId :: matchExpr keys)
+               else (Tuple (mkVInt (actId, actionSize) :: matchExpr keys)
                      %=% Tuple(actionVar rowId :: List.map keys ~f:(fillVar1 rowId))
                     , act) :: newRow (rowId - 1)
              in newRow n @ acc)
      in
-     let l = List.length actions - 1 in
      (* let rec matchUnion i =
       *   if n < 0 then Value2 Empty
       *   else Union(mVar2 i, matchUnion (i-1))
@@ -435,15 +440,15 @@ let check_add n name logical real =
   let u_log_add1 = add_symbolic_row name u_log in
   let u_rea = unroll_fully real in
   let u_rea_addn = concretely_instrument n u_rea in
-  let fvs = free_vars_of_cmd u_rea
-            @ free_vars_of_cmd u_log
-            @ free_vars_of_cmd u_log_add1
-            @ free_vars_of_cmd u_rea_addn in
-  let log_wp  = base_translation u_log |> symb_wp ~fvs in
-  let real_wp = base_translation u_rea |> symb_wp ~fvs in
-  let log1_wp = symb_wp u_log_add1 ~fvs in
-  let rean_wp = symb_wp u_rea_addn ~fvs in
-  match check_valid ((log_wp %<=>% real_wp) %=>% (log1_wp %<=>% rean_wp)) with
+  (* let fvs = free_vars_of_cmd u_rea
+   *           @ free_vars_of_cmd u_log
+   *           @ free_vars_of_cmd u_log_add1
+   *           @ free_vars_of_cmd u_rea_addn in *)
+  let log_wp  = base_translation u_log |> symb_wp in
+  let real_wp = base_translation u_rea |> symb_wp in
+  let log1_wp = symb_wp u_log_add1 in
+  let rean_wp = symb_wp u_rea_addn in
+  match check_valid_impl log_wp (*=*) real_wp (*=>*) log1_wp (*=*) rean_wp with
   | None -> Printf.printf "+++++valid+++++\n%!"; `Yes
   | Some x -> Printf.printf "-----invalid---\n%!"; `NoAndCE (Packet.from_CE x)
               

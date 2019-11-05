@@ -46,6 +46,7 @@ rule tokens = parse
 | ","             { COMMA }
 | "|"             { BAR }
 | "?"             { QUESTION }
+| "#"             { POUND }
 | ">"             { GREATER }
 | "<"             { LESS }
 | eof             { EOF }

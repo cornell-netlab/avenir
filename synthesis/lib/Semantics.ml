@@ -5,8 +5,8 @@ let rec eval_expr1 (pkt_loc : Packet.located) ( e : expr1 ) : value1 =
   let binop op e e' = op (eval_expr1 pkt_loc e) (eval_expr1 pkt_loc e') in
   match e with
   | Value1 v -> v
-  | Var1 v -> Packet.get_val (fst pkt_loc) v
-  | Hole1 h -> failwith ("Cannot evaluate symbolic hole " ^ h)
+  | Var1 (v,_) -> Packet.get_val (fst pkt_loc) v
+  | Hole1 (h,_) -> failwith ("Cannot evaluate symbolic hole " ^ h)
   | Plus  (e, e') -> binop add_values1 e e'
   | Times (e, e') -> binop multiply_values1 e e'
   | Minus (e, e') -> binop subtract_values1 e e'
@@ -16,8 +16,8 @@ let rec eval_expr1 (pkt_loc : Packet.located) ( e : expr1 ) : value1 =
 let rec eval_expr2 (pkt_loc : Packet.located) ( e : expr2 ) : value2 =
   match e with
   | Value2 v -> v
-  | Var2 s -> failwith ("Cannot evaluate (symbolic) second-order variable " ^ s)
-  | Hole2 s -> failwith("Cannot evaluate (symbolic) second-order hole " ^ s)
+  | Var2 (s,_) -> failwith ("Cannot evaluate (symbolic) second-order variable " ^ s)
+  | Hole2 (s,_) -> failwith("Cannot evaluate (symbolic) second-order hole " ^ s)
   | Single e -> eval_expr1 pkt_loc e  |> VSingle
   | Union (set, set') -> VUnion(eval_expr2 pkt_loc set, eval_expr2 pkt_loc set')
   

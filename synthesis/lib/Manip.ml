@@ -76,7 +76,7 @@ let rec substitute ex subsMap =
   let subst = get_val subsMap in
   let rec substituteE e =
     match e with
-    | Var1 field -> subst field e
+    | Var1 (field,_) -> subst field e
     | Value1 _ | Hole1 _ -> e
     | Plus (e, e') -> Plus (substituteE e, substituteE e')
     | Times (e, e') -> Times (substituteE e, substituteE e')
@@ -155,10 +155,13 @@ let rec fill_holes_expr1 e (subst : value1 StringMap.t) =
   let binop op e e' = op (fill_holesS e) (fill_holesS e') in
   match e with
   | Value1 _ | Var1 _ -> e
-  | Hole1 h ->
+  | Hole1 (h,sz) ->
      begin match StringMap.find subst h with
      | None -> e
-     | Some v -> Value1 v
+     | Some v -> let sz' = size_of_value1 v in
+                 let strv = string_of_value1 v in
+                 (if sz <> sz' then (Printf.printf "[Warning] replacing %s#%d with %s#%d, but the sizes may be different, taking the size of %s to be ground truth" h sz strv (size_of_value1 v) strv));
+                 Value1 v
      end
   | Plus (e, e') -> binop mkPlus e e'
   | Minus (e, e') -> binop mkMinus e e'
@@ -183,10 +186,13 @@ let rec fill_holes (c : cmd) subst =
                      ~f:(fun (cond, act) ->
                        [(fill_holes_test cond subst, fill_holes act subst)]) in
   match c with
-  | Assign (f, Hole1 h) ->
+  | Assign (f, Hole1 (h,sz)) ->
      begin match StringMap.find subst h with
      | None -> c
-     | Some v -> Assign (f, Value1 v)
+     | Some v -> let sz' = size_of_value1 v in
+                 let strv = string_of_value1 v in
+                 (if sz <> sz' then (Printf.printf "[Warning] replacing %s#%d with %s#%d, but the sizes may be different, taking the size of %s to be ground truth" h sz strv (size_of_value1 v) strv));
+                 Assign (f, Value1 v)
      end
   | SetLoc _ | Assign (_, _) -> c
   | Seq (firstdo, thendo) ->

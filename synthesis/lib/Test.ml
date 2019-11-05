@@ -26,9 +26,9 @@ let rec generate_random_string length =
             
 let generate_random_expr1 size =
   match Random.int 3 with
-  | 0 -> Value1 (Int (Random.int 256))
-  | 1 -> Var1 (generate_random_string size)
-  | 2 -> Hole1 (generate_random_string size)
+  | 0 -> Value1 (Int (Random.int 256, 8))
+  | 1 -> Var1 (generate_random_string size, 8)
+  | 2 -> Hole1 (generate_random_string size, 8)
   | _ -> failwith "generated random integer larger than 2"
           
 let rec generate_random_test size =
@@ -71,28 +71,28 @@ let rec generate_random_cmd size =
 
 let loop_body =
   mkSelect Partial
-    [ Var1 "pkt" %=% Value1(Int 3) , ("pkt" %<-% Value1(Int 6)) %:% ("loc" %<-% Value1(Int 10))
-    ; Var1 "pkt" %=% Value1(Int 4) , ("pkt" %<-% Value1(Int 2)) %:% ("loc" %<-% Value1(Int 11))]       
+    [ Var1 ("pkt",8) %=% Value1(Int (3,8)) , ("pkt" %<-% Value1(Int (6,8))) %:% ("loc" %<-% Value1(Int (10,8)))
+    ; Var1 ("pkt",8) %=% Value1(Int (4,8)) , ("pkt" %<-% Value1(Int (2,8))) %:% ("loc" %<-% Value1(Int (11,8)))]       
     
 let simple_test =
-  "h" %<-% Var1 "Ingress" %:%
-    mkWhile (Var1 "h" %<>% Var1 "Egress") loop_body
+  "h" %<-% Var1 ("Ingress",8) %:%
+    mkWhile (Var1 ("h",8) %<>% Var1 ("Egress",8)) loop_body
    
 let test1 = string_of_cmd simple_test
                 
-let test2 = wp ("h" %<-% Var1 "Ingress") True
+let test2 = wp ("h" %<-% Var1 ("Ingress",8)) True
 
 let complete_test_with_drop_location_no_holes =
   SetLoc 0 %:%
   While(!%(LocEq 1) %&% !%(LocEq (-1)), 
         mkPartial
-          [ LocEq 0 %&% (Var1 "pkt" %=% Value1 (Int 42)) ,  SetLoc 1 %:% ("pkt" %<-% Value1 (Int 47))
-          ; LocEq 0 %&% !%(Var1 "pkt" %=% Value1 (Int 42)), SetLoc (-1) ]
+          [ LocEq 0 %&% (Var1 ("pkt",8) %=% Value1 (Int (42,8))) ,  SetLoc 1 %:% ("pkt" %<-% Value1 (Int (47,8)))
+          ; LocEq 0 %&% !%(Var1 ("pkt",8) %=% Value1 (Int (42,8))), SetLoc (-1) ]
        )
 
 let complete_test_with_drop_location_holes =
-  let pkt_eq h = Var1 "pkt" %=% Hole1 h in
-  let pkt_gets h = "pkt" %<-% Hole1 h in
+  let pkt_eq h = Var1 ("pkt",8) %=% Hole1 (h,8) in
+  let pkt_gets h = "pkt" %<-% Hole1 (h,8) in
   SetLoc 0 %:%
   While(!%(LocEq 1) %&% !%(LocEq (-1)),
         mkPartial 
@@ -103,28 +103,28 @@ let complete_test_with_drop_location_holes =
 
              
 let%test _ = (* Testing unrolling *)
-  unroll 1 simple_test = "h" %<-% Var1 "Ingress" %:%
-                          mkSelect Partial [Var1 "h" %<>% Var1 "Egress" , loop_body]
+  unroll 1 simple_test = "h" %<-% Var1 ("Ingress",8) %:%
+                          mkSelect Partial [Var1 ("h",8) %<>% Var1 ("Egress",8) , loop_body]
 
 let%test _= (* testing loop removal when n = 0*)
-  unroll 0 simple_test = Seq(Assign("h",Var1("Ingress")), Skip)
+  unroll 0 simple_test = Seq(Assign("h",Var1("Ingress",8)), Skip)
 
 let%test _ = (* One unroll works *)
-  let cond = Var1 "h" %<>% Var1 "Egress" in
-  let input = ("h" %<-% Var1 "Ingress") %:% mkWhile cond loop_body in
+  let cond = Var1 ("h",8) %<>% Var1 ("Egress",8) in
+  let input = ("h" %<-% Var1 ("Ingress",8)) %:% mkWhile cond loop_body in
   unroll 1 input
-  = ("h" %<-% Var1 "Ingress") %:%  mkSelect Partial [cond , loop_body %:% Skip]
+  = ("h" %<-% Var1 ("Ingress",8)) %:%  mkSelect Partial [cond , loop_body %:% Skip]
   
 
 let%test _ = (*Sequencing unrolls works*)
-  let cond = Var1 "h" %<>% Var1 "Egress" in
+  let cond = Var1 ("h",8) %<>% Var1 ("Egress",8) in
   unroll 1 (mkWhile cond loop_body %:% mkWhile cond loop_body)
   = unroll 1 (mkWhile cond loop_body)
     %:% unroll 1 (mkWhile cond loop_body)
 
 let%test _ = (*Selection unrolls works*)
-  let cond = Var1 "h" %<>% Var1 "Egress" in
-  let selectCond = Var1 "h" %=% Value1 (Int 5) in
+  let cond = Var1 ("h",8) %<>% Var1 ("Egress",8) in
+  let selectCond = Var1 ("h",8) %=% Value1 (Int (5,8)) in
   unroll 1 (mkSelect Total [ selectCond, mkWhile cond loop_body
                            ; True, mkWhile cond loop_body])
   = mkSelect Total [selectCond, unroll 1 (mkWhile cond loop_body)
@@ -132,8 +132,8 @@ let%test _ = (*Selection unrolls works*)
 
 (* Testing equality smart constructor *)
 let%test _ =
-  let exp = Var1 "x" %=% Value1(Int 7) in
-  let got = Value1 (Int 7) %=% Var1 "x" in
+  let exp = Var1 ("x",8) %=% Value1(Int (7,8)) in
+  let got = Value1 (Int (7,8)) %=% Var1 ("x",8) in
   if exp = got then true else
     (print_test_neq ~got ~exp;false)
   
@@ -143,54 +143,52 @@ let%test _ =
 (* Weakest precondition testing *)
 let%test _ = (*Skip behaves well *)
   wp Skip True = True
-  && wp Skip (Var1 "x" %=% Var1 "y") = Var1 "x" %=% Var1 "y"
+  && wp Skip (Var1 ("x",8) %=% Var1 ("y",8)) = Var1 ("x",8) %=% Var1 ("y",8)
 
 let%test _ = (* Assign behaves well with integers *)
-  let prog = "h" %<-% Value1(Int 7) in
+  let prog = "h" %<-% Value1(Int (7,8)) in
   (* Printf.printf "%s\n" (string_of_test (wp prog (Var1 "h" %=% Int 7))); *)
   (* Int 7 %=% Int 7 = wp prog (Var1 "h" %=% Int 7) *)
-  if Value1 (Int 7) %=% Var1 "g" = wp prog (Var1 "h" %=% Var1 "g") then true else
+  if Value1 (Int (7,8)) %=% Var1 ("g",8) = wp prog (Var1 ("h",8) %=% Var1 ("g",8)) then true else
     (print_test_neq
-       ~exp:(Value1 (Int 7) %=% Var1 "g")
-       ~got:(wp prog (Var1 "h" %=% Var1 "g"))
+       ~exp:(Value1 (Int (7,8)) %=% Var1 ("g",8))
+       ~got:(wp prog (Var1 ("h",8) %=% Var1 ("g",8)))
     ; false)
   
     
     
 
 let%test _ = (* Assign behaves well with variables *)
-  let prog = "h" %<-% Var1 "hgets" in
-  let wphEQ x = wp prog (Var1 "h" %=% x) in
-  Var1 "hgets" %=% mkVInt 7 = wphEQ (mkVInt 7) 
-  && Var1 "hgets" %=% Var1 "g" = wphEQ (Var1 "g")
-
-
+  let prog = "h" %<-% Var1 ("hgets",8) in
+  let wphEQ x = wp prog (Var1 ("h",8) %=% x) in
+  Var1 ("hgets",8) %=% mkVInt (7,8) = wphEQ (mkVInt (7,8)) 
+  && Var1 ("hgets",8) %=% Var1 ("g",8) = wphEQ (Var1 ("g",8))
 
   
 let%test _ =
   let prog = mkSelect Total [
-                 Var1 "h" %=% Var1 "g", "g" %<-% mkVInt 8
+                 Var1 ("h",8) %=% Var1 ("g",8), "g" %<-% mkVInt (8,8)
                ] in
-  let prec = wp prog (Var1 "g" %=% mkVInt 8) in
-  let exp  = Var1 "h" %=% Var1 "g" in
+  let prec = wp prog (Var1 ("g",8) %=% mkVInt (8,8)) in
+  let exp  = Var1 ("h",8) %=% Var1 ("g",8) in
   (if prec <> exp then print_test_neq ~got:prec ~exp:exp);
   prec = exp
   
 let%test _ = (* wp behaves well with selects *)
-  let prog = mkSelect Total [ Var1 "h" %=%  Var1 "g" , "g" %<-% mkVInt 8
-                            ; Var1 "h" %=%  mkVInt 99  , "h" %<-% mkVInt 4
-                            ; Var1 "h" %<>% mkVInt 2   , "h" %<-% Var1 "g"
+  let prog = mkSelect Total [ Var1 ("h",8) %=%  Var1 ("g",8) , "g" %<-% mkVInt (8,8)
+                            ; Var1 ("h",8) %=%  mkVInt (99,8)  , "h" %<-% mkVInt (4,8)
+                            ; Var1 ("h",8) %<>% mkVInt (2,8)   , "h" %<-% Var1 ("g",8)
                             ] in
-  let comp = wp prog (Var1 "g" %=% mkVInt 8) in
+  let comp = wp prog (Var1 ("g",8) %=% mkVInt (8,8)) in
   let all_conds =
-    (Var1 "h" %=%  Var1 "g")
-    %+% (Var1 "h" %=%  mkVInt 99)
-    %+% (Var1 "h" %<>% mkVInt 2)
+    (Var1 ("h",8) %=%  Var1 ("g",8))
+    %+% (Var1 ("h",8) %=%  mkVInt (99,8))
+    %+% (Var1 ("h",8) %<>% mkVInt (2,8))
   in
   let all_imps =
-    ((Var1 "h" %=%  Var1 "g") %=>% (mkVInt  8  %=% mkVInt 8))
-    %&% ((Var1 "h" %=%  mkVInt 99)  %=>% (Var1 "g" %=% mkVInt 8))
-    %&% ((Var1 "h" %<>% mkVInt 2)   %=>% (Var1 "g" %=% mkVInt 8))
+    ((Var1 ("h",8) %=%  Var1 ("g",8)) %=>% (mkVInt (8,8)  %=% mkVInt (8,8)))
+    %&% ((Var1 ("h",8) %=%  mkVInt (99,8))  %=>% (Var1 ("g",8) %=% mkVInt (8,8)))
+    %&% ((Var1 ("h",8) %<>% mkVInt (2,8))   %=>% (Var1 ("g",8) %=% mkVInt (8,8)))
   in
   let exp = all_conds %&% all_imps in
   (if comp <> exp then print_test_neq ~got:comp ~exp:exp );
@@ -199,20 +197,20 @@ let%test _ = (* wp behaves well with selects *)
 
            
 let%test _ = (* wp behaves well with sequence *)
-  let prog = ("h" %<-% mkVInt 10) %:% ("h" %<-% mkVInt 80) in
-  let cond = Var1 "h" %=% Var1 "g" in
-  mkVInt 80 %=% Var1 "g" = wp prog cond
+  let prog = ("h" %<-% mkVInt (10,8)) %:% ("h" %<-% mkVInt (80,8)) in
+  let cond = Var1 ("h",8) %=% Var1 ("g",8) in
+  mkVInt (80,8) %=% Var1 ("g",8) = wp prog cond
 
 let%test _ = (* wp behaves well with assertions *)
-  let asst = (Var1 "h" %<>% mkVInt 10) %&% (Var1 "h" %<>% mkVInt 15) in
+  let asst = (Var1 ("h",8) %<>% mkVInt (10,8)) %&% (Var1 ("h",8) %<>% mkVInt (15,8)) in
   let prog = Assert(asst) in
-  let phi =  Var1 "h" %=% Var1 "g" in
+  let phi =  Var1 ("h",8) %=% Var1 ("g",8) in
   wp prog phi = asst %&% phi
 
 let%test _ = (* wp behaves well with partials *)
-  let cond = Var1 "pkt" %=% mkVInt 101 in
-  let prog = mkSelect Partial [ Var1 "pkt" %=% Hole1 "_hole0", "pkt" %<-% Hole1 "_hole1" ] in
-  let exp = Var1 "pkt" %=% Hole1 "_hole0" %=>% (Hole1 "_hole1" %=% mkVInt 101) in
+  let cond = Var1 ("pkt",8) %=% mkVInt (101,8) in
+  let prog = mkSelect Partial [ Var1 ("pkt",8) %=% Hole1 ("_hole0",8), "pkt" %<-% Hole1 ("_hole1",8) ] in
+  let exp = Var1 ("pkt",8) %=% Hole1 ("_hole0",8) %=>% (Hole1 ("_hole1",8) %=% mkVInt (101,8)) in
   let got = wp prog cond in
   if exp = got then true else(
     print_test_neq ~exp ~got;
@@ -221,9 +219,9 @@ let%test _ = (* wp behaves well with partials *)
 
 
 let%test _ = (* wp behaves well with totals *)
-  let cond = Var1 "pkt" %=% mkVInt 101 in
-  let prog = mkSelect Total [ Var1 "pkt" %=% Hole1 "_hole0", "pkt" %<-% Hole1 "_hole1" ] in
-  let exp = (Var1 "pkt" %=% Hole1 "_hole0") %&% (Var1 "pkt" %=% Hole1 "_hole0" %=>% (Hole1 "_hole1" %=% mkVInt 101)) in
+  let cond = Var1 ("pkt",8) %=% mkVInt (101,8) in
+  let prog = mkSelect Total [ Var1 ("pkt",8) %=% Hole1 ("_hole0",8), "pkt" %<-% Hole1 ("_hole1",8) ] in
+  let exp = (Var1 ("pkt",8) %=% Hole1 ("_hole0",8)) %&% (Var1 ("pkt",8) %=% Hole1 ("_hole0",8) %=>% (Hole1 ("_hole1",8) %=% mkVInt (101,8))) in
   let got = wp prog cond in
   if exp = got then true else(
     print_test_neq ~exp ~got;
@@ -231,11 +229,11 @@ let%test _ = (* wp behaves well with totals *)
   )
 
 let%test _ = (* wp behaves well with ordereds *)
-  let cond = Var1 "pkt" %=% mkVInt 101 in
-  let prog = mkSelect Ordered [ Var1 "pkt" %=% Hole1 "_hole0", "pkt" %<-% Hole1 "_hole1"
-                              ; Var1 "pkt" %=% mkVInt 99 , "pkt" %<-% mkVInt 101] in
-  let exp = (Var1 "pkt" %=% Hole1 "_hole0" %=>% (Hole1 "_hole1" %=% mkVInt 101))
-             %&% ((Var1 "pkt" %=% mkVInt 99 %&% (Var1 "pkt" %<>% Hole1 "_hole0")) %=>% (mkVInt 101 %=% mkVInt 101))
+  let cond = Var1 ("pkt",8) %=% mkVInt (101,8) in
+  let prog = mkSelect Ordered [ Var1 ("pkt",8) %=% Hole1 ("_hole0",8), "pkt" %<-% Hole1 ("_hole1",8)
+                              ; Var1 ("pkt",8) %=% mkVInt (99,8), "pkt" %<-% mkVInt (101,8)] in
+  let exp = (Var1 ("pkt",8) %=% Hole1  ("_hole0",8) %=>% (Hole1 ("_hole1",8) %=% mkVInt (101,8)))
+             %&% ((Var1 ("pkt",8) %=% mkVInt (99,8) %&% (Var1 ("pkt",8) %<>% Hole1 ("_hole0",8))) %=>% (mkVInt (101,8) %=% mkVInt (101,8)))
   in
   let got = wp prog cond in
   (* Printf.printf "EXPECTED:\n%s\n\nGOT:\n%s\n" (sexp_string_of_test expected) (sexp_string_of_test pre); *)
@@ -246,12 +244,12 @@ let%test _ = (* wp behaves well with ordereds *)
 
 
 let%test _ =
-  let cond = Var1 "pkt" %=% Var1 "ALPHA" in
+  let cond = Var1 ("pkt",8) %=% Var1 ("ALPHA",8) in
   let prog = complete_test_with_drop_location_no_holes in
   let u_prog = unroll (Graph.diameter prog) prog in
   let expected =
-    ((Var1 "pkt" %=% mkVInt 42) %=>% (Var1 "ALPHA" %=% mkVInt 47 ))
-    %&% ( !%(Var1 "pkt" %=% mkVInt 42) %=>% (Var1 "ALPHA" %=% Var1 "pkt" ))
+    ((Var1 ("pkt",8) %=% mkVInt (42,8)) %=>% (Var1 ("ALPHA",8) %=% mkVInt (47,8) ))
+    %&% ( !%(Var1 ("pkt",8) %=% mkVInt (42,8)) %=>% (Var1 ("ALPHA",8) %=% Var1 ("pkt",8) ))
   in
   let wp_got = wp u_prog cond in
   if wp_got = expected
@@ -260,27 +258,27 @@ let%test _ =
 
 
 let%test _ =
-  let x = Var1 "x" in
-  let alpha = Var1 "$0" in
-  let y = Var1 "y" in
-  let beta = Var1 "$1" in
+  let x = Var1 ("x",8) in
+  let alpha = Var1 ("$0",8) in
+  let y = Var1 ("y",8) in
+  let beta = Var1 ("$1",8) in
   let inner =
         mkSelect Ordered
-          [ LocEq 0 %&% (x %=% mkVInt 5), SetLoc 1
+          [ LocEq 0 %&% (x %=% mkVInt (5,8)), SetLoc 1
           ; LocEq 0, SetLoc 3
           ; LocEq 1, SetLoc 2
-          ; LocEq 2, "y" %<-% mkVInt 1 %:% SetLoc 6
-          ; LocEq 3 %&% (x %=% mkVInt 5), SetLoc 4
+          ; LocEq 2, "y" %<-% mkVInt (1,8) %:% SetLoc 6
+          ; LocEq 3 %&% (x %=% mkVInt (5,8)), SetLoc 4
           ; LocEq 3, SetLoc 5
-          ; LocEq 4, "y" %<-% mkVInt 99 %:% SetLoc 6
-          ; LocEq 5, "y" %<-% mkVInt 0  %:% SetLoc 6 ]
+          ; LocEq 4, "y" %<-% mkVInt (99,8) %:% SetLoc 6
+          ; LocEq 5, "y" %<-% mkVInt (0,8)  %:% SetLoc 6 ]
   in
   let cond = x %=% alpha %&% (y %=% beta)
              %&% LocEq 6 in
-  let exp = (x %<>% mkVInt 5
-             %=>% (alpha %=% x %&% (beta %=% mkVInt 0)))
-            %&% (x %=% mkVInt 5
-              %=>% (alpha %=% x %&% (beta %=% mkVInt 1)))
+  let exp = (x %<>% mkVInt (5,8)
+             %=>% (alpha %=% x %&% (beta %=% mkVInt (0,8))))
+            %&% (x %=% mkVInt (5,8)
+              %=>% (alpha %=% x %&% (beta %=% mkVInt (1,8))))
   in
   let prog = SetLoc 0
              %:% inner %:% inner %:% inner
@@ -320,29 +318,29 @@ let%test _ = 1 = Graph.diameter complete_test_with_drop_location_no_holes
 let%test _ = 1 = Graph.diameter complete_test_with_drop_location_holes
 
 let%test _ =
-  let x = Var1 "x" in
+  let x = Var1 ("x", 8)in
   let y = "y" in
-  let hole1 = Hole1 "_1" in
-  let hole2 = Hole1 "_2" in
-  let hole5 = Hole1 "_5" in
+  let hole1 = Hole1 ("_1",8)in
+  let hole2 = Hole1 ("_2",8) in
+  let hole5 = Hole1 ("_5",8) in
   let selects =
-    [ LocEq 0 %&% (x %=% mkVInt 5), SetLoc 1
+    [ LocEq 0 %&% (x %=% mkVInt (5,8)), SetLoc 1
     ; LocEq 0 , SetLoc 3
     ; LocEq 1 , SetLoc 2
-    ; LocEq 2 , y %<-% mkVInt 0 %:% SetLoc 0
+    ; LocEq 2 , y %<-% mkVInt (0,8) %:% SetLoc 0
     ; LocEq 3 %&% Lt (x, hole1) %&% Lt(x, hole2), SetLoc 4
     ; LocEq 3 , SetLoc 5
     ; LocEq 4 , y %<-% hole5 %:% SetLoc 6
-    ; LocEq 5 , y %<-% mkVInt 1 %:% SetLoc 6 ]
+    ; LocEq 5 , y %<-% mkVInt (1,8) %:% SetLoc 6 ]
   in
-  let expected = [ LocEq 0 %&% (x %=% mkVInt 5), SetLoc 1
-                 ; LocEq 0 %&% !%(x %=% mkVInt 5), SetLoc 3
+  let expected = [ LocEq 0 %&% (x %=% mkVInt (5,8)), SetLoc 1
+                 ; LocEq 0 %&% !%(x %=% mkVInt (5,8)), SetLoc 3
                  ; LocEq 1, SetLoc 2
-                 ; LocEq 2, y %<-% mkVInt 0 %:% SetLoc 0
+                 ; LocEq 2, y %<-% mkVInt (0,8) %:% SetLoc 0
                  ; LocEq 3 %&% Lt (x, hole1) %&% Lt(x, hole2), SetLoc 4
                  ; LocEq 3 %&% !%(Lt (x, hole1) %&% Lt(x, hole2)), SetLoc 5
                  ; LocEq 4, y %<-% hole5 %:% SetLoc 6
-                 ; LocEq 5, y %<-% mkVInt 1 %:% SetLoc 6 ]
+                 ; LocEq 5, y %<-% mkVInt (1,8) %:% SetLoc 6 ]
   in
   let got = ordered_selects selects in
   if got = expected then true else begin
@@ -360,7 +358,7 @@ let%test _ =
 
 let test_trace p_string expected_trace =
   let p = parse p_string in
-  let pkt = Packet.(set_field empty "pkt" (mkInt 100)) in
+  let pkt = Packet.(set_field empty "pkt" (mkInt (100,8))) in
   let loc = Some 0 in
   match trace_eval p (pkt, loc) with
   | None -> false
@@ -387,14 +385,14 @@ let%test _ = test_trace
 
 let%test _ =
   let ctx = context in
-  let t = (!%( (Var1 "x" %=% mkVInt 5) %+% ((Var1 "x" %=% mkVInt 3) %&% (Var1 "z" %=% mkVInt 6)))
-           %+% !%( (Var1 "x" %=% Hole1 "hole0") %+% (Var1 "y" %=% Hole1 "hole1"))) in
-  let exp_fvs = ["x"; "z"; "y"] in
-  let indices = mk_deBruijn (free_vars_of_test t) in
+  let t = (!%( (Var1 ("x",8) %=% mkVInt (5,8)) %+% ((Var1 ("x",8) %=% mkVInt (3,8)) %&% (Var1 ("z",8) %=% mkVInt (6,8))))
+           %+% !%( (Var1 ("x",8) %=% Hole1 ("hole0",8)) %+% (Var1 ("y",8) %=% Hole1 ("hole1",8)))) in
+  let exp_fvs = [("x", 8); ("z",8) ; ("y",8)] in
+  let indices = mk_deBruijn (List.map ~f:fst (free_vars_of_test t)) in
   let get = StringMap.find indices in
-  let z3test = mkZ3Test `Sat t ctx indices in
+  let z3test = mkZ3Test t ctx indices (free_vars_of_test t) in
   let expz3string = "(let ((a!1 (not (or (= (:var 2) 5) (and (= (:var 2) 3) (= (:var 1) 6))))))\n  (or a!1 (not (or (= (:var 2) hole0) (= (:var 0) hole1)))))" in
-  let qform = bind_vars ctx exp_fvs z3test in
+  let qform = bind_vars `All ctx exp_fvs z3test in
   let exp_qform_string ="(forall ((x Int) (z Int) (y Int))\n  (let ((a!1 (not (or (= x 5) (and (= x 3) (= z 6))))))\n    (or a!1 (not (or (= x hole0) (= y hole1))))))" in
   let success = free_vars_of_test t = exp_fvs
                 &&  get "x" = Some 2 && get "y" = Some 0 && get "z" = Some 1
@@ -413,8 +411,8 @@ let%test _ =
 
     
 let%test _ =
-  let t = (!%( (Var1 "x" %=% mkVInt 5) %+% ((Var1 "x" %=% mkVInt 3) %&% (Var1 "z" %=% mkVInt 6)))
-           %+% !%( (Var1 "x" %=% Hole1 "hole0") %+% (Var1 "y" %=% Hole1 "hole1"))) in
+  let t = (!%( (Var1 ("x",8) %=% mkVInt (5,8)) %+% ((Var1 ("x",8) %=% mkVInt (3,8)) %&% (Var1 ("z",8) %=% mkVInt (6,8))))
+           %+% !%( (Var1 ("x",8) %=% Hole1 ("hole0",8)) %+% (Var1 ("y",8) %=% Hole1 ("hole1",8)))) in
   let r = check `Sat t in
   let r' = check `Sat t in
   r = None (* i.e. is unsat *)
@@ -433,8 +431,8 @@ let%test _ = (* Test deBruijn Indices*)
 let%test _ = (* [no_nesting] accepts programs that have no nesting *)
     [ Skip 
     ; SetLoc 8
-    ; Assert (LocEq 9 %&% (Var1 "x" %=% mkVInt 100))
-    ; Seq (Skip, Seq(SetLoc 100, "x" %<-% mkVInt 200)) ]
+    ; Assert (LocEq 9 %&% (Var1 ("x",8) %=% mkVInt (100,8)))
+    ; Seq (Skip, Seq(SetLoc 100, "x" %<-% mkVInt (200,8))) ]
     |> List.map ~f:(fun x -> (True, x))
     |> no_nesting
 
@@ -451,8 +449,8 @@ let%test _ = (* [no_nesting] rejects programs that have nesting *)
 
 let%test _ = (* [instrumented] accepts fully instrumented programs *)
   instrumented
-  [ (LocEq 0 %&% Eq(Var1 "x", Hole1 "_9")),
-    (Assign ("x", Hole1 "_10") %:% (SetLoc 100))
+  [ (LocEq 0 %&% Eq(Var1 ("x",8), Hole1 ("_9",8))),
+    (Assign ("x", Hole1 ("_10",8)) %:% (SetLoc 100))
   ; LocEq 9, SetLoc 99 ]
 
 let%test _ = (* [instrumented] rejects programs with missing instrumentation *)
@@ -463,28 +461,28 @@ let%test _ = (* [instrumented] rejects programs with missing instrumentation *)
             [ LocEq 9, SetLoc 99
             ; True, SetLoc 99 ])
   && not (instrumented
-            [ LocEq 0, "x" %<-% mkVInt 100 %:% Assert (LocEq 9)])
+            [ LocEq 0, "x" %<-% mkVInt (100,8) %:% Assert (LocEq 9)])
 
 
 let%test _ = (* [no_negated_holes] accepts programs with no negated holes*)
   no_negated_holes
     [ (True, Skip)
-    ; (True, Assert (Hole1 "_0" %=% Hole1 "_1"))
-    ; (Hole1 "_0" %=% mkVInt 100,  Assign ("x", mkVInt 100))
-    ; (Neg(Neg(Hole1 "_0" %=% mkVInt 99)), Skip)
-    ; (Neg(And(Neg (Hole1 "_0" %=% mkVInt 99), True)), Skip)]
+    ; (True, Assert (Hole1 ("_0",8) %=% Hole1 ("_1",8)))
+    ; (Hole1 ("_0",8) %=% mkVInt (100,8),  Assign ("x", mkVInt (100,8)))
+    ; (Neg(Neg(Hole1 ("_0",8) %=% mkVInt (99,8))), Skip)
+    ; (Neg(And(Neg (Hole1 ("_0",8) %=% mkVInt (99,8)), True)), Skip)]
 
 
 let%test _ = (* [no_negated_holes] rejects programs with negated holes]*)
-  not (no_negated_holes [(Neg (Hole1 "_8" %=% mkVInt 100), Skip)])
-  && not (no_negated_holes [(True, Assert (Hole1 "_8" %<>% mkVInt 99))])
-  && not (no_negated_holes [(Neg (Neg (And (Hole1 "_8" %<>% mkVInt 99, True))), Skip)])
+  not (no_negated_holes [(Neg (Hole1 ("_8",8) %=% mkVInt (100,8)), Skip)])
+  && not (no_negated_holes [(True, Assert (Hole1 ("_8",8) %<>% mkVInt (99,8)))])
+  && not (no_negated_holes [(Neg (Neg (And (Hole1 ("_8",8) %<>% mkVInt (99,8), True))), Skip)])
                                          
     
 (* TESTING FOR CEGIS PROCEDURE *)
 
 let%test _ =
-  let pkt = Packet.(set_field empty "pkt" (mkInt 100)) in
+  let pkt = Packet.(set_field empty "pkt" (mkInt (100,8))) in
   let log  = parse "loc := 0; while (~ loc = 1) { if partial loc = 0 && pkt = 100 -> pkt := 101; loc := 1 fi } " in
   let real = parse "loc := 0 ; while (~ loc = 1) { if partial loc = 0 && pkt = ?_hole0 -> pkt := ?_hole1; loc := 1 fi } " in
   let model = get_one_model pkt log real in
