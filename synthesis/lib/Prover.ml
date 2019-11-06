@@ -31,7 +31,7 @@ let rec mkZ3Value (v : expr1) ctx (deBruijn : int StringMap.t) (quantified : (st
        | Some idx -> (* Printf.printf "%s is BOUND\n%!" x; *)
                      Z3.Quantifier.mk_bound ctx idx (Z3.BitVector.mk_sort ctx sz)
      else
-       (* (Printf.printf "%s is a constant" x; *)
+       (* (Printf.printf "%s is a consant" x; *)
         (Z3.BitVector.mk_const_s ctx x sz)
   | Plus (e,e') -> binop mk_add e e'
   | Times (e, e') -> binop mk_mul e e'
@@ -111,17 +111,21 @@ let mk_deBruijn vars : int StringMap.t =
 
 let bind_vars typ ctx vs formula =
   let open Z3 in
+  let open Quantifier in
   let types = List.map vs ~f:(fun (v,sz) ->
                   if String.get v 0 |> Char.is_uppercase then
                     Z3Array.mk_sort ctx (BitVector.mk_sort ctx sz) (Boolean.mk_sort ctx)
                   else
                       BitVector.mk_sort ctx sz) in
   let names = List.map vs ~f:(fun (v,_) -> Symbol.mk_string ctx v) in
-  let q = match typ with
-    | `All -> Quantifier.mk_forall ctx types names formula (Some 1) [] [] None None
-    | `Exists -> Quantifier.mk_exists ctx types names formula (Some 1) [] [] None None
-  in
-  Quantifier.expr_of_quantifier q
+  match typ with
+  | `All -> mk_forall ctx types names formula (Some 1) [] [] None None
+            |> expr_of_quantifier
+  | `Exists ->
+     let open Boolean in 
+     mk_forall ctx types names (mk_not ctx formula) (Some 1) [] [] None None
+     |> expr_of_quantifier
+     |> mk_not ctx
 
 
   
@@ -238,10 +242,10 @@ let check_valid_impl logUniv realUniv logOneUniv realNExist =
            List.iter mods ~f:(fun (v,_) -> Printf.printf "\t%s\n%!" v) 
   in
   let test = logUniv %<=>% realUniv %&% !%(logOneUniv %<=>% realNExist) in
-  let allBound = List.dedup_and_sort ~compare (pktAndMtchs @ mods) in
+  let allBound = mods @ pktAndMtchs in
   let indices = mk_deBruijn (List.map ~f:fst allBound) in  
-  (* let () = Printf.printf "Free Variables are \n%!";
-   *          List.iter allBound ~f:(fun (v,sz) -> Printf.printf "\t%s#%d\n%!" v sz) in *)
+  let () = Printf.printf "debruijn indicies are \n%!";
+           StringMap.iteri indices ~f:(fun ~key ~data -> Printf.printf "\t%s -> %d\n%!" key data) in
   let phi = mkZ3Test test context indices allBound in
   let mySolver = solver () in
   (* let () = Printf.printf "the test, pre-binding \n %s \n%!" (Z3.Expr.to_string phi) in *)

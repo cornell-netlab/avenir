@@ -425,10 +425,6 @@ let rec concretely_instrument (n:int) (c:cmd) =
      %:% (positiveRows @ ([catchAll positiveRows, default])
       |> mkSelect Partial)
 
-     
-     
-  
-  
                              
 (* Pre :: neither program has any holes in it *)
 (* Currently assume that no deletions are required to Real   *)
