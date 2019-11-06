@@ -122,10 +122,8 @@ let bind_vars typ ctx vs formula =
   | `All -> mk_forall ctx types names formula (Some 1) [] [] None None
             |> expr_of_quantifier
   | `Exists ->
-     let open Boolean in 
-     mk_forall ctx types names (mk_not ctx formula) (Some 1) [] [] None None
+     mk_exists ctx types names (formula) (Some 1) [] [] None None
      |> expr_of_quantifier
-     |> mk_not ctx
 
 
   

@@ -248,7 +248,10 @@ let unroll_fully c = unroll (diameter c) c
 let symbolic_pkt fvs = 
     List.fold fvs ~init:True
       ~f:(fun acc_test (var,sz) ->
-        if String.get var 0 |> Char.is_uppercase then acc_test else
+        if String.get var 0 |> Char.is_uppercase
+           || String.substr_index var ~pattern:("NEW") |> Option.is_some
+        then acc_test
+        else
         Var1 (var,sz) %=% Var1 (var ^ "_SYMBOLIC", sz)
         %&% acc_test)
 
@@ -322,7 +325,7 @@ let rec base_translation (c:cmd) =
            , act) :: acc )
      in
      let n = (List.length actions) - 1 in
-     Assume (matchWF keys mVar2 n n)
+     Assert (matchWF keys mVar2 n n)
      %:% (positiveRows @ ([catchAll positiveRows, default])
           |> mkSelect Partial)
            
@@ -366,8 +369,8 @@ let rec add_symbolic_row (name:string) (c:cmd) =
                            ~init:(Value2 Empty)
                            ~f:(fun i acc _ -> mkInsert (mkVInt (i, actionSize)) acc)
                          |> mkMember actionVar in
-         Assume actionWF
-         %:% Assume (matchWF keys mVar2 n n)
+         Assert actionWF
+         %:% Assert (matchWF keys mVar2 n n)
          %:% (positiveRows @ ([catchAll positiveRows, default])
               |> mkSelect Partial)
      else
@@ -420,7 +423,7 @@ let rec concretely_instrument (n:int) (c:cmd) =
              in newRow n @ acc)
      in
      (* let delWF i =  Member(matchExpr keys |> Tuple, delSet) %=>% (Member(matchExpr keys |> Tuple, matchUnion i)) in *)
-     Assume (matchWF keys mVar2 l l) %:% Skip
+     Assert (matchWF keys mVar2 l l) %:% Skip
      (* %:% Assume (delWF l) *)
      %:% (positiveRows @ ([catchAll positiveRows, default])
       |> mkSelect Partial)
