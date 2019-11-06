@@ -18,6 +18,10 @@
         & \mid & e,e          & \textsc{Concatenation} \\
         & \mid & e \oplus e   & \textsc{Operation} \\
         & &  \multicolumn{2}{l}{\textit{where}\;\; \oplus \in \{+,-,\times, \div, \texttt{<<}, \texttt{>>} \}} \\
+      \multicolumn{4}{l}{\textit{Bit Vectors}}\\
+      v & ::= & \\
+        & \mid & \cdot & \textsc{Empty} \\
+        & \mid & b,v   & \textsc{Cons} \\
       \multicolumn{4}{l}{\textit{Booleans}}\\
       b & ::= & \\
         & \mid & \TRUE & \textsc{Truth} \\
@@ -25,7 +29,7 @@
         & \mid & b \wedge b & \textsc{Conjunction} \\
         & \mid & b \vee b & \textsc{Disjunction} \\
         & \mid & \neg b & \textsc{Negation} \\
-        & \mid & e = e & \textsc{Equality} \\
+        & \mid & e = e & \textsc{Equalityg} \\
         & \mid & e \in X & \textsc{Membership} \\
       \multicolumn 3 l{\textit{Sets}} \\
       X &::=& \emptyset & \textsc{Empty} \\
@@ -297,7 +301,11 @@ Now we can show that our table encoding is sensible:
     \multirow{4}{*}{\rotatebox[origin=r]{90}{\it Edit-based}}
     && $\textsc{EditSynth}() = f$
     & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
-    & $\forall \rho. \wp_{(\tau_l \otimes \rho)}(c_l)$ && $\wp_{\left(\tau_r\otimes \bigotimes f(\rho)\right)}(c_r)$ \\ \cmidrule(r){2-7}
+    & $\forall \rho. \wp_{(\tau_l \otimes \rho)}(c_l)$ && $\wp_{\left(\tau_r\otimes \bigotimes f(\rho)\right)}(c_r)$ \\
+    && $\textsc{EditSynth}(\rho) = f$
+    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
+    & $\wp_{(\tau_l \otimes \rho)}(c_l)$ && $\wp_{\left(\tau_r\otimes \bigotimes f(\rho)\right)}(c_r)$ \\
+    \cmidrule(r){2-7}
     % & \textsc{EditSynth}$(\oplus, s)$
     % & n/a
     % & $\wp(c_l\; \tau_l) \Leftrightarrow \wp(c_r\; \tau_r)$
@@ -537,10 +545,10 @@ both $n$, by searching for the minimum $n$ via a grid search.
 for the $n$ we computed in the previous step. To do this, we leverage
 Synthesis-by-Sketching and CEGIS. The sketch that we use to model each $f_i$ is
 the following:
-\[f_i(\rho) \triangleq \texttt{repeat}(*)\left(\texttt{if }(?\rho_i = \rho)\;\{\texttt{return }?\rho'_i\}\right)\]
+\[f_i(\rho) \triangleq \texttt{repeat}(*)\left(\texttt{if }(?\rho = \rho)\;\{\texttt{return }?\rho'\}\right)\]
 
 which examines the value of $\rho$ some number () of times by comparing it with
-the hole $?\rho_i$ and producing a corresponding hole $?\rho'$. We generate
+the hole $?\rho$ and producing a corresponding hole $?\rho'$. We generate
 candidate solutions $f_1,\ldots, f_n$ by solving $\textsc{EditSynth}[n](\rho)$
 for a randomly generated $\rho$. Now we can generate counter-examples $\rho_c$
 by having Z3 attempt to solve $\textsc{EditVerif}[n](f_1,\ldots,f_n)$; we
