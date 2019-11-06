@@ -210,8 +210,9 @@ let rec all_agree (vs :  (string * size) list) =
                          )
                     then false
                     else all_agree vs
-                    
-                             
+                  
+
+
 (** Collect const_s pktAndMtchs for all fvs in logUniv & in realUniv 
   * Produce const_s addedRow for all fvs in logOneUniv not in C
   * Produce quantified mods for all fvs in realNExist not in C
@@ -223,7 +224,7 @@ let rec all_agree (vs :  (string * size) list) =
   * This will return SAT & a counter example, in which case we conclude invalid,
   * or it will return UNSAT and we will conclude VALID
   *)
-let check_valid_impl logUniv realUniv logOneUniv realNExist =
+let check_valid_impl (logUniv : test) (realUniv : test) (logOneUniv : test) (realNExist : test) =
   let () = Printf.printf "check\n %s \n" (string_of_test logUniv) in (*" is equal to \n %s is \n%s\n equal to \n %s\n??????????\n%!" (string_of_test logUniv) (string_of_test realUniv) (string_of_test logOneUniv) (string_of_test realNExist)in *)
   (*the free variables in the original program*)
   let pktAndMtchs = List.dedup_and_sort ~compare (free_vars_of_test logUniv @ free_vars_of_test realUniv) in
