@@ -23,8 +23,11 @@ let mkTuple es =
     | _  -> None 
   in
   match all_val [] es with
-  | None -> Tuple es
   | Some vs -> Value1 (VTuple vs)
+  | None ->
+     match es with
+     | [e] -> e
+     | _ -> Tuple es
 
 let (%@%) e e' =
   match e, e' with
@@ -74,7 +77,7 @@ let rec string_of_expr1 (e : expr1) : string =
   | Value1 v -> string_of_value1 v
   | Var1 (x,s) -> x ^ "#" ^ string_of_int s
   | Hole1 (x,s) -> "?" ^ x ^ "#" ^ string_of_int s
-  | Tuple es -> "(" ^ concatMap es
+  | Tuple es -> "(" ^ concatMap es ~init:(Some "")
                         ~c:(fun c c' -> c ^ "," ^ c')
                         ~f:(string_of_expr1)
                 ^ ")"
@@ -253,34 +256,7 @@ type test =
   | Or of (test * test)
   | Neg of test       
 
-let mkEq (e : expr1) (e':expr1) =
-  if e = e' then True else
-    let ord e = match e with
-      | Var1 _ -> 0
-      | Hole1 _ -> 1
-      | Plus _ -> 3
-      | Minus _ -> 4
-      | Times _ -> 5
-      | Tuple _ -> 6
-      | Value1 _ -> 7
-    in
-    match e, e' with 
-    | Value1 _, Value1 _ -> False
-    | Hole1 x , Hole1 x'
-    | Var1 x, Var1 x' ->
-       if x < x' then Eq (e, e') else Eq (e', e)
-    | _, _ ->
-       if ord e < ord e' then Eq (e, e') else Eq (e', e)
 
-let mkLt (e : expr1) (e' : expr1) : test = match e, e' with
-    | Value1(Int first), Value1(Int second) -> 
-       if first < second then True else False
-    | _, _ -> Lt(e, e')
-            
-let (%=%) = mkEq
-let (%<>%) v v' = Neg(v %=% v') 
-
-let (%<%) = mkLt
 
 let rec mkOr (t : test) (t' : test) : test =
   match t, t' with
@@ -310,6 +286,58 @@ let mkNeg t =
   | _ -> Neg t
 
 let (!%) = mkNeg
+
+             
+let rec mkEq (e : expr1) (e':expr1) = 
+  if e = e' then
+    (Printf.printf "[=] %s and %s are equal, so True\n" (string_of_expr1 e) (string_of_expr1 e');
+    True) else
+    let ord e = match e with
+      | Var1 _ -> 0
+      | Hole1 _ -> 1
+      | Plus _ -> 3
+      | Minus _ -> 4
+      | Times _ -> 5
+      | Tuple _ -> 6
+      | Value1 _ -> 7
+    in
+    match e, e' with 
+    | Value1 _, Value1 _
+      ->
+       Printf.printf "[=] %s and %s are unequal values so False\n" (string_of_expr1 e) (string_of_expr1 e');
+       False
+    | Hole1 x , Hole1 x'
+    | Var1 x, Var1 x'
+      -> if x < x'
+         then Eq (e, e')
+         else Eq (e', e)           
+    | Tuple es, Tuple es'
+      -> begin match es, es' with
+         | [], [] -> True
+         | _, [] | [], _ ->            
+            Printf.printf "[=] %s and %s are unequal length so False \n" (string_of_expr1 e) (string_of_expr1 e');
+            False
+         | (h::es), (h'::es')
+           ->
+            Printf.printf "[=] %s and %s are equal length so far\n" (string_of_expr1 e) (string_of_expr1 e');
+            mkEq (Tuple es) (Tuple es')
+              |> mkAnd (mkEq h h') 
+         end
+    | _, _ ->
+       if ord e < ord e'
+       then Eq (e, e')
+       else Eq (e', e)
+
+
+let mkLt (e : expr1) (e' : expr1) : test = match e, e' with
+    | Value1(Int first), Value1(Int second) -> 
+       if first < second then True else False
+    | _, _ -> Lt(e, e')
+            
+let (%=%) = mkEq
+let (%<>%) v v' = Neg(v %=% v') 
+
+let (%<%) = mkLt
 
 let rec mkMember el set =
   match set with

@@ -12,27 +12,34 @@ module StringMap = Map.Make (String)
 let string_of_map m =
   StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value1 v) ^ ") " ^ acc)) m ~init:""
    
-let rec mkZ3Value (v : expr1) ctx (deBruijn : int StringMap.t) (quantified : (string * size) list) : Z3.Expr.expr =
+let rec mkZ3Value (rhoVars : (string * size) list) (v : expr1) ctx (deBruijn : int StringMap.t) (quantified : (string * size) list) : Z3.Expr.expr =
   (* let () = Printf.printf "building z3 value for %s\n%!" (string_of_expr1 v) in *)
   let open Z3.Arithmetic in
   let binop op e e'=
-    op ctx [mkZ3Value e ctx deBruijn quantified; mkZ3Value  e' ctx deBruijn quantified]
+    op ctx [mkZ3Value rhoVars e ctx deBruijn quantified; mkZ3Value rhoVars  e' ctx deBruijn quantified]
   in
   match v with
   | Value1 (Int (i,sz)) ->  Z3.BitVector.mk_numeral ctx (Printf.sprintf "%d" i) sz 
   | Value1 (VTuple vs ) ->
-     concatMap vs ~c:(Z3.BitVector.mk_concat ctx) ~f:(fun e -> mkZ3Value (Value1 e) ctx deBruijn quantified)
+     concatMap vs ~c:(Z3.BitVector.mk_concat ctx) ~f:(fun e -> mkZ3Value rhoVars (Value1 e) ctx deBruijn quantified)
   | Tuple es ->
-     concatMap es ~c:(Z3.BitVector.mk_concat ctx) ~f:(fun e -> mkZ3Value e ctx deBruijn quantified)
+     concatMap es ~c:(Z3.BitVector.mk_concat ctx) ~f:(fun e -> mkZ3Value rhoVars e ctx deBruijn quantified)
   | Hole1 (x,sz) | Var1 (x,sz) ->     
      if List.exists quantified ~f:(fun (x', _) -> x = x') then
        match StringMap.find deBruijn x with
        | None -> failwith (Printf.sprintf "Could not find value for variable %s " x)
        | Some idx -> (* Printf.printf "%s is BOUND\n%!" x; *)
-                     Z3.Quantifier.mk_bound ctx idx (Z3.BitVector.mk_sort ctx sz)
+          Z3.Quantifier.mk_bound ctx idx (Z3.BitVector.mk_sort ctx sz)
      else
-       (* (Printf.printf "%s is a consant" x; *)
-        (Z3.BitVector.mk_const_s ctx x sz)
+       (* (Printf.printf "%s is a constant" x; *)
+       if [] = rhoVars then
+         (Printf.printf "RHOVARS IS EMPTY \n";
+           (Z3.BitVector.mk_const_s ctx x sz))
+       else Z3.Expr.mk_app ctx
+              (Z3.FuncDecl.mk_func_decl_s ctx x
+                 (List.map rhoVars ~f:(fun (_,sz) -> Z3.BitVector.mk_sort ctx sz))
+                 (Z3.BitVector.mk_sort ctx sz))
+              (List.map rhoVars ~f:(fun x -> mkZ3Value rhoVars (Var1 x) ctx deBruijn quantified))
   | Plus (e,e') -> binop mk_add e e'
   | Times (e, e') -> binop mk_mul e e'
   | Minus (e, e') -> binop mk_sub e e'
@@ -45,14 +52,14 @@ let rec value2_to_list (set : value2) : value1 list =
   | VSingle v -> [v]
   | VUnion (setL,setR) -> value2_to_list setL @ value2_to_list setR
                  
-let rec mkZ3Value2 set ctx (deBruijn : int StringMap.t) quantified : Z3.Expr.expr =
+let rec mkZ3Value2 rhoVars set ctx (deBruijn : int StringMap.t) quantified : Z3.Expr.expr =
   let arraySort sz = (Z3.Z3Array.mk_sort ctx
                         (Z3.BitVector.mk_sort ctx sz)
                         (Z3.Boolean.mk_sort ctx)) in
   let () = Printf.printf "Making Array Sort %s\n %!" (Z3.Sort.to_string (arraySort 4)) in
   match set with
   | Value2 (vSet) -> List.fold (value2_to_list vSet) ~init:(emptyset ctx (size_of_value2 vSet))
-                       ~f:(fun acc v -> Z3.Z3Array.mk_store ctx acc (mkZ3Value (Value1 v) ctx deBruijn quantified) (Z3.Boolean.mk_true ctx))
+                       ~f:(fun acc v -> Z3.Z3Array.mk_store ctx acc (mkZ3Value rhoVars (Value1 v) ctx deBruijn quantified) (Z3.Boolean.mk_true ctx))
      
   | Var2 (x,sz) | Hole2 (x,sz) ->
      if List.exists ~f:(fun (x',_) -> x = x') quantified then
@@ -68,17 +75,17 @@ let rec mkZ3Value2 set ctx (deBruijn : int StringMap.t) quantified : Z3.Expr.exp
      else
        Z3.Z3Array.mk_const_s ctx x (Z3.BitVector.mk_sort ctx sz) (Z3.Boolean.mk_sort ctx)
   | Single e ->
-     Z3.Z3Array.mk_store ctx (emptyset ctx (size_of_expr1 e)) (mkZ3Value e ctx deBruijn quantified) (Z3.Boolean.mk_true ctx)
+     Z3.Z3Array.mk_store ctx (emptyset ctx (size_of_expr1 e)) (mkZ3Value rhoVars e ctx deBruijn quantified) (Z3.Boolean.mk_true ctx)
   | Union (s,s') -> Z3.Z3Array.mk_map ctx
                          (Z3.Expr.get_func_decl (Z3.Boolean.mk_and ctx []))
-                         [ mkZ3Value2 s ctx deBruijn quantified
-                         ; mkZ3Value2 s' ctx deBruijn quantified]
+                         [ mkZ3Value2 rhoVars s ctx deBruijn quantified
+                         ; mkZ3Value2 rhoVars s' ctx deBruijn quantified]
                       
-let rec mkZ3Test t ctx deBruijn quantified =
+let rec mkZ3Test (rhoVars : (string * size) list) (t : test) ctx deBruijn quantified =
   (* let () = Printf.printf "Building z3 test for %s \n %!" (string_of_test t) in *)
-  let z3_value (v : expr1) = mkZ3Value v ctx deBruijn quantified in
-  let z3_value2 (set : expr2) = mkZ3Value2 set ctx deBruijn quantified in 
-  let z3_test t = mkZ3Test t ctx deBruijn quantified in 
+  let z3_value (v : expr1) = mkZ3Value rhoVars v ctx deBruijn quantified in
+  let z3_value2 (set : expr2) = mkZ3Value2 rhoVars set ctx deBruijn quantified in 
+  let z3_test t = mkZ3Test rhoVars t ctx deBruijn quantified in 
   match t with 
   | True -> Z3.Boolean.mk_true ctx
   | False -> Z3.Boolean.mk_false ctx
@@ -129,17 +136,19 @@ let bind_vars typ ctx vs formula =
   
 let initSolver typ solver ctx test =
   (* Printf.printf "SENDING TEST TO Z3: %s\n%!" (sexp_string_of_test test); *)
-  let init bindable ctor =
+  let init funcArgs bindable ctor =
     let () = Printf.printf "Free Variables are \n%!";
              List.iter bindable ~f:(fun (v,sz) -> Printf.printf "\t%s#%d\n%!" v sz) in
-    let phi = mkZ3Test test ctx (mk_deBruijn (List.map ~f:fst bindable)) bindable in
+    let phi = mkZ3Test funcArgs test ctx (mk_deBruijn (List.map ~f:fst bindable)) bindable
+    in
     Z3.Solver.add solver [ctor (bind_vars `All ctx bindable phi)]
   in
   match typ with
   | `Sat ->
-    init (free_vars_of_test test) (fun x -> x)
+    init [] (free_vars_of_test test) (fun x -> x)
   | `Valid ->
-    init (holes_of_test test) (Z3.Boolean.mk_not ctx)
+     init [] (holes_of_test test) (Z3.Boolean.mk_not ctx)
+  | `Synth rhoVars -> init rhoVars (free_vars_of_test test) (fun x -> x)
   
 (*
  Converts a Z3 expression to Motley expression 
@@ -184,7 +193,8 @@ let check typ test =
   let response = Z3.Solver.check mySolver [] in
   (* Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver); *)
   match response with
-  | UNSATISFIABLE | UNKNOWN -> Printf.printf "UNSAT\n%!"; None
+  | UNSATISFIABLE -> Printf.printf "UNSAT\n%!"; None
+  | UNKNOWN -> Printf.printf "UNKNOWN:\n \t%s \n%!" (Z3.Solver.get_reason_unknown mySolver); None
   | SATISFIABLE ->
     match Z3.Solver.get_model mySolver with 
     | Some m ->      
@@ -194,7 +204,7 @@ let check typ test =
     | None -> None
 
 (* Checks SMT Query for validity. Returns None (VALID) or Some model (Counter Example) *)          
-let check_valid test = check `Valid (test)
+let check_valid test = check `Valid test
 
 
 
@@ -245,7 +255,7 @@ let check_valid_impl (logUniv : test) (realUniv : test) (logOneUniv : test) (rea
   let indices = mk_deBruijn (List.map ~f:fst allBound) in  
   let () = Printf.printf "debruijn indicies are \n%!";
            StringMap.iteri indices ~f:(fun ~key ~data -> Printf.printf "\t%s -> %d\n%!" key data) in
-  let phi = mkZ3Test test context indices allBound in
+  let phi = mkZ3Test [] test context indices allBound in
   let mySolver = solver () in
   (* let () = Printf.printf "the test, pre-binding \n %s \n%!" (Z3.Expr.to_string phi) in *)
   let () = Printf.printf "=============\nthe inner bound expression\n %s \n =============="
@@ -268,3 +278,44 @@ let check_valid_impl (logUniv : test) (realUniv : test) (logOneUniv : test) (rea
        Some (StringMap.empty)
     | None -> None
 
+
+
+let checkSynthProblem rhoVars logwp realwp log1wp realNwp =
+  let mySolver = solver () in
+  let ctx = context in
+  let eqAssm = logwp %<=>% realwp in
+  let eqAssum_free = free_vars_of_test eqAssm in
+  let eqAssum_indices = mk_deBruijn (List.map eqAssum_free ~f:fst) in
+  let eqAssmZ3 =
+    mkZ3Test [] eqAssm ctx eqAssum_indices eqAssum_free
+    |> bind_vars `All ctx (List.filter ~f:(fun (x,_) -> String.get x 0 <> 'e') eqAssum_free)
+  in
+
+  let editEq = log1wp %<=>% realNwp in
+  let editEq_free = free_vars_of_test editEq in
+  let editEq_indices = mk_deBruijn (List.map editEq_free ~f:fst) in
+  let editEqZ3 =
+    mkZ3Test rhoVars editEq ctx editEq_indices editEq_free
+  in
+
+  let phi =
+    Z3.Boolean.mk_implies ctx (eqAssmZ3) (editEqZ3)
+    |> bind_vars `All ctx editEq_free in
+
+  Z3.Solver.add mySolver [ phi ];
+  Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver);  
+  match Z3.Solver.check mySolver [] with
+  | UNSATISFIABLE -> Printf.printf "UNSAT\n%!"; None
+  | UNKNOWN  -> failwith(Printf.sprintf "UNKNOWN! %s" (Z3.Solver.get_reason_unknown mySolver))
+  | SATISFIABLE ->
+     match Z3.Solver.get_model mySolver with 
+     | Some m ->
+        (* let model = mkMotleyModel m in *)
+        Printf.printf "SAT: %s \n%!" (Z3.Model.to_string m);       
+        Some (StringMap.empty)
+     | None -> None
+                 
+                 
+                 
+                 
+                 

@@ -45,3 +45,6 @@ let rec difference (xs : 'a list) (ys : 'a list) : 'a list =
        difference xs' ys
      else
        x :: difference xs' ys
+
+let log2 (x : int) : int =
+  int_of_float(Core.log (float_of_int x) /. Core.log (float_of_int 2))

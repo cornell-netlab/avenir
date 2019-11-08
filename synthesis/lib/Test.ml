@@ -390,7 +390,7 @@ let%test _ =
   let exp_fvs = [("x", 8); ("z",8) ; ("y",8)] in
   let indices = mk_deBruijn (List.map ~f:fst (free_vars_of_test t)) in
   let get = StringMap.find indices in
-  let z3test = mkZ3Test t ctx indices (free_vars_of_test t) in
+  let z3test = mkZ3Test [] t ctx indices (free_vars_of_test t) in
   let expz3string = "(let ((a!1 (not (or (= (:var 2) 5) (and (= (:var 2) 3) (= (:var 1) 6))))))\n  (or a!1 (not (or (= (:var 2) hole0) (= (:var 0) hole1)))))" in
   let qform = bind_vars `All ctx exp_fvs z3test in
   let exp_qform_string ="(forall ((x Int) (z Int) (y Int))\n  (let ((a!1 (not (or (= x 5) (and (= x 3) (= z 6))))))\n    (or a!1 (not (or (= x hole0) (= y hole1))))))" in

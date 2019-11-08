@@ -193,7 +193,7 @@ let rec fixup_val (model : value1 StringMap.t) (e : expr1)  : expr1 =
   | Plus  (e, e') -> binop mkPlus  e e'
   | Times (e, e') -> binop mkTimes e e'
   | Minus (e, e') -> binop mkMinus e e'
-  | Tuple es -> List.map es ~f:(fixup_val model) |> Tuple
+  | Tuple es -> List.map es ~f:(fixup_val model) |> mkTuple
 
 let rec fixup_val2 (model : value1 StringMap.t) (set : expr2) : expr2 =
   match set with
@@ -290,12 +290,12 @@ let check_edit (_:int) (_:cmd) (_:cmd) = failwith ""
 
 
 let matchExpr ks =  List.map ks ~f:(fun x -> Var1 x)
-let bitLen keys = size_of_expr1 (matchExpr keys |> Tuple) 
+let bitLen keys = size_of_expr1 (matchExpr keys |> mkTuple) 
 let rec matchWF keys mVar2 i j =
   if i = j then matchWF keys mVar2 (i-1) j %&% matchWF keys mVar2 i (j-1)
   else if i < 0 || j < 0 then True
-  else !%(mkMember (matchExpr keys |> Tuple) (mVar2 i)
-          %&% mkMember (matchExpr keys |> Tuple) (mVar2 j))
+  else !%(mkMember (matchExpr keys |> mkTuple) (mVar2 i)
+          %&% mkMember (matchExpr keys |> mkTuple) (mVar2 j))
 
 let catchAll rows = List.fold rows ~init:True ~f:(fun acc (k,_) -> (!% k) %&% acc)
 
@@ -317,52 +317,69 @@ let rec base_translation (c:cmd) =
     -> While (b, base_translation c) 
   | Apply (name, keys, actions, default)
     ->
-     let mVar2 i = Var2 ("M_"^name^"_"^string_of_int i, bitLen keys) in
+     let rec mVar2 ?n:(n=1) actId =
+       if n <= 0 then Value2 Empty else
+         mkUnion (Single(Var1 ("elM_"^name^"_"^string_of_int actId^"_"^ string_of_int n, bitLen keys)))
+           (mVar2 ~n:(n-1) actId) in
      let positiveRows : (test * cmd) list =
        List.foldi actions ~init:[]
          ~f:(fun i acc act ->
-           (mkMember (matchExpr keys |> Tuple) (mVar2 i)
+           (mkMember (matchExpr keys |> mkTuple) (mVar2 i)
            , act) :: acc )
      in
-     let n = (List.length actions) - 1 in
-     Assert (matchWF keys mVar2 n n)
-     %:% (positiveRows @ ([catchAll positiveRows, default])
+     (* let n = (List.length actions) - 1 in *)
+     (* Assert (matchWF keys mVar2 n n)
+      * %:% *)
+     (positiveRows @ ([catchAll positiveRows, default])
           |> mkSelect Partial)
            
                                                   
-let rec add_symbolic_row (name:string) (c:cmd) =
+let rec add_symbolic_row (name:string) (c:cmd) : (string * size) list * cmd=
   match c with
   | Skip
     | SetLoc _
     | Assign _
     | Assume _
-    | Assert _ -> c
-  | Select (styp, cmds) ->
-    List.map cmds
-      ~f:(fun (t, c) -> (t, add_symbolic_row name c))
-    |> mkSelect styp
+    | Assert _ -> [], c
+  | Select (styp, selects) ->
+     let (vars, selects) =
+       List.fold ~init:([],[]) selects
+          ~f:(fun (vs,ss) (t, c) ->
+            let (vs', c') = add_symbolic_row name c in
+            (vs @ vs', (t,c' ) :: ss)) in
+     (vars, mkSelect styp selects)
   | Seq (c, c')
-    -> Seq(add_symbolic_row name c, add_symbolic_row name c')
+    -> let (v, cs) = add_symbolic_row name c in
+       let (v', cs') = add_symbolic_row name c' in
+       (v @ v', cs %:% cs')
   | While (b, c)
-    -> While (b, add_symbolic_row name c) 
+    -> let (vs, cs) = add_symbolic_row name c in
+       (vs, mkWhile b cs)
   | Apply (name', keys, actions, default) as table
     ->
-     let mVar2 i = Var2 ("M_"^name^"_"^string_of_int i, bitLen keys) in
-     let fillVar1 (k,sz) =  Var1 (k^"_"^name^"_NEW", sz)in
+     let rec mVar2 ?n:(n=1) actId =
+       if n <= 0 then Value2 Empty else
+         mkUnion (Single(Var1 ("elM_"^name^"_"^string_of_int actId^"_"^ string_of_int n, bitLen keys)))
+           (mVar2 ~n:(n-1) actId) in
+     
+     let newString (k,sz) = (k ^ "_" ^ name ^ "_NEW", sz) in
+     let newVar1 (k,sz) =  newString (k,sz) |> Var1  in
      let n = (List.length actions) - 1 in
-     let actionSize = int_of_float(2. ** (float_of_int(n + 1))) - 1 in
-     let actionVar = Var1 ("action_NEW", actionSize) in
+     let actionSize = log2 (n + 1) in
+     let actionString = "action_NEW" in
+     let actionVar = Var1 (actionString, actionSize) in
+     ((actionString, actionSize) :: List.map keys ~f:newString,
      if name = name' then
-         let row = List.map keys ~f:(fillVar1) in
+         let row = List.map keys ~f:(newVar1) in
          let positiveRows : (test * cmd) list =
            List.foldi actions ~init:[]
              ~f:(fun i acc act ->
-               (mkMember (matchExpr keys |> Tuple) (mVar2 i)
-                %&% ((matchExpr keys |> Tuple) %<>% Tuple row)
+               (mkMember (matchExpr keys |> mkTuple) (mVar2 i)
+                %&% ((matchExpr keys |> mkTuple) %<>% mkTuple row)
                , act) :: acc )
            @ List.foldi actions ~init:[]
                ~f:(fun i acc act ->
-                 ((actionVar :: matchExpr keys |> Tuple) %=% (mkVInt (i,actionSize) :: row |> Tuple )
+                 ((actionVar :: matchExpr keys |> mkTuple) %=% (mkVInt (i,actionSize) :: row |> mkTuple )
                  , act) :: acc)
          in
          let actionWF =  List.foldi actions
@@ -370,11 +387,11 @@ let rec add_symbolic_row (name:string) (c:cmd) =
                            ~f:(fun i acc _ -> mkInsert (mkVInt (i, actionSize)) acc)
                          |> mkMember actionVar in
          Assert actionWF
-         %:% Assert (matchWF keys mVar2 n n)
+         (* %:% Assert (matchWF keys mVar2 n n) *)
          %:% (positiveRows @ ([catchAll positiveRows, default])
               |> mkSelect Partial)
      else
-       table
+       table)
 
 
          
@@ -404,36 +421,96 @@ let rec concretely_instrument (n:int) (c:cmd) =
      
      let rec modifiedRows i =
        if i = 0 then Value2 Empty
-       else List.map keys ~f:(fillVar1 i) |> Tuple |> Single |> mkUnion (modifiedRows (i-1))
+       else List.map keys ~f:(fillVar1 i) |> mkTuple |> Single |> mkUnion (modifiedRows (i-1))
      in
        
      let positiveRows : (test * cmd) list =
        List.foldi actions ~init:[]
          ~f:(fun i acc act ->
-           (mkMember (matchExpr keys |> Tuple) (mVar2 i)
-            %&% (!%(mkMember(matchExpr keys |> Tuple) (modifiedRows n))) (*modifiedRows are new!*)
+           (mkMember (matchExpr keys |> mkTuple) (mVar2 i)
+            %&% (!%(mkMember(matchExpr keys |> mkTuple) (modifiedRows n))) (*modifiedRows are new!*)
            , act) :: acc )
        @ List.foldi actions ~init:[]
            ~f:(fun actId acc act ->
              let rec newRow rowId   =
                if rowId <= 0 then []
-               else (Tuple (mkVInt (actId, actionSize) :: matchExpr keys)
-                     %=% Tuple(actionVar rowId :: List.map keys ~f:(fillVar1 rowId))
+               else (mkTuple (mkVInt (actId, actionSize) :: matchExpr keys)
+                     %=% mkTuple(actionVar rowId :: List.map keys ~f:(fillVar1 rowId))
                     , act) :: newRow (rowId - 1)
              in newRow n @ acc)
      in
-     (* let delWF i =  Member(matchExpr keys |> Tuple, delSet) %=>% (Member(matchExpr keys |> Tuple, matchUnion i)) in *)
+     (* let delWF i =  Member(matchExpr keys |> mkTuple, delSet) %=>% (Member(matchExpr keys |> mkTuple, matchUnion i)) in *)
      Assert (matchWF keys mVar2 l l) %:% Skip
      (* %:% Assume (delWF l) *)
      %:% (positiveRows @ ([catchAll positiveRows, default])
       |> mkSelect Partial)
 
+
+let mkFunHole name i (k,sz) =
+  Hole1 ("f" ^ k ^ "_" ^ name ^ "_" ^ string_of_int i , sz)
+  
+
+let rec edit_synth_real_inst ~numFs ~setSize (c : cmd) : cmd =
+  match c with
+  | Skip | SetLoc _ | Assign _ | Assume _ | Assert _ -> c
+  | Select (styp, ss) ->
+     List.map ss ~f:(fun (b,c) -> (b, edit_synth_real_inst ~numFs ~setSize c))
+     |> mkSelect styp
+  | Seq (c, c') ->
+     edit_synth_real_inst ~numFs ~setSize  c
+     %:%  edit_synth_real_inst ~numFs ~setSize c'
+  | While (b, c) ->
+     edit_synth_real_inst ~numFs ~setSize  c
+     |> mkWhile b
+  | Apply (name, keys, actions, default) ->
+     (* ENCODE THE FUNCTIONS AS HOLES -- RELY ON THE Z3 ENCODING TO APPROPRIATELY PASS RHOVARS TO THEM*)
+     let matchVars = List.mapi actions ~f:(fun idx _ -> (name ^ "_matchAction_" ^ string_of_int idx,idx)) in
+     let keysExpr = List.map keys ~f:(fun k -> Var1 k) |> mkTuple in
+     let rec notNewMatch i =
+       if i <= 0 then True else 
+         List.fold keys ~init:True
+           ~f:(fun acc k -> (Var1 k %<>% mkFunHole name i k) %&% acc)
+         %&% notNewMatch (i-1) in
+     let oldRows = List.map matchVars ~f:(fun (mS, idx) ->
+                       (keysExpr %=% Var1 (mS, size_of_expr1 keysExpr)
+                        %&% notNewMatch numFs,
+                        List.nth_exn actions idx))
+     in
+     let actSize = log2 (List.length actions + 1) in
+     let rec newRows i =
+       if i <= 0 then [] else
+         List.mapi actions
+           ~f:(fun actId act ->
+             ( List.fold keys ~init:True
+                 ~f:(fun acc  k ->
+                   (Var1 k %=% mkFunHole name i k)
+                   %&% (mkVInt (actId, actSize) %=% mkFunHole name i ("act" ^ string_of_int actId, actSize))
+                   %&% acc)
+             , act))
+         @ newRows (i-1) in
+     let defaultRow =
+       [(List.fold_left (oldRows @ (newRows numFs))
+           ~init:True
+           ~f:(fun acc (t,_) -> !%(t) %&% acc)
+        , default)]
+     in
+     oldRows
+     @ newRows numFs
+     @ defaultRow
+     |> mkSelect Partial
+     
+     
+
+
+       
+       
+           
                              
 (* Pre :: neither program has any holes in it *)
 (* Currently assume that no deletions are required to Real   *)
 let check_add n name logical real = 
   let u_log = unroll_fully logical in
-  let u_log_add1 = add_symbolic_row name u_log in
+  let (_, u_log_add1) = add_symbolic_row name u_log in
   let u_rea = unroll_fully real in
   let u_rea_addn = concretely_instrument n u_rea in
   (* let fvs = free_vars_of_cmd u_rea
@@ -447,6 +524,41 @@ let check_add n name logical real =
   match check_valid_impl log_wp (*=*) real_wp (*=>*) log1_wp (*=*) rean_wp with
   | None -> Printf.printf "+++++valid+++++\n%!"; `Yes
   | Some x -> Printf.printf "-----invalid---\n%!"; `NoAndCE (Packet.from_CE x)
+
+(* PRE :: neither program has any holes *)
+(* Assume No deletions are required for an addition *)                                            
+let synth_add n name logical real =
+  let u_log = unroll_fully logical in
+  let (rhoVars, u_log_add1) = add_symbolic_row name u_log in
+  let u_rea = unroll_fully real in
+  let u_rea_addn = edit_synth_real_inst ~numFs:n ~setSize:1 u_rea in
+  (* let fvs = free_vars_of_cmd u_rea
+   *           @ free_vars_of_cmd u_log
+   *           @ free_vars_of_cmd u_log_add1
+   *           @ free_vars_of_cmd u_rea_addn in *)
+  let log_wp  = base_translation u_log |> symb_wp in
+  let real_wp = base_translation u_rea |> symb_wp in
+  let log1_wp = symb_wp u_log_add1 in
+  let rean_wp = symb_wp u_rea_addn in
+  let () =
+    Printf.printf "Base logical: \n %s \n Base Real: \n %s \n Logical Add1: \n %s \n Real Add-N: \n %s \n\n "
+      (string_of_cmd (base_translation u_log))
+      (string_of_cmd (base_translation u_rea))
+      (string_of_cmd u_log_add1)
+      (string_of_cmd u_rea_addn) in
+
+  let () =
+    Printf.printf "Assumption logical: \n %s \n Assumption Real: \n %s \n Logical Add1: \n %s \n Real Add-N: \n %s \n\n "
+      (string_of_test log_wp)
+      (string_of_test real_wp)
+      (string_of_test log1_wp)
+      (string_of_test rean_wp) in
+  let () =
+    Printf.printf "RHOVARS HAS %d elements\n%!" (List.length rhoVars) in
+  match checkSynthProblem rhoVars log_wp real_wp log1_wp rean_wp with
+  | None -> Printf.printf "------unsat-----\n%!"; `Yes
+  | Some x -> Printf.printf "++++++++sat!+++++\n%!"; `NoAndCE (Packet.from_CE x)
+
               
   
 let cegis ?gas:(gas=1000) (logical : cmd) (real : cmd) =
