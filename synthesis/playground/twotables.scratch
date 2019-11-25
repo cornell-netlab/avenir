@@ -1,0 +1,68 @@
+
+;;;; Logical Program
+
+table srcdstMatch {
+  keys = { ipv4.src : exact
+           ipv4.dst : exact
+  }
+  action = {assignOp}
+}
+
+...
+srcdstMatch.apply()
+...
+
+;;;; Real Program
+
+table srcMatch {
+  keys =  {ipv4.src : exact }
+  action = {assignOp}
+}
+
+table dstMatch {
+  keys = {ipv4.dst : exact}
+  action = {assignOp}
+
+
+action assignOp(bit b){
+   modify_field(op, b)
+   op := b
+}
+
+
+...
+srcMatch.apply()
+dstMatch.apply()
+...
+
+
+;; One Table
+(src = α ∧ dst = β)
+∧ ((src = 1 ∧ dst = 3 ∧ ⊥ = γ)
+   ∨ (src = 1 ∧ dst = 4 ∧ ⊤ = γ)
+   ∨ (src = 2 ∧ dst = 3 ∧ ⊤ = γ)
+   ∨ (src = 2 ∧ dst = 4 ∧ ⊤ = γ))
+
+;; Two Table
+( src = α ∧ dst = β)
+∧ ((
+
+
+wp (
+ if ipv4.src = 1 -> op := ⊥ []
+    ipv4.src = 2 -> op := ⊤
+ fi;
+ if ipv4.dst = 3 -> op := ⊥ []
+    ipv4.dst = 4 -> op := ⊤
+ fi,
+ ipv4.src = σ ∧ ipv4.dst = δ ∧ op = ω)
+==
+wp (
+ if
+   ipv4.src = 1 → op := ⊥ []
+   ipv4.src = 2 → op := ⊤
+ fi
+ ipv4.dst = 3 = δ ∧ ipv4.src = σ ∧ ⊥ = ω
+
+
+

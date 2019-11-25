@@ -1,5 +1,5 @@
-\newcommand{\angel}{\talloblong}
-\newcommand{\Angel}{\bigsqcup}
+\DeclareMathOperator*{\angel}{\left[\!\right]}%%\raisebox{-1.5pt}{\vstretch{1.8}{\square}}}
+\DeclareMathOperator*{\Angel}{\scalerel*{\raisebox{-1.5pt}{\vstretch{1.8}{\square}}}{\sum}}
 \newcommand{\assert}[1]{\ensuremath{\mathsf{assert}\; #1\;}}
 \newcommand{\assume}[1]{\ensuremath{\mathsf{assume}\; #1\;}}
 \newcommand{\concat}{\ensuremath{++}}
@@ -7,6 +7,7 @@
 \newcommand{\FALSE}{\ensuremath{0}}
 \newcommand{\apply}[1]{\ensuremath{\mathsf{apply}(#1)}}
 \renewcommand{\wp}{\ensuremath{\mathit{wp}}}
+\renewcommand{\sp}{\ensuremath{\mathit{sp}}}
 \newcommand{\parenbb}[1]{\ensuremath{\llparenthesis\, #1\, \rrparenthesis}}
 \newcommand{\bracbb}[1]{\ensuremath{\llbracket\,#1\,\rrbracket}}
 \newcommand{\hole}{\ensuremath{\text{\textquestiondown}}}
@@ -16,8 +17,14 @@
 \newcommand{\name}[1]{\ensuremath{\mathsf{name}(#1)}}
 \newcommand{\Edit}{\ensuremath{\mathsf{Edit}}}
 \newcommand{\Expr}{\ensuremath{\mathsf{Expr}}}
+\newcommand{\Cmd}{\ensuremath{\mathsf{Cmd}}}
 \newcommand{\Name}{\ensuremath{\mathsf{Name}}}
 \newcommand{\Config}{\ensuremath{\mathsf{Config}}}
 \newcommand{\pkt}{\ensuremath{\mathit{pkt}}}
 \newcommand{\Pkt}{\ensuremath{\mathsf{Pkt}}}
 \newcommand{\fvs}{\ensuremath{\mathit{fvs}}}
+\newcommand{\Tables}[1]{\ensuremath{\mathsf{Tables}({#1})}}
+\newcommand{\tablify}[1]{\ensuremath{\mathsf{tablify}{(#1)}}}
+\newcommand{\oneify}{\ensuremath{\mathsf{oneify}}}
+\newcommand{\manyify}{\ensuremath{\mathsf{manyify}}}
+\newcommand{\simplify}{\ensuremath{\mathsf{simplify}}}
