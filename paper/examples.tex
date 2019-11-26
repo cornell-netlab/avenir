@@ -23,12 +23,12 @@ denoted with an asterisk.
 
 \begin{figure}
   \[C = \begin{array}l
-    \apply{xandy, \langle\texttt{dst}\rangle, \{x := 1; y:= 9\} | \{x:= 2; y:=10\}^*} \\
+    \apply{xandy, \langle\texttt{src,dst}\rangle, \{x := 1; y:= 9\} | \{x:= 2; y:=10\}^*} \\
   \end{array}
   \]
   \[D = \begin{array}{l}
-    \apply{xtheny1, \langle\texttt{dst}\rangle, \{x:=1\} | \{x:=2\}^*};
-    \\ \apply{xtheny2, \langle\texttt{dst}\rangle, \{y:=9\} | \{y:=10\}^*}
+    \apply{xtheny1, \langle\texttt{src,dst}\rangle, \{x:=1\} | \{x:=2\}^*};
+    \\ \apply{xtheny2, \langle\texttt{src,dst}\rangle, \{y:=9\} | \{y:=10\}^*}
   \end{array}\]
   \caption{Interleave: Synthesize $C$ -> $D$ and vice versa}
 \end{figure}
@@ -45,4 +45,17 @@ denoted with an asterisk.
     \end{array}\]
   
   \caption{Dependency: Synthesize $C$ -> $D$ and vice versa}
+\end{figure}
+
+\begin{figure}
+  \[C = \apply{subKey, \texttt{x,y}, a_1 | a_2 }\]
+  \[D = \apply{supKey, \texttt{x,y,z}, a_1 | a_2 }\]
+  \caption{Superset: Synthesize $C$ -> $D$. It is impossible to synthesize $D$-> $C$}
+\end{figure}
+
+
+\begin{figure}
+  \[C = \apply{subAct, \texttt{x}, \{y:=1\} }\]
+  \[D = \apply{supAct, \texttt{x}, \{y:=1\}| \{y:=2\}}\]
+  \caption{Superset: Synthesize $C$ -> $D$. It is impossible to synthesize $D$-> $C$}
 \end{figure}
