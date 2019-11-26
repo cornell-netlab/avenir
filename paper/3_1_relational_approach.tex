@@ -87,8 +87,12 @@ sets of functional dependencies $D_S$ and $D_T$, and requires that any
 solution $(\alpha, \iota)$ must obey the following property in
 addition to satisfying $\textsc{KeyMapSynth}$ and
 $\textsc{ActMapSynth}$:
+\[F_1,\ldots, F_n \longrightarrow \alpha(A) \in D_S \Rightarrow
+  F_1,\ldots, F_n \longrightarrow A \in D_T\]
 
-\[F_1,\ldots, F_n \to A \in D_S \Rightarrow F_1,\ldots,
-  F_n \to \alpha(A) \in D_T\]
+We can encode this in Z3 by statically computing all tuples in $D_S^+$
+and in $D_T^+$ and checking whether $D_T^+ \subseteq D_S^+$.
 
-\todo[inline]{How to encode in Z3?}
+
+
+
