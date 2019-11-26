@@ -1,0 +1,94 @@
+\section{A Relational Approach}
+
+A match-action table can be thought of in a similar way to a table in
+a Relational Database. This observation was first made in a CoNeXT
+2019 paper~\cite{Chiesa}. In this way a match-action table
+$\apply{t, \vec k, \vec c, a}$ can be represented as a relation
+$T = F_1 \times \cdots \times F_n \times A$ where
+$F_i = \mathsf{dom}(k_i)$ and $c_j \in A$, then, a $t$-complete
+configuration $g$ denotes a subset of $T$.
+
+\subsection{Single-Table Programs}
+
+To ground our investigation, lets first consider the simple situation
+where both our logical and concrete programs are comprised of a single
+table. So we have two table applications,
+$\apply{t,\vec k, \vec c, a}$ and $\apply{t, \vec l, \vec d, b}$,
+which we represent as relations of the form
+\[T = F_1 \times \cdots \times F_n \times A\]
+\[S = G_1 \times \cdots \times G_m \times B\] where $A$ and $B$ are
+sets of actions, $F_i = \mathsf{dom}(k_i)$, $G_j = \mathsf{dom}(l_i)$,
+$A = \vec c$ and $B = \vec d$, and with the functional dependencies
+\[F_1, \ldots, F_n \to A\] \[G_1, \ldots, G_n \to B.\] We write $T$
+and $S$ as functions as notational shorthand. We now build up the same
+scaffolding of programs as for the full-program formulation.
+
+\subsubsection{Single Table Verification}
+First we define a problem called $\textsc{SingleVerif}(T_0, S_0)$,
+which takes instantiations $T_0 \subset T$ and $S_0 \subset S$ and
+determines whether
+$\forall \pkt. \bracbb{T_0(\pi_{F_1,\ldots,F_n}(pkt))}\;\pkt =
+\bracbb{S_0(\pi_{G_1,\ldots,G_n}(\pkt))}\; \pkt$ via the condition
+
+\[\begin{array}c
+    \multicolumn{1}{l}{\textsc{SingleVerif}(S_0,T_0) \triangleq}\\
+    \displaystyle \quad \bigwedge_{\vec k, c \in T_0}\left(\vec k = \pi_{F_1,\ldots,F_n}(\pkt)\right) \Rightarrow wp(c,\pkt= \pkt')\\ \iff \\
+    \displaystyle \quad \bigwedge_{\vec l, d \in S_0}\left(\vec l = \pi_{G_1,\ldots,G_m}(\pkt)\right) \Rightarrow wp(d, \pkt= \pkt')
+  \end{array}
+\]
+
+\subsubsection{Instance Synthesis}
+
+The next question we can ask is: given a single logical instantiation
+$T_0$ can we construct a concrete instantiation $S_0$ that satisfies 
+\textsc{SingleVerif}? Formally, we write
+\[\textsc{SingleInstSynth}(T_0) \triangleq \exists
+  S_0. \textsc{SingleVerif}(T_0, S_0)\]
+
+\subsubsection{Mapping Synthesis}
+
+We can lift this up to asking whether there is a function that will
+produce, for an arbitrary $T_0$, an equivalent $S_0$, specifically, we write
+\[\textsc{SingleMapSynth}() \triangleq \exists f. \; \forall T_0.\;
+  \textsc{SingleVerif}(T_0, f(T_0))\]
+
+\subsubsection{Decomposing Keys and Actions}
+
+We can decompose the \textsc{SingleMapSynth} problem into two problems
+\textsc{KeyMapSynth} and $\textsc{ActMapSynth}(a)$ for each action,
+which respectively map the actions and the keys. Luckily,
+\textsc{KeyMapSynth} has a very easy intuition, they keys of the
+logical table must be a subset of the concrete table:
+\[\{F_1, \ldots, F_n\} \subseteq \{G_1, \ldots, G_m\}\]
+
+Then, a solution to $\textsc{KeyMapSynth}()$ is the injection map which crosses the missing columns with the full set:
+\[\displaystyle \iota (k_1, \ldots, k_n) = \Pi_{j=1}^m \begin{cases}
+    \{k_i\}, & \exists i,  F_i = G_j \\
+    G_j, & \mathit{otherwise}
+    \end{cases}
+\]
+
+And a solution to $\textsc{ActMapSynth}(a)$ for $a \in A$ is a map
+from $\alpha : A \to B$ such that the following holds:
+\[\bigwedge_{a \in A} \forall \pkt,\pkt'.\; \wp(a, \pkt = \pkt')
+  \Leftrightarrow \wp(\alpha(a), \pkt = \pkt')\] 
+
+We conjecture that every solution $f$ to $\textsc{SingleMapSynth}()$
+can be captured by the pair $(\iota, \alpha) : T \to S$ which form
+solutions to $\textsc{KeyMapSynth}()$ and $\textsc{ActMapSynth}()$
+respectively.
+
+\subsubsection{Single-Table Programs with Functional Dependencies}
+
+We can also consider variants of the mapping synthesis problem that
+incorporate functional dependencies on the logical and real tables. We
+call this problem $\textsc{SingleMapSynthFD}()$ which takes as given
+sets of functional dependencies $D_S$ and $D_T$, and requires that any
+solution $(\alpha, \iota)$ must obey the following property in
+addition to satisfying $\textsc{KeyMapSynth}$ and
+$\textsc{ActMapSynth}$:
+
+\[F_1,\ldots, F_n \to A \in D_S \Rightarrow F_1,\ldots,
+  F_n \to \alpha(A) \in D_T\]
+
+\todo[inline]{How to encode in Z3?}

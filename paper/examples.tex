@@ -3,7 +3,7 @@
 In the examples, we adopt the convention that the default action is
 denoted with an asterisk.
 
-\begin{figure}
+\begin{figure}[H]
   \[C = \apply{sd, \langle\texttt{src,dst}\rangle, \{op := 1\} | \{op:=0\}^*}\]
   \[D = \begin{array}{l}
   \apply{s, \langle\texttt{src}\rangle, \{op:=1\} | \{op:=0\}^*};
@@ -12,7 +12,7 @@ denoted with an asterisk.
   \caption{Src-Dst One-Two Overwrite: Synthesize $C$ -> $D$ and vice versa}
 \end{figure}
 
-\begin{figure}
+\begin{figure}[H]
   \[C = \apply{sd, \langle\texttt{src,dst}\rangle, \{op := 1\} | \{op:=0\}^*}\]
   \[D = \begin{array}{l}
     \apply{s, \langle\texttt{src}\rangle, \{op:=1\} | \{op:=0\}^*};
@@ -21,7 +21,7 @@ denoted with an asterisk.
   \caption{Src-Dst One-Two Interact: Synthesize $C$ -> $D$ and vice versa}
 \end{figure}
 
-\begin{figure}
+\begin{figure}[H]
   \[C = \begin{array}l
     \apply{xandy, \langle\texttt{src,dst}\rangle, \{x := 1; y:= 9\} | \{x:= 2; y:=10\}^*} \\
   \end{array}
@@ -34,7 +34,7 @@ denoted with an asterisk.
 \end{figure}
 
 
-\begin{figure}
+\begin{figure}[H]
   \[C = \begin{array}l
     \apply{xdety, \langle x,y \rangle, \{y:=x\} | \{y:= 1\}^*}; \\
     \apply{ready, \langle y \rangle, \{z := 100\} | \{\assert \TRUE\}^*}
@@ -47,14 +47,14 @@ denoted with an asterisk.
   \caption{Dependency: Synthesize $C$ -> $D$ and vice versa}
 \end{figure}
 
-\begin{figure}
+\begin{figure}[H]
   \[C = \apply{subKey, \texttt{x,y}, a_1 | a_2 }\]
   \[D = \apply{supKey, \texttt{x,y,z}, a_1 | a_2 }\]
   \caption{Superset: Synthesize $C$ -> $D$. It is impossible to synthesize $D$-> $C$}
 \end{figure}
 
 
-\begin{figure}
+\begin{figure}[H]
   \[C = \apply{subAct, \texttt{x}, \{y:=1\} }\]
   \[D = \apply{supAct, \texttt{x}, \{y:=1\}| \{y:=2\}}\]
   \caption{Superset: Synthesize $C$ -> $D$. It is impossible to synthesize $D$-> $C$}

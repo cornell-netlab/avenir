@@ -1,0 +1,546 @@
+\subsection{Action-Directed Synthesis}
+
+Observe that in the previous formulations, all of the higher-orderness
+comes from the unknown match conditions. What if, \emph{a la} \texttt{p4v} we
+just elminiate the matches, and model tables as a demonic choice
+between all of the actions. We formalize this notion in
+Figure~\ref{fig:nondeterministic}, using $|c|$ to represent this
+encoding.
+
+\begin{figure}[ht]
+  \[\begin{array}{l >{\triangleq}c l}
+      |x := e| && x := e  \\
+      |c;c'| && |c|;|c'| \\
+      |c \angel c'| && |c|\angel |c'| \\
+      |\assert b | && \assert b \\
+      |\assume b | && \assume b \\
+      |\apply {t, \vec k, \vec{c}, c_d}| && h_1^t := 0; \cdots ; h_n^t := 0; h_d^t := 0; \\
+      \multicolumn 2 l {} & \Bigg(\bigg(\displaystyle\Angel_{c_i \in \vec c} c_i; h_i^t := 1\bigg) \angel c_d; h^t_d := 1 \Bigg); \\
+      \multicolumn 2 l {} & \assert {h^t_d \veebar (\exists!c_i. (h_j^t))} 
+    \end{array} \]
+  \caption{Nondeterministic Encoding of Tables}
+  \label{fig:nondeterministic}
+\end{figure}
+
+Now we can define a problem \textsc{NonDetVerif} which is a very
+coarse-grained check -- it rules out program pairs that have
+incompatible sets of actions. Given two programs $c_l$ and $c_r$, we
+can simply check the validity of the following:
+
+\[\forall\pkt, \pkt'.\; \wp(|c_l|, \pkt = \pkt') \Leftrightarrow \wp(|c_l|, \pkt = \pkt') \]
+
+\begin{example}
+  Let
+  $c_l = \apply{\texttt{ip}, (\texttt{pt}), \langle \texttt{ip.src} :=
+    4 \rangle , \assert \TRUE }$, and let
+  $c_r = \apply {\texttt{tcp}, (\texttt{pt}), \langle \texttt{tcp.src}
+    := 4 \rangle, \assert \TRUE}$. Intuitively, This pair will not
+  pass the \textsc{NonDetVerif} condition, because the \texttt{ip}
+  table modifies the \texttt{ip.src} variable and the \texttt{tcp}
+  table modifies the \texttt{tcp.src} variable. We compute
+  $|c_l| = \texttt{ip.src}:=4 \angel \assert \TRUE$ and
+  $|c_r| = \texttt{tcp.src} := 4 \angel \assert \TRUE$. So,
+  $\wp(|c_l|) \Leftrightarrow \wp(|c_r|)$ is equivalent to
+  $(\texttt{ip.src}' = 4 \wedge \texttt{tcp.src} = \texttt{tcp.src}')
+  \Leftrightarrow (\texttt{ip.src}' = \texttt{ip.src}' \wedge
+  \texttt{tcp.src}' = 4)$, which is clearly false in general.
+\end{example}
+
+
+The intuition here, is that \textsc{NonDetVerif} is a necessary, but
+not sufficient condition for the above solutions,
+i.e. $\textsc{MapSynth} \Rightarrow \textsc{NonDetVerif}$.
+
+There is an easy generalization of this check to a synthesis problem,
+we want to check which actions are feasible implementations of a given
+action in a given table. We call this the \emph{feasible domain} of an
+action-table pair. We again, need to come up with a different, but
+related encoding of tables for a given action-table pair $(c_i,
+s)$. This is defined in Figure~\ref{fig:hitenc}. The problem of
+computing the a path that can implement an action is
+\[\textsc{PathSynth}(c_i, s) = \left\langle h_j^t \mid c_j \in \actions t \cup \{\default t\},
+    t \in \Tables {c_r}\right\rangle,\] which produces a collection of
+bits $h_j^t$, which are set to true if action $c_j \in \actions t$ can
+be used to implement action $c_i \in \actions s$. The set of solutions
+to \textsc{PathSynth} is the feasible domain. Notice again that
+\textsc{PathSynth} is a necessary, but insufficient condition -- if
+there is no path, then \textsc{MapSynth} cannot succeed.
+
+\begin{figure}[ht]
+  \[\begin{array}{l>{\triangleq}cl}
+      \mathcal H | x:= e | && x := e \\
+      \mathcal H | c; c'| && \mathcal H |c|;\mathcal H |c'| \\
+      \mathcal H | c \angel c'| && \mathcal H | c | ; \mathcal H | c' | \\
+      \mathcal H | \assert b | && \assert b \\
+      \mathcal H | \assume b | && \assume b \\
+      \mathcal H | \apply{t, \vec k, \vec c, c_d} | && \assert {h_d^t \veebar \exists! c_i. h_i^t }; \\
+      \multicolumn 2 l {} & \left(\displaystyle\Angel_{c_i}\assume {h_i^t};c_i \right) \angel \assume {h^t_d} ; c_d      
+    \end{array}\]
+  \caption{Instrumentation to for Feasible Domain Synthesis. The
+    ($\exists!$) can be desugared in the obvious way since $\vec c$ is
+    finite. This assumption ensures that the table is deterministic,
+    i.e. the $h_i^t$s pick out a path.}
+  \label{fig:hitenc}
+\end{figure}
+
+Then, we can define solutions to $\textsc{DomSynth}(c_i,s)$ by a
+satisfying model to the following formula:
+\[\begin{array}{l}\exists (h_i^t)_{\left(\substack{t \in \Tables{c_r} \\ c_i \in \actions t }\right)}. \;\forall \pkt. \; \forall \pkt'. \\
+    \qquad \wp(\mathcal H |c_l|, \pkt = \pkt') \Leftrightarrow \wp(\mathcal H |c_r|, \pkt = \pkt') \end{array}\]
+
+
+Now that we have a collection of the possible ways to encode the
+actions, we need to make sure that our tests can be encoded
+effectively. Morally, we want to know that a rule addition will only
+impact the same set of equivalence classes that it would impact in the
+logical program.
+%
+%
+\[ \bracbb{c_l }_{\tau_l \otimes \rho}\; \pkt \neq \bracbb{c_l}_{\tau_l} \; \pkt \Leftrightarrow
+  \bracbb{c_r}_{\tau_l \otimes \bigotimes f(\rho)} \neq \bracbb{c_r}_{\tau_l}\; \pkt \]
+
+
+\begin{proposition}[Edit Completeness]
+  Our axioms are sufficient to construct an $f : Edit \to \Edit^*$,
+  given (logical and concrete) deterministic, total programs $c_l$ and
+  $c_r$, such that for every pair of complete instantiations $\tau_l$
+  and $\tau_r$, such that
+  $\bracbb{c_l}_{\tau_l} = \bracbb{c_r}_{\tau_l}$, then, for every
+  $c_l$-well-formed $\rho \in \Edit$ such that
+  $\tau_l \neq \tau_l \otimes \rho$, then
+  $\bracbb{c_l}_{\tau_l \otimes \rho} = \bracbb{c_r}_{\tau_l \otimes
+    f(\rho)}$
+\end{proposition}
+
+
+\begin{proof}
+  Let $\rho = (+, s, \vec e, i)$. Consider an input packet $\pkt$, and
+  run $\bracbb{c_l}_{\tau_l}\; \pkt$. Since $c_l$ is deterministic and
+  total, there is a table trace, $\sigma_l \in \Edit^*$ corresponding
+  to the rows that $\pkt$ hits in $c_l$ instantiated with
+  $\tau_l$. There is another table trace $\sigma_l^\rho$ corresponding
+  to the tables hit by $\pkt$ when running
+  $\bracbb{c_l}_{\tau_l \otimes \rho}\; \pkt$.
+
+  Now there are two cases, either $\sigma_l = \sigma_l^\rho$, or not.
+
+
+
+  Consider the case where
+  $\bracbb{c_l}_{\tau_l}\; \pkt_0 = \bracbb{c_l}_{\tau_l \otimes \rho}
+  \; \pkt_0$. Then,
+  $\pkt = \pkt_0 \wedge \wp(\parenbb{c_l}_{\tau_l}, \pkt = \pkt')
+  \Leftrightarrow \pkt = \pkt_0 \wedge \wp(\parenbb{c_l}_{\tau_l
+    \otimes \rho}, \pkt = \pkt')$. Further, since
+  $\tau_l \otimes \rho \neq \tau_l$, we know that $\pkt$ misses
+  $\rho$\todo[inline]{formalize}
+
+
+  We need to show that
+  $\pkt = \pkt_0 \wedge \wp(\parenbb{c_r}_{\tau_r}, \pkt = \pkt')
+  \Leftrightarrow \pkt = \pkt_0 \wedge \wp (\parenbb{c_r}_{\tau_r
+    \otimes f(\rho)}, \pkt = pkt')$.
+
+
+  There are a few situations we need to consider in this proof
+  \begin{itemize}
+  \item $\pkt_0$ hits $\rho$ and $\pkt_0$ hits a sub-trace of
+    $f(\rho)$. This can be proven by restricting the programs to the
+    respective actions.
+    
+  \item $\pkt_0$ hits $\rho$ and $\pkt_0$ misses all of
+    $f(\rho)$. Contradictory if we assume $\rho$ is effectful.
+
+  \item $\pkt_0$ misses $\rho$ and $\pkt_0$ hits a sub-trace of $f(\rho)$.
+  \item $\pkt_0$ misses $\rho$ and $\pkt_0$ misses of $f(\rho)$. This
+    can be proven by restricting the programs to miss the traces.
+  \end{itemize}
+  
+\end{proof}
+
+
+\subsection{Lets start small -- Single-table Switches}
+
+Assume we can convert our programs into a single table with infinite
+rows that allows choice in the actions (we can do it for a disjunction
+thereof or if we add wild-cards, but for now just imagine a single
+table). The problem becomes much simpler. We want to map one table
+into another. How do we do this?
+
+We need to map actions -- which we can do using \textsc{DomSynth} and
+then make sure we can always discriminate them via the keys. Note that
+in this context, \textsc{DomSynth} is picking out a single concrete
+action for each logical action.
+
+So now all we need to do is constrain \textsc{DomSynth} so that it is
+possible for the keys to discriminate between the actions.
+%
+% Given a
+% mapping on actions $f_a$, we need $f_a(c_i)$ to be determined by a
+% superset of the same fields as $c_i$. We denote this formally: given
+% $\vec k \longrightarrow c_i$ we need
+% $\vec {k'} \longrightarrow f_a(c_i)$ , where
+% $\vec k \subseteq \vec {k'}$. Further, if we have logical actions
+% $ \vec {k_1} \longrightarrow c_i, \vec {k_2} \longrightarrow c_j$,
+% with $i \neq j$, and $\vec {k_1} \neq \vec{k_2}$ such that
+% $\vec {k_r} \longrightarrow f_a(c_i), f_a(c_j)$, then we need a
+% ``separable'' function of type
+% $f_k : \vec {k_1} + \vec{k_2} \to \vec{k_r}$. Specifically, we need to
+% know that
+% \[
+%   \not \exists \vec{v_1}, \vec{v_2}. \; f_k^1(\vec{v_1}) = f_k^2(\vec{v_2})
+% \]
+% in addition to the functional constraint that
+% \[
+%   \forall \pkt.\; \pkt = \vec{v_i} \Leftrightarrow \pkt = f_k^i(\vec{v_i}), \quad i = 1,2
+% \]
+%
+Specificaly, given constants $h_{i,j}$ which tell us that logical
+action $c_i$ is implemented as concrete action $c_j$, we want to
+synthesize functions $f : \Expr^n \times \mathbb N \to \Expr^m \times \mathbb N $ and activation
+bits $h_{i,j}$, which map logical keys to concrete keys subject to the
+following conditions:
+\begin{enumerate}[align=left]
+% \item[$(\textsc{Discernable})$]
+%   $\forall \vec k, i. ~ \pkt \sim \vec {k} \vee i = a \Leftrightarrow
+%   (\exists! j. f_{i,j}(\vec {k}) \sim \pkt \vee j = b)$
+\item[$(\textsc{Implementable})$] \((\pkt \sim \vec{k} \wedge \wp(c_i, \pkt = \pkt') \Leftrightarrow \pkt \sim f_1(\vec k, i) \wedge \wp(d_{f_2(\vec k, i)}, \pkt = \pkt'))\)
+\end{enumerate}
+
+
+We say the function $f$ is \emph{consistent} if it satisfies these
+properties. Then we construct a solution to the problem
+$\textsc{EditSynth}(\apply{L, \vec k, \vec c, a}, \apply{R, \vec k,
+  \vec d, b})$ as follows
+\[ f^c(+,L,\vec v, i) = \{(+,R,\vec u, j) \mid (\vec u,j) = f(\vec v,i) \} \]
+
+Note that \textsc{Disjoint} and \textsc{ActEq} constraints on
+$h_{i,j}$ means that $|f^c(\rho)|$ is always 1, so w.l.o.g., we can
+consider $f^c$ to have the following type $f^c : \Edit \to \Edit$.
+
+\begin{theorem}
+  $f^c$ is a solution to
+  $\textsc{EditSynth}()$ with $c_l = \apply{L, \vec k, \vec c, a}$ and $c_r = \apply{R,\vec l,
+    \vec d, b})$.
+\end{theorem}
+
+\begin{proof}
+  Given a logical table instantiation $\tau_l$ and a concrete table
+  instantiation $\tau_r$, such that
+  $\wp_{\tau_l}(c_l, \pkt = \pkt') \Leftrightarrow \wp_{\tau_r}(c_l,
+  \pkt = \pkt')$ and an addition $\rho$ to table $L$, we need to show that
+  \[\wp_{\tau_l + \rho}(\apply{L, \vec k, \vec c, a}, \pkt = \pkt') \Leftrightarrow
+    \wp_{\tau_r + f^c(\rho)}(\apply{R, \vec l, \vec c, b}, \pkt = \pkt').\]
+
+  We will (equivalently) show that given
+  $\bracbb{\apply{L, \vec k, \vec c, a}}_{\tau_l} =
+  \bracbb{\apply{R,\vec l, \vec d, b}}_{\tau_r}$, we can prove
+  \[\bracbb{\apply{L, \vec k, \vec c, a}}_{\tau_l + \rho} =
+    \bracbb{\apply{R,\vec l, \vec d, b}}_{\tau_r + f^c(\rho)}.\]
+
+  Let $\rho = (+, L, \vec v, i)$, and $f^c(\rho) = (+, R, \vec u, j)$,
+  such that $h_{i,j} = \TRUE$ and $\vec u = f_{i,j}(\vec v)$.
+
+  Let $\pkt$ be a packet, then we have two cases,
+  $\bracbb{\vec k = \vec v}\;\pkt$ is $\TRUE$, or it is $\FALSE$.
+  
+  First assume that it is $\FALSE$. Then by definition,
+  $\bracbb{\apply{L, \vec k, \vec c, a}}_{\tau_l + \rho}\;\pkt =
+  \bracbb{\apply{L, \vec k, \vec c, a}}_{\tau_l}\; \pkt$. Since
+  $h_{i,j} = 1$, the \textsc{Discernable} condition implies that
+  $\bracbb{\vec l = \vec u} = \FALSE$ also, so by definitions we
+  compute
+  $\bracbb{\apply{R,\vec l, \vec d, b}}_{\tau_r + f^c(\rho)}\; \pkt =
+  \bracbb{\apply{R,\vec l, \vec d, b}}_{\tau_r}\; \pkt$. This case is
+  finished by the \textsc{EditSynth} assumption.
+
+  Now assume that $\bracbb{\vec k = \vec v}\;\pkt = \TRUE$. Then, we
+  reduce
+  $\bracbb{\apply{L, \vec k, \vec c, a}}_{\tau_l + \rho}\;\pkt =
+  \bracbb{c_i}\;\pkt$, and similarly,
+  $\bracbb{\apply{R,\vec l, \vec d, b}}_{\tau_r + f^c(\rho)}\; \pkt =
+  \bracbb{d_j}\; \pkt$. Then, the result follows by \textsc{Implementable}.
+
+
+\end{proof}
+
+
+We can also produce the other direction of this theorem.
+
+\begin{theorem}
+  Given a solution $f$ to $\textsc{EditSynth}$ where
+  $c_l = \apply{L, \vec k, \vec c, a}$ and
+  $c_r = \apply{R,\vec l, \vec d, b})$, then we can construct an $f^c$
+  that is consistent.
+\end{theorem}
+
+\begin{proof}
+  Given $f$ such that for every $\tau_l, \tau_r, \rho$,
+  \[\wp_{\tau_l}(\apply{L, \vec k, \vec c, a}, \pkt = \pkt') \Leftrightarrow
+    \wp_{\tau_r}( \apply{R,\vec l, \vec d, b}, \pkt = \pkt')\]
+  implies that
+  \[\wp_{\tau_r + \rho}(\apply{L, \vec k, \vec c, a}, \pkt = \pkt') \Leftrightarrow
+    \wp_{\tau_l + \sum f(\rho)}(\apply{R,\vec l, \vec d, b}, \pkt = \pkt')\]
+
+  We can equivalently say that forall $\pkt$
+    \[\bracbb{\apply{L, \vec k, \vec c, a}}_{\tau_l}~\pkt =
+    \bracbb{\apply{R,\vec l, \vec d, b}}_{\tau_r}~\pkt\]
+  implies that
+  \[\bracbb{\apply{L, \vec k, \vec c, a}}_{\tau_r + \rho}~\pkt =
+    \bracbb{\apply{R,\vec l, \vec d, b}}_{\tau_l + \sum f(\rho)}~\pkt\]
+
+  Assume there exists
+
+\end{proof}
+
+
+
+
+\subsection{Generalizing : Converting a network program into a single table}
+
+\begin{figure}[pt]
+  \[\begin{array}{l >{\triangleq}c l}
+      \tablify {x := e} && \apply{\textsf{fresh s}, \cdot, \{x := e\}^*} \\
+      \tablify {\assume b} && \apply{\textsf{fresh s}, \cdot, \{\assume b\}^*} \\
+      \tablify {\assert b} && \apply{\textsf{fresh s}, \cdot, \{\assert b\}^*} \\
+      \tablify {\apply{s, \vec k, \vec c, c_d}} && \apply{s, \vec k, \vec c, c_d} \\
+      \tablify {c \angel c'} && \tablify c \diamond \tablify{c'} \\
+      \tablify {c ; c'} && \tablify c \circ \tablify{c'}\
+    \end{array}\]
+  \[
+    \begin{array}l
+      \apply{s,\vec k, \vec c, a} \circ \apply{t, \vec m, \vec d, b} \\
+      \triangleq \apply{st, (\vec x, \vec m), \textsf{map}\; (;)\; (\vec c \times \vec d), a|\vec c| + b}
+    \end{array}
+  \]
+  \[
+    \begin{array}l
+      \apply{st,\vec k, \vec c, a} \diamond \apply{t, \vec m, \vec d, b} \\
+      \triangleq \apply{st, (\vec x, \vec m), \textsf{map}\; (\angel)\; (\vec c \times \vec d), a|\vec c| + b}
+    \end{array}
+  \]
+  
+  \caption{Table-normalization function. We star actions as a
+    shorthand to denote the default action. The definition of
+    $(\circ)$ treats $a$ and $b$ as indices into the vectors $\vec c$
+    and $\vec d$. Union on vectors is a uniquifying
+    concatenation. $(\times)$ is the cartesian product on vectors, and
+    \textsf{map} treats vectors as lists. }
+  \label{fig:tablify}
+\end{figure}
+
+We can convert a general program into a disjunction of tables using
+the function $\tablify c \in \Cmd$, which is defined in
+Figure~\ref{fig:tablify}. Assuming the disjunction is deterministic,
+our analysis on single tables stands. In fact, allowing disjunctions
+makes it easy to compute the functional dependency relation
+$(\longrightarrow)$; now $\vec k \longrightarrow c$ in a program $\Angel_{t_i}t_i$,
+where each $t_i$ is a table, if there exists a table $t_i$ such that
+$\keys{t_i} = \vec k$ and $c \in \actions{t_i}$.
+
+We can also show that for a $c$-complete instantiation function $\tau$
+there is always an equivalent instantiation $\tau_t$ for $\tablify c$
+(Lemma~\ref{lem:tablifiedinst}), and vice versa
+(Lemma~\ref{lem:pretablifiedinst}).
+
+\begin{lemma}
+  \label{lem:tablifiedinst}
+  For every command $c$ and complete instantiation $\tau$, there
+  exists $\tau_t$ such that
+  $\bracbb{c}_\tau = \bracbb{\tablify c}_{\tau_t}$.
+\end{lemma}
+
+\begin{proof}[Proof Idea]
+  Proceed by induction on the structure of $c$:
+  \begin{enumerate}[align=left]
+  \item[($\apply{s, \vec k, \vec c, a}$)] Immediate.
+  \item[($x := e$)] $\bracbb{\tablify {x := e}}_{\langle \rangle} = \bracbb{\apply{t,\cdot, \{x := e\}^*}}_{\langle \rangle} = \bracbb{x:=e}_{\langle \rangle} = \bracbb{x:=e}_{\tau}$.
+  \item[($\assert b$)] \textit{sim.}
+  \item[($\assume b$)] \textit{sim.}
+  \item[($c;c'$)] Our IHs give us $\tau_t$ and $\tau_t'$ such that
+    $\bracbb{c}_\tau = \bracbb{\tablify c }_{\tau_t}$ and
+    $\bracbb{c'}_\tau = \bracbb{\tablify {c'}}_{\tau_t'}$. Let
+    $\apply{s, \vec k, \vec c, d} = \tablify c$, and
+    $\apply{s', \vec{k'}, \vec{c'}, d'} = \tablify {c'}$.
+
+    In this limited context $\tau_t$ is a sequence of additions to a
+single table: $(e_1,a_1), \ldots, (e_n, a_n)$, and similarly $\tau_t'$
+is $(e_1', a_1), \ldots, (e_m', a_m')$.
+
+    We include the row $((e_i,e'_j), (a_i,a_j))$ if $e_1, e_n$
+    satisfies the test $\wp(c_{a_i}, \fvs(c_{a_i}) = \vec k')$.
+
+    This proves our goal, since a packet will take rule
+    $((e_i,e'_j), (a_i,a_j))$ iff $e_i = \vec{k}$ and
+    $\bracbb{c_{a_i}}\; e_j' = \vec{k'}$ by the relationship between
+    the semantics and weakest preconditions.
+    
+  \item[($c \angel c'$)] Our IHs give us $\tau_t$ and $\tau_t'$ such
+    that $\bracbb{c}_\tau = \bracbb{\tablify c }_{\tau_t}$ and
+    $\bracbb{c'}_\tau = \bracbb{\tablify {c'}}_{\tau_t'}$. Let
+    $\apply{s, \vec k, \vec c, d} = \tablify c$, and
+    $\apply{s', \vec{k'}, \vec{c'}, d'} = \tablify {c'}$.
+
+    For each row $(\vec e, i) \in \tau_t$ we insert temporary rules
+    $(\vec e\vec{\ast'}, i \angel \star)$. Similarly, for every
+    $(\vec {e'}, j) \in \tau_t$ we insert temporary row
+    $(\vec \ast \vec{e'}, \star \angel j)$. Where the $\ast$ variables
+    are unification placeholders. Then, for every pair
+    $(\vec e\vec{\ast'}, i \angel \star')$, and $(\vec \ast \vec{e'}, \star
+    \angel j)$ we insert a rule $(\vec e\vec e', i \angel j)$ if it it
+    is satifiable for $\vec k = \vec e$ and for
+    $\vec {k'} = \vec {e'}$. Then we create catch-all rules
+    elaborating the wildcards $\ast$ and $\ast'$ setting $\star$ to
+    $a$ and $\star'$ to $a'$. Call this $\tau^\ast$.
+
+    We know that
+    $\bracbb{ c \angel c'}_{\tau} = \bracbb{c}_\tau \cup \bracbb{c'}_\tau
+    = \bracbb{\tablify c}_{\tau_t} \cup
+    \bracbb{\tablify{c'}}_{\tau_t'}$, so all we need to show is that
+    $\bracbb{\tablify{c}}_{\tau_t} \cup
+    \bracbb{\tablify{c'}}_{\tau_t'} = \bracbb{\tablify{c \angel
+        c'}}_{\tau^\ast}$.
+
+    Let $\pkt$ be a packet. Assume $\pkt$ matches some rule
+    $(\vec{e}, i)$ in $\tau_t$ and another rule $(\vec{e'}, j)$ in
+    $\tau_t'$. Then,
+    $\bracbb{\tablify{c}}_{\tau_t}\; \pkt \cup
+    \bracbb{\tablify{c'}}_{\tau_t'}\;\pkt = \bracbb{c_i}\; pkt \cup
+    \bracbb{c'_j}\; \pkt$. Similarly, $\tau^\ast$ has a rule
+    $(\vec e\vec e', i \angel j)$, so
+    $\bracbb{\tablify{c \angel c'}}_{\tau^\ast} = \bracbb{c_i}\; \pkt
+\cup \bracbb{c'_j}\;\pkt$, and we're done.
+
+    Now assume that $\pkt$ takes the default rule in $\tau_t$ and in
+    $\tau_t'$, then
+    $\bracbb{\tablify{c}}_{\tau_t}\; \pkt \cup
+    \bracbb{\tablify{c'}}_{\tau_t'}\;\pkt = \bracbb{c_a}\; pkt \cup
+    \bracbb{c'_{a'}}\; \pkt$. By construction, $\tau^*$ will also have
+    no rule matching $\pkt$, so we will take its default action
+    $c_a \angel c_{a'}$, which has the desired semantics, and we're
+    done.
+
+    Now, consider the case that $\pkt$ takes a rule $(\vec{e}, i)$ in
+    $\tau_t$, and the default action $a'$ in $\tau_t'$. Now,
+    $\bracbb{\tablify{c}}_{\tau_t}\; \pkt \cup
+    \bracbb{\tablify{c'}}_{\tau_t'}\;\pkt = \bracbb{c_i}\; \pkt \cup
+    \bracbb{c'_{a'}}\; \pkt$. By construction, $\tau^\ast$ has a row
+    $(\vec{e}\vec{e'}, i \angel a')$ such that $(\vec{e},i)$ is a
+    rule, and packets matching $\vec{e'}$ take the default action in
+    $\tau_t'$. So,
+    $\bracbb{\tablify{c \angel c'}}_{\tau^\ast} = \bracbb{c_i}\; \pkt
+    \cup \bracbb{c'_{a'}}\;\pkt$, and we're done.
+    
+    
+  \end{enumerate}
+\end{proof}
+
+\begin{lemma}
+  \label{lem:pretablifiedinst}
+  For every command $c$ and complete instantiation $\tau_t$, there
+  exists $\tau$ such that $\bracbb{\tablify c}_{\tau_t} = \bracbb{c}_\tau$.
+\end{lemma}
+
+\begin{proof}
+Proceed by induction on the structure of $c$.
+\begin{enumerate}[align=left]
+  \item[($\apply{s, \vec k, \vec c, a}$)] Immediate.
+  \item[($x := e$)] $\bracbb{\tablify {x := e}}_{\langle \rangle} = \bracbb{\apply{t,\cdot, \{x := e\}^*}}_{\langle \rangle} = \bracbb{x:=e}_{\langle \rangle} = \bracbb{x:=e}_{\tau}$.
+  \item[($\assert b$)] \textit{sim.}
+  \item[($\assume b$)] \textit{sim.}
+
+  \item[($c;c'$)] execute action from first table on packet with keys
+    as data values, then match becomes corresponding rule.
+  \item[($c \angel c'$)] rule projection is lossy, so -- delete rules
+    that go to default action.
+\end{enumerate}
+\end{proof}
+
+These lemmas (which we've proved by providing constructive witnesses)
+together let us perform all of our synthesis by analyzing the single
+table and converting our updates back into the original program.
+
+\begin{figure}[pt]
+  \newcommand{\linedef}[1]{\multicolumn{3}{>{\qquad}l}{#1}}
+  \[
+    \begin{array}{lcl}
+      \oneify(x:=e, \tau)
+      &\triangleq& \langle \rangle \\
+      \oneify(\assume b, \tau)
+      &\triangleq& \langle \rangle \\
+      \oneify(\assert b, \tau)
+      &\triangleq& \langle \rangle \\
+      \oneify(\apply{t, \vec k, \vec c, a}, \tau)
+      &\triangleq&  \tau \\
+      \oneify(c;c', \tau)
+      &\triangleq& \\
+      \linedef{\mathit{let}\; \apply{t, \vec k, \vec c, a} = \tablify{c}} \\
+      \linedef{\mathit {let}\; \apply{s, \vec l, \vec d, b} = \tablify {c'}} \\
+      \linedef{\mathit {forall}\; (\vec{v_i}, a_i) \in \tau(t),\; (\vec{w_j}, b_j) \in \tau(s)} \\
+      \linedef{\{ (\vec{v_i}\vec{u},a_i|\vec c| + b_j) \mid }\\
+      \linedef{\qquad \vec{k} = \vec{v_i}\wedge \vec{l} = \vec{u} \Rightarrow \wp(c_{a_i}, \vec l = \vec{w_j})) \}} \\
+      \oneify(c \angel c', \tau)
+      & \triangleq & \\
+      \linedef{\mathit{let}\; \apply{t, \vec k, \vec c, a} = \tablify{c}} \\
+      \linedef{\mathit{let}\; \apply{s, \vec l, \vec d, b} = \tablify{c'}} \\
+      \linedef{\mathit{forall}\; (\vec{v_i}, a_i) \in \tau(t),\; (\vec{w_j}, b_j) \in \tau(s)} \\
+      \linedef{\quad \{(\vec{v_i}\vec{w_j}, a_i|\vec c| +  b_i) \mid \vec{v_i} = \vec k \wedge \vec{w_j} = \vec l\; \mathit{is}\; \textsc{Sat}\} }\\
+      \linedef{\quad \cup\{ (\vec{v_i}\vec{u},a_i|\vec c| + b) \mid  \vec u \in \textsf{dom}(\vec l)}\\
+      \linedef{\quad\qquad \vec{v_i} = \vec k \wedge \vec{w_j} = \vec l\; \mathit{is}\; \textsc{Unsat}\}} \\
+      \linedef{\quad \cup\{ (\vec{u}\vec{w_j}, a|\vec c| +  b_j) \mid  \vec u \in \textsf{dom}(\vec l)}\\
+      \linedef{\quad\qquad \vec{v_i} = \vec k \wedge \vec{w_j} = \vec l\; \mathit{is}\; \textsc{Unsat}\}} \\
+      \end{array}
+  \]
+  \caption{$\oneify$ is the function that takes an instantiation on many
+    table, to an instantiation on one table.}
+\end{figure}
+
+\begin{figure}[pt]
+  \newcommand{\linedef}[1]{\multicolumn{3}{>{\qquad}l}{#1}}
+  \[
+    \begin{array}{lcl}
+      \manyify(x:=e, \tau)
+      &\triangleq& \langle \rangle \\
+      \manyify(\assume b, \tau)
+      &\triangleq& \langle \rangle \\
+      \manyify(\assert b, \tau)
+      &\triangleq& \langle \rangle \\
+      \manyify(\apply{t, \vec k, \vec c, a}, \tau)
+      &\triangleq&  \tau \\
+      \manyify(c;c', \tau)
+      &\triangleq& \\
+      \linedef{\mathit{let}\; \apply{t, \vec k, \vec c, a} = \tablify{c}} \\
+      \linedef{\mathit {let}\; \apply{s, \vec l, \vec d, b} = \tablify {c'}} \\
+      \linedef{\displaystyle \bigcup_{(\vec{v_i}\vec{w_j},a_i|\vec c| + b_j) \in \tau(ts)}
+      \begin{array}{l} \{(t,\vec{v_i},a_i)\} \;\cup \\ \{(s, \vec u, b_j) \mid \vec l = \vec{u}\Rightarrow \wp^{\vee}(c_{a_i}, \vec{l} = \vec{w_j})\}
+        \end{array}} \\
+      \manyify(c \angel c', \tau)
+      & \triangleq & \\
+      \linedef{\mathit{let}\; \apply{t, \vec k, \vec c, a} = \tablify{c}} \\
+      \linedef{\mathit{let}\; \apply{s, \vec l, \vec d, b} = \tablify{c'}} \\
+      \linedef{\displaystyle \bigcup_{(\vec{v_i}\vec{w_j}, a_i|\vec c| + b) \in \tau(ts)} \{(t, \vec{v_i}, a_i)\}\cup \{(s,\vec{w_j}, b_j)\}}
+      \end{array}
+  \]
+  \caption{$\manyify$ is the function that takes an instantiation on many
+    table, to an instantiation on one table.}
+\end{figure}
+
+
+
+\begin{figure}
+  \[
+    \begin{array}{lcl}
+      \simplify(x:=e, \vec k \longrightarrow_d \vec c)
+      &\triangleq& \vec k[x \mapsto e] \longrightarrow_d \overrightarrow{x:=e;c} \\
+      \simplify(\assume b, \vec k \longrightarrow_d \vec c)
+      & \triangleq& \vec k \longrightarrow_d \overrightarrow{\assume b; c}\\
+      \simplify(\assert b, \vec k \longrightarrow_d \vec c)
+      & \triangleq& \vec k \longrightarrow_d \overrightarrow{\assert b; c}\\
+      \simplify(\vec l \longrightarrow_f \vec b, \vec k \longrightarrow_d \vec c)
+      &\triangleq& \\
+      \simplify(c;c', \vec k \longrightarrow_d \vec c)
+      & \triangleq& \simplify(c, \simplify(c', \vec k \longrightarrow_d \vec c)) \\
+    \end{array}
+  \]
+
+\end{figure}
