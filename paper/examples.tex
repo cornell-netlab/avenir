@@ -1,0 +1,48 @@
+\section{Some Choice (possible) Examples}
+
+In the examples, we adopt the convention that the default action is
+denoted with an asterisk.
+
+\begin{figure}
+  \[C = \apply{sd, \langle\texttt{src,dst}\rangle, \{op := 1\} | \{op:=0\}^*}\]
+  \[D = \begin{array}{l}
+  \apply{s, \langle\texttt{src}\rangle, \{op:=1\} | \{op:=0\}^*};
+  \\ \apply{d, \langle\texttt{dst}\rangle, \{op:=1\} | \{op := 0\}^*}
+  \end{array}\]
+  \caption{Src-Dst One-Two Overwrite: Synthesize $C$ -> $D$ and vice versa}
+\end{figure}
+
+\begin{figure}
+  \[C = \apply{sd, \langle\texttt{src,dst}\rangle, \{op := 1\} | \{op:=0\}^*}\]
+  \[D = \begin{array}{l}
+    \apply{s, \langle\texttt{src}\rangle, \{op:=1\} | \{op:=0\}^*};
+    \\ \apply{d, \langle\texttt{dst}\rangle, \{op:=1\} | \{\assert \TRUE\}^*}
+  \end{array}\]
+  \caption{Src-Dst One-Two Interact: Synthesize $C$ -> $D$ and vice versa}
+\end{figure}
+
+\begin{figure}
+  \[C = \begin{array}l
+    \apply{xandy, \langle\texttt{dst}\rangle, \{x := 1; y:= 9\} | \{x:= 2; y:=10\}^*} \\
+  \end{array}
+  \]
+  \[D = \begin{array}{l}
+    \apply{xtheny1, \langle\texttt{dst}\rangle, \{x:=1\} | \{x:=2\}^*};
+    \\ \apply{xtheny2, \langle\texttt{dst}\rangle, \{y:=9\} | \{y:=10\}^*}
+  \end{array}\]
+  \caption{Interleave: Synthesize $C$ -> $D$ and vice versa}
+\end{figure}
+
+
+\begin{figure}
+  \[C = \begin{array}l
+    \apply{xdety, \langle x,y \rangle, \{y:=x\} | \{y:= 1\}^*}; \\
+    \apply{ready, \langle y \rangle, \{z := 100\} | \{\assert \TRUE\}^*}
+  \end{array}\]
+
+  \[D = \begin{array}l
+    \apply{xy, \langle x, y \rangle, \{y:= x;z:= 100\} | \{y:=1; z:=100\} | \{y:= x\} | \{y:=1\}^*}
+    \end{array}\]
+  
+  \caption{Dependency: Synthesize $C$ -> $D$ and vice versa}
+\end{figure}
