@@ -13,7 +13,7 @@ configuration $g$ denotes a subset of $T$.
 To ground our investigation, lets first consider the simple situation
 where both our logical and concrete programs are comprised of a single
 table. So we have two table applications,
-$\apply{t,\vec k, \vec c, a}$ and $\apply{t, \vec l, \vec d, b}$,
+$\apply{t,\vec k, \vec c, a}$ and $\apply{s, \vec l, \vec d, b}$,
 which we represent as relations of the form
 \[T = F_1 \times \cdots \times F_n \times A\]
 \[S = G_1 \times \cdots \times G_m \times B\] where $A$ and $B$ are
@@ -55,10 +55,10 @@ produce, for an arbitrary $T_0$, an equivalent $S_0$, specifically, we write
 \subsubsection{Decomposing Keys and Actions}
 
 We can decompose the \textsc{SingleMapSynth} problem into two problems
-\textsc{KeyMapSynth} and $\textsc{ActMapSynth}(a)$ for each action,
-which respectively map the actions and the keys. Luckily,
-\textsc{KeyMapSynth} has a very easy intuition, they keys of the
-logical table must be a subset of the concrete table:
+\textsc{KeyMapSynth} and $\textsc{ActMapSynth}()$ respectively map the
+actions and the keys. Luckily, \textsc{KeyMapSynth} has a very easy
+intuition, they keys of the logical table must be a subset of the
+concrete table:
 \[\{F_1, \ldots, F_n\} \subseteq \{G_1, \ldots, G_m\}\]
 
 Then, a solution to $\textsc{KeyMapSynth}()$ is the injection map which crosses the missing columns with the full set:
@@ -73,10 +73,16 @@ from $\alpha : A \to B$ such that the following holds:
 \[\bigwedge_{a \in A} \forall \pkt,\pkt'.\; \wp(a, \pkt = \pkt')
   \Leftrightarrow \wp(\alpha(a), \pkt = \pkt')\] 
 
+\[\bigwedge_{a \in A} \bracbb{a} = \bracbb{\alpha(a)}\]
+
 We conjecture that every solution $f$ to $\textsc{SingleMapSynth}()$
 can be captured by the pair $(\iota, \alpha) : T \to S$ which form
 solutions to $\textsc{KeyMapSynth}()$ and $\textsc{ActMapSynth}()$
 respectively.
+
+
+
+
 
 \subsubsection{Single-Table Programs with Functional Dependencies}
 
@@ -87,12 +93,53 @@ sets of functional dependencies $D_S$ and $D_T$, and requires that any
 solution $(\alpha, \iota)$ must obey the following property in
 addition to satisfying $\textsc{KeyMapSynth}$ and
 $\textsc{ActMapSynth}$:
-\[F_1,\ldots, F_n \longrightarrow \alpha(A) \in D_S \Rightarrow
+\[F_1,\ldots, F_n  \longrightarrow \alpha(A) \in D_S \Rightarrow
   F_1,\ldots, F_n \longrightarrow A \in D_T\]
+
+
+\[\alpha_A(D_S) \subseteq D_T\]
 
 We can encode this in Z3 by statically computing all tuples in $D_S^+$
 and in $D_T^+$ and checking whether $D_T^+ \subseteq D_S^+$.
 
+\[Src, Dst, Port \rightarrow \{\{x :=1\} , \{y:= 2\}, \{y:=3;y:=2\}\}\]
+\[Src,Dst \rightarrow \{\{x :=1\}, \{y:= 2\}\}\]
+\[Port \rightarrow \{\{y:=3;y:=2\}\}\]
 
 
+\[Src, Dst, Port, Typ \rightarrow \{\{x:=1\}, \{y:=2\}\}\]
+\[Src, Dst \rightarrow \{b_1\}\]
+\[Port, Typ \rightarrow \{b_2\}\]
+
+
+
+
+Src x {op:=1, op:= 0}; Dst x {op:= 1, skip}
+
+LOGICAL              S               D
+Src x Dst x {op :=1, op := 0} x {op := 1, skip}
+Src -> S
+Dst -> D
+(Src Dst -> S)
+(Src Dst -> D)
+
+PHYSICAL                  P 
+Src x Dst x Port x {op := 1, op := 0, skip}
+Src, Dst, Port -> P
+
+Assume:
+alpha(S) = {op := 1, op := 0}
+alpha(D) = {op := 1, op := 0}
+
+Src -L-> S (In Logical)
+i.e. exists f_ls : Src -> S
+
+Dst -L-> D (In Logical)
+i.e. exsists f_ld : Dst -> D
+
+To Show:
+Src -P-> { op := 1, op := 0 }
+-- witnessed by f_ls
+Dst -P-> { op := 1, op := 0 }
+-- witnessed by f_ld
 
