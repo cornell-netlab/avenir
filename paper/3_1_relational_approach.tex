@@ -102,44 +102,423 @@ $\textsc{ActMapSynth}$:
 We can encode this in Z3 by statically computing all tuples in $D_S^+$
 and in $D_T^+$ and checking whether $D_T^+ \subseteq D_S^+$.
 
-\[Src, Dst, Port \rightarrow \{\{x :=1\} , \{y:= 2\}, \{y:=3;y:=2\}\}\]
-\[Src,Dst \rightarrow \{\{x :=1\}, \{y:= 2\}\}\]
-\[Port \rightarrow \{\{y:=3;y:=2\}\}\]
+\subsection{Composing Tables}
+
+The approach detailed above generalizes to full tables so long as we
+can compress a full program into a single match-action table. In some
+cases, this is quite easy--for example, when the tables test and
+modify disjoint sets of variables. In Figure~\ref{fig:easy-example},
+we see that the composed table has the cross product of keys, and the
+cross product of actions. We only need to constrain the new table with
+the functional dependencies $\texttt{src} \longrightarrow X$ and
+$\texttt{dst} \longrightarrow Y$, so that we can properly convert
+every instance of each relation to the other. However, it becomes much
+more difficult when we have to consider relationships between tables.
+
+\begin{figure}[ptb]
+  \begin{minipage}{0.32\columnwidth}
+  \[\begin{array}{c}
+      (\texttt{src}, X); (\texttt{dst}, Y)
+      \\ = \\
+      (\langle\texttt{src,dst}\rangle, X, Y)
+    \end{array} \]
+\end{minipage} \hfill \vline \hfill \begin{minipage}{0.66\columnwidth}
+  \[\begin{array}l
+      X = \{x:=v \mid v = 1,2,3,4\}\\
+      Y = \{y:=v \mid v = 1,2,3,4
+    \end{array}\]
+  \hrule
+  \[\begin{array}{cc}
+      \texttt{src} \longrightarrow X
+      &\texttt{dst} \longrightarrow Y
+    \end{array} \]
+\end{minipage}
+\caption{Disjoint Cross Product}
+  \label{fig:cross-product-ex}
+\end{figure}
+
+\begin{figure}[ptb]
+  \begin{minipage}{.33\columnwidth}
+  \[\begin{array}{c}
+      (\texttt{src}, X);
+      (\texttt{x}, D)
+      \\ = \\
+      (\texttt{src}, X, D)
+    \end{array}\]
+\end{minipage}\hfill\vrule\hfill\begin{minipage}{.66\columnwidth}
+  \[\begin{array}l
+      X = \{x:=v \mid v = 1,2,3,4\}\\
+      D = \{\texttt{dst} := v \mid v = 101,102,103,104\} \\
+    \end{array}
+  \]
+  \hrule
+  \[\texttt{src}\longrightarrow XD\]
+\end{minipage}
+
+\caption{Dependency Example.We have the constraint that
+  $X \longrightarrow \texttt{x}$, so candidate key for the table is
+  simply \texttt{src}.}
+  \label{fig:dependency-ex}
+\end{figure}
+
+A common programming pattern is for one table to set a piece of
+metadata and then use that value as a key later in the program. For
+instance, consider Figure~\ref{fig:dependency-ex}. Notice that the
+value of \texttt{x} is completely determined by the contents of the
+previous table, which means that the only key we need in the composite
+table is \texttt{src}. 
+
+\begin{figure}
+  \begin{minipage}{0.33\columnwidth}
+  \[\begin{array}c
+      (\texttt{src}, X');(\texttt{x}_1,D)
+      \\ = \\
+      (\langle\texttt{src},\texttt{x}_0\rangle, X', D)
+    \end{array}
+  \]
+\end{minipage}\hfill \vline \hfill\begin{minipage}{0.66\columnwidth}
+  \[\begin{array}{l}
+      X = \{\texttt{x}_1:=1, \texttt{x}_1:=\texttt{x}_0\}\\
+      D = \{\texttt{dst} := v \mid v = 101,102,103,104\}
+    \end{array}
+  \]
+  \hrule\[\begin{array}{cc}
+      \texttt{src} \to X'
+      & \bracbb{X'}(\texttt{x}_0).\texttt{x}_1 \to D
+    \end{array}\]
+\end{minipage}
+  \caption{Partial Dependency Example}
+  \label{fig:partial-depend-ex}      
+\end{figure}
+
+Unfortunately, the complexity doesn't stop there. If a table only
+partially determines the value of a variable that is uses as a keys in
+the next table, then the relationship is tricky. Consider the two
+tables in Figure~\ref{fig:partial-depend-ex}, It doesn't hold that
+$X' \longrightarrow \texttt{x}$ (as in
+Figure~\ref{fig:dependency-ex}). But, the trivial functional
+constraint $\texttt{x}_0X' \longrightarrow \texttt{x}_1$
+holds, where $\texttt{x}_0$ is the value of $\texttt{x}_1$ before
+executing any of the actions in $X'$ and $\texttt{x}_1$ is the value
+after -- the one used in the key of the second table.
+
+As we would have done in~\ref{fig:cross-product-ex}, we would like to
+enforce the functional dependency $\texttt{x}_1 \longrightarrow D$;
+however, $x_1$ can't be a key in the composed table, because we need
+the match to occur before we execute $X'$. However, we do have the
+information to compute $x_1$ in the table -- we require that
+$\bracbb{X'}(\texttt{x}_0).\texttt{x}_1\longrightarrow D$, i.e. the
+values of $\texttt{x}_1$ in the image of the actions in $A$ over
+packets where the values of $\texttt{x}_0$ are known. To see why we
+need this, consider the following table entries
+\[
+  \begin{array}{c|c|c|c}
+    \texttt{src} & \texttt{x}_0 & X' & D\\ \hline
+    101 & 99 & \texttt{x}_1 := 1 & \texttt{dst} := 104 \\
+    101 & \vdots & \texttt{x}_1 := 1 & \texttt{dst} := 104 \\
+    102 & 1 & \texttt{x}_1 := \texttt{x}_0 & \texttt{dst} := 101 \\
+    102 & \vdots & \texttt{x}_1 := \texttt{x}_0 & \texttt{dst} := 101 \\
+  \end{array}
+\]
+
+These rules satisfy the requirement that
+$\texttt{src}\longrightarrow X'$, so we can losslessly add rules to
+the first table, however, we have a rule-conflict when we try and add
+rules to the second table. Notice that for each rule, $x_1 = 1$, which
+means the keys in the second table need to be the same, but they each
+select different actions!
+\[
+  \begin{array}{c|c}
+    \texttt{src} & X'\\ \hline
+    101 & \texttt{x}_1 := 1  \\
+    102 & \texttt{x}_1 := x_0 \\
+  \end{array}\enspace ; \enspace
+  \begin{array}{c|c}
+    \texttt{x}_1 & D\\ \hline
+    1 & \texttt{dst} := 104 \\
+    1 & \texttt{dst} := 101 \\
+    \vdots & \texttt{dst} := 101 \\
+  \end{array}  
+\]
+
+However, if we unpack the definition of the constraint
+$\bracbb{X'}(\texttt{x}_0).\texttt{x}_1 \to D$, we get
+\[\pi_{\texttt{x}_1}\left(\bigcup_{a \in X, x \in
+      \texttt{x}_0,\pkt} \bracbb{a}\; pkt[\texttt{x}_0 \mapsto x]
+  \right) \longrightarrow D.\] Unfolding definitions again, this says
+that for any relation $R$ implementing the that populates the table
+$(\langle\texttt{src},\texttt{x}_0\rangle, X', D)$ it must be that for
+rows $\rho, \rho' \in R$, then $\rho.D = \rho.D$ holds if the
+following condition holds
+\[\forall \pkt. \left(\bracbb{\rho.a}\; \pkt[\texttt{x}_0 \mapsto
+    \rho.x_0 ]\right).x_1 =
+  \left(\bracbb{\rho'.a}\;\pkt[\texttt{x}_0\mapsto \rho.x_0
+    ]\right).x_1\]
+
+which prohibits the key-conflict in the second table
+$(\texttt{x}_1,D)$. Specifically, since
+\[\left(\bracbb{x_1:=1} \{x_0 \mapsto 99\}\right).x_1 = 1 =
+  \left(\bracbb{x_1:=x_0} \{x_0 \mapsto 1\}\right).x_1\] and
+$\texttt{dst} := 101 \neq \texttt{dst} := 104$. Thus, this condition
+prohibits this combination of rules in
+$(\texttt{src}, \texttt{x}_0, X', D)$.
+
+\begin{figure}[tpb]
+  \[\begin{array}{c>{\triangleq}cl}
+      \delta(x := e,v) && \begin{cases}
+        \fvs(e) &x = v\\
+        \{v\} & \textit{otherwise} \end{cases} \\
+      \delta(c;c', v) && \left\{v'' \mid v' \in \delta(c, v), v'' \in \delta(c', v')\right\} \\
+      \delta(c\angel c', v) && \delta (c, v) \cup \delta(c', v) \\
+      \delta(\assert b, v) && \fvs(b) \\
+      \delta(\assume b, v) && \fvs(b) \\\\
+      \Delta(A, V) && \displaystyle\bigcup_{a\in A,v \in V}\delta(a,v)
+    \end{array}\]
+  \caption{The Domination function}
+  \label{fig:delta }
+\end{figure}
+
+As a helper function, we define the dominating set $\Delta(A,G)$ to be
+the (smallest) set of varibles required to determine the values of $G$
+after running $A$. We characterize $\Delta(A,G)$ in two properties.
+
+\begin{proposition}[$\Delta$-Definedness]
+  Given a set of deterministic, error-free commands $A$, and a set of
+  keys $G \in \Var$, then for $v_i \in V_i$ for
+  $\{V_1, \ldots, V_n\} = \Delta(A,G)$, and every $g \in G$,
+  $\bracbb{A}~\left(\cdot[\vec V \mapsto \vec v]\right).g$ is defined.
+\end{proposition}
+\begin{proof}
+  Let $g \in G$ and $a \in A$. It suffices to show that that for
+  $\bracbb{a}~\left(\cdot[\delta(a,g) \mapsto \vec v]\right).g$ is
+  defined. Proceed by induction on the structure of a.
+  \todo[inline]{Finish Proof}
+\end{proof}
+  
+
+\begin{proposition}[$\Delta$-Universality]
+  Given a set of deterministic, error-free commands $A$, and a set of
+  keys $G \in \Var$, then for $v_i \in V_i$ for
+  $\{V_1, \ldots, V_n\} = \Delta(A,G)$, and every $g \in G$,
+  $\bracbb{A}~\left(\cdot[\vec V \mapsto \vec v]\right).g =
+  \bracbb{A}~\left(\pkt\right).g$ for every $\pkt \in \Pkt$ with
+  $\pkt.\Delta(A,G) = \vec v$.
+\end{proposition}
+
+\begin{proof} By induction on $a \in A$.  \todo[inline]{Finish Proof}
+\end{proof}
+
+\begin{figure}[tpb]
+  \[\begin{array}{ccl}
+      \compose{(F,A)}{(G,B)}
+      & \triangleq
+      & ((F\times\Delta(G,A), A\times B),\\
+      &&\{F \longrightarrow A, \bracbb{A}(\Delta(A,G)).G \to B \})\\[.2em]
+  %   \end{array}\]
+  % \[\begin{array}{lcl}
+      \relcomp{s}{t}{S}{T}
+      & \triangleq
+      % & \{(\keys\sigma,d,\acts\sigma,\acts\tau)\\
+      % && \hspace{.5em}
+      %    \mid \sigma \in S, \tau \in T, d \in D = \Delta(\acts\sigma, \keys\tau),\\
+      % && \hspace{1em}
+      %    \keys\tau \in \bracbb{\textsf{reduce}~(;)~\acts\sigma}~[D \mapsto d]
+      %    \}\\[.2em]
+      & \{(\sigma.F,d,\sigma.A,\tau.B) \\
+      && \hspace{.5em}
+         \mid \sigma \in S, \tau \in T, (F,A) = s, (G,B) = t \\
+      && \hspace{1em}
+         d \in D = \Delta(A, G),\\
+      && \hspace{1em}
+         \tau.G = \bracbb{\sigma.A}~[D \mapsto d]
+         \}\\        
+      \decomp s t R
+      & \triangleq
+      & (\{(\rho.F,\rho.A) \mid \rho \in R, s = (F,A)\} \\
+      && , \{(p.G, \rho.B) \mid \rho \in R, (F,A) = s, (G,B) = t \\
+      && \hspace{.5em}
+         D = \Delta(A,G) \\
+      && \hspace{.5em}
+         p = \bracbb{\rho.A}~[D \to \rho.D] \} )
+    \end{array}
+  \]  
+  \caption{Table Composition ($\compose{s}{t}$), relation
+    composition ($\relcomp{s}{t}{S}{T}$), and relation
+    decomposition ($\decomp{s}{t}{R}$).}
+  \label{fig:compose-tables}
+\end{figure}
+
+Now we can use these intuitions to write down a composition operator
+for tables, and conversions between the entries. In
+Figure~\ref{fig:compose-tables}, we define table composition
+$(r,\Phi_r) = s \circ t$, relation composition for those tables
+$R = S \bowtie_{s,t} T$, and then relation decomposition,
+$\pi_{s,t}(R) = (S,T)$. When the context is obvious, we'll abbreviate
+$\fst(\pi_{s,t}(R))$ by $\pi_{s}(R)$, and $\snd(\pi_{s,t}(R))$ by
+$\pi_t(R)$. We want to prove that these operators commute.
+
+\begin{proposition}
+  \label{prop:join-proj}
+  Given two tables $s = (F,A)$ and $t = (G,B)$, with
+  $(r, \Phi_r) = s \circ t$. For every relation $R$ populating $r$ and
+  respecting $\Phi_r$, if $\pi_{s,t}(R) = (S,T)$, then
+  $S \bowtie_{s,t} T = R$.
+\end{proposition}
+
+\begin{proof}
+  Let $R$ be a relation populating $r = (H,C)$ and respecting $\Phi_r$, show
+  that $\pi_s(R) \bowtie_{s,t} \pi_t(R) = R$. Show each direction
+  separately.
+  \begin{enumerate}[align=left]
+  \item[$(\subseteq)$] Let $\rho \in \pi_s(R) \bowtie_{s,t} \pi_t(R)$,
+    to show that $\rho \in R$. Then, we know that
+    \[\begin{array}l
+        \rho = (\sigma.F, d, \sigma.A, \tau.B)\\
+        \text{for some } \sigma \in \pi_s(R)\\
+        \phantom{\text{for some }}\tau \in \pi_t(R)\\
+        \phantom{\text{for some }}d \in \Delta(A, G),\\
+        \text{such that } \tau.G = \bracbb{\sigma.A}~[\Delta(A,G) \mapsto d]
+      \end{array} \]
+
+    Further, we know that
+    \[\begin{array}l
+        \sigma = (\rho_s.F, \rho_s.A)\\
+        \text{for some } \rho_s \in R\\
+      \end{array}
+    \]
+    and
+    \[\begin{array}l  
+        \tau = (g, \rho_t.B) \\
+        \text{such that } g = (\bracbb{\rho_t.A}~[\Delta(A,G) \mapsto \rho_t.\Delta(A,G)]).G
+      \end{array}\]
+
+    Composing these definitions, we get that
+    \[\begin{array}l
+        \rho = (\rho_s.F, d, \rho_s.A, \rho_t.B) \\
+        \text{where } d \in \Delta(A, G)\\
+        \phantom{\text{where }} g = (\bracbb{\rho_s.A}~[\Delta(A,G) \mapsto d]).G\\
+        \phantom{\text{where } g} = (\bracbb{\rho_t.A}~[\Delta(A,G) \mapsto \rho_t.\Delta(A,G)]).G
+      \end{array}\]
+    
+  \end{enumerate}
+
+  Now, because of the constraint $\bracbb{A}(\Delta(A,G)).G \to B$, we
+  know that $\rho_t.B = \rho_s.B$, So we want to show
+  that \[(\rho_s.F, d, \rho_s.A, \rho_s.B) \in R\]
+
+  Since $R$ is total, and $F \longrightarrow A$, we know that there is
+  some $(\rho_s.F, d, \rho_s.A, b) \in R$. Then, the facts that
+  $g = (\bracbb{\rho_s.A}~[\Delta(A,G) \mapsto d]).G =
+  (\bracbb{\rho_t.A}~[\Delta(A,G) \mapsto \rho_t.\Delta(A,G)]).G$, and
+  $\rho_t \in R$ mean that $b = \rho_s.B$, and we're done. \hfill \checkmark
+
+\item[$(\supseteq)$] Let $\rho \in R$, subject to $\Phi_r$, to show
+  that $\rho \in \pi_s(R) \bowtie_{s,t} \pi_t(R)$.
+
+  We know that $(\rho.F, \rho.A) \in \pi_s(R)$, and further
+  \[(\bracbb{\rho.A}[\Delta(A,G) \mapsto \rho.\Delta(A,G)],\rho.B) \in
+  \pi_t(R).\]
+
+  Then, by definition
+  $(\rho.F, d, \rho.A, \rho.B) \in \pi_s(R) \bowtie_{s,t} \pi_t(R)$ when
+  \[\bracbb{\rho.A}[\Delta(A,G) \mapsto \rho.\Delta(A,G)]
+    = \bracbb{\rho.A}[\Delta(A,G) \mapsto d].\]
+
+  Since this is the case for $d = \rho.\Delta(A,G)$, conclude
+  \[(\rho.F, \rho.\Delta(A,G), \rho.A, \rho.B) \in \pi_s(R)
+    \bowtie_{s,t} \pi_t(R).\]
+  \mbox{} \hfill \checkmark\\\mbox{}
+\end{proof}
+
+\begin{proposition}
+  \label{prop:proj-join}
+  Given two tables $s = (F,A)$ and $t = (G,B)$ with
+  $(r, \Phi_r) = s \circ t$. For every relation $S$ populating $s$ and
+  $T$ populating $t$, then $\pi_{s,t}(S \bowtie_{s,t} T) = (S,T)$.
+\end{proposition}
+
+\begin{proof}
+  Let $S$ be a relation populating $s$ and $T$ be a relation
+  populating $t$, to show that show that
+  $ \pi_{s,t}(S \bowtie_{s,t}T) = (S,T)$. Show each containment
+  separately:
+  \begin{enumerate}[align=left]
+  \item[$(\subseteq)$] Let $\sigma \in \pi_s(S \bowtie_{s,t} T)$ and
+    $\tau \in \pi_t(S \bowtie_{s,t} T)$, to show that $\sigma \in S$
+    and $\tau \in T$.
+
+    Now show that $\sigma \in S$ and $\tau \in T$. We know further
+    that
+    $\tau = (\bracbb{\rho.A}[\Delta.(A,G) \mapsto \rho.\Delta(A,G)],
+    \rho.B)$. Again, by definition we compute that there are some
+    $\sigma' \in S$ and $\tau' \in T$ such that
+    $(\rho.F,\rho.A) = \sigma'$, and
+    $\tau' = (\bracbb{\rho.A}[\Delta.(A,G) \mapsto \rho.\Delta(A,G)],
+    \rho.B)$. Conclude that $\tau = \tau'$ and $\sigma = \sigma'$. \hfill \checkmark
+
+  \item[$(\supseteq)$] Let $\sigma \in S$ and $\tau \in T$, to show
+    that $\sigma \in \pi_s(S \bowtie_{s,t}T)$, and
+    $\tau \in \pi_t(S \bowtie_{s,t} T)$.  Then we know that there is
+    $\rho \in S\bowtie_{s,t}T$ such that $\rho.FA = \sigma$,
+    $\rho.B = \tau.B$, and
+    $\tau.G = \bracbb{\rho.A}[\Delta(A,G) \mapsto \rho.\Delta(A,G)]$.
+    Finally, we have $\sigma' \in \pi_s(S \bowtie_{s,t}T)$ and
+    $\tau' \in \pi_t(S \bowtie_{s,t} T)$ such that
+    $\sigma' = \rho.FA$, $\tau'.B = \tau.B$, and
+    $\tau'.\Delta(A,G) = \bracbb{\rho.A}~[\Delta(A,G) \mapsto
+      \rho.\Delta(A,G)]$. Conclude that $\sigma = \sigma'$ and $\tau = \tau'$. \hfill \checkmark
+  \end{enumerate}
+\end{proof}
+
+\todo[inline]{What happens if $\Delta(A,G) \cap F \neq \emptyset$?}
 
 
-\[Src, Dst, Port, Typ \rightarrow \{\{x:=1\}, \{y:=2\}\}\]
-\[Src, Dst \rightarrow \{b_1\}\]
-\[Port, Typ \rightarrow \{b_2\}\]
+\begin{theorem}[Composition Functional Equivalence]
+  \label{thm:comp-func-equiv}
+  Given two tables $s = (F,A)$ and $t = (G,B)$ with
+  $(r, \Phi_r) = s \circ t$. For every relation $S$ populating $s$ and
+  $T$ populating $t$, $\bracbb{S;T} = \bracbb{S\bowtie_{s,t}T}$.
+\end{theorem}
+
+\begin{proof}
+  Let $S$ be a relation populating $s$ and let $T$ be a relation
+  populating $t$.
+  %
+  Let $\pkt$ be an aribtrary packet. Then, since $S$ is total, there
+  is some rule $\sigma \in S$ such that \[\pkt.F = \sigma.F\]. Further, we
+  know that we will execute actions $\sigma.A$, to get
+  \[\pkt' = \bracbb{\sigma.A}~\pkt.\] Now, since $T$ is total, we know
+  that there is some $\tau \in T$ such that \[\pkt'.G = \tau.G.\]
+  Further, our final packet is \[\pkt'' = \bracbb{\tau.B}~\pkt'.\]
+
+  By definition the following set of rules $R$ is a subset of $S \bowtie_{s,t}T$:
+  \[\begin{array}{l}
+      R  = \bigg\{\rho \in S \bowtie_{s,t} T~~\big|\\
+      \qquad\quad \rho.F = \sigma.F = \pkt.F\\
+      \qquad\quad \rho.A = \sigma.A \\
+      \qquad\quad \tau.B = \rho.B \\
+      \qquad\quad \bracbb{\sigma.A}[\Delta(A,G) \mapsto \rho.\Delta(A,G)] =\tau.G \bigg\}
+    \end{array}\]
+
+  Since $\bracbb{\sigma.A}~\pkt = \tau.G$, then by the $\Delta$-lemma
+  there is some $\rho \in R$ such that $\pkt.F = \rho.F$ and
+  $\pkt.\Delta(A,G) = \rho.\Delta(A,G)$. Since $\rho.A = \sigma.A$ and $\rho.B = \sigma.B$, conclude
+  $\bracbb{\rho.B}\left(\bracbb{\rho.A}~\pkt\right) = \pkt''$, we're done.
+    \todo[inline]{Prove the delta lemma}
+\end{proof}
 
 
+\begin{theorem}[Decomposition Functional Equivalence]
+  \label{thm:decomp-func-equiv}
+  Given two tables $s = (F,A)$ and $t = (G,B)$ with
+  $(r, \Phi_r) = s \circ t$. For every relation $R$ populating $r$, 
+  $\bracbb{\pi_s(R);\pi_t(R)} = \bracbb{R}$.
+\end{theorem}
 
-
-Src x {op:=1, op:= 0}; Dst x {op:= 1, skip}
-
-LOGICAL              S               D
-Src x Dst x {op :=1, op := 0} x {op := 1, skip}
-Src -> S
-Dst -> D
-(Src Dst -> S)
-(Src Dst -> D)
-
-PHYSICAL                  P 
-Src x Dst x Port x {op := 1, op := 0, skip}
-Src, Dst, Port -> P
-
-Assume:
-alpha(S) = {op := 1, op := 0}
-alpha(D) = {op := 1, op := 0}
-
-Src -L-> S (In Logical)
-i.e. exists f_ls : Src -> S
-
-Dst -L-> D (In Logical)
-i.e. exsists f_ld : Dst -> D
-
-To Show:
-Src -P-> { op := 1, op := 0 }
--- witnessed by f_ls
-Dst -P-> { op := 1, op := 0 }
--- witnessed by f_ld
-
+\begin{proof}
+  Let $R$ be a relation populating $R$. By
+  Proposition~\ref{prop:proj-join},
+  $R = \pi_s(R)\bowtie_{s,t}\pi_t(R)$. The result follows by
+  Theorem~\ref{thm:comp-func-equiv} setting $S = \pi_s(T)$ and
+  $T=\pi_t(R)$.
+\end{proof}
