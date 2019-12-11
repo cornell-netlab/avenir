@@ -56,6 +56,18 @@
 \end{figure}
 
 \begin{figure}[ht]
+  \[\begin{array}{lcl}
+      \ifte b {c_1} {c_2} & \triangleq & \assume b;c_1 \angel \assume {\neg b}; c_2 \\
+      \SKIP & \triangleq& \assume \TRUE \\
+      \nop & \triangleq & \assert \TRUE
+    \end{array}
+  \]
+  \caption{Syntactic Sugar. A command is called \emph{deterministic
+      and total} if it is only constructed from assignment, sequence
+    and the above operators}
+\end{figure}
+
+\begin{figure}[ht]
   \[\begin{array}{l >{\triangleq}c l}
       \wp_\tau(x:=e, \phi) && \phi[x \mapsto e]\\
       \wp_\tau(c;c', \phi) && \wp_\tau(c, \wp_\tau(c', \phi)) \\

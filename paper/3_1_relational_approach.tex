@@ -270,43 +270,168 @@ $(\texttt{src}, \texttt{x}_0, X', D)$.
         \{v\} & \textit{otherwise} \end{cases} \\
       \delta(c;c', v) && \left\{v'' \mid v' \in \delta(c, v), v'' \in \delta(c', v')\right\} \\
       \delta(c\angel c', v) && \delta (c, v) \cup \delta(c', v) \\
-      \delta(\assert b, v) && \fvs(b) \\
-      \delta(\assume b, v) && \fvs(b) \\\\
+      \delta(\assert b, v) && \fvs(b) \cup \{v\} \\
+      \delta(\assume b, v) && \fvs(b) \cup \{v\} \\\\
       \Delta(A, V) && \displaystyle\bigcup_{a\in A,v \in V}\delta(a,v)
     \end{array}\]
-  \caption{The Domination function}
+  \caption{Dominating Sets}
   \label{fig:delta }
 \end{figure}
 
 As a helper function, we define the dominating set $\Delta(A,G)$ to be
-the (smallest) set of varibles required to determine the values of $G$
+the (smallest) set of variables required to determine the values of $G$
 after running $A$. We characterize $\Delta(A,G)$ in two properties.
 
-\begin{proposition}[$\Delta$-Definedness]
-  Given a set of deterministic, error-free commands $A$, and a set of
-  keys $G \in \Var$, then for $v_i \in V_i$ for
-  $\{V_1, \ldots, V_n\} = \Delta(A,G)$, and every $g \in G$,
-  $\bracbb{A}~\left(\cdot[\vec V \mapsto \vec v]\right).g$ is defined.
-\end{proposition}
+\begin{lemma}[Defined Free Variables Defines Expressions]
+  \label{lem:def-fvs-expr}
+  For an expression $e$, with
+  $\{\texttt{x}_1, \ldots, \texttt{x}_n\} \in \fvs(e)$, and
+  $v_i \in \texttt{x}_i$ for $i \in [n]$,
+  $\bracbb{e}~(\cdot[\vec{\texttt{x}} \mapsto \vec{v}])$ is defined.
+\end{lemma}
+
 \begin{proof}
-  Let $g \in G$ and $a \in A$. It suffices to show that that for
-  $\bracbb{a}~\left(\cdot[\delta(a,g) \mapsto \vec v]\right).g$ is
-  defined. Proceed by induction on the structure of a.
-  \todo[inline]{Finish Proof}
+  Proceed by induction on the structure of $e$.  \todo[inline]{the
+    proof!}.
 \end{proof}
-  
 
-\begin{proposition}[$\Delta$-Universality]
-  Given a set of deterministic, error-free commands $A$, and a set of
-  keys $G \in \Var$, then for $v_i \in V_i$ for
-  $\{V_1, \ldots, V_n\} = \Delta(A,G)$, and every $g \in G$,
-  $\bracbb{A}~\left(\cdot[\vec V \mapsto \vec v]\right).g =
-  \bracbb{A}~\left(\pkt\right).g$ for every $\pkt \in \Pkt$ with
-  $\pkt.\Delta(A,G) = \vec v$.
+\begin{lemma}[$\delta$-Domination]
+  \label{lem:delta-dom}
+  Given a deterministic, total command $a$, and a variable
+  $\texttt{x} \in \Var$, if
+  $\{\texttt{x}_1, \ldots, \texttt{x}_n\} = \delta(a,v)$ and
+  $v_i \in \texttt{x}_i$, then for every $\pkt$ and $\pkt'$,
+  $\bracbb{a}~\left(\pkt[\vec{\texttt{x}} \mapsto \vec v]\right)
+  = \bracbb{a}~\left(\pkt'[\vec{\texttt{x}} \mapsto \vec v]\right)$
+  is defined.
+\end{lemma}
+
+\begin{proof}
+  Proceed by induction on the structure of $a$, leaving
+  $\texttt{x}$, $\pkt$, and $\pkt'$ free.
+  \begin{enumerate}[align=left]
+  \item[($\SKIP$)] Let $\texttt{x} \in \Var$, Desugar
+    $\SKIP = \assume \TRUE$. Since $\fvs(\TRUE) = {}$, then
+    $\delta(\assume\TRUE, \texttt{x}) = \{\texttt{x}\}$. Let $\pkt$
+    and $\pkt'$ be packets. Let $v_x \in \texttt{x}$. Notice that
+    $\bracbb{\assume\TRUE} = \lambda x.x$, so calculate
+    $(\pkt[\texttt{x} \mapsto v_x]).\texttt{x} = v_x=
+    (\pkt'[\texttt{x} \mapsto v_x]).\texttt{x}$.
+  \item[($\nop$)] \textit{sim.}
+  \item[$(\texttt{y}:=e)$] Let $\texttt{x} \in
+    \Var$. There are two cases: $x = v$ or $x \neq v$.  If $\texttt{y}
+    = \texttt{x}$ then $\delta(a,\texttt{x}) =
+    \fvs(e)$. By Lemma~\ref{lem:def-fvs-expr},
+    $\bracbb{e}~\pkt[\fvs(e) \mapsto \vec v] = u =
+    \bracbb{e}~\pkt'[\fvs(e) \mapsto \vec
+    v]$, so $\bracbb{\texttt{x}:=e}~\pkt = \pkt[\texttt{x} \mapsto
+    u].\texttt{x} = u = \pkt'[\texttt{x} \mapsto u] =
+    \bracbb{\texttt{x}:=e}~\pkt'$.
+
+    If $\texttt{y} \neq \texttt{x}$, Then
+    $\delta(a,v) = \{\texttt{x}\}$. Let
+    $\bracbb{e}~\pkt[\texttt{x} \mapsto v] = u$ and
+    $\bracbb{e}~\pkt[\texttt{x} \mapsto v] = u'$. Then
+    \[\begin{array}l
+        \left(\bracbb{x:=e}~\pkt[\texttt{x} \mapsto v]\right).\texttt{x}\\
+        = \pkt[\texttt{x} \mapsto v,\texttt{y} \mapsto u].\texttt{x} \\
+        = v \\
+        = \pkt'[\texttt{x}\mapsto v, \texttt{y}\mapsto u']/\texttt{x} \\
+        = \left(\bracbb{x:=e}~\pkt'[\texttt{x} \mapsto v]\right).\texttt{x}
+      \end{array}\]
+
+  \item[$(\ifte b {c_1} {c_2})$] Desugar
+    \[\ifte b {c_1} {c_2} \triangleq\assume b; c_1 \angel \assume{\neg
+        b}; c_2\] Then let
+    $D = \delta\left(\left(\assume b; c_1 \angel \assume{\neg b};
+        c_2\right),v\right) = \fvs(b) \cup \delta(c_1,v) \cup
+    \delta(c_2,v)$. Let $\vec{v^b}$ be the values corresponding to
+    fields in $\fvs(b)$, $\vec{v^1}$ be the values corresponding to
+    the fields in $\delta(c_1,\texttt{x})$ and let $\vec{v^2}$ be the
+    values corresponding to the fields in
+    $\delta(c_2,\texttt{x})$. Let $\pkt$ and $\pkt'$ be
+    packets. Notice that we can commute our assignments to any of the
+    variables in $\delta(c_1,\texttt{x})$, $\delta(c_2,\texttt{x})$,
+    or $\fvs(b)$, because, as projections of the same map, either
+    they're idempotent or distinct. Then, we know, by
+    Lemma~\ref{lem:def-fvs-expr}, that
+    \[\begin{array}l
+        \bracbb{b}~\pkt[\delta(c_1,\texttt{x})\delta(c_2,\texttt{x})
+        \mapsto \vec{v^1}][\fvs(b) \mapsto \vec{v^b}] \\
+        = t\\
+        =  \bracbb{b}~\pkt'[\fvs(b) \mapsto \vec{v^b}]
+      \end{array}\]
+    Note $t \in \mathbf 2$. We'll show the case where $t = \TRUE$, the
+    alternate case is symmetric.
+
+    Since $t = \TRUE$, we execute
+    \[\begin{array}l
+        \left(\bracbb{c_1}~\pkt[\delta(c_1,\texttt{x}),\delta(c_2,\texttt{x})
+        \mapsto \vec{v^1},\vec{v^2}][\fvs(b) \mapsto \vec{v^b}]\right).\texttt{x}
+        \\ =  \left(\bracbb{c_1}~\pkt[\fvs(b),\delta(c_2,\texttt{x})
+        \mapsto \vec{v^b}, \vec{v^2}][\delta(c_1,\texttt{x}) \mapsto \vec{v^1}]\right).\texttt{x}
+        \\ = \left(\bracbb{c_1}~\pkt'[\fvs(b),\delta(c_2,\texttt{x})
+        \mapsto \vec{v^b}, \vec{v^2}][\delta(c_1,\texttt{x}) \mapsto \vec{v^1}]\right).\texttt{x}
+        \\ \multicolumn 1 r {\text{by IH}(c_1)}
+      \end{array}
+    \]
+  \item[$(c;c')$] Let $\pkt, \pkt'$ be packets.
+    Let
+    \begin{align*}
+      \pkt_z &= \pkt[\texttt{z} \mapsto v_z \mid \texttt z \in \delta(c, \texttt y), \texttt y \in \delta(c', \texttt{x})] \\
+      \pkt'_z &= \pkt'[\texttt{z} \mapsto v_z\mid \texttt z \in \delta(c, \texttt y), \texttt y \in \delta(c', \texttt{x})]\\
+      \pkt_c &= \bracbb{c}~\pkt_z \\
+      \pkt'_c &= \bracbb{c}~\pkt'_z 
+    \end{align*}
+    Then by IH$(c)$, $\forall y \in \delta(c', \texttt{x})$,
+    \[\pkt_c.\texttt{y} = v_y = \pkt'_c.\texttt{y}\]
+    which gives us the facts that
+    \begin{align*}
+      \pkt_c &= \pkt_c[\texttt{y} \mapsto v_y \mid y \in \delta(c', \texttt{x})]\\
+      \pkt'_c &= \pkt'_c[\texttt{y} \mapsto v_y \mid y \in \delta(c', \texttt{x})]
+    \end{align*}
+    So by IH$(c')$ conclude that 
+    \[(\bracbb{c'}~\pkt_c).\texttt{x} = (\bracbb{c'}~\pkt'_c).\texttt{x}\]
+  \end{enumerate}
+\end{proof}  
+
+\begin{proposition}[$\Delta$-Domination]
+  \label{prop:Delta-dom}
+  Given a set of deterministic, total commands $A$, and a set of keys
+  $G \subset \Var$, then for $\vec{v} \in \vec{V}$ for
+  $\{V_1, \ldots, V_n\} = \Delta(A,G)$, and every $\texttt{g} \in G$, for every
+  $\pkt, \pkt \in \Pkt$,
+  $\bracbb{A}~\left(\pkt[\vec V \mapsto \vec v]\right).\texttt{g} =
+  \bracbb{A}~\left(\pkt'[\vec V \mapsto \vec v]\right).\texttt{g}$.
 \end{proposition}
 
-\begin{proof} By induction on $a \in A$.  \todo[inline]{Finish Proof}
+\begin{proof}
+  By defintion
+  \begin{align*}
+    \bracbb{A}~\left(\pkt[\vec V \mapsto \vec v]\right) &= \{\bracbb{a}~\pkt[\vec V \mapsto \vec v] | a \in A\} \\
+    \bracbb{A}~\left(\pkt'[\vec V \mapsto \vec v]\right) &= \{\bracbb{a}~\pkt'[\vec V \mapsto \vec v] | a \in A\} \\
+  \end{align*}
+
+  So we only need to show for every $a \in A$, that
+  $\bracbb{a}~\pkt[\vec V \mapsto \vec v] = \bracbb{a}~\pkt'[\vec V
+  \mapsto \vec v] $.
+
+  Let $a \in A$. By definition, since $a \in A$ and
+  $\texttt{g} \in G$, observe that
+  $\delta(a,\texttt{g}) \in \Delta(A,G)$. So, we can partition
+  $\vec V$ and $\vec v$ into $(\vec{U}, \vec W)$ and
+  $(\vec u, \vec w)$ respectively, where $u_i \in U_i$ and
+  $U_i \in \delta(a,g)$ and $w_i \in W_i$ and $W_i \not\in
+  \delta(a,g)$. Then, since $\vec{U}$ and $\vec W$ are disjoint,
+  \begin{align*}
+    \bracbb{a}~\pkt[\vec V \mapsto \vec v] &= \bracbb{a}~\pkt[W\mapsto\vec{w}][U \mapsto\vec{u}]\\
+    \bracbb{a}~\pkt'[\vec V \mapsto \vec v] &= \bracbb{a}~\pkt'[W\mapsto\vec{w}][U \mapsto\vec{u}]
+  \end{align*}
+
+  The result follows by Lemma~\ref{lem:delta-dom}.
+  
 \end{proof}
+
 
 \begin{figure}[tpb]
   \[\begin{array}{ccl}
@@ -328,18 +453,23 @@ after running $A$. We characterize $\Delta(A,G)$ in two properties.
       && \hspace{.5em}
          \mid \sigma \in S, \tau \in T, (F,A) = s, (G,B) = t \\
       && \hspace{1em}
-         d \in D = \Delta(A, G),\\
+         d \in D = \Delta(A, G), Q = D \cap F\\
       && \hspace{1em}
-         \tau.G = \bracbb{\sigma.A}~[D \mapsto d]
+         \tau.G = \bracbb{\sigma.A}~[D \mapsto d]\\
+      && \hspace{1em}
+         d.Q = \sigma.Q
          \}\\        
       \decomp s t R
       & \triangleq
       & (\{(\rho.F,\rho.A) \mid \rho \in R, s = (F,A)\} \\
-      && , \{(p.G, \rho.B) \mid \rho \in R, (F,A) = s, (G,B) = t \\
-      && \hspace{.5em}
-         D = \Delta(A,G) \\
-      && \hspace{.5em}
-         p = \bracbb{\rho.A}~[D \to \rho.D] \} )
+      && , \{(p.G, \rho.B) \\
+      && \hspace{.5em} \mid \rho \in R, (F,A) = s, (G,B) = t, \\
+      && \hspace{1em}
+         D = \Delta(A,G), Q = D \cap F, \\
+      && \hspace{1em}
+         p = \bracbb{\rho.A}~[D \to \rho.D],\\
+      && \hspace{1em} d.Q = \sigma.Q
+         \} )
     \end{array}
   \]  
   \caption{Table Composition ($\compose{s}{t}$), relation
@@ -376,8 +506,9 @@ $\pi_t(R)$. We want to prove that these operators commute.
         \rho = (\sigma.F, d, \sigma.A, \tau.B)\\
         \text{for some } \sigma \in \pi_s(R)\\
         \phantom{\text{for some }}\tau \in \pi_t(R)\\
-        \phantom{\text{for some }}d \in \Delta(A, G),\\
-        \text{such that } \tau.G = \bracbb{\sigma.A}~[\Delta(A,G) \mapsto d]
+        \phantom{\text{for some }}d \in \Delta(A, G), Q = \Delta(A,G) \cap F\\
+        \text{such that } \tau.G = \bracbb{\sigma.A}~[\Delta(A,G) \mapsto d] \\
+        \phantom{\text{such that }} d.Q = \sigma.Q
       \end{array} \]
 
     Further, we know that
@@ -389,7 +520,8 @@ $\pi_t(R)$. We want to prove that these operators commute.
     and
     \[\begin{array}l  
         \tau = (g, \rho_t.B) \\
-        \text{such that } g = (\bracbb{\rho_t.A}~[\Delta(A,G) \mapsto \rho_t.\Delta(A,G)]).G
+        \text{such that } g = (\bracbb{\rho_t.A}~[\Delta(A,G) \mapsto \rho_t.\Delta(A,G)]).G \\
+        \phantom{\text{such that }}\rho_t.\Delta(A,G).Q = \rho_t.F.Q
       \end{array}\]
 
     Composing these definitions, we get that
@@ -397,7 +529,9 @@ $\pi_t(R)$. We want to prove that these operators commute.
         \rho = (\rho_s.F, d, \rho_s.A, \rho_t.B) \\
         \text{where } d \in \Delta(A, G)\\
         \phantom{\text{where }} g = (\bracbb{\rho_s.A}~[\Delta(A,G) \mapsto d]).G\\
-        \phantom{\text{where } g} = (\bracbb{\rho_t.A}~[\Delta(A,G) \mapsto \rho_t.\Delta(A,G)]).G
+        \phantom{\text{where } g} = (\bracbb{\rho_t.A}~[\Delta(A,G) \mapsto \rho_t.\Delta(A,G)]).G \\
+        \phantom{\text{where }} d.Q = \rho_s.F.Q \\
+        \phantom{\text{where }} \rho_t.\Delta(A,G).Q = \rho_t.F.Q 
       \end{array}\]
     
   \end{enumerate}
@@ -407,23 +541,26 @@ $\pi_t(R)$. We want to prove that these operators commute.
   that \[(\rho_s.F, d, \rho_s.A, \rho_s.B) \in R\]
 
   Since $R$ is total, and $F \longrightarrow A$, we know that there is
-  some $(\rho_s.F, d, \rho_s.A, b) \in R$. Then, the facts that
+  some $(\rho_s.F, d, \rho_s.A, b) \in R$. It is sufficient to show
+  that $b = \rho_s.B$.  The facts that
   $g = (\bracbb{\rho_s.A}~[\Delta(A,G) \mapsto d]).G =
   (\bracbb{\rho_t.A}~[\Delta(A,G) \mapsto \rho_t.\Delta(A,G)]).G$, and
-  $\rho_t \in R$ mean that $b = \rho_s.B$, and we're done. \hfill \checkmark
+  $\rho_t \in R$, combine with the constraint
+  $\bracbb{A}(\Delta(A,G)).G \to B$ to prove $b = \rho_s.B$, and we're
+  done. \hfill \checkmark
 
 \item[$(\supseteq)$] Let $\rho \in R$, subject to $\Phi_r$, to show
   that $\rho \in \pi_s(R) \bowtie_{s,t} \pi_t(R)$.
 
   We know that $(\rho.F, \rho.A) \in \pi_s(R)$, and further
   \[(\bracbb{\rho.A}[\Delta(A,G) \mapsto \rho.\Delta(A,G)],\rho.B) \in
-  \pi_t(R).\]
+    \pi_t(R)\]
+  and \[\rho.F.Q = \rho.\Delta(A,G).Q.\]
 
   Then, by definition
   $(\rho.F, d, \rho.A, \rho.B) \in \pi_s(R) \bowtie_{s,t} \pi_t(R)$ when
   \[\bracbb{\rho.A}[\Delta(A,G) \mapsto \rho.\Delta(A,G)]
-    = \bracbb{\rho.A}[\Delta(A,G) \mapsto d].\]
-
+    = \bracbb{\rho.A}[\Delta(A,G) \mapsto d]\] and \[\rho.F.Q = d.Q.\]
   Since this is the case for $d = \rho.\Delta(A,G)$, conclude
   \[(\rho.F, \rho.\Delta(A,G), \rho.A, \rho.B) \in \pi_s(R)
     \bowtie_{s,t} \pi_t(R).\]
@@ -447,31 +584,30 @@ $\pi_t(R)$. We want to prove that these operators commute.
     $\tau \in \pi_t(S \bowtie_{s,t} T)$, to show that $\sigma \in S$
     and $\tau \in T$.
 
-    Now show that $\sigma \in S$ and $\tau \in T$. We know further
-    that
-    $\tau = (\bracbb{\rho.A}[\Delta.(A,G) \mapsto \rho.\Delta(A,G)],
-    \rho.B)$. Again, by definition we compute that there are some
-    $\sigma' \in S$ and $\tau' \in T$ such that
+    Now show that $\sigma \in S$ and $\tau \in T$. We know that there is a $\rho \in S \bowtie_{s,t} T$ such that
+    \[\tau = (\bracbb{\rho.A}[\Delta.(A,G) \mapsto \rho.\Delta(A,G)],
+      \rho.B),\] and \[\rho.F.Q = \rho.\Delta(A,G).Q.\] By definition,
+    there are $\sigma' \in S$ and $\tau' \in T$ such that
     $(\rho.F,\rho.A) = \sigma'$, and
     $\tau' = (\bracbb{\rho.A}[\Delta.(A,G) \mapsto \rho.\Delta(A,G)],
-    \rho.B)$. Conclude that $\tau = \tau'$ and $\sigma = \sigma'$. \hfill \checkmark
+    \rho.B)$. Conclude that $\tau = \tau'$ and $\sigma =
+    \sigma'$. \hfill \checkmark
 
   \item[$(\supseteq)$] Let $\sigma \in S$ and $\tau \in T$, to show
     that $\sigma \in \pi_s(S \bowtie_{s,t}T)$, and
     $\tau \in \pi_t(S \bowtie_{s,t} T)$.  Then we know that there is
     $\rho \in S\bowtie_{s,t}T$ such that $\rho.FA = \sigma$,
     $\rho.B = \tau.B$, and
-    $\tau.G = \bracbb{\rho.A}[\Delta(A,G) \mapsto \rho.\Delta(A,G)]$.
-    Finally, we have $\sigma' \in \pi_s(S \bowtie_{s,t}T)$ and
+    $\tau.G = \bracbb{\rho.A}[\Delta(A,G) \mapsto \rho.\Delta(A,G)]$
+    with $\rho.F.Q = \rho.\Delta(A,G).Q$.  Finally, we have
+    $\sigma' \in \pi_s(S \bowtie_{s,t}T)$ and
     $\tau' \in \pi_t(S \bowtie_{s,t} T)$ such that
     $\sigma' = \rho.FA$, $\tau'.B = \tau.B$, and
     $\tau'.\Delta(A,G) = \bracbb{\rho.A}~[\Delta(A,G) \mapsto
-      \rho.\Delta(A,G)]$. Conclude that $\sigma = \sigma'$ and $\tau = \tau'$. \hfill \checkmark
+    \rho.\Delta(A,G)]$. Conclude that $\sigma = \sigma'$ and
+    $\tau = \tau'$. \hfill \checkmark
   \end{enumerate}
 \end{proof}
-
-\todo[inline]{What happens if $\Delta(A,G) \cap F \neq \emptyset$?}
-
 
 \begin{theorem}[Composition Functional Equivalence]
   \label{thm:comp-func-equiv}
@@ -485,7 +621,7 @@ $\pi_t(R)$. We want to prove that these operators commute.
   populating $t$.
   %
   Let $\pkt$ be an aribtrary packet. Then, since $S$ is total, there
-  is some rule $\sigma \in S$ such that \[\pkt.F = \sigma.F\]. Further, we
+  is some rule $\sigma \in S$ such that \[\pkt.F = \sigma.F.\] Further, we
   know that we will execute actions $\sigma.A$, to get
   \[\pkt' = \bracbb{\sigma.A}~\pkt.\] Now, since $T$ is total, we know
   that there is some $\tau \in T$ such that \[\pkt'.G = \tau.G.\]
@@ -497,14 +633,15 @@ $\pi_t(R)$. We want to prove that these operators commute.
       \qquad\quad \rho.F = \sigma.F = \pkt.F\\
       \qquad\quad \rho.A = \sigma.A \\
       \qquad\quad \tau.B = \rho.B \\
-      \qquad\quad \bracbb{\sigma.A}[\Delta(A,G) \mapsto \rho.\Delta(A,G)] =\tau.G \bigg\}
+      \qquad\quad (\bracbb{\sigma.A}[\Delta(A,G) \mapsto \rho.\Delta(A,G)]).G =\tau.G \bigg\}
     \end{array}\]
 
-  Since $\bracbb{\sigma.A}~\pkt = \tau.G$, then by the $\Delta$-lemma
-  there is some $\rho \in R$ such that $\pkt.F = \rho.F$ and
-  $\pkt.\Delta(A,G) = \rho.\Delta(A,G)$. Since $\rho.A = \sigma.A$ and $\rho.B = \sigma.B$, conclude
-  $\bracbb{\rho.B}\left(\bracbb{\rho.A}~\pkt\right) = \pkt''$, we're done.
-    \todo[inline]{Prove the delta lemma}
+  Since $(\bracbb{\sigma.A}~\pkt).G = \tau.G$, then by
+  Proposition~\ref{prop:Delta-dom} there is some $\rho \in R$ such
+  that $\pkt.F = \rho.F$ and $\pkt.\Delta(A,G) =
+  \rho.\Delta(A,G)$. Since $\rho.A = \sigma.A$ and
+  $\rho.B = \sigma.B$, conclude that
+  \[\bracbb{\rho.B}\left(\bracbb{\rho.A}~\pkt\right) = \pkt''.\]
 \end{proof}
 
 
@@ -522,3 +659,25 @@ $\pi_t(R)$. We want to prove that these operators commute.
   Theorem~\ref{thm:comp-func-equiv} setting $S = \pi_s(T)$ and
   $T=\pi_t(R)$.
 \end{proof}
+
+
+\subsection{The Algorithm}
+
+The goal is, given two sequences of tables $t_1;\cdots;t_n$ (logical) and
+$s_1;\cdots;s_m$ (physical) compute a function
+$f(T_1,\ldots,T_n) = (S_1,\ldots,S_m)$, where $T_i$ populates $t_i$,
+and $S_i$ populates $s_i$ such that
+$\bracbb{T_1;\cdots;T_n} = \bracbb{S_1;\cdots;S_m}$. Heres how we do it:
+\begin{itemize}
+\item Compute
+  \begin{align*}
+    ((F,A),\Phi_t) &= t_1 \circ \cdots \circ t_n\\
+    ((G,B),\Phi_s) &= s_1 \circ \cdots \circ s_m
+  \end{align*}
+\item Notice that $A = A_1\times \cdots \times A_k $ and
+  $B = B_1 \times \cdots \times B_l$.
+\item For each $A_k$,Guess a projection $P_k$ of $B$ such that .....
+\end{itemize}
+
+
+
