@@ -1,0 +1,53 @@
+(set-option :fixedpoint.engine datalog)
+(define-sort SrcAddr () (_ BitVec 2))
+(define-sort DstAddr () (_ BitVec 2))
+(define-sort ActId () (_ BitVec 1))
+(declare-fun Logical (SrcAddr DstAddr) ActId)
+(declare-fun Real (DstAddr) ActId)
+
+;; Dst -> ActId
+
+(declare-fun logFD (DstAddr) ActId)
+(declare-fun reaFD (DstAddr) ActId) 
+(declare-fun fAct (SrcAddr DstAddr ActId) ActId)
+(declare-fun fDst (SrcAddr DstAddr ActId) DstAddr)
+
+
+(assert (forall ((s SrcAddr) (d DstAddr) (a ActId))
+		(=> (= (Logical s d) a) (= (logFD d) a))))
+
+(assert (forall ((d DstAddr) (a ActId))
+		(=> (= (Real d) a) (= (reaFD d) a))))
+
+(assert (forall ((srcKey SrcAddr) (srcIn SrcAddr) (srcOut SrcAddr) (a ActId)
+		 (dstKey DstAddr) (dstIn DstAddr) (dstOut DstAddr)
+		 )
+		(=> (= (Logical srcKey dstKey) a)
+		    (= (Real (fDst srcKey dstKey a)) (fAct srcKey dstKey a))
+		    (= (and (= srcIn srcKey)
+			    (= dstIn dstKey)
+			    (= srcIn srcOut)
+			    (= dstIn dstOut)			       
+			    (= #b0 a))
+		       (and (= dstIn (fDst srcKey dstKey a))
+			    (= dstIn dstOut)
+			    (= srcIn srcOut)
+			    (= #b0 (fAct srcKey dstKey a)))))))
+
+(assert (forall ((srcKey SrcAddr) (srcIn SrcAddr) (srcOut SrcAddr) (a ActId)
+		 (dstKey DstAddr) (dstIn DstAddr) (dstOut DstAddr)
+		 )
+		(=> (= (Logical srcKey dstKey) a)
+		    (= (Real (fDst srcKey dstKey a)) (fAct srcKey dstKey a))
+		    (= (and (= srcIn srcKey)
+			    (= dstIn dstKey)
+			    (= srcIn srcOut)
+			    (= dstIn dstOut)			       
+			    (= #b1 a))
+		       (and (= dstIn (fDst srcKey dstKey a))
+			    (= dstIn dstOut)
+			    (= srcIn srcOut)
+			    (= #b1 (fAct srcKey dstKey a)))))))
+
+(check-sat)
+(get-model)

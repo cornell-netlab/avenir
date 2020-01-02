@@ -1,5 +1,5 @@
-\newcommand{\angel}{\talloblong}
-\newcommand{\Angel}{\bigsqcup}
+\DeclareMathOperator*{\angel}{\left[\!\right]}%%\raisebox{-1.5pt}{\vstretch{1.8}{\square}}}
+\DeclareMathOperator*{\Angel}{\scalerel*{\raisebox{-1.5pt}{\vstretch{1.8}{\square}}}{\sum}}
 \newcommand{\assert}[1]{\ensuremath{\mathsf{assert}\; #1\;}}
 \newcommand{\assume}[1]{\ensuremath{\mathsf{assume}\; #1\;}}
 \newcommand{\concat}{\ensuremath{++}}
@@ -7,17 +7,36 @@
 \newcommand{\FALSE}{\ensuremath{0}}
 \newcommand{\apply}[1]{\ensuremath{\mathsf{apply}(#1)}}
 \renewcommand{\wp}{\ensuremath{\mathit{wp}}}
+\renewcommand{\sp}{\ensuremath{\mathit{sp}}}
 \newcommand{\parenbb}[1]{\ensuremath{\llparenthesis\, #1\, \rrparenthesis}}
 \newcommand{\bracbb}[1]{\ensuremath{\llbracket\,#1\,\rrbracket}}
 \newcommand{\hole}{\ensuremath{\text{\textquestiondown}}}
 \newcommand{\keys}[1]{\ensuremath{\mathsf{keys}(#1)}\xspace}
 \newcommand{\actions}[1]{\ensuremath{\mathsf{actions}(#1)}\xspace}
+\newcommand{\acts}[1]{\actions{#1}}
 \newcommand{\default}[1]{\ensuremath{\mathsf{default}(#1)}\xspace}
 \newcommand{\name}[1]{\ensuremath{\mathsf{name}(#1)}}
 \newcommand{\Edit}{\ensuremath{\mathsf{Edit}}}
 \newcommand{\Expr}{\ensuremath{\mathsf{Expr}}}
+\newcommand{\Cmd}{\ensuremath{\mathsf{Cmd}}}
 \newcommand{\Name}{\ensuremath{\mathsf{Name}}}
 \newcommand{\Config}{\ensuremath{\mathsf{Config}}}
+\newcommand{\Var}{\ensuremath{\mathsf{Var}}}
 \newcommand{\pkt}{\ensuremath{\mathit{pkt}}}
 \newcommand{\Pkt}{\ensuremath{\mathsf{Pkt}}}
 \newcommand{\fvs}{\ensuremath{\mathit{fvs}}}
+\newcommand{\Tables}[1]{\ensuremath{\mathsf{Tables}({#1})}}
+\newcommand{\tablify}[1]{\ensuremath{\mathsf{tablify}{(#1)}}}
+\newcommand{\oneify}{\ensuremath{\mathsf{oneify}}}
+\newcommand{\manyify}{\ensuremath{\mathsf{manyify}}}
+\newcommand{\simplify}{\ensuremath{\mathsf{simplify}}}
+\newcommand{\compose}[2]{\ensuremath{#1 \circ #2}}
+\newcommand{\relcomp}[4]{\ensuremath{#3 \mathrel{\bowtie_{#1,#2}}  #4}}
+\newcommand{\decomp}[3]{\ensuremath{\pi_{#1,#2}(#3)}}
+\newcommand{\fst}{\ensuremath{\mathsf{fst}}}
+\newcommand{\snd}{\ensuremath{\mathsf{snd}}}
+\newcommand{\SKIP}{\ensuremath{\mathsf{skip}}}
+\newcommand{\nop}{\ensuremath{\mathsf{nop}}}
+\newcommand{\ifte}[3]{\ensuremath{\mathsf{if}~(#1)~\{#2\}~\{#3\}}}
+\newcommand{\Impl}{\ensuremath{\mathsf{Impl}}}
+\newcommand{\dom}{\ensuremath{\mathrm{dom}}}

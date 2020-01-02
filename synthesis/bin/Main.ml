@@ -60,21 +60,22 @@ let encode_cmd : Command.t =
 module EditCheck = struct
   let spec = Command.Spec.(
       empty
-      +> flag "-d" no_arg ~doc:"dry-run-mode: Output the Z3 query"
+      +> flag "-d" no_arg ~doc:"dry-run-mode: Output the instrumented programs"
       +> flag "-n" (required int) ~doc:"The number of concrete edits"
       +> flag "-t" (required string) ~doc:"The logical table to edit"
       +> anon ("logical" %: string)
       +> anon ("concrete" %: string))
    
 
-  let run (_:bool) n name logical_fp concrete_fp () =
+  let run (d:bool) n name logical_fp concrete_fp () =
     let log_cmd = parse_file logical_fp in
     let real_cmd = parse_file concrete_fp in
-    ignore(Synthesis.check_add n name log_cmd real_cmd)
-
-        
-        
-
+    if d then begin
+        Printf.printf "Logical: \n %s \n%!" (Ast.string_of_cmd (Synthesis.base_translation log_cmd));
+        Printf.printf "Real : \n %s \n %!" (Ast.string_of_cmd (Synthesis.base_translation real_cmd));
+        Printf.printf "ADD1 to Logical:\n %s\n%!" (Ast.string_of_cmd (snd (Synthesis.add_symbolic_row name log_cmd)));
+        Printf.printf "ADD<N to Concrete:\n %s \n%!" (Ast.string_of_cmd (Synthesis.concretely_instrument n real_cmd))
+      end else ignore(Synthesis.check_add n name log_cmd real_cmd)
 end
   
 let editCheck : Command.t =
@@ -82,7 +83,40 @@ let editCheck : Command.t =
     ~summary: "Check whether there exist `n` outputs that implement an edit"
     EditCheck.spec
     EditCheck.run
+
+module EditSynth = struct
+  let spec = Command.Spec.(
+      empty
+      +> flag "-d" no_arg ~doc:"dry-run-mode: Output the Z3 query"
+      +> flag "-n" (required int) ~doc:"The number of functions"
+      +> flag "-t" (required string) ~doc:"The logical table to edit"
+      +> anon ("logical" %: string)
+      +> anon ("concrete" %: string))
+   
+
+  let run (d:bool) numFs name logical_fp concrete_fp () =
+    let log_cmd = parse_file logical_fp in
+    let real_cmd = parse_file concrete_fp in
+    if d then begin
+        let open Ast in
+        let open Synthesis in
+        let (_, logAdd1_cmd) = add_symbolic_row name log_cmd in
+        Printf.printf "Logical: \n %s \n%!" (string_of_cmd (base_translation log_cmd));
+        Printf.printf "Real : \n %s \n %!" (string_of_cmd (base_translation real_cmd));
+        Printf.printf "ADD1 to Logical:\n %s\n%!" (string_of_cmd logAdd1_cmd);
+        Printf.printf "ADD<N to Concrete:\n %s \n%!"
+          (string_of_cmd (edit_synth_real_inst ~numFs ~setSize:1 real_cmd))          
+      end
+    else
+      ignore(Synthesis.synth_add numFs name log_cmd real_cmd)
+end
   
+let editSynth : Command.t =
+  Command.basic_spec
+    ~summary: "Produce a function that transforms edits"
+    EditSynth.spec
+    EditSynth.run
+    
 
 
 module WeakestPrecondition = struct
@@ -111,9 +145,10 @@ let wp_cmd : Command.t =
 let main : Command.t =
   Command.group
     ~summary:"Invokes the specified Motley Command"
-    [ ("synthesize", synthesize_cmd)
-    ; ("encodep4", encode_cmd)
+    [ ("inst-synth", synthesize_cmd)
+    ; ("encode-p4", encode_cmd)
     ; ("edit-check", editCheck)
+    ; ("edit-synth", editSynth)
     ; ("wp", wp_cmd)]
     
 let () = Command.run main

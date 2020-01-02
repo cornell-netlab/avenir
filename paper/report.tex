@@ -66,13 +66,14 @@
 \usepackage{enumitem}
 \usepackage{graphicx}
 \usepackage{multirow}
+\usepackage{scalerel}
 %% \usepackage{makecell}
 \input{macros}
 
 \begin{document}
 
 %% Title information
-\title[Hyena/Motley/Forsythia/Venus]{Verification and Synthesis of Hybrid Networks}         %% [Short Title] is optional;
+\title[Cygnet]{Cygnet: Verification and Synthesis of Hybrid Networks}         %% [Short Title] is optional;
                                         %% when present, will be used in
                                         %% header instead of Full Title.
 %% \titlenote{with title note}             %% \titlenote is optional;
@@ -185,6 +186,8 @@ Text of abstract \ldots.
 \input{1_intro}
 \input{2_background}
 \input{3_system}
+% \input{3_0_syntactic_transforms}
+\input{3_1_relational_approach}
 
 
 %% Acknowledgments
@@ -209,9 +212,10 @@ Text of abstract \ldots.
 %\bibliography{bibfile}
 
 
+\clearpage
 %% Appendix
-% \appendix
-% \section{Appendix}
+\appendix
+\input{examples}
 
 % Text of appendix \ldots
 

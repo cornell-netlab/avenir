@@ -28,8 +28,9 @@
         & \mid & \FALSE & \textsc{Falsity} \\
         & \mid & b \wedge b & \textsc{Conjunction} \\
         & \mid & b \vee b & \textsc{Disjunction} \\
-        & \mid & \neg b & \textsc{Negation} \\
-        & \mid & e = e & \textsc{Equalityg} \\
+
+        & \mid & \neg b & \textsc{Negation} \\ 
+        & \mid & e = e & \textsc{Equality} \\
         & \mid & e \in X & \textsc{Membership} \\
       \multicolumn 3 l{\textit{Sets}} \\
       X &::=& \emptyset & \textsc{Empty} \\
@@ -57,6 +58,18 @@
 
   \caption{Tables}
   \label{fig:tables}
+\end{figure}
+
+\begin{figure}[ht]
+  \[\begin{array}{lcl}
+      \ifte b {c_1} {c_2} & \triangleq & \assume b;c_1 \angel \assume {\neg b}; c_2 \\
+      \SKIP & \triangleq& \assume \TRUE \\
+      \nop & \triangleq & \assert \TRUE
+    \end{array}
+  \]
+  \caption{Syntactic Sugar. A command is called \emph{deterministic
+      and total} if it is only constructed from assignment, sequence
+    and the above operators}
 \end{figure}
 
 \begin{figure}[ht]
@@ -478,6 +491,20 @@ for a given model size $n$. That is, \emph{for every logical edit $\rho$, does
   there exists a sequence of exactly $n$ concrete edits $\rho_1, \ldots, \rho_n$
   that produce equivalent changes}?
 
+\begin{example}
+  Bounded Model Checking is tricky to do correctly, because a single
+  logical edit can require many concrete edits. Consider a logical program
+  \[\begin{array}{l}
+      \apply{l, \langle  \texttt{dst} \rangle, \langle \underline{\texttt{op} := 1}, \texttt{op} := 0 \rangle}
+    \end{array}
+  \]
+  and a concrete program
+  \[\apply{r, \langle \texttt{src}, \texttt{dst} \rangle, \langle \underline{\texttt{op} := 1}, \texttt{op} := 0 \rangle}.\]
+  
+  A function $f$ that maps logical edits into concrete edits, requires
+  $|\texttt{src}|$ concrete edits for every logical edit.
+\end{example}
+
 To lift this to a synthesis problem, called $\textsc{EditSynth}[n]$ for a given
 $n$, we will instead synthesize a sequence of $n$ functions
 $f_i : \Edit \to \Edit$, each producing a single $\rho$, such that applying the
@@ -502,7 +529,7 @@ symbolic encoding that allows for symbolic (or concrete) edits to be inserted.
       \parenbb{\assume b}_\tau^{\vec\rho}
       && \assume b\\
       \parenbb{\apply {s,\vec k, \vec c, c_d}}_\tau^{\vec\rho}
-      && \Angel_{c_i}\mathsf{matchDel}(\tau, \vec\rho, s, c_i) \\
+      && \displaystyle \Angel_{c_i}\mathsf{matchDel}(\tau, \vec\rho, s, c_i) \\
       \multicolumn 2 l {} & \angel \mathsf{newMatches}(\vec\rho, \vec k, s, \vec c) \\
       \multicolumn 2 l {} & \angel \mathsf{newDefault}(\tau, \vec\rho, \vec k,s, \vec c, c_d)\end{array}\]
   \[\begin{array}{r c l}
@@ -514,7 +541,7 @@ symbolic encoding that allows for symbolic (or concrete) edits to be inserted.
       &;&c_i \\
       \mathsf{newMatches}(\vec\rho, \vec k, s, \vec c)
       &\triangleq
-      &\Angel_{(+,s,\vec e, i) \in \rho} \assume {\vec k = \vec e}; c_i \\
+      &\displaystyle \Angel_{(+,s,\vec e, i) \in \rho} \assume {\vec k = \vec e}; c_i \\
       \mathsf{newDefault}(\tau, \vec\rho,\vec k, s, \vec c, c_d) &\triangleq& \assume \bigwedge_{c_i}k\not\in M_i(\tau_s) \\
       && \qquad\;\;\vee \bigvee_{(-,s,\vec e, i) \in \rho} \vec k = \vec e\\
       &;& c_d
@@ -558,3 +585,6 @@ to $\textsc{EditSynth}[n](\rho_c)$. \todo[inline]{widening? Narrowing?}
 \paragraph{Step 3: Produce $f$} Once we've synthesized the collection of
 $f_1, \ldots, f_n$, we can produce $f = \textsc{EditSynth}()$ by setting
 \[f(\rho) = \{f_1(\rho), \ldots, f_n(\rho)\}\]
+
+
+\todo[inline]{well that didn't work, Z3 complained at the nested quantifiers}

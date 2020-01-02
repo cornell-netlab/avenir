@@ -57,6 +57,7 @@ let rec split_test_on_loc test =
   | LocEq l -> (Some l, True)
   | Eq (v, v') -> (None, mkEq v v')
   | Lt (v, v') -> (None, mkLt v v')
+  | Member (v, set) -> (None, Member (v, set))
   | Neg _ -> (None, test)
   | And (a, b) ->
      let loc_opt_a, test_a = split_test_on_loc a in
@@ -197,10 +198,12 @@ let all_locations graph : int list =
 let get_all_paths graph =
   let nodes = all_locations graph in
   let all_endpoints = List.cartesian_product nodes nodes in
-  concatMap all_endpoints ~c:(@)
+  concatMap all_endpoints
+    ~init:(Some [])
+    ~c:(@)
     ~f:(fun (src, dst) ->
         get_all_paths_between graph src dst
-      )
+    )
 
 let get_edges (graph:graph) src dst =
   Printf.printf "[LOG] looking for edge from %d to %d\n%!" src dst;

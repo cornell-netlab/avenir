@@ -8,9 +8,9 @@ while (~ (loc = 4 || loc = 5 || loc = 6 || loc = 7 || loc = 99)) {
     loc = 0 && d = 104 -> loc := 1; h1 := ?__104_h1 ; h2 := ?__104_h2 []
     loc = 1 && h1 = 0 -> loc := 2 []
     loc = 1 && h1 = 1 -> loc := 3 []
-    loc = 2 && h1 = 0 -> loc := 4 []
-    loc = 2 && h1 = 1 -> loc := 5 []
-    loc = 3 && h1 = 0 -> loc := 6 []
-    loc = 3 && h1 = 1 -> loc := 7 []
+    loc = 2 && h2 = 0 -> loc := 4 []
+    loc = 2 && h2 = 1 -> loc := 5 []
+    loc = 3 && h2 = 0 -> loc := 6 []
+    loc = 3 && h2 = 1 -> loc := 7 []
   fi
 }

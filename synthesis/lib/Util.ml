@@ -9,7 +9,7 @@ open Core
 exception EmptyList of string
 let rec concatMap ?init:(init=None) ~f:(f: 'a -> 'b)  ~c:(c : 'b -> 'b -> 'b) (xs : 'a list) : 'b =
   match xs, init with
-  | [], None -> raise (EmptyList "called concatMap on an empty list")
+  | [], None -> failwith ("called concatMap on an empty list")
   | [], Some y -> y
   | [x], None -> f x
   | [x], Some y -> c (f x) y
@@ -34,4 +34,17 @@ let random_int_nin domain =
 let mkPair a b = (a, b)
 
 (** constructs a reversed pair from the arguments *)
-let mkRevPair b a = (a, b)                 
+let mkRevPair b a = (a, b)
+
+
+let rec difference (xs : 'a list) (ys : 'a list) : 'a list =
+  match xs,ys with
+  | [],_ | _,[] -> xs
+  | (x::xs'),_ ->
+     if List.exists ys ~f:((=) x) then
+       difference xs' ys
+     else
+       x :: difference xs' ys
+
+let log2 (x : int) : int =
+  int_of_float(Core.log (float_of_int x) /. Core.log (float_of_int 2))
