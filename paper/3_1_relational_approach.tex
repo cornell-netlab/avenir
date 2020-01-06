@@ -660,66 +660,106 @@ $\pi_t(R)$. We want to prove that these operators commute.
   $T=\pi_t(R)$.
 \end{proof}
 
-\subsection{The Algorithm}
+\subsection{An Algorithm for Instance Synthesis}
 
-\begin{figure}[tpbh]
-  \[
-    p \preceq q \overset{\triangle}{\iff}
-    p =_{\nabla(q)} q 
-  \]
-  \[p =_{S} q \overset\triangleq\iff \forall \pkt, \pi_S(\bracbb{p}~\pkt) = \pi_S(\bracbb{q}~\pkt)\]
-  \[\nabla(p) \triangleq \{\texttt x \in
-    \mathsf{Var} \mid \exists \pkt.~\pkt.\texttt x \neq
-    (\bracbb{p}~\pkt.\texttt x) \}\]
-  \caption{A specificity order on programs}
-  \label{fig:order}
-\end{figure}
+First, we present the online version of the algorithm, which, for a
+given logical table instantiation, produces a physical table
+instantiation that implements the same functionality.
 
-The goal is, given two sequences of tables $t_1;\cdots;t_n$ (logical)
-and $s_1;\cdots;s_m$ (physical) compute a function
-$f(T_1,\ldots,T_n) = (S_1,\ldots,S_m)$, where $T_i$ populates $t_i$,
-and $S_i$ populates $s_i$ such that
-$\bracbb{T_1;\cdots;T_n} = \bracbb{S_1;\cdots;S_m}$. Heres how we do
-it:
-\begin{itemize}
-\item Compute
-  \begin{align*}
-    ((F,A),\Phi_t) &= t_1 \circ \cdots \circ t_n\\
-    ((G,B),\Phi_s) &= s_1 \circ \cdots \circ s_m
-  \end{align*}
-\item Notice that $A = A_1\times \cdots \times A_k $ and
-  $B = B_1 \times \cdots \times B_l$.
+Formally, given one big logical table $s = (F, \vec A)$ with FDs $\Phi$ and
+one big physical table $t = (G, \vec B)$ with FDs $\Psi$, and a relation
+$S$ populating $s$ such that $S \models \Phi$, we want to compute a
+relation $T$ populating $t$ such that $\bracbb S = \bracbb T$, and $T
+\models \Psi$. 
 
-\item For each $A_i$ and each $a \in A_i$, define
-  \[\mathcal B_{a,k} \subseteq B_{1}\times \cdots \times B_{l},\]
-  Initialize $\mathcal B_{a,i}$ to $\emptyset$. Add every $\vec b$ to
-  $\mathcal B_{a,k}$ such that each $b_j = \Angel C_j$ where
-  $C_j \subseteq B_{a,k}$ and $\emptyset \neq C_j$, and
-  $b_1; \cdots ; b_l \preceq a$.
+Assume that $F$ is a candidate key for the table $s$. This means that
+for every $X$ such that $X \longrightarrow F\vec A$,
+$F \longrightarrow X$, and $|F| \leq |X|$. If it isn't, we can,
+equivalently replace $F$ with a candidate key, since the other values
+of $F$ will be determined by the candidate key.
 
-\item Compute attribute substitutions. For each $A_i$, $a \in A_i$,
-  and $\vec b \in \mathcal B_{a,i}$, then add $A_i \mapsto B_j$ to
-  $\sigma(i,a,b)$, for each $b_j \neq \Angel B_j$.
+Now, recall that the keys $F$ will be mapped injectively into $G$ via
+a map $\kappa : F \to G$. In other words, given a rule $\sigma \in S$,
+we will create an equivalent rule $\tau$ in $T$ such that if
+$\sigma.\texttt{x} \in F \cap G$, then
+$\tau.\texttt{x} = \sigma.\texttt{x}$, otherwise
+$\tau.\texttt{x} = *$.
 
-  Given a mapping $f_i: A_i \to B$, define $\sigma(f_i)$ to be
-  $\{A_i \mapsto B_j \mid b_j \neq B_j, \vec b \in f(A_i)\}$.
+Next, we map the actions. Each action sequence $\vec a$ has a
+candidate set $\hat\alpha(\vec a) \subseteq \vec B$ of physical
+actions, such that $\vec b \in \hat\alpha(\vec a)$ iff
+$\bracbb{b_1;\ldots;b_m} = \bracbb{a_1;\ldots;b_n}$. Now, there is a
+set of candidate relations $T_1,\ldots, T_k$ created by injecting the
+keys of $S$ into $t$, and selecting a candidate $\vec b$ from
+$\hat \alpha(\sigma.\vec A)$ for each $\sigma \in S$. By construction,
+for every $T_i$, $\bracbb{T_i} = \bracbb{S}$. We search through these
+candidate solutions $T_i$ until one of them satisfies $\Psi$.
 
-  As syntactic sugar for $\sigma(f_1)~\cdots~\sigma(f_n)$, write
-  $\sigma(f_1, \ldots, f_n)$.
+In the common case, we expect $|\hat\alpha(\vec a)|$ to be close to 1,
+so the search space is small. Further, we can precompute the candidate
+sets $\hat \alpha(\vec a)$ for every possible action so that all we
+need check at runtime are the functional dependencies.
 
-\item Search for a mapping $f: A \to B$ subject to two conditions:
-  \begin{itemize}
-  \item For each $(a_1,\ldots, a_k) \in A$, let $f(\vec a)$ be
-    $\vec{b}$ such that for every $a_i$, there exists a
-    $\vec{b'} \in \mathcal B_{a_i,i}$ such that
-    $\bracbb{b_1;\cdots;b_k} \subseteq \bracbb{b'_1;\cdots;b'}$. 
-  \item Let the map $f_i : A_i \to B$ select the corresponding
-    $\vec{b'}$, as above. Ensure
-    $\Phi_s\sigma(f_1,\ldots,f_k) \Rightarrow \Phi_t$.
-  \end{itemize}
+% \subsection{The Algorithm}
 
-\item Now $f$ indiciates a set of solutions. To select one, whenever
-  $f(a) = \vec b$ has a nondeterministic action $b_j = \Angel C$,
-  replace $b_j$ with an arbitrary element of $C$.
+% \begin{figure}[tpbh]
+%   \[
+%     p \preceq q \overset{\triangle}{\iff}
+%     p =_{\nabla(q)} q 
+%   \]
+%   \[p =_{S} q \overset\triangleq\iff \forall \pkt, \pi_S(\bracbb{p}~\pkt) = \pi_S(\bracbb{q}~\pkt)\]
+%   \[\nabla(p) \triangleq \{\texttt x \in
+%     \mathsf{Var} \mid \exists \pkt.~\pkt.\texttt x \neq
+%     (\bracbb{p}~\pkt.\texttt x) \}\]
+%   \caption{A specificity order on programs}
+%   \label{fig:order}
+% \end{figure}
 
-\end{itemize}
+% The goal is, given two sequences of tables $t_1;\cdots;t_n$ (logical)
+% and $s_1;\cdots;s_m$ (physical) compute a function
+% $f(T_1,\ldots,T_n) = (S_1,\ldots,S_m)$, where $T_i$ populates $t_i$,
+% and $S_i$ populates $s_i$ such that
+% $\bracbb{T_1;\cdots;T_n} = \bracbb{S_1;\cdots;S_m}$. Heres how we do
+% it:
+% \begin{itemize}
+% \item Compute
+%   \begin{align*}
+%     ((F,A),\Phi_t) &= t_1 \circ \cdots \circ t_n\\
+%     ((G,B),\Phi_s) &= s_1 \circ \cdots \circ s_m
+%   \end{align*}
+% \item Notice that $A = A_1\times \cdots \times A_k $ and
+%   $B = B_1 \times \cdots \times B_l$.
+
+% \item For each $A_i$ and each $a \in A_i$, define
+%   \[\mathcal B_{a,k} \subseteq B_{1}\times \cdots \times B_{l},\]
+%   Initialize $\mathcal B_{a,i}$ to $\emptyset$. Add every $\vec b$ to
+%   $\mathcal B_{a,k}$ such that each $b_j = \Angel C_j$ where
+%   $C_j \subseteq B_{a,k}$ and $\emptyset \neq C_j$, and
+%   $b_1; \cdots ; b_l \preceq a$.
+
+% \item Compute attribute substitutions. For each $A_i$, $a \in A_i$,
+%   and $\vec b \in \mathcal B_{a,i}$, then add $A_i \mapsto B_j$ to
+%   $\sigma(i,a,b)$, for each $b_j \neq \Angel B_j$.
+
+%   Given a mapping $f_i: A_i \to B$, define $\sigma(f_i)$ to be
+%   $\{A_i \mapsto B_j \mid b_j \neq B_j, \vec b \in f(A_i)\}$.
+
+%   As syntactic sugar for $\sigma(f_1)~\cdots~\sigma(f_n)$, write
+%   $\sigma(f_1, \ldots, f_n)$.
+
+% \item Search for a mapping $f: A \to B$ subject to two conditions:
+%   \begin{itemize}
+%   \item For each $(a_1,\ldots, a_k) \in A$, let $f(\vec a)$ be
+%     $\vec{b}$ such that for every $a_i$, there exists a
+%     $\vec{b'} \in \mathcal B_{a_i,i}$ such that
+%     $\bracbb{b_1;\cdots;b_k} \subseteq \bracbb{b'_1;\cdots;b'}$. 
+%   \item Let the map $f_i : A_i \to B$ select the corresponding
+%     $\vec{b'}$, as above. Ensure
+%     $\Phi_s\sigma(f_1,\ldots,f_k) \Rightarrow \Phi_t$.
+%   \end{itemize}
+
+% \item Now $f$ indiciates a set of solutions. To select one, whenever
+%   $f(a) = \vec b$ has a nondeterministic action $b_j = \Angel C$,
+%   replace $b_j$ with an arbitrary element of $C$.
+
+% \end{itemize}
