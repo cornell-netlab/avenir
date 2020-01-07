@@ -49,7 +49,8 @@ let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   | Eq (e,e') -> binope (equal_values1) e e'
   | Lt (e,e') -> binope (lt_values1) e e'
   | Member (e, set) -> member pkt_loc e set
-	 
+
+
 let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packet.located * (int list)) option =
   (* Printf.printf "\n###TRACE EVAL\nPROGRAM:\n%s\n\tPACKET: %s\n\tLOCATION: %s\n%!"
    *   (string_of_cmd cmd)
@@ -106,3 +107,9 @@ let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packe
       else 
         Some (pkt_loc, [])
     | Apply _ -> failwith "Cannot Evaluate table -- need configuration"
+
+
+let eval_act (act : cmd) (pkt : Packet.t) : Packet.t =
+  match trace_eval act (pkt, None) with
+  | None -> failwith "Ran out of gas -- but it's an action!?"
+  | Some ((pkt, _), _) -> pkt

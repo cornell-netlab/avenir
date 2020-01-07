@@ -85,3 +85,6 @@ let from_CE (model : value1 StringMap.t) : t =
 
         
         
+let mk_packet_from_list (assoc : (string * value1) list) : t =
+  List.fold assoc ~init:empty
+    ~f:(fun pkt (f, v) -> set_field pkt f v)

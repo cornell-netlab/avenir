@@ -48,3 +48,8 @@ let rec difference (xs : 'a list) (ys : 'a list) : 'a list =
 
 let log2 (x : int) : int =
   int_of_float(Core.log (float_of_int x) /. Core.log (float_of_int 2))
+
+let get_singleton_exn = function
+  | [] -> failwith "Cannot get a singleton from an empty list"
+  | [x] -> x
+  | _ -> failwith "Cannot get a singleton from a list with more than one element"
