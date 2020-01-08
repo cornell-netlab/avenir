@@ -1,20 +1,28 @@
 \section{Syntax and Semantics}
 
+Figure~\ref{fig:syntax} depicts the syntax of commands and
+actions. Useful syntactic sugar is presented in
+Figure~\ref{fig:sugar}. Finally, Figure~\ref{fig:semantics} depicts
+their semantics, notice that actions are deterministic and will always
+terminate, which means that for every action $a$, and for every packet
+$\pkt$, we can write $\bracbb{a}~\pkt = \{\pkt'\}$. For simplicity we
+will often omit the curly braces.
+
 
 \begin{figure}[ht]
   \[\begin{array}{l c l l}
-      \multicolumn{4}{l}{\textit{Commands}}\\
+      \multicolumn{4}{l}{\textit{Commands}~~(\Cmd)~~(\Action^*)}\\
       c & ::=& \\
-        & \mid & x := e & \textsc{Assignment}\\
-        & \mid & c;c & \textsc{Sequence} \\
-        & \mid & c \angel c & \textsc{Angelic Choice}\\
+        & \mid & \var x := e & \textsc{Assignment}^*\\
+        & \mid & c;c & \textsc{Sequence}^* \\
+        & \mid & c \angel c & \textsc{Demonic Choice}\\
         & \mid & \assert b & \textsc{Assertions} \\
         & \mid & \assume b & \textsc{Assumptions} \\
-        & \mid & \apply t & \textsc{Table Application}\\
-      \multicolumn{4}{l}{\textit{Expressions}} \\
+        & \mid & t & \textsc{Table Application}\\
+      \multicolumn{4}{l}{\textit{Expressions}~~(\Expr)} \\
       e & ::= & \\
         & \mid & v            & \textsc{BitVector} \\
-        & \mid & x            & \textsc{Field} \\
+        & \mid & \var x       & \textsc{Field} \\
         & \mid & e,e          & \textsc{Concatenation} \\
         & \mid & e \oplus e   & \textsc{Operation} \\
         & &  \multicolumn{2}{l}{\textit{where}\;\; \oplus \in \{+,-,\times, \div, \texttt{<<}, \texttt{>>} \}} \\
@@ -28,36 +36,22 @@
         & \mid & \FALSE & \textsc{Falsity} \\
         & \mid & b \wedge b & \textsc{Conjunction} \\
         & \mid & b \vee b & \textsc{Disjunction} \\
-
         & \mid & \neg b & \textsc{Negation} \\ 
         & \mid & e = e & \textsc{Equality} \\
-        & \mid & e \in X & \textsc{Membership} \\
-      \multicolumn 3 l{\textit{Sets}} \\
-      X &::=& \emptyset & \textsc{Empty} \\
-        & \mid & \{e\} & \textsc{Singleton}\\
-        & \mid & M & \textsc{Variable} \\
-        & \mid & X \cup X & \textsc{Union}\\
-     \multicolumn{2}{l}{\textit{Values}} & \textit{Fields}  & \textit{Variables}\\
-     \multicolumn{2}{l}{v \in \mathbbm{2}^+} & x \in \mathsf{Var}_1 & M \in \mathsf{Var}_2
+      \multicolumn 4 l {\textit{Tables}~~(\Table)}\\
+      t & ::= & (\vec{\var f}, \vec A, \Phi) & \textsc{Table Schema}\\
+      R & ::= & \{\overline{(\vec v, \vec a)}\} & \textsc{Table Instance} \\      
+      \multicolumn 4 l {\textit{Constraints}}\\
+      \Phi & ::= &\{\overline{\phi} \} & \textsc{Constraint Set}\\
+      \phi & ::= & \\
+        & \mid & b & \textsc{Boolean} \\
+        & \mid & \vec {\var x} \longrightarrow \vec A & \textsc{Functional Dependency}\\
+        & \mid & \bracbb{A}(\vec{\var x}).\vec{\var x} \longrightarrow \vec A  & \textsc{Semantic FD} \\[.3em]
+      \multicolumn{2}{l}{\textit{Values}} & \textit{Fields} & \textit{Action Set}\\
+      \multicolumn{2}{l}{v \in \mathbbm{2}^+} & \var x, \var y, \var f, \var g \in \mathsf{Var} & A \subseteq \Action
     \end{array}\]
-
-  \caption{Syntax of GCL+Tables}
-  \label{fig:syntaxgcl}
-  
-\end{figure}
-
-
-\begin{figure}[ht]
-  \[\begin{array}{l >{\triangleq}c l l >{\triangleq}c l}
-      \multicolumn 3 l {\textit{Tables}}  & \multicolumn 3 l {\textit{Names}}\\
-      \multicolumn 3 l {t::= (s,\vec e, \vec c, c_d)} & \multicolumn 3 l {s \in \Name}\\
-      \multicolumn 6 c {\textit{Accessors}}\\
-      \keys t && \vec x &  \default t && c_d \\
-      \actions t && \vec c & \name t && s
-    \end{array}\]
-
-  \caption{Tables}
-  \label{fig:tables}
+  \caption{Syntax of Commands and Actions*}
+  \label{fig:syntax}
 \end{figure}
 
 \begin{figure}[ht]
@@ -70,521 +64,49 @@
   \caption{Syntactic Sugar. A command is called \emph{deterministic
       and total} if it is only constructed from assignment, sequence
     and the above operators}
+  \label{fig:sugar}
 \end{figure}
 
-\begin{figure}[ht]
-  \[\begin{array}{l >{\triangleq}c l}
-      \wp_\tau(x:=e, \phi) && \phi[x \mapsto e]\\
-      \wp_\tau(c;c', \phi) && \wp_\tau(c, \wp_\tau(c', \phi)) \\
-      \wp_\tau(c\angel c', \phi) && \wp_\tau(c, \phi) \wedge \wp_\tau(c',\phi) \\
-      \wp_\tau(\assert b, \phi) && b \wedge \phi \\
-      \wp_\tau(\assume b, \phi) && b \Rightarrow \phi \\
-      \wp_\tau(\apply t, \phi) && \wp_\tau(\parenbb{\apply t}_\tau, \phi)\\\\\hline\\
-      
-      \wp_\tau(c) && \wp_\tau(c,\displaystyle \bigwedge_{\substack{v \in \fvs(c) \\ \mathsf{fresh} v'}} v = v') \\
-      \wp(c) && \wp_\bot(c), \quad c \text{ is table-free}
-    \end{array}\]
-  \caption{Weakest Preconditions}
-  \label{fig:wp}
-\end{figure}
-
-\begin{figure}[ht]
-  \[\begin{array}{l c l}
-      \multicolumn{3}{c}{\textit{Configurations}\quad g \in \Config} \\
-      \multicolumn 1 r g & ::= & \langle\rangle \\
-        & \mid & (e,i)::g \quad i \in \mathbb N \\\\
-      \multicolumn 3 l {\textit{Table Instantiations} \qquad \tau : \Name \rightharpoonup \mathsf{Config}}\\
-      \parenbb{c}_\tau &\multicolumn 2 l {\in \mathsf{Cmd}} \\
-      \parenbb{(x:= e)}_\tau &\triangleq& x := e \\
-      \parenbb{(c;c')}_\tau &\triangleq& \parenbb{c\; \tau};\parenbb{c\; \tau} \\
-      \parenbb{(c\angel c')}_\tau &\triangleq& \parenbb{c\; \tau} \angel \parenbb{c'\; \tau}\\
-      \parenbb{(\assert b)}_\tau &\triangleq& \assert b \\
-      \parenbb{(\assume b)}_\tau &\triangleq& \assume b \\
-      \parenbb{\apply t}_\tau &\triangleq\\
-      \multicolumn 3 l {\qquad\qquad \left( \displaystyle \Angel_{c_i \in \actions t}
-      \assume{\left(\keys t \in M_i(g)\right)}; c_i\right)}\\
-      \multicolumn 3 l {\qquad\qquad \displaystyle \angel \assume{\left(\bigwedge_{c_i \in \actions t} \keys t \not\in M_i(g)\right)}; c_d}
-    \end{array}\]
-
-  \caption{Configurations and Table Instantiations. A configuration is
-    \emph{$t$-well-formed} if the $\vec e$s are unique and for every
-    $i$, there is an action $c_i \in \actions t$.}
-  \label{fig:configs}
-
-  
-  
-\end{figure}
+% \begin{figure}[ht]
+%   \[\begin{array}{l >{\triangleq}c l}
+%       \wp(x:=e, \phi) && \phi[x \mapsto e]\\
+%       \wp(c;c', \phi) && \wp(c, \wp(c', \phi)) \\
+%       \wp(c\angel c', \phi) && \wp(c, \phi) \wedge \wp(c',\phi) \\
+%       \wp(\assert b, \phi) && b \wedge \phi \\
+%       \wp(\assume b, \phi) && b \Rightarrow \phi \\
+%     \end{array}\]
+%   \caption{Weakest Preconditions}
+%   \label{fig:wp}
+% \end{figure}
 
 
-\todo[inline]{describe language~\ref{fig:syntaxGCL} and wp~\ref{fig:wp}}
-
-As shown in Figure~\ref{fig:tables}, a table is a triple
-$(s, \vec e, \vec c, c_d)$, where $s$ is the name of the table, the
-variables $e_1,\ldots,e_n$ represent the table keys, the commands
-$c_1,\ldots, c_m$ represent table actions, and $c_d$ represents the
-default action, note that $c_d$ need not be equal to any of the other
-actions. Also notice that we have omitted any consideration of action
-data for the time being. This is because from a theoretical sense, we
-can abstract away the action data by creating a new action for each
-possible parameter. In practice this is infeasible (an action with a
-single 48 bit argument would elaborate to $2^{48}$ actions), we'll
-discuss our optimizations in a later section.
-
-A table $t$ cannot be executed alone; it must have a configuration
-(even if that configuration is empty). A configuration is a list of
-pairs $(\vec e,i)$, which represents the match conditions for action
-$i$. The empty configuration specifies that the default action should
-be executed. A configuration $g$ is \emph{well-formed for a table $t$}
-if for every element $(\vec e, i)$ of $g$, $|\vec e| = |\keys t|$, and
-$i \leq |\actions t|$, and every $\vec e$ is a literal, i.e. no fields
-and no holes.
-
-\subsection{Translating Tables to GCL}
-
-Now we can use the table configurations to convert a table into a core
-GCL program, as depicted in Figure~\ref{fig:configs}. Essentially, we
-nodeterministically choose between each of the actions $c_i$. However,
-each $c_i$ is only executed if the packet matches one of the guarding
-expressions. We collect these guarding expressions \emph{match-set}
-$M_i$ of the $\vec e$s in config $g$ that trigger $c_i$. Precisely, we
-define a function $M_i$ as follows:
-\[M_i(g) \triangleq \{ e \mid (e,j) \in g, i = j\}.\]
-
-Now, the we can translate the matches, we check to see whether the
-current keys, indicated by $\keys t$, are in each set $M_i$, and when
-we find a match, we execute $c_i$. If we find no match, we have a
-final catch-all case, that executes $c_d$. We can lift configurations
-to \emph{table instantiations} $\tau : \Name \to \Config$, which are
-simply functions that map each table to a configuration. We say that a
-table instantiation $\tau$ is $c$-complete if $\tau$ is defined on
-$\name t$ for every table $t$ mentioned in the program $c$. Then, for
-a program $c$ and a $c$-complete $\tau$, we write $\parenbb{c\; \tau}$
-for the command with all table applications compiled away.
-
-We want to show that our encoding is correct, so we introduce a semantics for
-commands $c$ and for $c,\tau$ pairs, and show that
-$\bracbb{\parenbb{c\; \tau}} = \bracbb{c\; \tau}$. The semantics for full
-programs are given in Figure~\ref{fig:semantics}, but the work is done on
-single-tables and single configurations. Figure~\ref{fig:tablesemantics} defines
-$\bracbb{t\; g} : \Pkt \to \Pkt$ for a table $t$ and configuration $g$.
-
-\begin{figure}[ht]
+\begin{figure}
+  \[\pkt :: = \{\overline{\var x \mapsto v}\}\qquad T :: \Table \to \Instance\]
   \[\begin{array}{lcl}
-      \bracbb{t}_{\langle\rangle}\; \pkt
-      &\triangleq& \bracbb{\default t}\; \pkt \\
-      \bracbb{ t }_{(\vec e, i)::g}\; \pkt
-      &\triangleq& \begin{cases}
-        \bracbb{c_i}\; \pkt & \displaystyle \bigwedge_{e_j} \bracbb{k_j = e_j}\; \pkt \\
-        \bracbb{t}_{g}\; \pkt & \mathit{otherwise}
-      \end{cases}\\
-      && \mathit{where}\; t = (s, \vec k, \vec c, c_d)
-    \end{array}\]
-  \caption{Semantics for a Single Table}
-  \label{fig:tablesemantics}
-\end{figure}
-
-
-\begin{figure}[ht]
-  \[\begin{array}{lcl}
-      \multicolumn 3 l {\bracbb{c}_\tau : \Pkt \rightharpoonup 2^\Pkt_\bot} \\
-      \bracbb{(x:=e)}_\tau\; \pkt & \triangleq & (1,\pkt[x \mapsto e]) \\
-      \bracbb{(c;c')}_\tau\; \pkt & \triangleq & \bracbb{c'\; \tau}^\dag(\bracbb{c\; \tau}\; pkt) \\
-      \bracbb{(c\angel c')}_\tau\; pkt &\triangleq& \bracbb{c\; \tau}\; \pkt \cup \bracbb{c'\; \tau}\; \pkt \\
-      \bracbb{(\assert b)}_\tau\; \pkt &\triangleq& \begin{cases}
-        \{pkt\}   & \bracbb{b}\; \pkt = \TRUE \\
-        \bot & \mathit{otherwise}
+      \bracbb{x:=e}~T~\pkt &\triangleq& \{\pkt[x \mapsto e]\} \\
+      \bracbb{c;c'}~T~\pkt & \triangleq& \displaystyle \bigcup_{\pkt' \in \bracbb{c'}~T~\pkt}\bracbb{c}~T~\pkt' \\
+      \bracbb{c\angel c'}~T~\pkt & \triangleq & \bracbb{c}~\vec T~\pkt \cup \bracbb{c'}~T~\pkt\\
+      \bracbb{\assert b}~T~\pkt & \triangleq & \begin{cases}
+        \pkt & \textrm{if}~\bracbb{b}~\pkt = \TRUE \\
+        \bot & \textrm{otherwise}
       \end{cases} \\
-      \bracbb{(\assume b)}_\tau\; \pkt &\triangleq& \begin{cases}
-        \{pkt\} & \bracbb{b}\; pkt = \TRUE \\
-        \emptyset    & \mathit{otherwise}
+      \bracbb{\assume b}~\pkt & \triangleq & \begin{cases}
+        \pkt & \textrm{if}~\bracbb{b}~\pkt = \TRUE \\
+        \emptyset & \textrm{otherwise}
       \end{cases} \\
-      \bracbb{(\apply t)}_\tau\; \pkt &\triangleq& \bracbb{\apply t\; \tau(t)} \\\\\hline\\
-      \bracbb c \; \pkt & \triangleq& \bracbb{c}_\bot\; \pkt
-
-    \end{array}\]
-  
-  \caption{Semantics}
-  \label{fig:semantics}
-
-\end{figure}
-
-Now we can show that our table encoding is sensible:
-
-\begin{lemma}
-  \label{lem:table-encoding}
-  For a table $t$ and a well-formed configuration $g$,
-  \[\forall \pkt. \bracbb{t}_{g}\; \pkt = \bracbb{\parenbb{t}_g}\;
-  \pkt.\]
-
-\end{lemma}
-
-\begin{proof}
-  Let table $t$, and packet $\pkt$ be given. Proceed by induction on
-  $g$.
-  \begin{enumerate}[align=left]
-  \item[($g = \langle \rangle$)] Equivalently,
-    $\bracbb{c_d}\;\pkt = \bracbb{\assume\TRUE; c_d}\; \pkt$, for
-    $c_d = \default t$. This is true by definition of $\bracbb{}$.
-
-  \item[($g = (\vec e,i)::g')$] 
-    
-    If $\bracbb{\keys t = \vec e}\; \pkt = 1$, then,
-    $\bracbb{t}_{(\vec e, i)::g'}\;\pkt = \bracbb{c_i}\; \pkt$, by
-    Figure~\ref{fig:tablesemantics}.
-
-    Now, by definition of $M_i$,$\bracbb{\keys t \in M_i}\; \pkt =
-    1$. The well-formedness of $(\vec e, i)::g'$ means that there's no
-    conflicting $(\vec{e'}, j) \in g'$ s.t.
-    $\exists \pkt. \bracbb{\keys t = \vec{e}}\; \pkt = \bracbb{\keys t
-      = \vec{e'}}\; \pkt$.  So, $\bracbb{t}_{(\vec e,i)::g'}\; \pkt$
-    equals $\bracbb{\assume{\keys t \in M_i}; c_i}\;\pkt$ which in
-    turn equals $\bracbb{c_i}\; \pkt$, which finishes this case.
-    
-    Conversely, if $\bracbb{\keys t = \vec e}\; \pkt = 0$, then
-    $\bracbb{\apply t}_{(\vec e, i)::g'}\;\pkt =
-    \bracbb{t}_{g'}\;\pkt$.  Now, by definition of $M_i$,
-    $\bracbb{\keys t \in M_i}\; \pkt = 0$, so
-    $\bracbb{\keys t \in M_i}\; \pkt = 0$, which means that we can
-    remove $\vec e$ from $M_i$. In fact, this is the only difference
-    between $\parenbb{t}_{g}$ and $\parenbb{t}_{g'}$, so we can conclude
-    that
-    $\bracbb{\parenbb{t}_{(e,i)::g}}\;\pkt =
-    \bracbb{\parenbb{t}_{g'}}\;\pkt$. The result follows by the
-    inductive hypothesis.
-  \end{enumerate}
-  
-\end{proof}
-
-\begin{proposition}
-  For a program $c$ and a well-formed, $c$-complete table
-  instantiation function $\tau$,
-  $\forall \pkt. \bracbb{c}_{\tau}\;\pkt =
-  \bracbb{\parenbb{c}_{\tau}}\; \pkt$.
-\end{proposition}
-
-\begin{proof}
-
-  Proceed by induction on the structure of $c$.
-  \begin{enumerate}[align=left]
-  \item[($x:=e$)] Immediate since $\parenbb{x:=e}_{\tau} \triangleq x := e$.
-  \item[($\assert b$)] Immediate since
-    $\parenbb{\assert b}_{\tau} \triangleq \assert b$.
-  \item[($\assume b$)] Immediate since $\parenbb{\assume b}_{\tau} \triangleq \assume b$.
-  \item[($c;c'$)] By the definition of the translation function,
-    $\parenbb{c;c'}_{\tau} = \parenbb{c}_{\tau};\parenbb{c'}_{\tau}$,
-    and by the definition of the denotation function, we need to show
-    that
-    $\forall
-    \pkt. \bracbb{c}_\tau^\dag\left(\;\bracbb{c'}_\tau\;\pkt\right) =
-    \bracbb{\parenbb{c}_\tau}^\dag\left(\bracbb{\parenbb{c'}_\tau}\;\pkt\right)$,
-  which follows by the inductive hypotheses.
-  \item[($c \angel c'$)] By definitions, we must show
-    $\forall \pkt. \bracbb{c}_\tau\; \pkt \cup \bracbb{c}_\tau\;
-    \pkt = \forall \pkt. \bracbb{\parenbb{c}_\tau}\; \pkt \cup
-    \bracbb{\parenbb{c}_\tau}$, which follows by the inductive
-    hypotheses.
-  \item[$(\apply t)$] By definitions, we must show
-    $\forall \pkt. \bracbb{t}_{\tau(\name t)} =
-    \bracbb{\parenbb{t}_{\tau(\name t)}}$. Note that $\tau(\name t)$
-    is defined since $\tau$ is complete. The result follows by
-    Lemma~\ref{lem:table-encoding}.
-  \end{enumerate}
-\end{proof}
-
-
-\section{Verification and Synthesis}
-
-
-\begin{figure*}
-  \begin{tabular}{l l c c r >{$ \Leftrightarrow$}c l}
-    \toprule
-    && Problem
-    & Assumption
-    & \multicolumn{3}{c}{Validity Condition} \\ \midrule
-    \multirow{3}{*}{\rotatebox[origin=c]{90}{\it Basic}} 
-    && $\textsc{Verif}(\tau_l, \tau_r)$
-    & n/a
-    & $\wp_{\tau_l}(c_l)$ && $\wp_{\tau_r}(c_r)$ \\
-    && $\textsc{InstSynth}(\tau_l) = \tau_r$
-    & n/a
-    & $\wp_{\tau_l}(c_l)$ && $\wp_{\tau_r}(c_r)$ \\
-    && $\textsc{MapSynth}() = F$
-    & n/a
-    & $\forall \tau_l. \wp_{\tau_l}(c_l)$ && $\wp_{f(\tau_l)}(c_r)$ \\ \midrule
-    \multirow{4}{*}{\rotatebox[origin=r]{90}{\it Edit-based}}
-    && $\textsc{EditSynth}() = f$
-    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
-    & $\forall \rho. \wp_{(\tau_l \otimes \rho)}(c_l)$ && $\wp_{\left(\tau_r\otimes \bigotimes f(\rho)\right)}(c_r)$ \\
-    && $\textsc{EditSynth}(\rho) = f$
-    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
-    & $\wp_{(\tau_l \otimes \rho)}(c_l)$ && $\wp_{\left(\tau_r\otimes \bigotimes f(\rho)\right)}(c_r)$ \\
-    \cmidrule(r){2-7}
-    % & \textsc{EditSynth}$(\oplus, s)$
-    % & n/a
-    % & $\wp(c_l\; \tau_l) \Leftrightarrow \wp(c_r\; \tau_r)$
-    % & $f : \mathsf{Edit}_s \to 2^{\mathsf{Edit}}$
-    % & $\forall \rho_{s}. \wp(s^\oplus\parenbb{c_l}_{(\tau_l \oplus \rho_s)})$ \\
-    % &&&&\qquad$\Leftrightarrow \wp\left(\hole\parenbb{c_r}_{\left(\tau_r\otimes \bigotimes f(\rho_s)\right)}\right)$ \\
-    & \multirow{3}{*}{\rotatebox[origin=r]{90}{\it Bound}}
-    & $\textsc{EditCheck}[n]()$
-    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
-    & $\forall \rho_s. \exists \rho_1, \ldots, \rho_n. \wp(\parenbb{c_l}_{\tau_l}^\rho)$
-    &&$\wp(\parenbb{c_r}_{\tau_r}^{\rho_1,\ldots,\rho_n})$ \\
-    && $\textsc{EditSynth}[n]() = f_1,\ldots, f_n$
-    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
-    & $\forall \rho. \wp(\parenbb{c_l}_{\tau_l}^\rho))$ && $\wp(\parenbb{c_r}_{\tau_r}^{f_1(\rho),\ldots,f_n(\rho)})$ \\
-    && $\textsc{EditVerif}[n](f_1,...,f_n)$
-    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
-    & $\forall \rho. \wp(\parenbb{c_l}_{\tau_l}^\rho))$ && $\wp(\parenbb{c_r}_{\tau_r}^{f_1(\rho),\ldots,f_n(\rho)})$\\ \addlinespace
-    \bottomrule
-  \end{tabular}
-  \caption{Cheat Sheet for the Verification and Synthesis problems.\textit{ All
-      problems take $c_r$ and $c_l$ as given. Additional givens are in
-      parentheses.  Problem parameters are given in square brackets. Note,
-      $F : \mathsf{Inst} \to \mathsf{Inst}$, $f : \Edit \to 2^\Edit$ and
-      $f_i : \Edit \to \Edit$ }}
-  \label{fig:problems}
-\end{figure*}
-
-We can use this calculus to construct some verification and synthesis
-problems. Broadly we want to take a logical program $c_l$ and a concrete program
-$c_r$, relate their respective table instantiations $\tau_l$, and $\tau_r$,
-where $\tau_i$ is $c_i$-complete.  We generate our verification conditions using
-Dijkstra's weakest precondition semantics, included for completeness in
-Figure~\ref{fig:wp}.
-
-\paragraph{Verification} The simplest problem is the verification problem
-\textsc{Verif} where we are given the table instantiations $\tau_l$ and
-$\tau_r$, and we want to verify that $c_l\; \tau_l$ is equivalent to
-$c_r\; \tau_r$. Since everything is concrete, we can encode this as a simple
-\textsc{sat} problem. If the following problem returns \texttt{unsat}, we
-conclude $c_l\; \tau_l$ and $c_r\; \tau_l$ are equivalent.
-\[\begin{array}{lcl}
-    \text{Given }( c_l\; \tau_l), (c_r\; \tau_r) \\
-    \exists \fvs(c_l), \fvs(c_r). \\
-    \qquad \neg(wp(c_l\; \tau_l) \iff wp(c_r\; \tau_r))
-  \end{array}
-\]
-
-\paragraph{Synthesizing a Concrete Instance} One step up, we have the
-\textsc{InstSynth} problem, where only the logical table instantiation is given,
-and we must produce a $\tau_r$ satisfying the \textsc{Verif} condition. If we
-get \texttt{sat} and a model for $\tau_r$ from Z3 we conclude success.
-\[\begin{array}{lcl}
-    \text{Given } c_l\; \tau_l,c_r
-    \exists \tau_r.\\
-    \forall \fvs(c_l), \fvs(c_r). \\
-    \qquad wp(c_l\; \tau_l) \iff wp(c_r\; \tau_r)
-  \end{array}
-\]
-
-In a real network, this means that every time the
-controller changes the logical forwarding state, we must resynthesize the
-concrete forwarding state. However, network engineers care very deeply about the
-predictability of their networks, and inserting a heuristic shim in the middle
-of the network would make it very hard to exert the kind of control that network
-engineers rely on.
-
-\paragraph{Synthesizing an Instance Mapping} To ameliorate this problem, we consider the \textsc{MapSynth} problem, which
-synthesizes a function $f$ from an arbitary logical instantiations $\tau_l$ to a
-concrete table instantiation that will implement the same functionality as
-$\tau_l$. The offline synthesis succeeds the following formula is \texttt{sat}
-and the witness for $f$ is the solution.
-\[\begin{array}{l}
-    \text{Given } c_l,c_r\\
-    \exists f. \forall \tau_l. \forall \fvs(c_l), \fvs(c_r). \\
-    \qquad wp(c_l\; \tau_l) \iff wp(c_r\; f(\tau_l))
-  \end{array}\]
-However this function $f$ is really quite large, and for even trivial
-examples causes Z3 to return \texttt{unknown}. So, we need to find a way of
-partitioning the \textsc{OfflineSynth} problem into more tractable
-components.
-
-\paragraph{Edit-Based Synthesis} Instead of trying to synthesize an arbitrary
-function from table instantiations to table instantiations, we reframe the
-problem to examining only the table edits, and call it \textsc{EditSynth}. The
-idea is: given two equivalent programs, for every edit to a logical table, can
-we synthesize an equivalent set of edits to the concrete tables. This means we
-synthesize (offline!) two different functions for each table, one for additions
-and one for deletions. This works so long as we have a notion of transactions.
-
-\todo[inline]{The following functions and objects need types!}
-
-
-\begin{figure}[pt]
-  \[\rho \in \Edit = \{ +, -\} \times \Name \times \Expr^n \times \mathbb N \]
-  \[\begin{array}{lcl}
-      \tau \otimes (+,s,\vec e, i) & \triangleq & \tau[s \mapsto (e,i)::\tau(s)] \\
-      \tau \otimes (-,s,\vec e, i) & \triangleq & \tau[s \mapsto \tau(s) \setminus (e,i)] \\
-      \tau + (+, s, \vec, e, i) & \triangleq & \tau \otimes (+,s, \vec e,i) \\
-      \tau - (-, s, \vec, e, i) & \triangleq & \tau \otimes (-, s, \vec e, i) 
-    \end{array}\]
-
-  \[\begin{array}{lcl}
-      \rho_s & \triangleq & (\oplus, s', \vec e, i), \text{where } s = s'\\
-      \Edit_s &\triangleq & \{\rho_s \mid \rho_s\in \Edit\} \\
-    \end{array}\]
-  \caption{Edits}
-  \label{fig:edits}
-\end{figure}
-
-Formally, an edit $\rho \in \mathsf{Edit}$ is a tuple
-$(\oplus,s,\vec e,i)$, where $\oplus \in \{+,-\}$, $s$ is the name of
-the table being edited, and $(\vec e, i)$ is the row to add. Then,
-given a table instantiation function $\tau$, we write
-$\tau \otimes \rho$ to update $\tau$ with $\rho$. Precisely,
-$\tau \otimes (+,t,\vec e, i) = \tau[t \mapsto (e,i)::\tau(t)]$, and
-$\tau \otimes (-, t, \vec e, i) = \tau[t \mapsto \tau(t) \setminus
-(e,i)]$ where $l \setminus (e,i)$ removes all occurences $(e,i)$ from
-the list $l$. As syntactic sugar, we'll write $\tau + \rho$ to mean
-$\tau \otimes \rho$ when $\rho = (+, s, \vec e, i)$, and $\tau - \rho$
-to mean $\tau \otimes \rho$ when $\rho = (-, s, \vec e,
-i)$. Additionally, we adopt the convention that $\rho_s$ indicates an
-edit to all tables named $s$, i.e. that
-$\rho_s = (\oplus, s, \vec e, i)$. Similarly, $\mathsf{Edit}_s$ is the
-set of all such edits. Edits are summarized in Figure~\ref{fig:edits}.
-
-
-
-A solution for \textsc{EditSynth} is a witness $f$ for every table $t$ such that
-the following formula is satisfied:
-\[\begin{array}{l}
-    \text{Given } c_l,c_r, \exists \rho. \\
-    \forall \tau_l,\tau_r,\rho. \forall \fvs(c_l), \fvs(c_r). \\
-    \qquad \wp(c_l\; \tau_l) \iff wp(c_r\; \tau_l) \\
-    \qquad \Rightarrow \wp(c_l\; (\tau_l \otimes \rho)) \iff \wp(c_r\; \tau_r \otimes (f(\rho)))
-  \end{array}\]
-
-For now we have only figured out how to address a simpler version of the
-problem:
-
-A solution for \textsc{EditSynth'} is a series of actions $\vec{\rho'}$ for every table $t$ such that
-the following formula is valid:
-\[\begin{array}{l}
-    \text{Given } c_l,c_r, \\
-    \forall \rho, \tau_r, \tau_l.\, \exists n.\, \exists \hole\rho_1,\ldots,\hole\rho_n. \\ 
-    \quad \forall \fvs(c_l), \fvs(c_r). \\
-    \qquad \wp(c_l\; \tau_l) \iff wp(c_r\; \tau_l) \\
-    \qquad \Rightarrow \wp(c_l\; (\tau_l \otimes \rho)) \iff \wp(c_r\; \tau_r
-    \otimes \hole\rho_1 \otimes \cdots \otimes \hole\rho_n )
-  \end{array}\]
-
-In practice, we will can even produce problems \textsc{EditSynth}$(\oplus,s)$
-where the universal $\rho$ is restricted so that its first two elements are
-$\oplus$ and $s$.
-
-
-
-\subsection{Synthesis via Bounded Model Checking}
-
-\todo[inline]{explain why this problem is too big}
-
-In order to shrink the complexity of the problem, we leverage the finiteness of
-updates. A single update to a single table can only affect finitely many
-tables. We suspect that there is a concrete upper bound on the number of
-concrete rules will need to be inserted or deleted for any single logical rule
-update. \todo[inline]{Think about this more deeply}
-
-We use a technique similar to \emph{bounded model checking} to exploit the
-finite effect of each rule. In bounded model checking are asking the question
-for a given model size $n$. That is, \emph{for every logical edit $\rho$, does
-  there exists a sequence of exactly $n$ concrete edits $\rho_1, \ldots, \rho_n$
-  that produce equivalent changes}?
-
-\begin{example}
-  Bounded Model Checking is tricky to do correctly, because a single
-  logical edit can require many concrete edits. Consider a logical program
-  \[\begin{array}{l}
-      \apply{l, \langle  \texttt{dst} \rangle, \langle \underline{\texttt{op} := 1}, \texttt{op} := 0 \rangle}
+      \bracbb{(\vec{\var f}, \vec A, \Phi)}~T~\pkt &\triangleq & \bracbb{T(t)}^{\vec{\var f}}~\pkt \\\\
+      \bracbb{(\vec v, \vec a)\cup R}^{\vec{\var f}}~\pkt & \triangleq & \begin{cases}
+        \bracbb{\vec a}~\pkt & \mathrm{if} \pkt.\vec{\var f} = \vec v\\
+        \bracbb{R}^{\vec{\var f}}~\pkt& \mathrm{otherwise}
+        \end{cases}                                                            
+      \\
+      \bracbb{\vec a}~pkt & \triangleq & \bracbb{a_1;\cdots;\vec a_n}~\pkt
     \end{array}
   \]
-  and a concrete program
-  \[\apply{r, \langle \texttt{src}, \texttt{dst} \rangle, \langle \underline{\texttt{op} := 1}, \texttt{op} := 0 \rangle}.\]
-  
-  A function $f$ that maps logical edits into concrete edits, requires
-  $|\texttt{src}|$ concrete edits for every logical edit.
-\end{example}
 
-To lift this to a synthesis problem, called $\textsc{EditSynth}[n]$ for a given
-$n$, we will instead synthesize a sequence of $n$ functions
-$f_i : \Edit \to \Edit$, each producing a single $\rho$, such that applying the
-sequence of edits $f_1(\rho), \ldots, f_n(\rho)$ to the concrete network has the
-same effect as applying $\rho$ to the logical network. This problem is described
-in Figure~\ref{fig:problems}.
-
-Our compilation of GCL programs with tables to GCL programs without tables so
-far only works with concrete encodings. Figure~\ref{fig:symbolic-encoding} presents a
-symbolic encoding that allows for symbolic (or concrete) edits to be inserted.
-
-\begin{figure}[ht]
-  \[\begin{array}{r >{\triangleq}c l}
-      \parenbb{x:=e}_\tau^{\vec\rho}
-      && x:=e\\
-      \parenbb{c;c'}_\tau^{\vec\rho}
-      && \parenbb{c}_\tau^{\vec\rho};\parenbb{c'}_\tau^{\vec\rho} \\
-      \parenbb{c \angel c'}_\tau^{\vec\rho}
-      && \parenbb{c}_\tau^{\vec\rho} \angel \parenbb{c'}_\tau^{\vec\rho} \\
-      \parenbb{\assert b}_\tau^{\vec\rho}
-      && \assert b\\
-      \parenbb{\assume b}_\tau^{\vec\rho}
-      && \assume b\\
-      \parenbb{\apply {s,\vec k, \vec c, c_d}}_\tau^{\vec\rho}
-      && \displaystyle \Angel_{c_i}\mathsf{matchDel}(\tau, \vec\rho, s, c_i) \\
-      \multicolumn 2 l {} & \angel \mathsf{newMatches}(\vec\rho, \vec k, s, \vec c) \\
-      \multicolumn 2 l {} & \angel \mathsf{newDefault}(\tau, \vec\rho, \vec k,s, \vec c, c_d)\end{array}\]
-  \[\begin{array}{r c l}
-      \hline\\
-      \mathsf{matchDel}(\tau,\vec\rho,s,c_i)
-      &\triangleq
-      &\assume{\vec k \in M_i(\tau(s))} \\
-      &;&\assume{\bigwedge_{(-,s,\vec e, i) \in \vec \rho} \vec k \neq \vec e}\\
-      &;&c_i \\
-      \mathsf{newMatches}(\vec\rho, \vec k, s, \vec c)
-      &\triangleq
-      &\displaystyle \Angel_{(+,s,\vec e, i) \in \rho} \assume {\vec k = \vec e}; c_i \\
-      \mathsf{newDefault}(\tau, \vec\rho,\vec k, s, \vec c, c_d) &\triangleq& \assume \bigwedge_{c_i}k\not\in M_i(\tau_s) \\
-      && \qquad\;\;\vee \bigvee_{(-,s,\vec e, i) \in \rho} \vec k = \vec e\\
-      &;& c_d
-    \end{array}\]
-  \caption{Symbolic Encoding of Tables, and helper functions}
-  \label{fig:symbolic-encoding}
-
+  \caption{The semantics. $T$ produces instances for tables. For
+    actions, we may omit $T$. The semantics for expressions and
+    booleans are omitted for the time being, but are the obvious
+    ones.}
+  \label{fig:semantics}
 \end{figure}
-
-In order to properly synthesize these $f_i$s, we leverage both Counter Example
-Guided Inductive Synthesis (CEGIS)~\cite{CEGIS}, and Sketch~\cite{Sketch}. We
-describe the algorithm in $N$ steps.
-
-\paragraph{Step 0: Initialization.} The inputs are we are given two unconfigured
-network programs, a \textbf{l}ogical program $c_l$ and a conc\textbf{r}ete
-program $c_r$. When a network begins running, every table starts off with the
-empty configuration: $\langle\rangle$. So, we provide $c_l$ with such an
-instantiation: $\lambda s. \langle \rangle$. Since we have this concrete
-instantiation, we can solve $\textsc{InstSynth}(\lambda s. \langle\rangle)$ to
-produce a configuration $\tau_l$ such that
-$\wp_{\langle\rangle}(c_r) \Leftrightarrow \wp_{\tau_l}(c_l)$.
-
-\paragraph{Step 1: Search for Model Size.} Now that the assumption for
-$\textsc{EditCheck}[n]$, for all $n$ is satisfied, we can attempt to solve for
-both $n$, by searching for the minimum $n$ via a grid search.
-
-\paragraph{Step 2: Synthesize $f_i$s.} Now, we can solve $\textsc{EditSynth}[n]$
-for the $n$ we computed in the previous step. To do this, we leverage
-Synthesis-by-Sketching and CEGIS. The sketch that we use to model each $f_i$ is
-the following:
-\[f_i(\rho) \triangleq \texttt{repeat}(*)\left(\texttt{if }(?\rho = \rho)\;\{\texttt{return }?\rho'\}\right)\]
-
-which examines the value of $\rho$ some number () of times by comparing it with
-the hole $?\rho$ and producing a corresponding hole $?\rho'$. We generate
-candidate solutions $f_1,\ldots, f_n$ by solving $\textsc{EditSynth}[n](\rho)$
-for a randomly generated $\rho$. Now we can generate counter-examples $\rho_c$
-by having Z3 attempt to solve $\textsc{EditVerif}[n](f_1,\ldots,f_n)$; we
-terminate if Z3 proves that there is no counter example, otherwise, we loop back
-to $\textsc{EditSynth}[n](\rho_c)$. \todo[inline]{widening? Narrowing?}
-
-\paragraph{Step 3: Produce $f$} Once we've synthesized the collection of
-$f_1, \ldots, f_n$, we can produce $f = \textsc{EditSynth}()$ by setting
-\[f(\rho) = \{f_1(\rho), \ldots, f_n(\rho)\}\]
-
-
-\todo[inline]{well that didn't work, Z3 complained at the nested quantifiers}

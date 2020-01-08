@@ -1,0 +1,179 @@
+\section{Verification and Synthesis}
+
+\begin{figure*}
+  \begin{tabular}{l l c c r >{$ \Leftrightarrow$}c l}
+    \toprule
+    && Problem
+    & Assumption
+    & \multicolumn{3}{c}{Validity Condition} \\ \midrule
+    \multirow{3}{*}{\rotatebox[origin=c]{90}{\it Basic}} 
+    && $\textsc{Verif}(\tau_l, \tau_r)$
+    & n/a
+    & $\wp_{\tau_l}(c_l)$ && $\wp_{\tau_r}(c_r)$ \\
+    && $\textsc{InstSynth}(\tau_l) = \tau_r$
+    & n/a
+    & $\wp_{\tau_l}(c_l)$ && $\wp_{\tau_r}(c_r)$ \\
+    && $\textsc{MapSynth}() = F$
+    & n/a
+    & $\forall \tau_l. \wp_{\tau_l}(c_l)$ && $\wp_{f(\tau_l)}(c_r)$ \\ \midrule
+    \multirow{4}{*}{\rotatebox[origin=r]{90}{\it Edit-based}}
+    && $\textsc{EditSynth}() = f$
+    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
+    & $\forall \rho. \wp_{(\tau_l \otimes \rho)}(c_l)$ && $\wp_{\left(\tau_r\otimes \bigotimes f(\rho)\right)}(c_r)$ \\
+    && $\textsc{EditSynth}(\rho) = f$
+    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
+    & $\wp_{(\tau_l \otimes \rho)}(c_l)$ && $\wp_{\left(\tau_r\otimes \bigotimes f(\rho)\right)}(c_r)$ \\
+    \cmidrule(r){2-7}
+    % & \textsc{EditSynth}$(\oplus, s)$
+    % & n/a
+    % & $\wp(c_l\; \tau_l) \Leftrightarrow \wp(c_r\; \tau_r)$
+    % & $f : \mathsf{Edit}_s \to 2^{\mathsf{Edit}}$
+    % & $\forall \rho_{s}. \wp(s^\oplus\parenbb{c_l}_{(\tau_l \oplus \rho_s)})$ \\
+    % &&&&\qquad$\Leftrightarrow \wp\left(\hole\parenbb{c_r}_{\left(\tau_r\otimes \bigotimes f(\rho_s)\right)}\right)$ \\
+    & \multirow{3}{*}{\rotatebox[origin=r]{90}{\it Bound}}
+    & $\textsc{EditCheck}[n]()$
+    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
+    & $\forall \rho_s. \exists \rho_1, \ldots, \rho_n. \wp(\parenbb{c_l}_{\tau_l}^\rho)$
+    &&$\wp(\parenbb{c_r}_{\tau_r}^{\rho_1,\ldots,\rho_n})$ \\
+    && $\textsc{EditSynth}[n]() = f_1,\ldots, f_n$
+    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
+    & $\forall \rho. \wp(\parenbb{c_l}_{\tau_l}^\rho))$ && $\wp(\parenbb{c_r}_{\tau_r}^{f_1(\rho),\ldots,f_n(\rho)})$ \\
+    && $\textsc{EditVerif}[n](f_1,...,f_n)$
+    & $\wp_{\tau_l}(c_l) \Leftrightarrow \wp_{\tau_r}(c_r)$
+    & $\forall \rho. \wp(\parenbb{c_l}_{\tau_l}^\rho))$ && $\wp(\parenbb{c_r}_{\tau_r}^{f_1(\rho),\ldots,f_n(\rho)})$\\ \addlinespace
+    \bottomrule
+  \end{tabular}
+  \caption{Cheat Sheet for the Verification and Synthesis problems.\textit{ All
+      problems take $c_r$ and $c_l$ as given. Additional givens are in
+      parentheses.  Problem parameters are given in square brackets. Note,
+      $F : \mathsf{Inst} \to \mathsf{Inst}$, $f : \Edit \to 2^\Edit$ and
+      $f_i : \Edit \to \Edit$ }}
+  \label{fig:problems}
+\end{figure*}
+
+We can use this calculus to construct some verification and synthesis
+problems. Broadly we want to take a logical program $c_l$ and a concrete program
+$c_r$, relate their respective table instantiations $\tau_l$, and $\tau_r$,
+where $\tau_i$ is $c_i$-complete.  We generate our verification conditions using
+Dijkstra's weakest precondition semantics, included for completeness in
+Figure~\ref{fig:wp}.
+
+\paragraph{Verification} The simplest problem is the verification problem
+\textsc{Verif} where we are given the table instantiations $\tau_l$ and
+$\tau_r$, and we want to verify that $c_l\; \tau_l$ is equivalent to
+$c_r\; \tau_r$. Since everything is concrete, we can encode this as a simple
+\textsc{sat} problem. If the following problem returns \texttt{unsat}, we
+conclude $c_l\; \tau_l$ and $c_r\; \tau_l$ are equivalent.
+\[\begin{array}{lcl}
+    \text{Given }( c_l\; \tau_l), (c_r\; \tau_r) \\
+    \exists \fvs(c_l), \fvs(c_r). \\
+    \qquad \neg(wp(c_l\; \tau_l) \iff wp(c_r\; \tau_r))
+  \end{array}
+\]
+
+\paragraph{Synthesizing a Concrete Instance} One step up, we have the
+\textsc{InstSynth} problem, where only the logical table instantiation is given,
+and we must produce a $\tau_r$ satisfying the \textsc{Verif} condition. If we
+get \texttt{sat} and a model for $\tau_r$ from Z3 we conclude success.
+\[\begin{array}{lcl}
+    \text{Given } c_l\; \tau_l,c_r
+    \exists \tau_r.\\
+    \forall \fvs(c_l), \fvs(c_r). \\
+    \qquad wp(c_l\; \tau_l) \iff wp(c_r\; \tau_r)
+  \end{array}
+\]
+
+In a real network, this means that every time the
+controller changes the logical forwarding state, we must resynthesize the
+concrete forwarding state. However, network engineers care very deeply about the
+predictability of their networks, and inserting a heuristic shim in the middle
+of the network would make it very hard to exert the kind of control that network
+engineers rely on.
+
+\paragraph{Synthesizing an Instance Mapping} To ameliorate this problem, we consider the \textsc{MapSynth} problem, which
+synthesizes a function $f$ from an arbitary logical instantiations $\tau_l$ to a
+concrete table instantiation that will implement the same functionality as
+$\tau_l$. The offline synthesis succeeds the following formula is \texttt{sat}
+and the witness for $f$ is the solution.
+\[\begin{array}{l}
+    \text{Given } c_l,c_r\\
+    \exists f. \forall \tau_l. \forall \fvs(c_l), \fvs(c_r). \\
+    \qquad wp(c_l\; \tau_l) \iff wp(c_r\; f(\tau_l))
+  \end{array}\]
+However this function $f$ is really quite large, and for even trivial
+examples causes Z3 to return \texttt{unknown}. So, we need to find a way of
+partitioning the \textsc{OfflineSynth} problem into more tractable
+components.
+
+\paragraph{Edit-Based Synthesis} Instead of trying to synthesize an arbitrary
+function from table instantiations to table instantiations, we reframe the
+problem to examining only the table edits, and call it \textsc{EditSynth}. The
+idea is: given two equivalent programs, for every edit to a logical table, can
+we synthesize an equivalent set of edits to the concrete tables. This means we
+synthesize (offline!) two different functions for each table, one for additions
+and one for deletions. This works so long as we have a notion of transactions.
+
+\todo[inline]{The following functions and objects need types!}
+
+
+\begin{figure}[pt]
+  \[\rho \in \Edit = \{ +, -\} \times \Name \times \Expr^n \times \mathbb N \]
+  \[\begin{array}{lcl}
+      \tau \otimes (+,s,\vec e, i) & \triangleq & \tau[s \mapsto (e,i)::\tau(s)] \\
+      \tau \otimes (-,s,\vec e, i) & \triangleq & \tau[s \mapsto \tau(s) \setminus (e,i)] \\
+      \tau + (+, s, \vec, e, i) & \triangleq & \tau \otimes (+,s, \vec e,i) \\
+      \tau - (-, s, \vec, e, i) & \triangleq & \tau \otimes (-, s, \vec e, i) 
+    \end{array}\]
+
+  \[\begin{array}{lcl}
+      \rho_s & \triangleq & (\oplus, s', \vec e, i), \text{where } s = s'\\
+      \Edit_s &\triangleq & \{\rho_s \mid \rho_s\in \Edit\} \\
+    \end{array}\]
+  \caption{Edits}
+  \label{fig:edits}
+\end{figure}
+
+Formally, an edit $\rho \in \mathsf{Edit}$ is a tuple
+$(\oplus,s,\vec e,i)$, where $\oplus \in \{+,-\}$, $s$ is the name of
+the table being edited, and $(\vec e, i)$ is the row to add. Then,
+given a table instantiation function $\tau$, we write
+$\tau \otimes \rho$ to update $\tau$ with $\rho$. Precisely,
+$\tau \otimes (+,t,\vec e, i) = \tau[t \mapsto (e,i)::\tau(t)]$, and
+$\tau \otimes (-, t, \vec e, i) = \tau[t \mapsto \tau(t) \setminus
+(e,i)]$ where $l \setminus (e,i)$ removes all occurences $(e,i)$ from
+the list $l$. As syntactic sugar, we'll write $\tau + \rho$ to mean
+$\tau \otimes \rho$ when $\rho = (+, s, \vec e, i)$, and $\tau - \rho$
+to mean $\tau \otimes \rho$ when $\rho = (-, s, \vec e,
+i)$. Additionally, we adopt the convention that $\rho_s$ indicates an
+edit to all tables named $s$, i.e. that
+$\rho_s = (\oplus, s, \vec e, i)$. Similarly, $\mathsf{Edit}_s$ is the
+set of all such edits. Edits are summarized in Figure~\ref{fig:edits}.
+
+
+
+A solution for \textsc{EditSynth} is a witness $f$ for every table $t$ such that
+the following formula is satisfied:
+\[\begin{array}{l}
+    \text{Given } c_l,c_r, \exists \rho. \\
+    \forall \tau_l,\tau_r,\rho. \forall \fvs(c_l), \fvs(c_r). \\
+    \qquad \wp(c_l\; \tau_l) \iff wp(c_r\; \tau_l) \\
+    \qquad \Rightarrow \wp(c_l\; (\tau_l \otimes \rho)) \iff \wp(c_r\; \tau_r \otimes (f(\rho)))
+  \end{array}\]
+
+For now we have only figured out how to address a simpler version of the
+problem:
+
+A solution for \textsc{EditSynth'} is a series of actions $\vec{\rho'}$ for every table $t$ such that
+the following formula is valid:
+\[\begin{array}{l}
+    \text{Given } c_l,c_r, \\
+    \forall \rho, \tau_r, \tau_l.\, \exists n.\, \exists \hole\rho_1,\ldots,\hole\rho_n. \\ 
+    \quad \forall \fvs(c_l), \fvs(c_r). \\
+    \qquad \wp(c_l\; \tau_l) \iff wp(c_r\; \tau_l) \\
+    \qquad \Rightarrow \wp(c_l\; (\tau_l \otimes \rho)) \iff \wp(c_r\; \tau_r
+    \otimes \hole\rho_1 \otimes \cdots \otimes \hole\rho_n )
+  \end{array}\]
+
+In practice, we will can even produce problems \textsc{EditSynth}$(\oplus,s)$
+where the universal $\rho$ is restricted so that its first two elements are
+$\oplus$ and $s$.

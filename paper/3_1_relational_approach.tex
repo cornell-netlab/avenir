@@ -1,136 +1,200 @@
-\section{A Relational Approach}
+\section{Relational Synthesis}
 
+Our goal is to take a logical program $g$ and a physical program $p$,
+and convert rule insertions into $g$ into an equivalent set of
+insertions into $p$. In this section, we'll describe how to solve the
+synthesis problem when $g$ and $p$ are each only a single table. In
+the next section, we'll describe how to convert pipelines into
+single-table representations.
+
+\subsection{Preliminaries}
 A match-action table can be thought of in a similar way to a table in
-a Relational Database. This observation was first made in a CoNeXT
-2019 paper~\cite{Chiesa}. In this way a match-action table
-$\apply{t, \vec k, \vec c, a}$ can be represented as a relation
-$T = F_1 \times \cdots \times F_n \times A$ where
-$F_i = \mathsf{dom}(k_i)$ and $c_j \in A$, then, a $t$-complete
-configuration $g$ denotes a subset of $T$.
+a relational database, an observation that was recently made in a
+CoNeXT 2019 paper~\cite{Chiesa}. In this way a match-action table can
+be represented as a \emph{table schema}
+$t \in \Var^n \times \left(2^{\mathsf{Action}}\right)^m \times
+2^{\FD}$, i.e. a tuple $(\vec{\var f}, \vec{A}, \Phi)$, where the
+$\var f_i \in \Var$ are the match fields, the $A_i$s are sets of
+actions, and $\Phi$ is a of constraints on the valid table
+instances. An instance of this table will first match on the values of
+the variables $\var f_1, \ldots \var f_n$, and then execute a sequence
+of actions $a_1;\cdots;a_m$, where $a_i \in A_i$. Our tables have no
+``default action'' as OpenFlow and P4 tables have.
+
+A table schema $t = (\vec{\var f}, \vec{A}, \Phi)$ can be populated by
+a relation
+$T \subseteq \left(\mathbbm {2}^+\right)^n \times
+\left(\mathsf{Action}\right)^m$. We use $T.\vec g$ or $T.\vec A$ as
+syntactic sugar for the more standard $\pi_{\vec g}(T)$ or
+$\pi_{\vec A}(T)$. A relation instance $T$ of $t$ is said to be
+\emph{valid} if $T$ satisfies the constraints $\Phi$.
+
+There a few kinds of constraints $ \phi \in \Phi$ on instances $T$ of
+$t$. First, $\phi$ can be a typical boolean formulae over expressions
+with defined fields drawn from $\vec{\var f}$. Alternatively, the
+constraints can be functional dependencies of the form
+$\vec{\var g} \longrightarrow \vec{B}$, where for every $\var g_i$,
+$\var g_i = \vec f_j$ for some $j$, and for every $B_i$, $B_i = A_j$
+for some $j$. Finally, the constraints can be \emph{semantic
+  functional dependencies} of the form
+$\bracbb{A_1}(\vec{\var g}).\vec{\var x} \longrightarrow \vec{\var
+  y}$, which just says that the value of $\vec{\var x}$ after
+executing the action in $A_1$ on the packet is determined by the
+fields $\vec{\var g}$. The semantics of these conditions are defined
+in Figure~\ref{fig:conditions-semantics}.
+
+\begin{figure}[tph]
+  \[T \models_t \phi \qquad t = (\vec{\var f}, \vec A, \Phi)\]
+  \[T \models \Phi \iff \forall \phi \in \Phi. T \models \phi \]
+  \[\begin{array}{ll}
+      T \models_t b &\iff \forall \rho \in T. \bracbb{b}~[\overline{\var f \mapsto \rho.\var{f}}]\\
+
+      T \models_t \vec{\var g} \longrightarrow \vec A & \iff \forall \rho, \tau \in T. \rho.\vec{\var g} = \tau.\vec{\var g} \Rightarrow
+                                                        \rho.A = \tau.A \\
+      
+      \multicolumn 2 l {T \models_t \bracbb{\vec A}(\vec{\var x}).\vec{\var y}
+      \longrightarrow \vec B} \\
+      \multicolumn 2 l {\iff \forall \rho, \tau \in
+    T. \bracbb{\rho.\vec A}[\overline{\var x \mapsto \rho.\var x}] =
+    \bracbb{\tau.\vec A}[\overline{\var x \mapsto \tau.\var
+      x}]}
+      \\ \multicolumn 2 l {\phantom{\iff \forall \rho, \tau \in T.} \Rightarrow \rho.\vec B \rightarrow \tau.\vec B}
+    \end{array}\]
+  \todo[inline]{Typeset these more legibly}
+  \caption{What it means for a relation to satisfy a constraint. We
+    frequently write $R$ satisfies $\Phi$ to mean $R \models \Phi$.}
+  \label{fig:conditions-semantics}
+\end{figure}
+
+\subsection{Synthesis Problems}
+
 
 \subsection{Single-Table Programs}
 
-To ground our investigation, lets first consider the simple situation
-where both our logical and concrete programs are comprised of a single
-table. So we have two table applications,
-$\apply{t,\vec k, \vec c, a}$ and $\apply{s, \vec l, \vec d, b}$,
-which we represent as relations of the form
-\[T = F_1 \times \cdots \times F_n \times A\]
-\[S = G_1 \times \cdots \times G_m \times B\] where $A$ and $B$ are
-sets of actions, $F_i = \mathsf{dom}(k_i)$, $G_j = \mathsf{dom}(l_i)$,
-$A = \vec c$ and $B = \vec d$, and with the functional dependencies
-\[F_1, \ldots, F_n \to A\] \[G_1, \ldots, G_n \to B.\] We write $T$
-and $S$ as functions as notational shorthand. We now build up the same
-scaffolding of programs as for the full-program formulation.
+To ground our investigation, let us first consider the simple
+situation where our logical program and concrete programs are
+comprised of a single table. In other words, given two tables
+$s = (\vec{\var f}, \vec{\var A}, \Phi)$, and
+$t = (\vec{\var g}, \vec{\var b}, \Psi)$, we want to produce a way to
+map every valid instance $S$ of $s$ to a valid instance $T$ of $t$.
 
 \subsubsection{Single Table Verification}
-First we define a problem called $\textsc{SingleVerif}(T_0, S_0)$,
-which takes instantiations $T_0 \subset T$ and $S_0 \subset S$ and
-determines whether
-$\forall \pkt. \bracbb{T_0(\pi_{F_1,\ldots,F_n}(pkt))}\;\pkt =
-\bracbb{S_0(\pi_{G_1,\ldots,G_n}(\pkt))}\; \pkt$ via the condition
-
+First we define a problem called $\textsc{SingleVerif}(t,s,T, S)$,
+which takes valid instances $T$ and $S$ of
+$t = (\vec{\var f}, \vec A, \Phi)$ and
+$s = (\vec{\var g}, \vec B, \Psi)$ respectively, and determines
+whether $\forall \pkt. \bracbb{T}\;\pkt = \bracbb{S}\; \pkt$. We can
+easily solve this by checking the validity of the following condition
+to Z3:
 \[\begin{array}c
-    \multicolumn{1}{l}{\textsc{SingleVerif}(S_0,T_0) \triangleq}\\
-    \displaystyle \quad \bigwedge_{\vec k, c \in T_0}\left(\vec k = \pi_{F_1,\ldots,F_n}(\pkt)\right) \Rightarrow wp(c,\pkt= \pkt')\\ \iff \\
-    \displaystyle \quad \bigwedge_{\vec l, d \in S_0}\left(\vec l = \pi_{G_1,\ldots,G_m}(\pkt)\right) \Rightarrow wp(d, \pkt= \pkt')
+    \multicolumn{1}{l}{\textsc{SingleVerif}(t,s,S,T) \triangleq}\\
+    \displaystyle \quad \bigwedge_{\vec v, \vec a \in T}
+    \left(\bigwedge_i v_i = \pkt.\var f_i\right) \Rightarrow \wp(a_1;\cdots;a_n,\pkt = \pkt')\\ \iff \\
+    \displaystyle \quad \bigwedge_{(\vec v, \vec a) \in S}\left(\bigwedge_i k_i = \pkt.\var g_i\right) \Rightarrow \wp(v_1;\cdots; a_m, \pkt= \pkt')
   \end{array}
 \]
 
 \subsubsection{Instance Synthesis}
 
 The next question we can ask is: given a single logical instantiation
-$T_0$ can we construct a concrete instantiation $S_0$ that satisfies 
-\textsc{SingleVerif}? Formally, we write
-\[\textsc{SingleInstSynth}(T_0) \triangleq \exists
-  S_0. \textsc{SingleVerif}(T_0, S_0)\]
+$T$ can we construct a concrete instantiation $S$ that satisfies
+\textsc{SingleVerif}? Formally, we ask
+\[\textsc{SingleInstSynth}(s,t,T) \triangleq \textrm{Construct}~S~\textrm{st.}~\textsc{SingleVerif}(s,t,T, S)\]
 
 \subsubsection{Mapping Synthesis}
 
 We can lift this up to asking whether there is a function that will
-produce, for an arbitrary $T_0$, an equivalent $S_0$, specifically, we write
-\[\textsc{SingleMapSynth}() \triangleq \exists f. \; \forall T_0.\;
-  \textsc{SingleVerif}(T_0, f(T_0))\]
+produce, for an arbitrary $T$, an equivalent $S$, specifically, we
+write
+\[\textsc{SingleMapSynth}() \triangleq \textrm{Construct}~f~\textrm{st.}~\forall T.\;
+  \textsc{SingleVerif}(T, f(T))\]
 
 \subsubsection{Decomposing Keys and Actions}
 
-We can decompose the \textsc{SingleMapSynth} problem into two problems
-\textsc{KeyMapSynth} and $\textsc{ActMapSynth}()$ respectively map the
-actions and the keys. Luckily, \textsc{KeyMapSynth} has a very easy
-intuition, they keys of the logical table must be a subset of the
-concrete table:
-\[\{F_1, \ldots, F_n\} \subseteq \{G_1, \ldots, G_m\}\]
+We can decompose the search for a mapping in the
+\textsc{SingleInstSynth} problem to a search for two mappings: one
+that maps the keys, and another that maps the actions. Luckily,
+\textsc{KeyMapSynth} has a very easy intuition, the keys of $s$ must
+be a subset of the keys of $t$:
+\[\{\var f_1, \ldots, \var f_n\} \subseteq \{\var g_1, \ldots, \var g_m\}\]
 
 Then, a solution to $\textsc{KeyMapSynth}()$ is the injection map which crosses the missing columns with the full set:
-\[\displaystyle \iota (k_1, \ldots, k_n) = \Pi_{j=1}^m \begin{cases}
-    \{k_i\}, & \exists i,  F_i = G_j \\
-    G_j, & \mathit{otherwise}
-    \end{cases}
+\[\displaystyle \kappa (v_1, \ldots, v_n) = \Pi_{j=1}^m \begin{cases}
+    \{k_i\} &, \exists i,  \var f_i = \var g_j \\
+    \dom(g_j) &, \mathit{otherwise}
+  \end{cases}
 \]
+Where here, $\dom(g_j) \subseteq \mathbbm{2}^+$ refers to the vectors
+that could be assigned to $g_j$. In the current formalism, this is
+just every non-empty bivector, but in the future will be all vectors
+of a given length, or in a given interval. Or hopefully some symbolic
+representation like a wildcard or an interval.
 
-And a solution to $\textsc{ActMapSynth}(a)$ for $a \in A$ is a map
-from $\alpha : A \to B$ such that the following holds:
-\[\bigwedge_{a \in A} \forall \pkt,\pkt'.\; \wp(a, \pkt = \pkt')
-  \Leftrightarrow \wp(\alpha(a), \pkt = \pkt')\] 
+\todo[inline]{Could there be funny situations where this is unsound?
+  like when theres a functional dependency between $\var f_1$ and
+  $\var f_2$ in the given relation? }
 
-\[\bigwedge_{a \in A} \bracbb{a} = \bracbb{\alpha(a)}\]
+Separately, now, we want to map the actions. However, it is possible
+that there are multiple physical actions for each logical action. For
+example, the logical action $\var x:=1$, can be mapped to either
+$\var x := 1; \assume 1$ or to $\var x:= 0; \var x:= 1$.
 
-We conjecture that every solution $f$ to $\textsc{SingleMapSynth}()$
-can be captured by the pair $(\iota, \alpha) : T \to S$ which form
-solutions to $\textsc{KeyMapSynth}()$ and $\textsc{ActMapSynth}()$
-respectively.
+To capture this freedom, we define a \emph{candidate map}
+$\alpha : A_1 \times \cdots \times A_n \to B_1 \times \cdots \times
+B_m$ to be
+\[\alpha(\vec a) = \{\vec b \mid \bracbb{a_1;\cdots;a_n} =
+  \bracbb{b_1; \cdots; b_n}, b_i \in B_i  \}\]
+
+We can check the equivalence of these straight-line programs by
+calling out to Z3.
+\todo[inline]{What if you match on $y=1$ and execute $x:=y$
+  how do you observe that this row is equal to $(y=1, x:=1)$? }
+
+Now that we have the key map $\kappa$, and the action candidate map
+$\alpha$, we can produce a map $f$ from instances of $s$ to instances
+of $t$. We can precompute $\alpha$ for every action sequence.
+
+Now, we have a way to produce a valid instance $T$ of $t$ that from a
+valid instance $S$ of $s$ such that $\bracbb{S} = \bracbb{T}$:
+\begin{quote}
+  Given $S$, brute force search for an instance $T$ of $t$ such that
+  for every $(\vec v, \vec a) \in S$, select a
+  $\vec b \in \alpha(\vec a)$ so that
+  \[\{(\vec u, \vec b) \mid \vec u \in
+    \kappa(\vec v)\} \subseteq T\]
+\end{quote}
 
 
 
-
-
-\subsubsection{Single-Table Programs with Functional Dependencies}
-
-We can also consider variants of the mapping synthesis problem that
-incorporate functional dependencies on the logical and real tables. We
-call this problem $\textsc{SingleMapSynthFD}()$ which takes as given
-sets of functional dependencies $D_S$ and $D_T$, and requires that any
-solution $(\alpha, \iota)$ must obey the following property in
-addition to satisfying $\textsc{KeyMapSynth}$ and
-$\textsc{ActMapSynth}$:
-\[F_1,\ldots, F_n  \longrightarrow \alpha(A) \in D_S \Rightarrow
-  F_1,\ldots, F_n \longrightarrow A \in D_T\]
-
-
-\[\alpha_A(D_S) \subseteq D_T\]
-
-We can encode this in Z3 by statically computing all tuples in $D_S^+$
-and in $D_T^+$ and checking whether $D_T^+ \subseteq D_S^+$.
-
-\subsection{Composing Tables}
+\section{Converting to One Big Table}
 
 The approach detailed above generalizes to full tables so long as we
 can compress a full program into a single match-action table. In some
 cases, this is quite easy--for example, when the tables test and
-modify disjoint sets of variables. In Figure~\ref{fig:easy-example},
+modify disjoint sets of variables. In Figure~\ref{fig:cross-product-ex},
 we see that the composed table has the cross product of keys, and the
 cross product of actions. We only need to constrain the new table with
-the functional dependencies $\texttt{src} \longrightarrow X$ and
-$\texttt{dst} \longrightarrow Y$, so that we can properly convert
+the functional dependencies $\var{src} \longrightarrow X$ and
+$\var{dst} \longrightarrow Y$, so that we can properly convert
 every instance of each relation to the other. However, it becomes much
 more difficult when we have to consider relationships between tables.
 
 \begin{figure}[ptb]
   \begin{minipage}{0.32\columnwidth}
   \[\begin{array}{c}
-      (\texttt{src}, X); (\texttt{dst}, Y)
+      (\var{src}, X); (\var{dst}, Y)
       \\ = \\
       (\langle\texttt{src,dst}\rangle, X, Y)
     \end{array} \]
 \end{minipage} \hfill \vline \hfill \begin{minipage}{0.66\columnwidth}
   \[\begin{array}l
-      X = \{x:=v \mid v = 1,2,3,4\}\\
-      Y = \{y:=v \mid v = 1,2,3,4
+      X = \{\var x:=v \mid v = 1,2,3,4\}\\
+      Y = \{\var y:=v \mid v = 1,2,3,4
     \end{array}\]
   \hrule
   \[\begin{array}{cc}
-      \texttt{src} \longrightarrow X
-      &\texttt{dst} \longrightarrow Y
+      \var{src} \longrightarrow X
+      &\var{dst} \longrightarrow Y
     \end{array} \]
 \end{minipage}
 \caption{Disjoint Cross Product}
@@ -140,22 +204,22 @@ more difficult when we have to consider relationships between tables.
 \begin{figure}[ptb]
   \begin{minipage}{.33\columnwidth}
   \[\begin{array}{c}
-      (\texttt{src}, X);
-      (\texttt{x}, D)
+      (\var{src}, X);
+      (\var{x}, D)
       \\ = \\
-      (\texttt{src}, X, D)
+      (\var{src}, X, D)
     \end{array}\]
 \end{minipage}\hfill\vrule\hfill\begin{minipage}{.66\columnwidth}
   \[\begin{array}l
-      X = \{x:=v \mid v = 1,2,3,4\}\\
-      D = \{\texttt{dst} := v \mid v = 101,102,103,104\} \\
+      X = \{\var x:=v \mid v = 1,2,3,4\}\\
+      D = \{\var{dst} := v \mid v = 101,102,103,104\} \\
     \end{array}
   \]
   \hrule
-  \[\texttt{src}\longrightarrow XD\]
+  \[\var{src}\longrightarrow XD\]
 \end{minipage}
 
-\caption{Dependency Example.We have the constraint that
+\caption{Dependency Example. We have the constraint that
   $X \longrightarrow \texttt{x}$, so candidate key for the table is
   simply \texttt{src}.}
   \label{fig:dependency-ex}
@@ -164,9 +228,9 @@ more difficult when we have to consider relationships between tables.
 A common programming pattern is for one table to set a piece of
 metadata and then use that value as a key later in the program. For
 instance, consider Figure~\ref{fig:dependency-ex}. Notice that the
-value of \texttt{x} is completely determined by the contents of the
+value of \var{x} is completely determined by the contents of the
 previous table, which means that the only key we need in the composite
-table is \texttt{src}. 
+table is \var{src}.
 
 \begin{figure}
   \begin{minipage}{0.33\columnwidth}
@@ -195,34 +259,34 @@ Unfortunately, the complexity doesn't stop there. If a table only
 partially determines the value of a variable that is uses as a keys in
 the next table, then the relationship is tricky. Consider the two
 tables in Figure~\ref{fig:partial-depend-ex}, It doesn't hold that
-$X' \longrightarrow \texttt{x}$ (as in
+$X' \longrightarrow \var{x}$ (as in
 Figure~\ref{fig:dependency-ex}). But, the trivial functional
-constraint $\texttt{x}_0X' \longrightarrow \texttt{x}_1$
-holds, where $\texttt{x}_0$ is the value of $\texttt{x}_1$ before
-executing any of the actions in $X'$ and $\texttt{x}_1$ is the value
+constraint $\var{x}_0X' \longrightarrow \var{x}_1$
+holds, where $\var{x}_0$ is the value of $\var{x}_1$ before
+executing any of the actions in $X'$ and $\var{x}_1$ is the value
 after -- the one used in the key of the second table.
 
 As we would have done in~\ref{fig:cross-product-ex}, we would like to
-enforce the functional dependency $\texttt{x}_1 \longrightarrow D$;
-however, $x_1$ can't be a key in the composed table, because we need
+enforce the functional dependency $\var{x}_1 \longrightarrow D$;
+however, $\var x_1$ can't be a key in the composed table, because we need
 the match to occur before we execute $X'$. However, we do have the
-information to compute $x_1$ in the table -- we require that
-$\bracbb{X'}(\texttt{x}_0).\texttt{x}_1\longrightarrow D$, i.e. the
-values of $\texttt{x}_1$ in the image of the actions in $A$ over
-packets where the values of $\texttt{x}_0$ are known. To see why we
+information to compute $\var x_1$ in the table -- we require that
+$\bracbb{X'}(\var{x}_0).\var{x}_1\longrightarrow D$, i.e. the
+values of $\var{x}_1$ in the image of the actions in $A$ over
+packets where the values of $\var{x}_0$ are known. To see why we
 need this, consider the following table entries
 \[
   \begin{array}{c|c|c|c}
-    \texttt{src} & \texttt{x}_0 & X' & D\\ \hline
-    101 & 99 & \texttt{x}_1 := 1 & \texttt{dst} := 104 \\
-    101 & \vdots & \texttt{x}_1 := 1 & \texttt{dst} := 104 \\
-    102 & 1 & \texttt{x}_1 := \texttt{x}_0 & \texttt{dst} := 101 \\
-    102 & \vdots & \texttt{x}_1 := \texttt{x}_0 & \texttt{dst} := 101 \\
+    \var{src} & \var{x}_0 & X' & D\\ \hline
+    101 & 99 & \var{x}_1 := 1 & \var{dst} := 104 \\
+    101 & \vdots & \var{x}_1 := 1 & \var{dst} := 104 \\
+    102 & 1 & \var{x}_1 := \var{x}_0 & \var{dst} := 101 \\
+    102 & \vdots & \var{x}_1 := \var{x}_0 & \var{dst} := 101 \\
   \end{array}
 \]
 
 These rules satisfy the requirement that
-$\texttt{src}\longrightarrow X'$, so we can losslessly add rules to
+$\var{src}\longrightarrow X'$, so we can losslessly add rules to
 the first table, however, we have a rule-conflict when we try and add
 rules to the second table. Notice that for each rule, $x_1 = 1$, which
 means the keys in the second table need to be the same, but they each
@@ -230,64 +294,72 @@ select different actions!
 \[
   \begin{array}{c|c}
     \texttt{src} & X'\\ \hline
-    101 & \texttt{x}_1 := 1  \\
-    102 & \texttt{x}_1 := x_0 \\
+    101 & \var{x}_1 := 1  \\
+    102 & \var{x}_1 := x_0 \\
   \end{array}\enspace ; \enspace
   \begin{array}{c|c}
-    \texttt{x}_1 & D\\ \hline
-    1 & \texttt{dst} := 104 \\
-    1 & \texttt{dst} := 101 \\
-    \vdots & \texttt{dst} := 101 \\
+    \var{x}_1 & D\\ \hline
+    1 & \var{dst} := 104 \\
+    1 & \var{dst} := 101 \\
+    \vdots & \var{dst} := 101 \\
   \end{array}  
 \]
 
 However, if we unpack the definition of the constraint
-$\bracbb{X'}(\texttt{x}_0).\texttt{x}_1 \to D$, we get
-\[\pi_{\texttt{x}_1}\left(\bigcup_{a \in X, x \in
-      \texttt{x}_0,\pkt} \bracbb{a}\; pkt[\texttt{x}_0 \mapsto x]
+$\bracbb{X'}(\var{x}_0).\var{x}_1 \to D$, we get
+\[\pi_{\var{x}_1}\left(\bigcup_{a \in X, x \in
+      \var{x}_0,\pkt} \bracbb{a}\; pkt[\var{x}_0 \mapsto x]
   \right) \longrightarrow D.\] Unfolding definitions again, this says
 that for any relation $R$ implementing the that populates the table
-$(\langle\texttt{src},\texttt{x}_0\rangle, X', D)$ it must be that for
+$(\langle\var{src},\var{x}_0\rangle, X', D)$ it must be that for
 rows $\rho, \rho' \in R$, then $\rho.D = \rho.D$ holds if the
 following condition holds
-\[\forall \pkt. \left(\bracbb{\rho.a}\; \pkt[\texttt{x}_0 \mapsto
+\[\forall \pkt. \left(\bracbb{\rho.a}\; \pkt[\var{x}_0 \mapsto
     \rho.x_0 ]\right).x_1 =
-  \left(\bracbb{\rho'.a}\;\pkt[\texttt{x}_0\mapsto \rho.x_0
+  \left(\bracbb{\rho'.a}\;\pkt[\var{x}_0\mapsto \rho.x_0
     ]\right).x_1\]
 
 which prohibits the key-conflict in the second table
-$(\texttt{x}_1,D)$. Specifically, since
+$(\var{x}_1,D)$. Specifically, since
 \[\left(\bracbb{x_1:=1} \{x_0 \mapsto 99\}\right).x_1 = 1 =
   \left(\bracbb{x_1:=x_0} \{x_0 \mapsto 1\}\right).x_1\] and
-$\texttt{dst} := 101 \neq \texttt{dst} := 104$. Thus, this condition
+$\var{dst} := 101 \neq \var{dst} := 104$. Thus, this condition
 prohibits this combination of rules in
-$(\texttt{src}, \texttt{x}_0, X', D)$.
+$(\var{src}, \var{x}_0, X', D)$.
+
+
+\subsection{Dominating Sets}
 
 \begin{figure}[tpb]
   \[\begin{array}{c>{\triangleq}cl}
-      \delta(x := e,v) && \begin{cases}
-        \fvs(e) &x = v\\
-        \{v\} & \textit{otherwise} \end{cases} \\
-      \delta(c;c', v) && \left\{v'' \mid v' \in \delta(c, v), v'' \in \delta(c', v')\right\} \\
-      \delta(c\angel c', v) && \delta (c, v) \cup \delta(c', v) \\
-      \delta(\assert b, v) && \fvs(b) \cup \{v\} \\
-      \delta(\assume b, v) && \fvs(b) \cup \{v\} \\\\
-      \Delta(A, V) && \displaystyle\bigcup_{a\in A,v \in V}\delta(a,v)
+      \delta(\var y := e,\var x) && \begin{cases}
+        \fvs(e) &\var y = \var x\\
+        \{\var x\} & \textit{otherwise} \end{cases} \\
+      \delta(c;c', \var x) && \left\{\var z \mid \var y \in \delta(c', \var x), \var z \in \delta(c, \var y)\right\} \\
+      \delta(c\angel c', \var x) && \delta (c, \var y) \cup \delta(c', \var y) \\
+      \delta(\assert b, \var x) && \fvs(b) \cup \{\var x\} \\
+      \delta(\assume b, \var x) && \fvs(b) \cup \{\var x\} \\\\
+      \Delta(\vec A, X) && \displaystyle\bigcup_{\substack{a_1\in A_1,\\\ldots,\\ a_n \in A_n, \\\var x \in X}}\delta(a_1;\cdots; a_n,\var x)                      
     \end{array}\]
   \caption{Dominating Sets}
-  \label{fig:delta }
+  \label{fig:dominating-sets }
 \end{figure}
+
+
+\todo[inline]{Motivate Dominating Sets}
 
 As a helper function, we define the dominating set $\Delta(A,G)$ to be
 the (smallest) set of variables required to determine the values of $G$
-after running $A$. We characterize $\Delta(A,G)$ in two properties.
+after running $A$
 
 \begin{lemma}[Defined Free Variables Defines Expressions]
   \label{lem:def-fvs-expr}
   For an expression $e$, with
-  $\{\texttt{x}_1, \ldots, \texttt{x}_n\} \in \fvs(e)$, and
-  $v_i \in \texttt{x}_i$ for $i \in [n]$,
-  $\bracbb{e}~(\cdot[\vec{\texttt{x}} \mapsto \vec{v}])$ is defined.
+  $\{\var{x}_1, \ldots, \var{x}_n\} \in \fvs(e)$, and
+  $v_i \in \dom(\var{x}_i)$ for $i \in [n]$, for all
+  $\pkt, \pkt' \in \Pkt$,
+  \[\bracbb{e}~(\pkt[\vec{\var{x}} \mapsto \vec{v}]) =
+  \bracbb{e}~(\pkt'[\vec{\var{x}} \mapsto \vec{v}]).\]
 \end{lemma}
 
 \begin{proof}
@@ -298,46 +370,46 @@ after running $A$. We characterize $\Delta(A,G)$ in two properties.
 \begin{lemma}[$\delta$-Domination]
   \label{lem:delta-dom}
   Given a deterministic, total command $a$, and a variable
-  $\texttt{x} \in \Var$, if
-  $\{\texttt{x}_1, \ldots, \texttt{x}_n\} = \delta(a,v)$ and
-  $v_i \in \texttt{x}_i$, then for every $\pkt$ and $\pkt'$,
-  $\bracbb{a}~\left(\pkt[\vec{\texttt{x}} \mapsto \vec v]\right)
-  = \bracbb{a}~\left(\pkt'[\vec{\texttt{x}} \mapsto \vec v]\right)$
+  $\var{x} \in \Var$, if
+  $\{\var{x}_1, \ldots, \var{x}_n\} = \delta(a,v)$ and
+  $v_i \in \var{x}_i$, then for every $\pkt$ and $\pkt'$,
+  $\bracbb{a}~\left(\pkt[\vec{\var{x}} \mapsto \vec v]\right)
+  = \bracbb{a}~\left(\pkt'[\vec{\var{x}} \mapsto \vec v]\right)$
   is defined.
 \end{lemma}
 
 \begin{proof}
   Proceed by induction on the structure of $a$, leaving
-  $\texttt{x}$, $\pkt$, and $\pkt'$ free.
+  $\var{x}$, $\pkt$, and $\pkt'$ free.
   \begin{enumerate}[align=left]
-  \item[($\SKIP$)] Let $\texttt{x} \in \Var$, Desugar
+  \item[($\SKIP$)] Let $\var{x} \in \Var$, Desugar
     $\SKIP = \assume \TRUE$. Since $\fvs(\TRUE) = {}$, then
-    $\delta(\assume\TRUE, \texttt{x}) = \{\texttt{x}\}$. Let $\pkt$
-    and $\pkt'$ be packets. Let $v_x \in \texttt{x}$. Notice that
+    $\delta(\assume\TRUE, \var{x}) = \{\var{x}\}$. Let $\pkt$
+    and $\pkt'$ be packets. Let $v_x \in \var{x}$. Notice that
     $\bracbb{\assume\TRUE} = \lambda x.x$, so calculate
-    $(\pkt[\texttt{x} \mapsto v_x]).\texttt{x} = v_x=
-    (\pkt'[\texttt{x} \mapsto v_x]).\texttt{x}$.
+    $(\pkt[\var{x} \mapsto v_x]).\var{x} = v_x=
+    (\pkt'[\var{x} \mapsto v_x]).\var{x}$.
   \item[($\nop$)] \textit{sim.}
-  \item[$(\texttt{y}:=e)$] Let $\texttt{x} \in
-    \Var$. There are two cases: $x = v$ or $x \neq v$.  If $\texttt{y}
-    = \texttt{x}$ then $\delta(a,\texttt{x}) =
+  \item[$(\var{y}:=e)$] Let $\var{x} \in
+    \Var$. There are two cases: $x = v$ or $x \neq v$.  If $\var{y}
+    = \var{x}$ then $\delta(a,\var{x}) =
     \fvs(e)$. By Lemma~\ref{lem:def-fvs-expr},
     $\bracbb{e}~\pkt[\fvs(e) \mapsto \vec v] = u =
     \bracbb{e}~\pkt'[\fvs(e) \mapsto \vec
-    v]$, so $\bracbb{\texttt{x}:=e}~\pkt = \pkt[\texttt{x} \mapsto
-    u].\texttt{x} = u = \pkt'[\texttt{x} \mapsto u] =
-    \bracbb{\texttt{x}:=e}~\pkt'$.
+    v]$, so $\bracbb{\var{x}:=e}~\pkt = \pkt[\var{x} \mapsto
+    u].\var{x} = u = \pkt'[\var{x} \mapsto u] =
+    \bracbb{\var{x}:=e}~\pkt'$.
 
-    If $\texttt{y} \neq \texttt{x}$, Then
-    $\delta(a,v) = \{\texttt{x}\}$. Let
-    $\bracbb{e}~\pkt[\texttt{x} \mapsto v] = u$ and
-    $\bracbb{e}~\pkt[\texttt{x} \mapsto v] = u'$. Then
+    If $\var{y} \neq \var{x}$, Then
+    $\delta(a,v) = \{\var{x}\}$. Let
+    $\bracbb{e}~\pkt[\var{x} \mapsto v] = u$ and
+    $\bracbb{e}~\pkt[\var{x} \mapsto v] = u'$. Then
     \[\begin{array}l
-        \left(\bracbb{x:=e}~\pkt[\texttt{x} \mapsto v]\right).\texttt{x}\\
-        = \pkt[\texttt{x} \mapsto v,\texttt{y} \mapsto u].\texttt{x} \\
+        \left(\bracbb{x:=e}~\pkt[\var{x} \mapsto v]\right).\var{x}\\
+        = \pkt[\var{x} \mapsto v,\var{y} \mapsto u].\var{x} \\
         = v \\
-        = \pkt'[\texttt{x}\mapsto v, \texttt{y}\mapsto u']/\texttt{x} \\
-        = \left(\bracbb{x:=e}~\pkt'[\texttt{x} \mapsto v]\right).\texttt{x}
+        = \pkt'[\var{x}\mapsto v, \var{y}\mapsto u']/\var{x} \\
+        = \left(\bracbb{x:=e}~\pkt'[\var{x} \mapsto v]\right).\var{x}
       \end{array}\]
 
   \item[$(\ifte b {c_1} {c_2})$] Desugar
@@ -347,16 +419,16 @@ after running $A$. We characterize $\Delta(A,G)$ in two properties.
         c_2\right),v\right) = \fvs(b) \cup \delta(c_1,v) \cup
     \delta(c_2,v)$. Let $\vec{v^b}$ be the values corresponding to
     fields in $\fvs(b)$, $\vec{v^1}$ be the values corresponding to
-    the fields in $\delta(c_1,\texttt{x})$ and let $\vec{v^2}$ be the
+    the fields in $\delta(c_1,\var{x})$ and let $\vec{v^2}$ be the
     values corresponding to the fields in
-    $\delta(c_2,\texttt{x})$. Let $\pkt$ and $\pkt'$ be
+    $\delta(c_2,\var{x})$. Let $\pkt$ and $\pkt'$ be
     packets. Notice that we can commute our assignments to any of the
-    variables in $\delta(c_1,\texttt{x})$, $\delta(c_2,\texttt{x})$,
+    variables in $\delta(c_1,\var{x})$, $\delta(c_2,\var{x})$,
     or $\fvs(b)$, because, as projections of the same map, either
     they're idempotent or distinct. Then, we know, by
     Lemma~\ref{lem:def-fvs-expr}, that
     \[\begin{array}l
-        \bracbb{b}~\pkt[\delta(c_1,\texttt{x})\delta(c_2,\texttt{x})
+        \bracbb{b}~\pkt[\delta(c_1,\var{x})\delta(c_2,\var{x})
         \mapsto \vec{v^1}][\fvs(b) \mapsto \vec{v^b}] \\
         = t\\
         =  \bracbb{b}~\pkt'[\fvs(b) \mapsto \vec{v^b}]
@@ -366,119 +438,121 @@ after running $A$. We characterize $\Delta(A,G)$ in two properties.
 
     Since $t = \TRUE$, we execute
     \[\begin{array}l
-        \left(\bracbb{c_1}~\pkt[\delta(c_1,\texttt{x}),\delta(c_2,\texttt{x})
-        \mapsto \vec{v^1},\vec{v^2}][\fvs(b) \mapsto \vec{v^b}]\right).\texttt{x}
-        \\ =  \left(\bracbb{c_1}~\pkt[\fvs(b),\delta(c_2,\texttt{x})
-        \mapsto \vec{v^b}, \vec{v^2}][\delta(c_1,\texttt{x}) \mapsto \vec{v^1}]\right).\texttt{x}
-        \\ = \left(\bracbb{c_1}~\pkt'[\fvs(b),\delta(c_2,\texttt{x})
-        \mapsto \vec{v^b}, \vec{v^2}][\delta(c_1,\texttt{x}) \mapsto \vec{v^1}]\right).\texttt{x}
+        \left(\bracbb{c_1}~\pkt[\delta(c_1,\var{x}),\delta(c_2,\var{x})
+        \mapsto \vec{v^1},\vec{v^2}][\fvs(b) \mapsto \vec{v^b}]\right).\var{x}
+        \\ =  \left(\bracbb{c_1}~\pkt[\fvs(b),\delta(c_2,\var{x})
+        \mapsto \vec{v^b}, \vec{v^2}][\delta(c_1,\var{x}) \mapsto \vec{v^1}]\right).\var{x}
+        \\ = \left(\bracbb{c_1}~\pkt'[\fvs(b),\delta(c_2,\var{x})
+        \mapsto \vec{v^b}, \vec{v^2}][\delta(c_1,\var{x}) \mapsto \vec{v^1}]\right).\var{x}
         \\ \multicolumn 1 r {\text{by IH}(c_1)}
       \end{array}
     \]
   \item[$(c;c')$] Let $\pkt, \pkt'$ be packets.
     Let
     \begin{align*}
-      \pkt_z &= \pkt[\texttt{z} \mapsto v_z \mid \texttt z \in \delta(c, \texttt y), \texttt y \in \delta(c', \texttt{x})] \\
-      \pkt'_z &= \pkt'[\texttt{z} \mapsto v_z\mid \texttt z \in \delta(c, \texttt y), \texttt y \in \delta(c', \texttt{x})]\\
+      \pkt_z &= \pkt[\var{z} \mapsto v_z \mid \var z \in \delta(c, \var y), \var y \in \delta(c', \var{x})] \\
+      \pkt'_z &= \pkt'[\var{z} \mapsto v_z\mid \var z \in \delta(c, \var y), \var y \in \delta(c', \var{x})]\\
       \pkt_c &= \bracbb{c}~\pkt_z \\
       \pkt'_c &= \bracbb{c}~\pkt'_z 
     \end{align*}
-    Then by IH$(c)$, $\forall y \in \delta(c', \texttt{x})$,
-    \[\pkt_c.\texttt{y} = v_y = \pkt'_c.\texttt{y}\]
+    Then by IH$(c)$, $\forall y \in \delta(c', \var{x})$,
+    \[\pkt_c.\var{y} = v_y = \pkt'_c.\var{y}\]
     which gives us the facts that
     \begin{align*}
-      \pkt_c &= \pkt_c[\texttt{y} \mapsto v_y \mid y \in \delta(c', \texttt{x})]\\
-      \pkt'_c &= \pkt'_c[\texttt{y} \mapsto v_y \mid y \in \delta(c', \texttt{x})]
+      \pkt_c &= \pkt_c[\var{y} \mapsto v_y \mid y \in \delta(c', \var{x})]\\
+      \pkt'_c &= \pkt'_c[\var{y} \mapsto v_y \mid y \in \delta(c', \var{x})]
     \end{align*}
     So by IH$(c')$ conclude that 
-    \[(\bracbb{c'}~\pkt_c).\texttt{x} = (\bracbb{c'}~\pkt'_c).\texttt{x}\]
+    \[(\bracbb{c'}~\pkt_c).\var{x} = (\bracbb{c'}~\pkt'_c).\var{x}\]
   \end{enumerate}
 \end{proof}  
 
-\begin{proposition}[$\Delta$-Domination]
-  \label{prop:Delta-dom}
+\begin{proposition}[Single-Set $\Delta$-Domination]
+  \label{prop:single-Delta-dom}
   Given a set of deterministic, total commands $A$, and a set of keys
-  $G \subset \Var$, then for $\vec{v} \in \vec{V}$ for
-  $\{V_1, \ldots, V_n\} = \Delta(A,G)$, and every $\texttt{g} \in G$, for every
-  $\pkt, \pkt \in \Pkt$,
-  $\bracbb{A}~\left(\pkt[\vec V \mapsto \vec v]\right).\texttt{g} =
-  \bracbb{A}~\left(\pkt'[\vec V \mapsto \vec v]\right).\texttt{g}$.
+  $\vec{\var g} \in \Var^m$, then for $\vec{v} \in \dom(\vec{\var x})$
+  for $\{\var x_1, \ldots, \var x_n\} = \Delta(A,\vec{\var g})$, and
+  every $\vec{\var g_i}$, every $\pkt, \pkt \in \Pkt$,
+  \[\left\{\bracbb{a}~\left(\pkt[\vec{\var x} \mapsto \vec v]\right).\var g_i \mid a \in A \right\}
+  = \left\{\bracbb{a}~\left(\pkt'[\vec{\var x} \mapsto \vec v]\right).\var
+  g_i \mid a \in A \right\}\]
 \end{proposition}
 
 \begin{proof}
-  By defintion
-  \begin{align*}
-    \bracbb{A}~\left(\pkt[\vec V \mapsto \vec v]\right) &= \{\bracbb{a}~\pkt[\vec V \mapsto \vec v] | a \in A\} \\
-    \bracbb{A}~\left(\pkt'[\vec V \mapsto \vec v]\right) &= \{\bracbb{a}~\pkt'[\vec V \mapsto \vec v] | a \in A\} \\
-  \end{align*}
-
-  So we only need to show for every $a \in A$, that
-  $\bracbb{a}~\pkt[\vec V \mapsto \vec v] = \bracbb{a}~\pkt'[\vec V
+  Equivalently, show for every $a \in A$, that
+  $\bracbb{a}~\pkt[\vec{\var x} \mapsto \vec v] = \bracbb{a}~\pkt'[\vec{\var x}
   \mapsto \vec v] $.
 
-  Let $a \in A$. By definition, since $a \in A$ and
-  $\texttt{g} \in G$, observe that
-  $\delta(a,\texttt{g}) \in \Delta(A,G)$. So, we can partition
-  $\vec V$ and $\vec v$ into $(\vec{U}, \vec W)$ and
-  $(\vec u, \vec w)$ respectively, where $u_i \in U_i$ and
-  $U_i \in \delta(a,g)$ and $w_i \in W_i$ and $W_i \not\in
-  \delta(a,g)$. Then, since $\vec{U}$ and $\vec W$ are disjoint,
+  Let $a \in A$, and fix a $g_i$. By definition, observe that
+  $\delta(a,\var g_i) \in \Delta(A,G)$. So, we can partition
+  $\vec{\var x}$ and $\vec v$ into $(\vec{\var y}, \vec{\var z})$ and
+  $(\vec u, \vec w)$ respectively, where $u_i \in \dom(\var y_i)$ and
+  $\var y_i \in \delta(a,\var g_i)$ and $w_i \in \dom(\var z_i)$ and
+  $\var z_i \not\in \delta(a,g)$. Then, since $\vec{\var y}$ and
+  $\vec{\var z}$ are disjoint,
   \begin{align*}
-    \bracbb{a}~\pkt[\vec V \mapsto \vec v] &= \bracbb{a}~\pkt[W\mapsto\vec{w}][U \mapsto\vec{u}]\\
-    \bracbb{a}~\pkt'[\vec V \mapsto \vec v] &= \bracbb{a}~\pkt'[W\mapsto\vec{w}][U \mapsto\vec{u}]
+    \bracbb{a}~\pkt[\vec{\var x} \mapsto \vec v] &= \bracbb{a}~\pkt[\vec{\var z}\mapsto\vec{w}][\vec{\var{y}} \mapsto\vec{u}]\\
+    \bracbb{a}~\pkt'[\vec {\var x} \mapsto \vec v] &= \bracbb{a}~\pkt'[\vec{\var z}\mapsto\vec{w}][\vec{\var y} \mapsto\vec{u}]
   \end{align*}
-
   The result follows by Lemma~\ref{lem:delta-dom}.
-  
 \end{proof}
 
+\begin{theorem}[$\Delta$-Domination]
+  \label{thm:Delta-dom}
+  Given a list of sets of deterministic, total commands $\vec A$, and
+  a set of keys $\vec{\var g} \in \Var^m$, then for
+  $\vec{v} \in \dom(\vec{\var x})$ for
+  $\{\var x_1, \ldots, \var x_n\} = \Delta(\vec A,\vec{\var g})$, and every
+  $\vec{\var g_i}$, every $\pkt, \pkt \in \Pkt$,
+  \begin{align*}
+    &\left\{\bracbb{a_1;\cdots;a_n}~\left(\pkt[\vec{\var x} \mapsto \vec v]\right).\var g_i \mid a_i \in A_i \right\} = \\
+    &\left\{\bracbb{a_1;\cdots;a_n}~\left(\pkt'[\vec{\var x} \mapsto \vec v]\right).\var
+    g_i \mid a_i \in A_i \right\}
+  \end{align*}
+\end{theorem}
+
+\begin{proof}
+  The proof follows from the
+  fact that $\Delta(\vec A, \vec G) = \Delta(B, \vec G)$, where
+  $B = \{a_1; \cdots; a_n \mid a_i \in A_i\}$, and Proposition~\ref{prop:single-Delta-dom}.
+\end{proof}
+
+\subsection{Joins and Projections}
 
 \begin{figure}[tpb]
   \[\begin{array}{ccl}
-      \compose{(F,A)}{(G,B)}
+      \multicolumn 3 c
+      {s = (\vec{\var f},\vec A, \Phi)\hfill t = (\vec{\var g},B, \Psi) \hfill \{\var d_1, \ldots, \var d_n\} = \Delta(\vec A, \vec{\var g})}\\\\
+      s \circ t
       & \triangleq
-      & ((F\times\Delta(G,A), A\times B),\\
-      &&\{F \longrightarrow A, \bracbb{A}(\Delta(A,G)).G \to B \})\\[.2em]
+      & ((\vec{\var f}\vec{\var d}, \vec A\vec B),\\
+      && \Phi \cup \Psi \cup \{\vec{\var f} \longrightarrow \vec A\} \cup \{ \bracbb{\vec A}(\vec{\var d}).\var g \to \vec B \})\\[.2em]
   %   \end{array}\]
   % \[\begin{array}{lcl}
-      \relcomp{s}{t}{S}{T}
+      S \bowtie_{s,t}T
       & \triangleq
-      % & \{(\keys\sigma,d,\acts\sigma,\acts\tau)\\
-      % && \hspace{.5em}
-      %    \mid \sigma \in S, \tau \in T, d \in D = \Delta(\acts\sigma, \keys\tau),\\
-      % && \hspace{1em}
-      %    \keys\tau \in \bracbb{\textsf{reduce}~(;)~\acts\sigma}~[D \mapsto d]
-      %    \}\\[.2em]
-      & \{(\sigma.F,d,\sigma.A,\tau.B) \\
+      & \{(\sigma.\vec{\var f},\vec v,\sigma.\vec A,\tau.\vec B) \\
       && \hspace{.5em}
-         \mid \sigma \in S, \tau \in T, (F,A) = s, (G,B) = t \\
+         \mid \sigma \in S, \tau \in T, v_i \in \dom(\var d_i), \\
       && \hspace{1em}
-         d \in D = \Delta(A, G), Q = D \cap F\\
+         \tau.\var g = \bracbb{\sigma.\vec A}~[\overline{\var d \mapsto v}],\\
       && \hspace{1em}
-         \tau.G = \bracbb{\sigma.A}~[D \mapsto d]\\
-      && \hspace{1em}
-         d.Q = \sigma.Q
+         \forall i,j. \var d_i = \var f_j \Rightarrow v_i = \sigma.\var f_j
          \}\\        
-      \decomp s t R
+      \pi_{s,t}(R)
       & \triangleq
-      & (\{(\rho.F,\rho.A) \mid \rho \in R, s = (F,A)\} \\
-      && , \{(p.G, \rho.B) \\
-      && \hspace{.5em} \mid \rho \in R, (F,A) = s, (G,B) = t, \\
-      && \hspace{1em}
-         D = \Delta(A,G), Q = D \cap F, \\
-      && \hspace{1em}
-         p = \bracbb{\rho.A}~[D \to \rho.D],\\
-      && \hspace{1em} d.Q = \sigma.Q
-         \} )
+      & (\{(\rho.\vec{\var f},\rho.\vec A) \mid \rho \in R\}, \\
+      && ~\{(p, \rho.\vec B) \\
+      && \hspace{.5em} \mid \rho \in R, \\
+      && \hspace{1em} p = \left(\bracbb{\rho.\vec A}~[\overline{\var d \mapsto \rho.\var d}] \right).\vec{\var g})
     \end{array}
   \]  
-  \caption{Table Composition ($\compose{s}{t}$), relation
-    composition ($\relcomp{s}{t}{S}{T}$), and relation
-    decomposition ($\decomp{s}{t}{R}$).}
+  \caption{Table Composition ($s \circ t$), relation composition
+    ($S \bowtie_{s,t}T$), and relation decomposition ($\pi_{s,t}R$).}
   \label{fig:compose-tables}
 \end{figure}
 
-Now we can use these intuitions to write down a composition operator
+Now we can use these definitions to write down a composition operator
 for tables, and conversions between the entries. In
 Figure~\ref{fig:compose-tables}, we define table composition
 $(r,\Phi_r) = s \circ t$, relation composition for those tables
@@ -489,131 +563,138 @@ $\pi_t(R)$. We want to prove that these operators commute.
 
 \begin{proposition}
   \label{prop:join-proj}
-  Given two tables $s = (F,A)$ and $t = (G,B)$, with
-  $(r, \Phi_r) = s \circ t$. For every relation $R$ populating $r$ and
-  respecting $\Phi_r$, if $\pi_{s,t}(R) = (S,T)$, then
-  $S \bowtie_{s,t} T = R$.
+  Given two tables $s = (F,A,\Phi)$ and $t = (G,B, \Psi)$, with
+  $r = s \circ t$. For every valid instance $R$ of $r$,
+  $\pi_s(R) \bowtie_{s,t} \pi_t(R) = R$.
 \end{proposition}
 
 \begin{proof}
-  Let $R$ be a relation populating $r = (H,C)$ and respecting $\Phi_r$, show
-  that $\pi_s(R) \bowtie_{s,t} \pi_t(R) = R$. Show each direction
+  Let $R$ be a valid instance of $r$, show that
+  $\pi_s(R) \bowtie_{s,t} \pi_t(R) = R$. We prove each direction
   separately.
   \begin{enumerate}[align=left]
   \item[$(\subseteq)$] Let $\rho \in \pi_s(R) \bowtie_{s,t} \pi_t(R)$,
     to show that $\rho \in R$. Then, we know that
     \[\begin{array}l
-        \rho = (\sigma.F, d, \sigma.A, \tau.B)\\
+        \rho = (\sigma.\vec{\var f}, \vec v, \sigma.\vec A, \tau.\vec B)\\
         \text{for some } \sigma \in \pi_s(R)\\
         \phantom{\text{for some }}\tau \in \pi_t(R)\\
-        \phantom{\text{for some }}d \in \Delta(A, G), Q = \Delta(A,G) \cap F\\
-        \text{such that } \tau.G = \bracbb{\sigma.A}~[\Delta(A,G) \mapsto d] \\
-        \phantom{\text{such that }} d.Q = \sigma.Q
+        \phantom{\text{for some }} \vec v \in \dom(\vec{\var d})\\ 
+        \text{such that } \tau.\vec{\var g} = \bracbb{\sigma.\vec A}~[\overline{\var d \mapsto v}] \\
+        \phantom{\text{such that }} \forall i,j. \var d_i = \var f_j \Rightarrow v_i = \sigma.\var d_j
       \end{array} \]
 
     Further, we know that
     \[\begin{array}l
-        \sigma = (\rho_s.F, \rho_s.A)\\
+        \sigma = (\rho_s.\vec{\var f}, \rho_s.\vec A)\\
         \text{for some } \rho_s \in R\\
       \end{array}
     \]
     and
     \[\begin{array}l  
-        \tau = (g, \rho_t.B) \\
-        \text{such that } g = (\bracbb{\rho_t.A}~[\Delta(A,G) \mapsto \rho_t.\Delta(A,G)]).G \\
-        \phantom{\text{such that }}\rho_t.\Delta(A,G).Q = \rho_t.F.Q
+        \tau = (p, \rho_t.\vec B) \\
+        \text{such that } p = (\bracbb{\rho_t.A}~[\overline{\var d \mapsto \rho_t.\var d}]).\vec g \\
+        \text{for some } \rho_t \in R
       \end{array}\]
 
     Composing these definitions, we get that
     \[\begin{array}l
-        \rho = (\rho_s.F, d, \rho_s.A, \rho_t.B) \\
-        \text{where } d \in \Delta(A, G)\\
-        \phantom{\text{where }} g = (\bracbb{\rho_s.A}~[\Delta(A,G) \mapsto d]).G\\
-        \phantom{\text{where } g} = (\bracbb{\rho_t.A}~[\Delta(A,G) \mapsto \rho_t.\Delta(A,G)]).G \\
-        \phantom{\text{where }} d.Q = \rho_s.F.Q \\
-        \phantom{\text{where }} \rho_t.\Delta(A,G).Q = \rho_t.F.Q 
+        \rho = (\rho_s.\vec{\var f}, \vec v, \rho_s.\vec A, \rho_t.\vec B) \\
+        \text{where } \vec v \in \dom(\vec d)\\
+        \phantom{\text{where }} p = (\bracbb{\rho_s.\vec A}~[\overline{\var d \mapsto v}]).\vec{\var g}\\
+        \phantom{\text{where } p} = (\bracbb{\rho_t.\vec A}~[\overline{\var d \mapsto \rho_t.\var d}]).\vec{\var g} \\
+        \phantom{\text{where }} \forall i,j. \var d_i = \var f_j \Rightarrow v_i = \rho_s.\var f_j
       \end{array}\]
     
   \end{enumerate}
 
-  Now, because of the constraint $\bracbb{A}(\Delta(A,G)).G \to B$, we
-  know that $\rho_t.B = \rho_s.B$, So we want to show
-  that \[(\rho_s.F, d, \rho_s.A, \rho_s.B) \in R\]
+  Now, because of the constraint
+  $\bracbb{\vec A}(\vec d).\vec{\var g} \to \vec B$, we know that
+  $\rho_t.\vec B = \rho_s.\vec B$, So we want to show
+  that
+  \[(\rho_s.\vec{\var f}, \vec v, \rho_s.\vec A, \rho_s.\vec B) \in
+    R\]
 
-  Since $R$ is total, and $F \longrightarrow A$, we know that there is
-  some $(\rho_s.F, d, \rho_s.A, b) \in R$. It is sufficient to show
-  that $b = \rho_s.B$.  The facts that
-  $g = (\bracbb{\rho_s.A}~[\Delta(A,G) \mapsto d]).G =
-  (\bracbb{\rho_t.A}~[\Delta(A,G) \mapsto \rho_t.\Delta(A,G)]).G$, and
-  $\rho_t \in R$, combine with the constraint
-  $\bracbb{A}(\Delta(A,G)).G \to B$ to prove $b = \rho_s.B$, and we're
-  done. \hfill \checkmark
+  Since $R$ is total, and $\vec{\var f} \longrightarrow \vec A$, we
+  know that there is some
+  $(\rho_s.\vec{\var f}, \vec v, \rho_s.\vec A, \vec b) \in R$. It is
+  sufficient to show that $\vec b = \rho_s.\vec B$.  The facts that
+  $p = (\bracbb{\rho_s.\vec A}~[\overline{\var d \mapsto
+    v}]).\vec{\var g} = (\bracbb{\rho_t.\vec A}~[\overline{\var d
+    \mapsto \rho_t.\var d}]).\vec{\var g}$, and $\rho_t \in R$,
+  combine with the constraint
+  $\bracbb{\vec A}(\vec{\var d}).\vec{\var g} \to B$ to
+  prove $b = \rho_s.B$. \hfill \checkmark
 
-\item[$(\supseteq)$] Let $\rho \in R$, subject to $\Phi_r$, to show
+\item[$(\supseteq)$] Let $\rho \in R$, to show
   that $\rho \in \pi_s(R) \bowtie_{s,t} \pi_t(R)$.
 
-  We know that $(\rho.F, \rho.A) \in \pi_s(R)$, and further
-  \[(\bracbb{\rho.A}[\Delta(A,G) \mapsto \rho.\Delta(A,G)],\rho.B) \in
+  We know that $(\rho.\vec{\var f}, \rho.\vec A) \in \pi_s(R)$, and further
+  \[(\bracbb{\rho.\vec A}[\overline{\var d \mapsto \rho.\var d}],\rho.\vec B) \in
     \pi_t(R)\]
-  and \[\rho.F.Q = \rho.\Delta(A,G).Q.\]
 
   Then, by definition
-  $(\rho.F, d, \rho.A, \rho.B) \in \pi_s(R) \bowtie_{s,t} \pi_t(R)$ when
-  \[\bracbb{\rho.A}[\Delta(A,G) \mapsto \rho.\Delta(A,G)]
-    = \bracbb{\rho.A}[\Delta(A,G) \mapsto d]\] and \[\rho.F.Q = d.Q.\]
-  Since this is the case for $d = \rho.\Delta(A,G)$, conclude
-  \[(\rho.F, \rho.\Delta(A,G), \rho.A, \rho.B) \in \pi_s(R)
+  $(\rho.\vec{\var f}, \vec v, \rho.\vec A, \rho.\vec B) \in \pi_s(R)
+  \bowtie_{s,t} \pi_t(R)$ whenever
+  \[\bracbb{\rho.\vec A}[\overline{\var d \mapsto \rho.\var d}]
+    = \bracbb{\rho.A}[\overline{\var d \mapsto v}]\] Since
+  $\vec v = \rho.\vec{\var d}$, the above equality holds. Therfore,
+  conclude
+  \[(\rho.\vec{\var f}, \rho.\vec{\var d}, \rho.\vec A, \rho.\vec B) \in \pi_s(R)
     \bowtie_{s,t} \pi_t(R).\]
   \mbox{} \hfill \checkmark\\\mbox{}
 \end{proof}
 
 \begin{proposition}
   \label{prop:proj-join}
-  Given two tables $s = (F,A)$ and $t = (G,B)$ with
-  $(r, \Phi_r) = s \circ t$. For every relation $S$ populating $s$ and
-  $T$ populating $t$, then $\pi_{s,t}(S \bowtie_{s,t} T) = (S,T)$.
+  Given two tables $s = (\vec{\var f},\vec A, \Phi)$ and
+  $t = (\vec{\var g},\vec B, \Psi)$ with $r = s \circ t$. For every
+  instance $S$ of $s$ and $T$ of $t$, then
+  $\pi_{s,t}(S \bowtie_{s,t} T) = (S,T)$.
 \end{proposition}
 
 \begin{proof}
-  Let $S$ be a relation populating $s$ and $T$ be a relation
-  populating $t$, to show that show that
-  $ \pi_{s,t}(S \bowtie_{s,t}T) = (S,T)$. Show each containment
+  Let $S$ be an instance of $s$ and $T$ be an instance of $t$, to show
+  that $ \pi_{s,t}(S \bowtie_{s,t}T) = (S,T)$. Show each containment
   separately:
   \begin{enumerate}[align=left]
   \item[$(\subseteq)$] Let $\sigma \in \pi_s(S \bowtie_{s,t} T)$ and
     $\tau \in \pi_t(S \bowtie_{s,t} T)$, to show that $\sigma \in S$
     and $\tau \in T$.
 
-    Now show that $\sigma \in S$ and $\tau \in T$. We know that there is a $\rho \in S \bowtie_{s,t} T$ such that
-    \[\tau = (\bracbb{\rho.A}[\Delta.(A,G) \mapsto \rho.\Delta(A,G)],
-      \rho.B),\] and \[\rho.F.Q = \rho.\Delta(A,G).Q.\] By definition,
-    there are $\sigma' \in S$ and $\tau' \in T$ such that
-    $(\rho.F,\rho.A) = \sigma'$, and
-    $\tau' = (\bracbb{\rho.A}[\Delta.(A,G) \mapsto \rho.\Delta(A,G)],
-    \rho.B)$. Conclude that $\tau = \tau'$ and $\sigma =
-    \sigma'$. \hfill \checkmark
+    We know that there is a $\rho \in S \bowtie_{s,t} T$ such that
+    \[\tau = (\bracbb{\rho.\vec A}[\overline{\var d \mapsto \rho.\var d}],
+      \rho.B),\] By definition, there are $\sigma' \in S$ and
+    $\tau' \in T$ such that
+    $(\rho.\vec{\var F},\rho.\vec A) = \sigma'$, and
+    $\tau' = (\bracbb{\rho.\vec A}[\overline{\var d \mapsto \rho.\var
+      d}], \rho.\vec B)$. Conclude that $\tau = \tau'$ and
+    $\sigma = \sigma'$. \hfill \checkmark
 
   \item[$(\supseteq)$] Let $\sigma \in S$ and $\tau \in T$, to show
     that $\sigma \in \pi_s(S \bowtie_{s,t}T)$, and
-    $\tau \in \pi_t(S \bowtie_{s,t} T)$.  Then we know that there is
-    $\rho \in S\bowtie_{s,t}T$ such that $\rho.FA = \sigma$,
-    $\rho.B = \tau.B$, and
-    $\tau.G = \bracbb{\rho.A}[\Delta(A,G) \mapsto \rho.\Delta(A,G)]$
-    with $\rho.F.Q = \rho.\Delta(A,G).Q$.  Finally, we have
+    $\tau \in \pi_t(S \bowtie_{s,t} T)$.  We know that there is
+    $\rho \in S\bowtie_{s,t}T$ such that
+    $\rho.\vec{\var f}\vec A = \sigma$, $\rho.\vec B = \tau.\vec B$,
+    and
+    $\tau.\vec{\var g} = \bracbb{\rho.\vec A}[\overline{\var d \mapsto
+      \rho.\var d}]$.  Finally, we have
     $\sigma' \in \pi_s(S \bowtie_{s,t}T)$ and
     $\tau' \in \pi_t(S \bowtie_{s,t} T)$ such that
-    $\sigma' = \rho.FA$, $\tau'.B = \tau.B$, and
-    $\tau'.\Delta(A,G) = \bracbb{\rho.A}~[\Delta(A,G) \mapsto
-    \rho.\Delta(A,G)]$. Conclude that $\sigma = \sigma'$ and
+    $\sigma' = \rho.\vec{\var f}\vec A$, $\tau'.\vec B = \tau.\vec B$,
+    and
+    $\tau'.\vec{\var g} = \bracbb{\rho.\vec A}~[\overline{\var d
+      \mapsto \rho.\var d}]$. Conclude that $\sigma = \sigma'$ and
     $\tau = \tau'$. \hfill \checkmark
   \end{enumerate}
 \end{proof}
 
 \begin{theorem}[Composition Functional Equivalence]
   \label{thm:comp-func-equiv}
-  Given two tables $s = (F,A)$ and $t = (G,B)$ with
-  $(r, \Phi_r) = s \circ t$. For every relation $S$ populating $s$ and
-  $T$ populating $t$, $\bracbb{S;T} = \bracbb{S\bowtie_{s,t}T}$.
+  Given two tables $s = (\vec{\var f},\vec A, \Phi)$ and
+  $t = (\vec{\var g},\vec B, \Psi)$ with $r = s \circ t$. For every
+  valid instances $S$ of $s$ and $T$ of $t$,
+  $\bracbb{S;T} = \bracbb{S\bowtie_{s,t}T}$.
 \end{theorem}
 
 \begin{proof}
@@ -621,105 +702,48 @@ $\pi_t(R)$. We want to prove that these operators commute.
   populating $t$.
   %
   Let $\pkt$ be an aribtrary packet. Then, since $S$ is total, there
-  is some rule $\sigma \in S$ such that \[\pkt.F = \sigma.F.\] Further, we
-  know that we will execute actions $\sigma.A$, to get
-  \[\pkt' = \bracbb{\sigma.A}~\pkt.\] Now, since $T$ is total, we know
-  that there is some $\tau \in T$ such that \[\pkt'.G = \tau.G.\]
-  Further, our final packet is \[\pkt'' = \bracbb{\tau.B}~\pkt'.\]
+  is some rule $\sigma \in S$ such that
+  \[\pkt.\vec{\var f} = \sigma.\vec{\var f}.\] Further, we know that
+  we will execute actions $\sigma.\vec A$, to get
+  \[\pkt' = \bracbb{\sigma.\vec A}~\pkt.\] Now, since $T$ is total, we know
+  that there is some $\tau \in T$ such that
+  \[\pkt'.\vec{\var g} = \tau.\vec{\var g}.\] Further, our final
+  packet is \[\pkt'' = \bracbb{\tau.\vec{B}}~\pkt'.\]
 
   By definition the following set of rules $R$ is a subset of $S \bowtie_{s,t}T$:
   \[\begin{array}{l}
       R  = \bigg\{\rho \in S \bowtie_{s,t} T~~\big|\\
-      \qquad\quad \rho.F = \sigma.F = \pkt.F\\
-      \qquad\quad \rho.A = \sigma.A \\
-      \qquad\quad \tau.B = \rho.B \\
-      \qquad\quad (\bracbb{\sigma.A}[\Delta(A,G) \mapsto \rho.\Delta(A,G)]).G =\tau.G \bigg\}
+      \qquad\quad \rho.\vec{\var f} = \sigma.\vec{\var F} = \pkt.\vec{\var f}\\
+      \qquad\quad \rho.\vec A = \sigma.\vec A \\
+      \qquad\quad \tau.\vec B = \rho.\vec B \\
+      \qquad\quad (\bracbb{\sigma.\vec A}[\overline{\var d \mapsto \rho.\var d}).\vec{\var g} =\tau.\vec{ \var g} \bigg\}
     \end{array}\]
 
-  Since $(\bracbb{\sigma.A}~\pkt).G = \tau.G$, then by
+  Since $(\bracbb{\sigma.\vec A}~\pkt).\vec{\var g} = \tau.\vec{\var g}$, then by 
   Proposition~\ref{prop:Delta-dom} there is some $\rho \in R$ such
-  that $\pkt.F = \rho.F$ and $\pkt.\Delta(A,G) =
-  \rho.\Delta(A,G)$. Since $\rho.A = \sigma.A$ and
-  $\rho.B = \sigma.B$, conclude that
-  \[\bracbb{\rho.B}\left(\bracbb{\rho.A}~\pkt\right) = \pkt''.\]
+  that $\pkt.\vec{\var f} = \rho.\vec{\var f}$ and $\pkt.\vec{\var d} =
+  \rho.\vec{\var d}$. Since $\rho.\vec A = \sigma.\vec A$ and
+  $\rho.\vec B = \sigma.\vec B$, conclude that
+  \[\bracbb{\rho.\vec B}\left(\bracbb{\rho.\vec A}~\pkt\right) = \pkt''.\]
 \end{proof}
 
 
 \begin{theorem}[Decomposition Functional Equivalence]
   \label{thm:decomp-func-equiv}
-  Given two tables $s = (F,A)$ and $t = (G,B)$ with
-  $(r, \Phi_r) = s \circ t$. For every relation $R$ populating $r$, 
+  Given two tables $s = (\vec{\var f},\vec A,\Phi)$ and
+  $t = (\vec{\var g},\vec B)$ with $r = s \circ t$. For every valid
+  instance $R$ of $r$,
   $\bracbb{\pi_s(R);\pi_t(R)} = \bracbb{R}$.
 \end{theorem}
 
 \begin{proof}
-  Let $R$ be a relation populating $R$. By
+  Let $R$ be a valid instance of $r$. By
   Proposition~\ref{prop:proj-join},
   $R = \pi_s(R)\bowtie_{s,t}\pi_t(R)$. The result follows by
   Theorem~\ref{thm:comp-func-equiv} setting $S = \pi_s(T)$ and
   $T=\pi_t(R)$.
+  \todo[inline]{Small Hiccup in this proof, need to show that
+  $S \bowtie_{s,t} T$ is a valid instance of $s \circ t$ and that
+  $\pi_s(R)$ is a valid instance of $s$. }
 \end{proof}
 
-\subsection{The Algorithm}
-
-\begin{figure}[tpbh]
-  \[
-    p \preceq q \overset{\triangle}{\iff}
-    p =_{\nabla(q)} q 
-  \]
-  \[p =_{S} q \overset\triangleq\iff \forall \pkt, \pi_S(\bracbb{p}~\pkt) = \pi_S(\bracbb{q}~\pkt)\]
-  \[\nabla(p) \triangleq \{\texttt x \in
-    \mathsf{Var} \mid \exists \pkt.~\pkt.\texttt x \neq
-    (\bracbb{p}~\pkt.\texttt x) \}\]
-  \caption{A specificity order on programs}
-  \label{fig:order}
-\end{figure}
-
-The goal is, given two sequences of tables $t_1;\cdots;t_n$ (logical)
-and $s_1;\cdots;s_m$ (physical) compute a function
-$f(T_1,\ldots,T_n) = (S_1,\ldots,S_m)$, where $T_i$ populates $t_i$,
-and $S_i$ populates $s_i$ such that
-$\bracbb{T_1;\cdots;T_n} = \bracbb{S_1;\cdots;S_m}$. Heres how we do
-it:
-\begin{itemize}
-\item Compute
-  \begin{align*}
-    ((F,A),\Phi_t) &= t_1 \circ \cdots \circ t_n\\
-    ((G,B),\Phi_s) &= s_1 \circ \cdots \circ s_m
-  \end{align*}
-\item Notice that $A = A_1\times \cdots \times A_k $ and
-  $B = B_1 \times \cdots \times B_l$.
-
-\item For each $A_i$ and each $a \in A_i$, define
-  \[\mathcal B_{a,k} \subseteq B_{1}\times \cdots \times B_{l},\]
-  Initialize $\mathcal B_{a,i}$ to $\emptyset$. Add every $\vec b$ to
-  $\mathcal B_{a,k}$ such that each $b_j = \Angel C_j$ where
-  $C_j \subseteq B_{a,k}$ and $\emptyset \neq C_j$, and
-  $b_1; \cdots ; b_l \preceq a$.
-
-\item Compute attribute substitutions. For each $A_i$, $a \in A_i$,
-  and $\vec b \in \mathcal B_{a,i}$, then add $A_i \mapsto B_j$ to
-  $\sigma(i,a,b)$, for each $b_j \neq \Angel B_j$.
-
-  Given a mapping $f_i: A_i \to B$, define $\sigma(f_i)$ to be
-  $\{A_i \mapsto B_j \mid b_j \neq B_j, \vec b \in f(A_i)\}$.
-
-  As syntactic sugar for $\sigma(f_1)~\cdots~\sigma(f_n)$, write
-  $\sigma(f_1, \ldots, f_n)$.
-
-\item Search for a mapping $f: A \to B$ subject to two conditions:
-  \begin{itemize}
-  \item For each $(a_1,\ldots, a_k) \in A$, let $f(\vec a)$ be
-    $\vec{b}$ such that for every $a_i$, there exists a
-    $\vec{b'} \in \mathcal B_{a_i,i}$ such that
-    $\bracbb{b_1;\cdots;b_k} \subseteq \bracbb{b'_1;\cdots;b'}$. 
-  \item Let the map $f_i : A_i \to B$ select the corresponding
-    $\vec{b'}$, as above. Ensure
-    $\Phi_s\sigma(f_1,\ldots,f_k) \Rightarrow \Phi_t$.
-  \end{itemize}
-
-\item Now $f$ indiciates a set of solutions. To select one, whenever
-  $f(a) = \vec b$ has a nondeterministic action $b_j = \Angel C$,
-  replace $b_j$ with an arbitrary element of $C$.
-
-\end{itemize}

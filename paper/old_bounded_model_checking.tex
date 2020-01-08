@@ -1,0 +1,114 @@
+
+\subsection{Synthesis via Bounded Model Checking}
+
+\todo[inline]{explain why this problem is too big}
+
+In order to shrink the complexity of the problem, we leverage the finiteness of
+updates. A single update to a single table can only affect finitely many
+tables. We suspect that there is a concrete upper bound on the number of
+concrete rules will need to be inserted or deleted for any single logical rule
+update. \todo[inline]{Think about this more deeply}
+
+We use a technique similar to \emph{bounded model checking} to exploit the
+finite effect of each rule. In bounded model checking are asking the question
+for a given model size $n$. That is, \emph{for every logical edit $\rho$, does
+  there exists a sequence of exactly $n$ concrete edits $\rho_1, \ldots, \rho_n$
+  that produce equivalent changes}?
+
+\begin{example}
+  Bounded Model Checking is tricky to do correctly, because a single
+  logical edit can require many concrete edits. Consider a logical program
+  \[\begin{array}{l}
+      \apply{l, \langle  \texttt{dst} \rangle, \langle \underline{\texttt{op} := 1}, \texttt{op} := 0 \rangle}
+    \end{array}
+  \]
+  and a concrete program
+  \[\apply{r, \langle \texttt{src}, \texttt{dst} \rangle, \langle \underline{\texttt{op} := 1}, \texttt{op} := 0 \rangle}.\]
+  
+  A function $f$ that maps logical edits into concrete edits, requires
+  $|\texttt{src}|$ concrete edits for every logical edit.
+\end{example}
+
+To lift this to a synthesis problem, called $\textsc{EditSynth}[n]$ for a given
+$n$, we will instead synthesize a sequence of $n$ functions
+$f_i : \Edit \to \Edit$, each producing a single $\rho$, such that applying the
+sequence of edits $f_1(\rho), \ldots, f_n(\rho)$ to the concrete network has the
+same effect as applying $\rho$ to the logical network. This problem is described
+in Figure~\ref{fig:problems}.
+
+Our compilation of GCL programs with tables to GCL programs without tables so
+far only works with concrete encodings. Figure~\ref{fig:symbolic-encoding} presents a
+symbolic encoding that allows for symbolic (or concrete) edits to be inserted.
+
+\begin{figure}[ht]
+  \[\begin{array}{r >{\triangleq}c l}
+      \parenbb{x:=e}_\tau^{\vec\rho}
+      && x:=e\\
+      \parenbb{c;c'}_\tau^{\vec\rho}
+      && \parenbb{c}_\tau^{\vec\rho};\parenbb{c'}_\tau^{\vec\rho} \\
+      \parenbb{c \angel c'}_\tau^{\vec\rho}
+      && \parenbb{c}_\tau^{\vec\rho} \angel \parenbb{c'}_\tau^{\vec\rho} \\
+      \parenbb{\assert b}_\tau^{\vec\rho}
+      && \assert b\\
+      \parenbb{\assume b}_\tau^{\vec\rho}
+      && \assume b\\
+      \parenbb{\apply {s,\vec k, \vec c, c_d}}_\tau^{\vec\rho}
+      && \displaystyle \Angel_{c_i}\mathsf{matchDel}(\tau, \vec\rho, s, c_i) \\
+      \multicolumn 2 l {} & \angel \mathsf{newMatches}(\vec\rho, \vec k, s, \vec c) \\
+      \multicolumn 2 l {} & \angel \mathsf{newDefault}(\tau, \vec\rho, \vec k,s, \vec c, c_d)\end{array}\]
+  \[\begin{array}{r c l}
+      \hline\\
+      \mathsf{matchDel}(\tau,\vec\rho,s,c_i)
+      &\triangleq
+      &\assume{\vec k \in M_i(\tau(s))} \\
+      &;&\assume{\bigwedge_{(-,s,\vec e, i) \in \vec \rho} \vec k \neq \vec e}\\
+      &;&c_i \\
+      \mathsf{newMatches}(\vec\rho, \vec k, s, \vec c)
+      &\triangleq
+      &\displaystyle \Angel_{(+,s,\vec e, i) \in \rho} \assume {\vec k = \vec e}; c_i \\
+      \mathsf{newDefault}(\tau, \vec\rho,\vec k, s, \vec c, c_d) &\triangleq& \assume \bigwedge_{c_i}k\not\in M_i(\tau_s) \\
+      && \qquad\;\;\vee \bigvee_{(-,s,\vec e, i) \in \rho} \vec k = \vec e\\
+      &;& c_d
+    \end{array}\]
+  \caption{Symbolic Encoding of Tables, and helper functions}
+  \label{fig:symbolic-encoding}
+
+\end{figure}
+
+In order to properly synthesize these $f_i$s, we leverage both Counter Example
+Guided Inductive Synthesis (CEGIS)~\cite{CEGIS}, and Sketch~\cite{Sketch}. We
+describe the algorithm in $N$ steps.
+
+\paragraph{Step 0: Initialization.} The inputs are we are given two unconfigured
+network programs, a \textbf{l}ogical program $c_l$ and a conc\textbf{r}ete
+program $c_r$. When a network begins running, every table starts off with the
+empty configuration: $\langle\rangle$. So, we provide $c_l$ with such an
+instantiation: $\lambda s. \langle \rangle$. Since we have this concrete
+instantiation, we can solve $\textsc{InstSynth}(\lambda s. \langle\rangle)$ to
+produce a configuration $\tau_l$ such that
+$\wp_{\langle\rangle}(c_r) \Leftrightarrow \wp_{\tau_l}(c_l)$.
+
+\paragraph{Step 1: Search for Model Size.} Now that the assumption for
+$\textsc{EditCheck}[n]$, for all $n$ is satisfied, we can attempt to solve for
+both $n$, by searching for the minimum $n$ via a grid search.
+
+\paragraph{Step 2: Synthesize $f_i$s.} Now, we can solve $\textsc{EditSynth}[n]$
+for the $n$ we computed in the previous step. To do this, we leverage
+Synthesis-by-Sketching and CEGIS. The sketch that we use to model each $f_i$ is
+the following:
+\[f_i(\rho) \triangleq \texttt{repeat}(*)\left(\texttt{if }(?\rho = \rho)\;\{\texttt{return }?\rho'\}\right)\]
+
+which examines the value of $\rho$ some number () of times by comparing it with
+the hole $?\rho$ and producing a corresponding hole $?\rho'$. We generate
+candidate solutions $f_1,\ldots, f_n$ by solving $\textsc{EditSynth}[n](\rho)$
+for a randomly generated $\rho$. Now we can generate counter-examples $\rho_c$
+by having Z3 attempt to solve $\textsc{EditVerif}[n](f_1,\ldots,f_n)$; we
+terminate if Z3 proves that there is no counter example, otherwise, we loop back
+to $\textsc{EditSynth}[n](\rho_c)$. \todo[inline]{widening? Narrowing?}
+
+\paragraph{Step 3: Produce $f$} Once we've synthesized the collection of
+$f_1, \ldots, f_n$, we can produce $f = \textsc{EditSynth}()$ by setting
+\[f(\rho) = \{f_1(\rho), \ldots, f_n(\rho)\}\]
+
+
+\todo[inline]{well that didn't work, Z3 complained at the nested quantifiers}
