@@ -547,13 +547,13 @@ after running $A$
   % \[\begin{array}{lcl}
       S \bowtie_{s,t}T
       & \triangleq
-      & \{(\sigma.\vec{\var f},\vec v,\sigma.\vec A,\tau.\vec B) \\
+      & \{(\sigma.\vec{\var f}\cdot\vec v,\sigma.\vec A \cdot\tau.\vec B) \\
       && \hspace{.5em}
          \mid \sigma \in S, \tau \in T, v_i \in \dom(\var d_i), \\
       && \hspace{1em}
-         \tau.\var g = \bracbb{\sigma.\vec A}~[\overline{\var d \mapsto v}],\\
-      && \hspace{1em}
-         \forall i,j. \var d_i = \var f_j \Rightarrow v_i = \sigma.\var f_j
+         \tau.\vec{\var g} = \left(\bracbb{\sigma.\vec A}~[\overline{\var d \mapsto v}]\right).\vec{\var g}% ,\\
+      % && \hspace{1em}
+      %    \forall i,j. \var d_i = \var f_j \Rightarrow v_i = \sigma.\var f_j
          \}\\        
       \pi_{s,t}(R)
       & \triangleq
@@ -592,12 +592,12 @@ $\pi_t(R)$. We want to prove that these operators commute.
   \item[$(\subseteq)$] Let $\rho \in \pi_s(R) \bowtie_{s,t} \pi_t(R)$,
     to show that $\rho \in R$. Then, we know that
     \[\begin{array}l
-        \rho = (\sigma.\vec{\var f}, \vec v, \sigma.\vec A, \tau.\vec B)\\
+        \rho = (\sigma.\vec{\var f} \cdot \vec v, \sigma.\vec A \cdot \tau.\vec B)\\
         \text{for some } \sigma \in \pi_s(R)\\
         \phantom{\text{for some }}\tau \in \pi_t(R)\\
         \phantom{\text{for some }} \vec v \in \dom(\vec{\var d})\\ 
-        \text{such that } \tau.\vec{\var g} = \bracbb{\sigma.\vec A}~[\overline{\var d \mapsto v}] \\
-        \phantom{\text{such that }} \forall i,j. \var d_i = \var f_j \Rightarrow v_i = \sigma.\var d_j
+        \text{such that } \tau.\vec{\var g} = \bracbb{\sigma.\vec A}~[\overline{\var d \mapsto v}] % \\
+        % \phantom{\text{such that }} \forall i,j. \var d_i = \var f_j \Rightarrow v_i = \sigma.\var d_j
       \end{array} \]
 
     Further, we know that
@@ -615,7 +615,7 @@ $\pi_t(R)$. We want to prove that these operators commute.
 
     Composing these definitions, we get that
     \[\begin{array}l
-        \rho = (\rho_s.\vec{\var f}, \vec v, \rho_s.\vec A, \rho_t.\vec B) \\
+        \rho = (\rho_s.\vec{\var f} \cdot \vec v, \rho_s.\vec A \cdot \rho_t.\vec B) \\
         \text{where } \vec v \in \dom(\vec d)\\
         \phantom{\text{where }} p = (\bracbb{\rho_s.\vec A}~[\overline{\var d \mapsto v}]).\vec{\var g}\\
         \phantom{\text{where } p} = (\bracbb{\rho_t.\vec A}~[\overline{\var d \mapsto \rho_t.\var d}]).\vec{\var g} \\
@@ -628,7 +628,7 @@ $\pi_t(R)$. We want to prove that these operators commute.
   $\bracbb{\vec A}(\vec d).\vec{\var g} \to \vec B$, we know that
   $\rho_t.\vec B = \rho_s.\vec B$, So we want to show
   that
-  \[(\rho_s.\vec{\var f}, \vec v, \rho_s.\vec A, \rho_s.\vec B) \in
+  \[(\rho_s.\vec{\var f}\cdot \vec v, \rho_s.\vec A \cdot \rho_s.\vec B) \in
     R\]
 
   Since $R$ is total, and $\vec{\var f} \longrightarrow \vec A$, we
@@ -650,13 +650,13 @@ $\pi_t(R)$. We want to prove that these operators commute.
     \pi_t(R)\]
 
   Then, by definition
-  $(\rho.\vec{\var f}, \vec v, \rho.\vec A, \rho.\vec B) \in \pi_s(R)
+  $(\rho.\vec{\var f}\cdot \vec v, \rho.\vec A\cdot \rho.\vec B) \in \pi_s(R)
   \bowtie_{s,t} \pi_t(R)$ whenever
   \[\bracbb{\rho.\vec A}[\overline{\var d \mapsto \rho.\var d}]
     = \bracbb{\rho.A}[\overline{\var d \mapsto v}]\] Since
   $\vec v = \rho.\vec{\var d}$, the above equality holds. Therfore,
   conclude
-  \[(\rho.\vec{\var f}, \rho.\vec{\var d}, \rho.\vec A, \rho.\vec B) \in \pi_s(R)
+  \[(\rho.\vec{\var f}\cdot \rho.\vec{\var d}, \rho.\vec A \cdot \rho.\vec B) \in \pi_s(R)
     \bowtie_{s,t} \pi_t(R).\]
   \mbox{} \hfill \checkmark\\\mbox{}
 \end{proof}
@@ -717,7 +717,7 @@ $\pi_t(R)$. We want to prove that these operators commute.
   Let $S$ be a relation populating $s$ and let $T$ be a relation
   populating $t$.
   %
-  Let $\pkt$ be an aribtrary packet. Then, since $S$ is total, there
+  Let $\pkt$ be an arbitrary packet. Then, since $S$ is total, there
   is some rule $\sigma \in S$ such that
   \[\pkt.\vec{\var f} = \sigma.\vec{\var f}.\] Further, we know that
   we will execute actions $\sigma.\vec A$, to get
@@ -797,11 +797,11 @@ $b$ evaluates to false.
       && \cup~\{\vec{\var f} \longrightarrow \vec A\} \cup
          \{\vec{\var g} \longrightarrow \vec B\}
          )\\[.5em]
-      && \cup~\{\vec{A'} \neq \SKIP \Rightarrow  \vec{\var f} \longrightarrow \vec{A'}\} \cup   \{\vec{A'} \neq \SKIP \Rightarrow \vec{\var g} \longrightarrow \vec{B'}\}
-         )\\[.5em]
+      % && \cup~\{\vec{A'} \neq \SKIP \Rightarrow  \vec{\var f} \longrightarrow \vec{A'}\} \cup   \{\vec{A'} \neq \SKIP \Rightarrow \vec{\var g} \longrightarrow \vec{B'}\}
+      %    )\\[.5em]
       S +^b_{s,t} T
       & \triangleq
-      & \{(\vec v, \sigma.\vec{\var{f}}, \vec{\var *}, \sigma.\vec A, \overrightarrow{\SKIP})\\
+      & \{(\vec v\cdot \sigma.\vec{\var{f}} \cdot \vec{\var *}, \sigma.\vec A \cdot \overrightarrow{\SKIP})\\
       &&\mid \vec v \in \dom(\vec{\var x}), \bracbb{b}[\overline{\var x \mapsto v}] = \TRUE, \sigma \in S \} \\
       && \cup~\{(\vec v, \vec{\var *}, \tau.\vec{\var{g}}, \overrightarrow{\SKIP}, \tau.\vec B) \\
       && \phantom{\cup}~\mid \vec v \in \dom(\vec{\var x}), \bracbb{b}[\overline{\var x \mapsto v}] = \FALSE, \tau \in T \}\\[.5em]
