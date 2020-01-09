@@ -47,7 +47,7 @@ in Figure~\ref{fig:conditions-semantics}.
   \[T \models_t \phi \qquad t = (\vec{\var f}, \vec A, \Phi)\]
   \[T \models \Phi \iff \forall \phi \in \Phi. T \models \phi \]
   \[\begin{array}{ll}
-      T \models_t b &\iff \forall \rho \in T. \bracbb{b}~[\overline{\var f \mapsto \rho.\var{f}}]\\
+      T \models_t b &\iff \forall \rho \in T. \bracbb{b}~[\overline{\var f \mapsto \rho.\var{f}}][\overline{\var A \mapsto \rho.A}]\\
 
       T \models_t \vec{\var g} \longrightarrow \vec A & \iff \forall \rho, \tau \in T. \rho.\vec{\var g} = \tau.\vec{\var g} \Rightarrow
                                                         \rho.A = \tau.A \\
@@ -68,6 +68,13 @@ in Figure~\ref{fig:conditions-semantics}.
 
 \subsection{Synthesis Problems}
 
+In what follows we will make the assumption that the free variables in
+the actions of tables are bound in the same table's keys. Formally,
+for a table
+$(\vec{\var f}, \vec A, \Phi)$, we assume that $\bigcup_{A_i}\bigcup_{a
+  \in A_i} \fvs(a) \subseteq \{\var f_1, \ldots, \var f_n\}$.
+
+\todo[inline]{is this a reasonable assumption?}
 
 \subsection{Single-Table Programs}
 
@@ -146,9 +153,16 @@ B_m$ to be
   \bracbb{b_1; \cdots; b_n}, b_i \in B_i  \}\]
 
 We can check the equivalence of these straight-line programs by
-calling out to Z3.
-\todo[inline]{What if you match on $y=1$ and execute $x:=y$
-  how do you observe that this row is equal to $(y=1, x:=1)$? }
+calling out to Z3.  \todo[inline]{What if you match on $y=1$ and
+  execute $x:=y$ how do you observe that this row is equal to
+  $(y=1, x:=1)$? } \todo[inline]{We need to update $\alpha$ to take a
+  valuation on the free variables of $\vec a$ and $\vec b$ and make
+  sure they're equal in this context.}  \todo[inline]{Alternately, we
+  can do some simple abduction to compute a formula $\phi$ on the free
+  variables of $\vec a $ and $\vec b$ such that
+  $\phi \Rightarrow \bracbb{\vec a} = \bracbb{\vec b}$, Then below, we
+  need to select a $\vec b, \phi \in \alpha(\vec a)$ such that
+  $\forall \vec u \in \kappa(\vec v),~\vec u \models \phi$}
 
 Now that we have the key map $\kappa$, and the action candidate map
 $\alpha$, we can produce a map $f$ from instances of $s$ to instances
@@ -746,4 +760,157 @@ $\pi_t(R)$. We want to prove that these operators commute.
   $S \bowtie_{s,t} T$ is a valid instance of $s \circ t$ and that
   $\pi_s(R)$ is a valid instance of $s$. }
 \end{proof}
+
+\subsection{Conditionals}
+
+The next piece we need is to handle conditionals. Morally, a
+conditional is a kind of match action table for which both the match
+and the actions are hard-coded.  The operator $s \oplus^b t$ produces
+a single table that captures the program
+$\mathsf{if}(b)~\{s\}~\{t\}$. The keys of $s \oplus^b t$ are the keys
+of $s$, the keys of $t$, and the free variables in $b$, this way, we
+can evaluate $b$ in the table.  The actions are just the actions of
+$s$ followed by the actions of $t$, with $\SKIP$ added to every
+column. Then, whenever the free variables of $b$ cause $b$ to evaluate
+to true, every action in $\vec B$ must be skip, and vice-versa when
+$b$ evaluates to false.
+
+\todo[inline]{This construction makes the assumption that every
+  boolean relies on some dynamic information -- this makes sense: if a
+  boolean expression has no variables then it can be statically
+  evaluated. We can assume we've already done that step}
+
+\todo[inline]{It will probably be faster to make the boolean $b$ its
+  own column, then we avoid the blowup in space from all the
+  fields.}
+
+\begin{figure}[tpb]
+  \[\begin{array}{rcl}
+      \multicolumn 3 c {t = (\vec{\var f}, \vec A, \Phi) \qquad s = (\vec{\var g}, \vec B, \Psi) \qquad \{\var x_1, \ldots, \var x_n\} = \fvs(b)}\\
+      s \mathrel{\oplus^b} t
+      & \triangleq
+      & (\vec{\var x}\cdot\vec{\var f}\cdot \vec{\var g},\\
+      && \vec{A'}\cdot\vec{B'}, \text{where}~ A'_i = A_i \cup \SKIP, B'_i = B_i \cup\SKIP, \\
+      && \Phi \cup \Psi \cup \{b \Rightarrow \vec{\var{B'}} = \overrightarrow \SKIP, \neg b \Rightarrow \vec {\var{A'}} = \overrightarrow\SKIP\}\\
+      && \cup~\{\vec{\var f} \longrightarrow \vec A\} \cup
+         \{\vec{\var g} \longrightarrow \vec B\}
+         )\\[.5em]
+      && \cup~\{\vec{A'} \neq \SKIP \Rightarrow  \vec{\var f} \longrightarrow \vec{A'}\} \cup   \{\vec{A'} \neq \SKIP \Rightarrow \vec{\var g} \longrightarrow \vec{B'}\}
+         )\\[.5em]
+      S +^b_{s,t} T
+      & \triangleq
+      & \{(\vec v, \sigma.\vec{\var{f}}, \vec{\var *}, \sigma.\vec A, \overrightarrow{\SKIP})\\
+      &&\mid \vec v \in \dom(\vec{\var x}), \bracbb{b}[\overline{\var x \mapsto v}] = \TRUE, \sigma \in S \} \\
+      && \cup~\{(\vec v, \vec{\var *}, \tau.\vec{\var{g}}, \overrightarrow{\SKIP}, \tau.\vec B) \\
+      && \phantom{\cup}~\mid \vec v \in \dom(\vec{\var x}), \bracbb{b}[\overline{\var x \mapsto v}] = \FALSE, \tau \in T \}\\[.5em]
+      R|_s
+      &\triangleq
+      & \{(\rho.\vec{\var f},\rho.{\vec A}) \mid  \rho \in R\}\\
+      R|_t
+      & \triangleq
+      & \{(\rho.\vec{\var g}, \rho.\vec B) \mid \rho \in R\}
+    \end{array}
+  \]
+  \caption{The encoding of conditionals. }
+  \label{fig:conditionals}
+\end{figure}
+
+\begin{theorem}[Guarded Union Equivalence]
+  Given tables $s = (\vec{\var f}, \vec A, \Phi)$ and
+  $T = (\vec{\var g}, \vec B, \Psi)$ and a boolean expression $b$,
+  then
+  \begin{enumerate}
+  \item For valid instances $S$ of $s$ and $T$ of $t$
+    $\bracbb{\mathsf{if}~(b)~\{S\}~\{T\}} = \bracbb{S +_{s,t}^b T}$, and
+  \item For every valid instance $R$ of $s \oplus^b t$,
+    $\bracbb{R} = \bracbb{\mathsf{if}~(b)~\{R|_s\} \{R|_t\}}$
+  \end{enumerate}
+\end{theorem}
+\begin{proof}
+\todo[inline]{prove it}
+\end{proof}
+
+
+\subsection{The Normal Form}
+
+The final translation we need to do is for assignments, skips, and
+no-ops. We will simply inject these into tables that match on no
+fields, and so must perform the action. Then we can combine this with
+the composition and union operations from the previous sections. This
+is detailed in Figure~\ref{fig:normal-form}.
+
+\begin{figure}[tp]
+  \[
+    \begin{array}{l c l}
+      \multicolumn 3 l {\nf : \DTCmd \to \Table}\\
+      \nf(\var x := e)
+      &\triangleq
+      &(\langle\rangle, \{\var x:=e\}, \emptyset) \\
+      \nf(\SKIP)
+      &\triangleq
+      & (\langle\rangle, \{\SKIP\}, \emptyset) \\
+      \nf(\nop)
+      &\triangleq
+      & ((\langle\rangle, \{\nop\}, \emptyset), \lambda r. (,\nop)) \\
+      \nf(t)
+      &\triangleq
+      & t \\
+      \nf(c;c')
+      &\triangleq
+      & \nf(c) \circ \nf(c') \\
+      \nf (\ifte b c {c'})
+      && \nf(c) \oplus^b \nf(c')
+    \end{array}\]
+  \[\begin{array}{lcl}
+      \multicolumn 3 l {\join : \DTCmd \to (\Table \to \Instance) \to \Instance}\\
+      \join(\var x := e)~(T)
+      &\triangleq
+      & (x:=e) \\
+      \join(\SKIP)~(T)
+      &\triangleq
+      & (\SKIP) \\
+      \join(\nop)~(T)
+      & \triangleq
+      & (\nop)\\
+      \join(t)~(T)
+      &\triangleq
+      & T(t)\\
+      \join(c;c')~(T)
+      &\triangleq
+      & \join(c)~(T) \underset{\nf(c),\nf(c')}{\bowtie} \join(c')~(T)\\
+      \join(\ifte b c {c'})~(T)
+      &\triangleq 
+      & \join(c)~(T) \underset{{\nf(c),\nf(c')}}{+^b}\join(c')~(T)
+    \end{array}\]
+  \[\begin{array}{lcl}        
+      \multicolumn 3 l {\project : \DTCmd \to \Instance \to (\Table \to \Instance)}\\
+      \project(\var x := e)~(R)
+      &\triangleq
+      & \emptyset \\
+      \project(\SKIP)~(R)
+      &\triangleq
+      & \emptyset \\
+      \project(\nop)~(R)
+      & \triangleq
+      & \emptyset \\
+      \project(t)~(R)
+      &\triangleq
+      & \{t \mapsto R\}\\
+      \project(c;c')~(R)
+      &\triangleq
+      & \project(c)~(\pi_{\nf(c)}(R)) \\
+      && \cup~\project(c')~(\pi_{\nf(c')}(R))\\
+      \project(\ifte b c {c'})~(R)
+      &\triangleq 
+      & \project(c)~(R|_{\nf(c)}) \\
+      && \cup~\project(c')~(R|_{\nf(c'})
+    \end{array}
+  \]
+  \caption{The functions to compute the One Big Table normal form of
+    deterministic, total commands and the normalization functions on
+    the branches. In implementation, we can compute all of these in
+    a single pass}
+  \label{fig:normal-form}
+\end{figure}
+
 
