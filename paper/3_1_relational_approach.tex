@@ -12,14 +12,16 @@ A match-action table can be thought of in a similar way to a table in
 a relational database, an observation that was recently made in a
 CoNeXT 2019 paper~\cite{Chiesa}. In this way a match-action table can
 be represented as a \emph{table schema}
-$t \in \Var^n \times \left(2^{\mathsf{Action}}\right)^m \times
-2^{\FD}$, i.e. a tuple $(\vec{\var f}, \vec{A}, \Phi)$, where the
-$\var f_i \in \Var$ are the match fields, the $A_i$s are sets of
+$t \in \Name \times \Var^n \times \left(2^{\mathsf{Action}}\right)^m
+\times 2^{\FD}$, i.e. a tuple $(n,\vec{\var f}, \vec{A}, \Phi)$, where
+the $\var f_i \in \Var$ are the match fields, the $A_i$s are sets of
 actions, and $\Phi$ is a of constraints on the valid table
-instances. An instance of this table will first match on the values of
-the variables $\var f_1, \ldots \var f_n$, and then execute a sequence
-of actions $a_1;\cdots;a_m$, where $a_i \in A_i$. Our tables have no
-``default action'' as OpenFlow and P4 tables have.
+instances. When it is irrelevant, we omit the name $n$ and write
+$(\vec{\var f}, \vec{A}, \Phi)$. An instance of this table will first
+match on the values of the variables $\var f_1, \ldots \var f_n$, and
+then execute a sequence of actions $a_1;\cdots;a_m$, where
+$a_i \in A_i$. Our tables have no ``default action'' as OpenFlow and
+P4 tables have.
 
 A table schema $t = (\vec{\var f}, \vec{A}, \Phi)$ can be populated by
 a relation
@@ -862,28 +864,28 @@ is detailed in Figure~\ref{fig:normal-form}.
       && \nf(c) \oplus^b \nf(c')
     \end{array}\]
   \[\begin{array}{lcl}
-      \multicolumn 3 l {\join : \DTCmd \to (\Table \to \Instance) \to \Instance}\\
-      \join(\var x := e)~(T)
+      \multicolumn 3 l {\join : \DTCmd \to (\Name \to \Instance) \to \Instance}\\
+      \join(\var x := e)~(I)
       &\triangleq
       & (x:=e) \\
-      \join(\SKIP)~(T)
+      \join(\SKIP)~(I)
       &\triangleq
       & (\SKIP) \\
-      \join(\nop)~(T)
+      \join(\nop)~(I)
       & \triangleq
       & (\nop)\\
-      \join(t)~(T)
+      \join((n, \vec{\var f}, \vec A, \Phi)~(I)
       &\triangleq
-      & T(t)\\
-      \join(c;c')~(T)
+      & I(n)\\
+      \join(c;c')~(I)
       &\triangleq
-      & \join(c)~(T) \underset{\nf(c),\nf(c')}{\bowtie} \join(c')~(T)\\
-      \join(\ifte b c {c'})~(T)
+      & \join(c)~(I) \underset{\nf(c),\nf(c')}{\bowtie} \join(c')~(I)\\
+      \join(\ifte b c {c'})~(I)
       &\triangleq 
-      & \join(c)~(T) \underset{{\nf(c),\nf(c')}}{+^b}\join(c')~(T)
+      & \join(c)~(I) \underset{{\nf(c),\nf(c')}}{+^b}\join(c')~(I)
     \end{array}\]
   \[\begin{array}{lcl}        
-      \multicolumn 3 l {\project : \DTCmd \to \Instance \to (\Table \to \Instance)}\\
+      \multicolumn 3 l {\project : \DTCmd \to \Instance \to (\Name \to \Instance)}\\
       \project(\var x := e)~(R)
       &\triangleq
       & \emptyset \\
@@ -893,9 +895,9 @@ is detailed in Figure~\ref{fig:normal-form}.
       \project(\nop)~(R)
       & \triangleq
       & \emptyset \\
-      \project(t)~(R)
+      \project((n,\vec{\var f}, \vec A, \Phi))~(R)
       &\triangleq
-      & \{t \mapsto R\}\\
+      & \{n \mapsto R\}\\
       \project(c;c')~(R)
       &\triangleq
       & \project(c)~(\pi_{\nf(c)}(R)) \\

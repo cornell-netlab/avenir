@@ -81,12 +81,12 @@ will often omit the curly braces.
 
 
 \begin{figure}
-  \[\pkt :: = \{\overline{\var x \mapsto v}\}\qquad T :: \Table \to \Instance\]
+  \[\pkt :: = \{\overline{\var x \mapsto v}\}\qquad I :: \Name \to \Instance\]
   \[\begin{array}{lcl}
-      \bracbb{x:=e}~T~\pkt &\triangleq& \{\pkt[x \mapsto e]\} \\
-      \bracbb{c;c'}~T~\pkt & \triangleq& \displaystyle \bigcup_{\pkt' \in \bracbb{c'}~T~\pkt}\bracbb{c}~T~\pkt' \\
-      \bracbb{c\angel c'}~T~\pkt & \triangleq & \bracbb{c}~\vec T~\pkt \cup \bracbb{c'}~T~\pkt\\
-      \bracbb{\assert b}~T~\pkt & \triangleq & \begin{cases}
+      \bracbb{x:=e}~I~\pkt &\triangleq& \{\pkt[x \mapsto e]\} \\
+      \bracbb{c;c'}~I~\pkt & \triangleq& \displaystyle \bigcup_{\pkt' \in \bracbb{c'}~T~\pkt}\bracbb{c}~T~\pkt' \\
+      \bracbb{c\angel c'}~I~\pkt & \triangleq & \bracbb{c}~\vec T~\pkt \cup \bracbb{c'}~T~\pkt\\
+      \bracbb{\assert b}~I~\pkt & \triangleq & \begin{cases}
         \pkt & \textrm{if}~\bracbb{b}~\pkt = \TRUE \\
         \bot & \textrm{otherwise}
       \end{cases} \\
@@ -94,7 +94,7 @@ will often omit the curly braces.
         \pkt & \textrm{if}~\bracbb{b}~\pkt = \TRUE \\
         \emptyset & \textrm{otherwise}
       \end{cases} \\
-      \bracbb{(\vec{\var f}, \vec A, \Phi)}~T~\pkt &\triangleq & \bracbb{T(t)}^{\vec{\var f}}~\pkt \\\\
+      \bracbb{(n,\vec{\var f}, \vec A, \Phi)}~I~\pkt &\triangleq & \bracbb{I(n)}^{\vec{\var f}}~\pkt \\\\
       \bracbb{(\vec v, \vec a)\cup R}^{\vec{\var f}}~\pkt & \triangleq & \begin{cases}
         \bracbb{\vec a}~\pkt & \mathrm{if} \pkt.\vec{\var f} = \vec v\\
         \bracbb{R}^{\vec{\var f}}~\pkt& \mathrm{otherwise}
@@ -104,8 +104,8 @@ will often omit the curly braces.
     \end{array}
   \]
 
-  \caption{The semantics. $T$ produces instances for tables. For
-    actions, we may omit $T$. The semantics for expressions and
+  \caption{The semantics. $I$ produces instances for tables. For
+    actions, we may omit $I$. The semantics for expressions and
     booleans are omitted for the time being, but are the obvious
     ones.}
   \label{fig:semantics}
