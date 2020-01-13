@@ -21,15 +21,15 @@ will often omit the curly braces.
         & \mid & t & \textsc{Table Application}\\
       \multicolumn{4}{l}{\textit{Expressions}~~(\Expr)} \\
       e & ::= & \\
-        & \mid & v            & \textsc{BitVector} \\
+        & \mid & i            & \textsc{Interval} \\
         & \mid & \var x       & \textsc{Field} \\
-        & \mid & e,e          & \textsc{Concatenation} \\
+        % & \mid & e,e          & \textsc{Concatenation} \\
         & \mid & e \oplus e   & \textsc{Operation} \\
-        & &  \multicolumn{2}{l}{\textit{where}\;\; \oplus \in \{+,-,\times, \div, \texttt{<<}, \texttt{>>} \}} \\
-      \multicolumn{4}{l}{\textit{Bit Vectors}}\\
-      v & ::= & \\
-        & \mid & \cdot & \textsc{Empty} \\
-        & \mid & b,v   & \textsc{Cons} \\
+        & &  \multicolumn{2}{l}{\textit{where}\;\; \oplus \in \{+,-,\times \}} \\
+      \multicolumn{4}{l}{\textit{Interval}}\\
+      i & ::= & \\
+        & \mid & [] & \textsc{Empty} \\
+        & \mid & [v, v] & \textsc{Inclusive Interval} \\
       \multicolumn{4}{l}{\textit{Booleans}}\\
       b & ::= & \\
         & \mid & \TRUE & \textsc{Truth} \\
@@ -39,7 +39,7 @@ will often omit the curly braces.
         & \mid & \neg b & \textsc{Negation} \\ 
         & \mid & e = e & \textsc{Equality} \\
       \multicolumn 4 l {\textit{Tables}~~(\Table)}\\
-      t & ::= & (\vec{\var f}, \vec A, \Phi) & \textsc{Table Schema}\\
+      t & ::= & (n,\vec{\var f}, \vec A, \Phi) & \textsc{Table Schema}\\
       R & ::= & \{\overline{(\vec v, \vec a)}\} & \textsc{Table Instance} \\      
       \multicolumn 4 l {\textit{Constraints}}\\
       \Phi & ::= &\{\overline{\phi} \} & \textsc{Constraint Set}\\
@@ -50,7 +50,9 @@ will often omit the curly braces.
       \multicolumn{2}{l}{\textit{Values}} & \textit{Fields} & \textit{Action Set}\\
       \multicolumn{2}{l}{v \in \mathbbm{2}^+} & \var x, \var y, \var f, \var g \in \mathsf{Var} & A \subseteq \Action
     \end{array}\]
-  \caption{Syntax of Commands and Actions*}
+  \caption{Syntax of Commands and Actions*. An interval $[l, h]$ is
+    only well-formed if $l \leq h$. Otherwise we write $[]$ to signify
+    the empty interval.}
   \label{fig:syntax}
 \end{figure}
 
@@ -80,33 +82,109 @@ will often omit the curly braces.
 % \end{figure}
 
 
+\begin{figure}[tpb]
+  \[\begin{array}{l}
+      \mathit{Packets}~~(\pkt \in \Pkt) \\
+      \pkt :: =\{\overline{\var x \mapsto [l,h]}\}\\
+      \{\var x_1\mapsto [l_1,h_1], \ldots, \var x_i \mapsto [l_i,h_i], \ldots, \var x_n \mapsto [l_n,h_n]\}[\var x_i \mapsto [u,v]]
+      \\ \triangleq
+      \{\var x_1 \mapsto [l_1,h_1], \ldots, \var x_i \mapsto [u,v], \ldots, \var x_n\mapsto [l_n,h_n]\}
+    \end{array}
+  \]
+  \caption{Packets and packet update. We write
+    $\pkt[\overline{\var x \mapsto v}]$ to signify a sequence of
+  updates $\pkt[\var x_1 \mapsto v_1]\cdots[\var x_n \mapsto v_n]$}
+  \label{fig:packets}
+\end{figure}
 \begin{figure}
-  \[\pkt :: = \{\overline{\var x \mapsto v}\}\qquad I :: \Name \to \Instance\]
   \[\begin{array}{lcl}
-      \bracbb{x:=e}~I~\pkt &\triangleq& \{\pkt[x \mapsto e]\} \\
+      \multicolumn 3 l {\bracbb{c}:: (\Name \to \Instance) \to \Pkt \to 2^\Pkt}\\
+      \bracbb{x:=e}~I~\pkt &\triangleq& \{\pkt[x \mapsto \bracbb{e} \pkt]\} \\
       \bracbb{c;c'}~I~\pkt & \triangleq& \displaystyle \bigcup_{\pkt' \in \bracbb{c'}~T~\pkt}\bracbb{c}~T~\pkt' \\
       \bracbb{c\angel c'}~I~\pkt & \triangleq & \bracbb{c}~\vec T~\pkt \cup \bracbb{c'}~T~\pkt\\
       \bracbb{\assert b}~I~\pkt & \triangleq & \begin{cases}
-        \pkt & \textrm{if}~\bracbb{b}~\pkt = \TRUE \\
-        \bot & \textrm{otherwise}
+        \bot & \bracbb{b}~\pkt = \emptyset \\
+        \bracbb{b}~\pkt & \textrm{otherwise}
       \end{cases} \\
-      \bracbb{\assume b}~\pkt & \triangleq & \begin{cases}
-        \pkt & \textrm{if}~\bracbb{b}~\pkt = \TRUE \\
-        \emptyset & \textrm{otherwise}
-      \end{cases} \\
+      \bracbb{\assume b}~\pkt & \triangleq &\bracbb{b}~\pkt\\
       \bracbb{(n,\vec{\var f}, \vec A, \Phi)}~I~\pkt &\triangleq & \bracbb{I(n)}^{\vec{\var f}}~\pkt \\\\
-      \bracbb{(\vec v, \vec a)\cup R}^{\vec{\var f}}~\pkt & \triangleq & \begin{cases}
-        \bracbb{\vec a}~\pkt & \mathrm{if} \pkt.\vec{\var f} = \vec v\\
-        \bracbb{R}^{\vec{\var f}}~\pkt& \mathrm{otherwise}
-        \end{cases}                                                            
-      \\
-      \bracbb{\vec a}~pkt & \triangleq & \bracbb{a_1;\cdots;\vec a_n}~\pkt
+      \bracbb{(\vec v, \vec a)\cup R}^{\vec{\var f}}~\pkt & \triangleq &
+                                                                         \bracbb{\assume{\vec{\var f = v}}; \vec a}~\pkt \cup \bracbb{R}^{\vec{\var f}}~\pkt \\
+      \bracbb{\vec a}~pkt & \triangleq & \bracbb{a_1;\cdots;\vec a_n}~\pkt\\
     \end{array}
   \]
 
   \caption{The semantics. $I$ produces instances for tables. For
-    actions, we may omit $I$. The semantics for expressions and
-    booleans are omitted for the time being, but are the obvious
-    ones.}
+    actions, we may omit $I$. The semantics for expressions are given
+    in Figure~\ref{fig:expr-semantics} and for booleans in
+    Figure~\ref{fig:bool-semantics} are omitted for the time being,
+    but are the obvious ones.}
   \label{fig:semantics}
+\end{figure}
+
+
+\begin{figure}
+  \[\begin{array}{lcl}
+      \multicolumn 3 l {\bracbb{e} :: \Pkt \to \mathbbm{2}^+ \times \mathbbm{2}^n}\\
+      \bracbb{v}~\pkt &\triangleq& [v,v] \\
+      \bracbb{i}~\pkt &\triangleq& i\\
+      \bracbb{\var x}~\pkt & \triangleq & \pkt.\var x \\
+      \bracbb{e + e'}~\pkt & \triangleq & \bracbb{e}~\pkt \iplus \bracbb{e'}~\pkt \\
+      \bracbb{e - e'}~\pkt & \triangleq & \bracbb{e}~\pkt \iminus \bracbb{e'}~\pkt \\
+      \bracbb{e \times e'}~\pkt & \triangleq & \bracbb{e}~\pkt \itimes \bracbb{e'}~\pkt\\      
+      % \bracbb{e \shl e'}~\pkt & \triangleq & \bracbb{e}~\pkt \ishl \bracbb{e'}~\pkt\\
+      % \bracbb{e \shr e'}~\pkt & \triangleq & \bracbb{e}~\pkt \ishr \bracbb{e'}~\pkt\\
+    \end{array}
+    \]
+  \caption{Interval Semantics for arithmetic expressions. The operators on intervals are defined in Figure~\ref{fig:ivaloperators}}
+  \label{fig:expr-semantics}
+\end{figure}
+
+\begin{figure}
+  \[
+    \iplus,\iminus,\itimes,\icap,\ilt :: (\mathbbm{2}^+ \times \mathbbm{2}^n) \times (\mathbbm{2}^+ \times \mathbbm{2}^n) \to \mathbbm{2}^+ \times \mathbbm{2}^n\]
+  \[\begin{array}{lcl}
+      {[x,y]} \iplus [w,z] &\triangleq & [x + w, y + z] \\
+      {[x,y]} \iminus [w,z] &\triangleq & [x - z, y - w] \\
+      {[x,y]} \itimes [w,z] & \triangleq & [x \times w, y \times z] \\
+      {[x,y]} \icap [w,z] & \triangleq & \begin{cases}
+        [] &y < w\\
+        [] &x > z \\
+        [\max(x,w), \min(y,z)] &\mathrm{otherwise}
+      \end{cases} 
+    \end{array}
+  \]
+  \[\icup :: (\mathbbm{2}^+ \times \mathbbm{2}^n) \times (\mathbbm{2}^+ \times \mathbbm{2}^n) \to 2^{\mathbbm{2}^+ \times \mathbbm{2}^n}\]
+  \[[x,y] \icup [w,z] = \begin{cases}
+      \{[x,y],[w,z]\} & y < w \\
+      \{[\min(x,w), \max(y,z)]\} & \mathit{otherwise}
+    \end{cases}\]
+    
+  
+  \[\ineg :: (\mathbbm{2}^+ \times \mathbbm{2}^n) \to 2^{\mathbbm{2}^+
+      \times \mathbbm{2}^n}\]
+  \[\ineg [x,y] = \{[0,x-1],[y+1,\infty]\} \]
+  
+  \[\icap :: \Pkt \times \Pkt \to 2^\Pkt\]
+  \[\{\overline{\var x \mapsto i}\} \icap \{\overline{\var x \mapsto j}\} \triangleq \{\var x \mapsto i \icap j\}\]
+
+  \caption{Interval operations. }
+  \label{fig:ivaloperators}
+\end{figure}
+
+\begin{figure}
+  \[
+    \begin{array}{lcl}
+      \multicolumn 3 l {\bracbb{b} :: \Pkt \to 2^\Pkt} \\
+      \bracbb{1}~\pkt &\triangleq& \{\pkt\}\\
+      \bracbb{0}~\pkt & \triangleq & \emptyset \\
+      \bracbb{b \wedge b'}~\pkt &\triangleq & \displaystyle \hat{\bigcup_{\substack{\pkt' \in \bracbb{b}~\pkt\\ \pkt'' \in \bracbb{b'}}}} \pkt' \icap \pkt''\\
+      \bracbb{b \vee b'}~\pkt & \triangleq & \bracbb{b}~\pkt \cup \bracbb{b'}~\pkt \\
+      \bracbb{\neg b}~\pkt & \triangleq & \displaystyle \hat{\bigcup_{\pkt' \in \bracbb{b}~\pkt}}\ineg \pkt'\\
+      \bracbb{e = e'}~\pkt & \triangleq & \bracbb{e}~\pkt \icap \bracbb{e'}~\pkt
+    \end{array}
+  \]
+  \caption{Interval Semantics for boolean expressions. Operators are
+    defined in Figure~\ref{fig:ivaloperators}}
+  \label{fig:expr_semantics}
 \end{figure}
