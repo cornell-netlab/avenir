@@ -72,14 +72,6 @@ in Figure~\ref{fig:conditions-semantics}.
 
 \subsection{Synthesis Problems}
 
-In what follows we will make the assumption that the free variables in
-the actions of tables are bound in the same table's keys. Formally,
-for a table
-$(\vec{\var f}, \vec A, \Phi)$, we assume that $\bigcup_{A_i}\bigcup_{a
-  \in A_i} \fvs(a) \subseteq \{\var f_1, \ldots, \var f_n\}$.
-
-\todo[inline]{is this a reasonable assumption?}
-
 \subsection{Single-Table Programs}
 
 To ground our investigation, let us first consider the simple
@@ -117,24 +109,21 @@ $T$ can we construct a concrete instantiation $S$ that satisfies
 We can decompose the search for a mapping in the
 \textsc{SingleInstSynth} problem to a search for two mappings: one
 that maps the keys, and another that maps the actions. Luckily,
-\textsc{KeyMapSynth} has a very easy intuition, the keys of $s$ must
-be a subset of the keys of $t$:
-\[\{\var f_1, \ldots, \var f_n\} \subseteq \{\var g_1, \ldots, \var g_m\}\]
+\textsc{KeySynth} has a very easy intuition, the keys $\vec k$ of $s$
+implement a boolean function, and the keys $\vec c$ of $t$ implement a
+different boolean function. The function implemented by $s$ must imply
+the function implemented by $t$.
 
-Then, a solution to $\textsc{KeyMapSynth}()$ is the injection map which crosses the missing columns with the full set:
-\[\displaystyle \kappa ([l_1,h_1], \ldots, [l_n,h_n]) = \Pi_{j=1}^m \begin{cases}
-    \{[l_j,h_j]\} &\exists i,  \var f_i = \var g_j \\
-    \dom(g_j) &\mathit{otherwise}
-  \end{cases}
-\]
-Where here, $\dom(\var g_j) \subseteq \mathbbm{2}^+$ refers to the
-minimum and maximum values that could be assigned to $\var g_j$. For
-example if $\var g_j$ is a bitvector of length 5,
-$\dom(\var g_j) = [0,2^5-1]$.
-
-\todo[inline]{Could there be funny
-  situations where this is unsound?  like when theres a functional
-  dependency between $\var f_1$ and $\var f_2$ in the given relation?}
+Then, a solution to $\textsc{KeyMapSynth}()$ is a map $\kappa$ such
+that
+\[\forall \vec k, \vec v, \vec c.~~\overline{k = v} \implies \bigvee_{\vec u \in \kappa(\vec v)} \overline{c = u}\]
+Notice that $\kappa$ can produce multiple physical for a single
+logical rule, for instance if the logical table keys on the expression
+$\var{ipv4.proto} = \var{0x1} \vee \var{ipv6.nxt\_hdr} = \var{0x1}$
+and the concrete table has keys $\var{ipv4.proto}$ and
+$\var{ipv6.nxt\_hdr}$, then the single logical match $(\var{0b1})$
+will need to be converted into the two matches $(\var{0x1},\var*)$,
+and $(\var{*}, \var{0x1})$. \todo[inline]{How do we compute $\kappa$?}
 
 Separately, now, we want to map the actions. However, it is possible
 that there are multiple physical actions for each logical action. For
@@ -166,8 +155,8 @@ of $t$. We can precompute $\alpha$ for every action sequence.
 Now, we have a way to produce a valid instance $T$ of $t$ that from a
 valid instance $S$ of $s$ such that $\bracbb{S} = \bracbb{T}$:
 \begin{quote}
-  Given $S$, brute force search for an instance $T$ of $t$ such that
-  for every $(\vec v, \vec a) \in S$, select a
+  Given $S$, brute force search for a \emph{valid} instance $T$ of $t$
+  such that for every $(\vec v, \vec a) \in S$, select a
   $\vec b \in \alpha(\vec a)$ so that
   \[\{(\vec u, \vec b) \mid \vec u \in
     \kappa(\vec v)\} \subseteq T\]
@@ -179,6 +168,9 @@ valid instance $S$ of $s$ such that $\bracbb{S} = \bracbb{T}$:
 \todo[inline]{How to synthesize a sequence of edits for a single rule}
 
 \subsubsection{Mapping Synthesis}
+
+
+\todo[inline]{How do we do this?}
 
 A major caveat of instance synthesis is that we do not know before we
 run the network whether the mapping will succeed. For each new logical
@@ -197,84 +189,89 @@ specifically, we write
 \[\textsc{SingleMapSynth}() \triangleq \textrm{Construct}~f~\textrm{st.}~\forall I.\;
   \textsc{SingleVerif}(I, f(I))\]
 
-Our key map remains an injection, so what we need to know is how to
-map the actions. In the instance mapping problem, we searched for an
-instance that satisfied the logical constraints. We will combine an
-action mapping
-$\hat\alpha : A_1 \times \cdots \times A_n \to B_1 \times \cdots B_m$
-combined with the key injection
-$\kappa : \dom(\vec{\var f}) \to \dom(\vec{v\var g})$ to map valid
-instances of the logical program $s = (\vec{\var f}, \vec A, \Phi)$,
-to valid instances of the physical program
-$t = (\vec{\var g}, \vec B, \Psi)$.
+% Our key map remains an injection, so what we need to know is how to
+% map the actions. In the instance mapping problem, we searched for an
+% instance that satisfied the logical constraints. We will combine an
+% action mapping
+% $\hat\alpha : A_1 \times \cdots \times A_n \to B_1 \times \cdots B_m$
+% combined with the key injection
+% $\kappa : \dom(\vec{\var f}) \to \dom(\vec{v\var g})$ to map valid
+% instances of the logical program $s = (\vec{\var f}, \vec A, \Phi)$,
+% to valid instances of the physical program
+% $t = (\vec{\var g}, \vec B, \Psi)$.
 
-\todo[inline]{Add motivating prose}
+% \todo[inline]{Add motivating prose}
 
-Lets define a \emph{single-action candidate set} for $a \in A_i$
-$\alpha_i(a) \subseteq 2^{B_1} \times \cdots \times 2^{B_n}$
-\[\alpha_i(a) = \{ \vec C \mid
-  \overline{C \subseteq B}, \{\overline{\var x}\}= \fvs(a), \bracbb{a}
-  =_{\overline{\var x}} \bracbb{\Demon C_1; \ldots; \Demon C_m}, \vec
-  C~\textrm{maximal} \}\]
+% Lets define a \emph{single-action candidate set} for $a \in A_i$
+% $\alpha_i(a) \subseteq 2^{B_1} \times \cdots \times 2^{B_n}$
+% \[\alpha_i(a) = \{ \vec C \mid
+%   \overline{C \subseteq B}, \{\overline{\var x}\}= \fvs(a), \bracbb{a}
+%   =_{\overline{\var x}} \bracbb{\Demon C_1; \ldots; \Demon C_m}, \vec
+%   C~\textrm{maximal} \}\]
 
-We can define the column-range for the element of an action set to be
-\[\cols(C_1,\ldots, C_m) = \{B_i \mid C_i \neq B_i\}\]
-which captures the columns that are relevant in implementing an action
-$a$. The intuition is that if every action works in a column can be
-used, then the specific action is not important for implementing the
-that implementation of the action $a$. For example if we are trying to
-implement the action $\var x := 1$ across two columns
-$B_1 = \{\SKIP, \var x:=1\}$, and $B_2 = \{\SKIP, \var x:=1\}$, then
-$\alpha_i(a) = \{ (B_1,\{\var x:=1\}), (\var x:=1, B_2)\}$. Then
-$\cols(B_1,\{\var x:=1\}) = \{B_2\}$, and
-$\cols(\var x:=1, B_2) = B_1$.
+% We can define the column-range for the element of an action set to be
+% \[\cols(C_1,\ldots, C_m) = \{B_i \mid C_i \neq B_i\}\]
+% which captures the columns that are relevant in implementing an action
+% $a$. The intuition is that if every action works in a column can be
+% used, then the specific action is not important for implementing the
+% that implementation of the action $a$. For example if we are trying to
+% implement the action $\var x := 1$ across two columns
+% $B_1 = \{\SKIP, \var x:=1\}$, and $B_2 = \{\SKIP, \var x:=1\}$, then
+% $\alpha_i(a) = \{ (B_1,\{\var x:=1\}), (\var x:=1, B_2)\}$. Then
+% $\cols(B_1,\{\var x:=1\}) = \{B_2\}$, and
+% $\cols(\var x:=1, B_2) = B_1$.
 
-The reason that we want the column range of each action is so that we
-can check whether the functional dependencies $\Phi$ are sufficient to
-prove the functional dependencies $\Psi$. If they are, then every
-instance of $s$ can be safely mapped to $t$. However, $\Phi$ is
-phrased in terms of the columns in $s$ and $\Psi$ is phrased in terms
-of the columns in $t$, so $\cols$ will translate.
+% The reason that we want the column range of each action is so that we
+% can check whether the functional dependencies $\Phi$ are sufficient to
+% prove the functional dependencies $\Psi$. If they are, then every
+% instance of $s$ can be safely mapped to $t$. However, $\Phi$ is
+% phrased in terms of the columns in $s$ and $\Psi$ is phrased in terms
+% of the columns in $t$, so $\cols$ will translate.
 
-Now we can use $\alpha_i$ to produce a candidate map $\alpha $ as
-follows:
-\[\alpha(\vec{a}) = \left\{
-    \left(\vec b, \cols(\vec C)\right)~
-    \begin{array}{|>{\;}l}
-      \bracbb{\vec a} = \bracbb{\vec b},\\
-      \vec {C^1} \in \alpha_1(a_1), \ldots, \vec{C^n} \in \alpha_n(a_n),\\
-      b_1 \in C^1_1 \cap \cdots \cap C^n_1, \\
-      \ldots,  \\
-      b_n \cap C^n_1 \cap \cdots \cap C^n_n \\
-    \end{array}\right\}\]
-
-
-We can produce a set of candidate mappings $\textsf{cands}$ by
-iterating through the different possibilities
-$\vec b,\vec C \in \alpha(\vec a)$ for every action sequence $\vec a$:
-\[\textsf{cands}(\vec A) =
-  \left\{
-    \left(\begin{array}{r}
-      \left\{\overline{\vec a \mapsto \vec
-      b}\right\}, \\
-      \left\{\overline{\vec a \mapsto \vec
-      C}\right\}
-    \end{array}\right)~\Bigg{|}~\overline{\vec a \mapsto \left(\vec b, \vec C\right)}
-    \in \prod_{\vec a \in \dom(\vec A)} a \mapsto \alpha(\vec
-    a)\right\}\]
+% Now we can use $\alpha_i$ to produce a candidate map $\alpha $ as
+% follows:
+% \[\alpha(\vec{a}) = \left\{
+%     \left(\vec b, \cols(\vec C)\right)~
+%     \begin{array}{|>{\;}l}
+%       \bracbb{\vec a} = \bracbb{\vec b},\\
+%       \vec {C^1} \in \alpha_1(a_1), \ldots, \vec{C^n} \in \alpha_n(a_n),\\
+%       b_1 \in C^1_1 \cap \cdots \cap C^n_1, \\
+%       \ldots,  \\
+%       b_n \cap C^n_1 \cap \cdots \cap C^n_n \\
+%     \end{array}\right\}\]
 
 
-For a function $f_c$ from actions to columns, we define its lift,
-$f_c^\dagger : \Constraint \to \Constraint$ which traverses a
-constraint, substituting every action set with its image in $f_c$.
-Now, the set of valid solutions to this problem is defined by the set
-\[\left\{ f_a~\big|~(f_a,f_c) \in \textsf{cands}(\vec A),
-  f_c^\dagger(\Phi) \Rightarrow \Psi \right\}\]
+% We can produce a set of candidate mappings $\textsf{cands}$ by
+% iterating through the different possibilities
+% $\vec b,\vec C \in \alpha(\vec a)$ for every action sequence $\vec a$:
+% \[\textsf{cands}(\vec A) =
+%   \left\{
+%     \left(\begin{array}{r}
+%       \left\{\overline{\vec a \mapsto \vec
+%       b}\right\}, \\
+%       \left\{\overline{\vec a \mapsto \vec
+%       C}\right\}
+%     \end{array}\right)~\Bigg{|}~\overline{\vec a \mapsto \left(\vec b, \vec C\right)}
+%     \in \prod_{\vec a \in \dom(\vec A)} a \mapsto \alpha(\vec
+%     a)\right\}\]
 
 
+% For a function $f_c$ from actions to columns, we define its lift,
+% $f_c^\dagger : \Constraint \to \Constraint$ which traverses a
+% constraint, substituting every action set with its image in $f_c$.
+% Now, the set of valid solutions to this problem is defined by the set
+% \[\left\{ f_a~\big|~(f_a,f_c) \in \textsf{cands}(\vec A),
+%     f_c^\dagger(\Phi) \Rightarrow \Psi \right\}\]
 
 
 \section{Converting to One Big Table}
+
+\todo[inline]{ In what follows we will make the assumption that the
+  free variables in the actions of tables are bound in the same
+  table's keys. Formally, for a table $(\vec{\var f}, \vec A, \Phi)$,
+  we assume that
+  $\bigcup_{A_i}\bigcup_{a \in A_i} \fvs(a) \subseteq \{\var f_1,
+  \ldots, \var f_n\}$.}  \todo[inline]{We should prove this}
 
 The approach detailed above generalizes to full tables so long as we
 can compress a full program into a single match-action table. In some
@@ -447,7 +444,8 @@ $(\var{src}, \var{x}_0, X', D)$.
       \delta(c\angel c', \var x) && \delta (c, \var y) \cup \delta(c', \var y) \\
       \delta(\assert b, \var x) && \fvs(b) \cup \{\var x\} \\
       \delta(\assume b, \var x) && \fvs(b) \cup \{\var x\} \\\\
-      \Delta(\vec A, X) && \displaystyle\bigcup_{\substack{a_1\in A_1,\\\ldots,\\ a_n \in A_n, \\\var x \in X}}\delta(a_1;\cdots; a_n,\var x)                      
+      \Delta(\vec A, X) && \displaystyle\bigcup_{\substack{a_1\in A_1,\\\ldots,\\ a_n \in A_n, \\\var x \in X}}\delta(a_1;\cdots; a_n,\var x) \\\\
+      \Delta(\vec A, \vec e) && \Delta(A, \bigcup_{e_i}\fvs(e))
     \end{array}\]
   \caption{Dominating Sets}
   \label{fig:dominating-sets }
@@ -630,23 +628,24 @@ after running $A$
 \begin{figure}[tpb]
   \[\begin{array}{ccl}
       \multicolumn 3 c
-      {s = (\vec{\var f},\vec A, \Phi)\hfill t = (\vec{\var g},B, \Psi) \hfill \{\var d_1, \ldots, \var d_n\} = \Delta(\vec A, \vec{\var g})}\\\\
+      {s = \left(\vec{k},\vec{\var a : A}, \Phi\right)\hfill t = \left(\vec{c},\vec{\var b : B}, \Psi\right) \hfill \left\{\overline{\var d}\right\} = \Delta\left(\vec A, \vec{c}\right) \hfill \overline{\dom(\var d) = r}}\\\\
       s \circ t
       & \triangleq
-      & ((\vec{\var f}\cdot\vec{\var d}, \vec A\cdot\vec B),\\
-      && \Phi \cup \Psi \cup \{\vec{\var f} \longrightarrow \vec A\} \cup \{ \bracbb{\vec A}(\vec{\var d}).\var g \to \vec B \})\\[.2em]
+      & \left(\vec{k}\cdot\vec{\var d : r}, \vec{\var a : A}\cdot{\var b : \vec B}),
+      \Phi \cup \Psi\left[\overline{\var g /\bracbb{\vec A}(\vec{\var d}).\var g}\right]\right)
+      \\[.2em]
   %   \end{array}\]
   % \[\begin{array}{lcl}
       S \bowtie_{s,t}T
       & \triangleq
-      & \{(\sigma.\vec{\var f}\cdot\pkt.\vec{\var d},\sigma.\vec A \cdot\tau.\vec B) \\
+      & \{(\sigma.\vec{k}\cdot\pkt.\vec{\var d},\sigma.\vec{\var a} \cdot\tau.\vec{\var b}) \\
       && \hspace{.5em}
          \mid \pkt \in \bracbb{\sigma.\vec A}^{-1}[\overline{\var g \mapsto \tau.\var g}],
          \sigma \in S, \tau \in T \} \\
       \pi_{s,t}(R)
       & \triangleq
-      & (\{(\rho.\vec{\var f},\rho.\vec A) \mid \rho \in R\}, \\
-      && ~\{(\pkt.\vec{\var g}, \rho.\vec B) \mid \pkt \in \bracbb{\rho.\vec A}[\overline{d\mapsto \rho.d}], \rho \in R\})
+      & (\{(\rho.\vec k,\rho.\vec{\var a}) \mid \rho \in R\}, \\
+      && ~\{(\pkt.\vec{c}, \rho.\vec{\var b}) \mid \pkt \in \bracbb{\rho.\vec A}[\overline{\var d\mapsto \rho.\var d}], \rho \in R\})
     \end{array}
   \]  
   \caption{Table Composition ($s \circ t$), relation composition
@@ -882,18 +881,16 @@ $b$ evaluates to false.
 
 \begin{figure}[tpb]
   \[\begin{array}{rcl}
-      \multicolumn 3 c {s = (\vec{\var f}, \vec A, \Phi) \qquad t = (\vec{\var g}, \vec B, \Psi) \qquad \{\var x_1, \ldots, \var x_n\} = \fvs(b)}\\
+      \multicolumn 3 c {s = \left(\vec{k}, \vec{\var a : A}, \Phi\right) \qquad t = \left(\vec{c}, \vec{\var b : B}, \Psi\right)}\\
       s \mathrel{\oplus^b} t
       & \triangleq
-      & (\vec{\var x}\cdot\vec{\var f}\cdot \vec{\var g},\\
-      && \vec{A'}\cdot\vec{B'}, \text{where}~ A'_i = A_i \cup \{\SKIP\}, B'_i = B_i \cup\{\SKIP\}, \\
-      && \Phi \cup \Psi \cup \{b \Rightarrow \vec{\var{B'}} = \overrightarrow \SKIP, \neg b \Rightarrow \vec {\var{A'}} = \overrightarrow\SKIP\}\\[.5em]
+      & (b : [0,1] \cdot\vec{\var f}\cdot \vec{\var g},\\
+      && \vec{\var{a'} : A \cup \{\SKIP\}}\cdot\vec{\var{b'} : B \cup \{\SKIP\}},\\
+      && \Phi \cup \Psi \cup \{b \Rightarrow \vec{\var{b'}} = \overrightarrow \SKIP, \neg b \Rightarrow \vec {\var{a'}} = \overrightarrow\SKIP\}\\[.5em]
       S +^b_{s,t} T
       & \triangleq
-      & \{(\pkt.\vec{\var x}\cdot \sigma.\vec{\var{f}} \cdot \overline{\dom(\var{g})}, \sigma.\vec A \cdot \overline{\SKIP})\\
-      &&\mid \pkt \in \ker~\bracbb{\neg b}, \sigma \in S \} \\
-      && \cup~\{(\pkt.\vec{\var x}, \overline{\dom(\var{g})}, \tau.\vec{\var{g}}, \overline{\SKIP}, \tau.\vec B) \\
-      && \phantom{\cup}~\mid \pkt \in \ker \bracbb{b}, \tau \in T \}\\[.5em]
+      & \{1 \cdot \sigma.\vec{\var{f}} \cdot \overline{\dom(k)}, \sigma.\vec A \cdot \overline{\SKIP} \mid \sigma \in S \} \\
+      && \cup~\{(0 \cdot \overline{\dom(k)}, \tau.\vec{\var{g}}, \overline{\SKIP}, \tau.\vec B) \mid  \tau \in T \}\\[.5em]
       R|_s
       &\triangleq
       & \{(\rho.\vec{\var f},\rho.{\vec A}) \mid  \rho \in R\}\\
@@ -963,7 +960,7 @@ is detailed in Figure~\ref{fig:normal-form}.
       \join(\nop)~(I)
       & \triangleq
       & (\nop)\\
-      \join((n, \vec{\var f}, \vec A, \Phi)~(I)
+      \join((n, \vec{e}, \vec{\var a : A}, \Phi)~(I)
       &\triangleq
       & I(n)\\
       \join(c;c')~(I)
@@ -984,7 +981,7 @@ is detailed in Figure~\ref{fig:normal-form}.
       \project(\nop)~(R)
       & \triangleq
       & \emptyset \\
-      \project((n,\vec{\var f}, \vec A, \Phi))~(R)
+      \project((n,\vec{k}, \vec{ \var a : A}, \Phi))~(R)
       &\triangleq
       & \{n \mapsto R\}\\
       \project(c;c')~(R)
