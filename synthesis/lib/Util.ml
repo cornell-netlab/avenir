@@ -53,3 +53,13 @@ let get_singleton_exn = function
   | [] -> failwith "Cannot get a singleton from an empty list"
   | [x] -> x
   | _ -> failwith "Cannot get a singleton from a list with more than one element"
+
+
+let liftO2 f a_opt b_opt =
+  let open Option in
+  a_opt >>= fun a ->
+  b_opt >>= fun b ->
+  Some (f a b)
+
+let mkCons x xs = x :: xs
+          

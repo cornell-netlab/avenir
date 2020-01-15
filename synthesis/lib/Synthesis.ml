@@ -245,14 +245,19 @@ and fixup (real:cmd) (model : value1 StringMap.t) : cmd =
 
 let unroll_fully c = unroll (diameter c) c 
 
+
+let symbolize str =  str ^ "_SYMBOLIC"
+let unsymbolize = String.substr_replace_all ~pattern:"_SYMBOLIC" ~with_:""
+let is_symbolic = String.is_substring ~substring:"_SYMBOLIC"
+
 let symbolic_pkt fvs = 
-    List.fold fvs ~init:True
-      ~f:(fun acc_test (var,sz) ->
-        if String.get var 0 |> Char.is_uppercase
-           || String.substr_index var ~pattern:("NEW") |> Option.is_some
-        then acc_test
-        else
-        Var1 (var,sz) %=% Var1 (var ^ "_SYMBOLIC", sz)
+  List.fold fvs ~init:True
+    ~f:(fun acc_test (var,sz) ->
+      if String.get var 0 |> Char.is_uppercase
+         || String.substr_index var ~pattern:("NEW") |> Option.is_some
+      then acc_test
+      else
+        Var1 (var,sz) %=% Var1 (symbolize var, sz)
         %&% acc_test)
 
 let symb_wp ?fvs:(fvs=[]) cmd =

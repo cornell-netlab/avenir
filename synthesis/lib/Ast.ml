@@ -269,12 +269,13 @@ let rec mkOr (t : test) (t' : test) : test =
 let (%+%) = mkOr
 
 let rec mkAnd (t : test) (t' : test) =
-  match t, t' with
-  | True, x | x, True -> x
-  | False, _ | _, False -> False
-  | _, And ( t'', t''') -> (* left-associative *)
-     mkAnd (mkAnd t t'') t'''
-  | _ -> And (t, t')
+  if t = t' then t else
+    match t, t' with
+    | True, x | x, True -> x
+    | False, _ | _, False -> False
+    | _, And ( t'', t''') -> (* left-associative *)
+       mkAnd (mkAnd t t'') t'''
+    | _ -> And (t, t')
 
 let (%&%) = mkAnd
        
@@ -338,6 +339,9 @@ let (%=%) = mkEq
 let (%<>%) v v' = Neg(v %=% v') 
 
 let (%<%) = mkLt
+let (%>%) e e' = e' %<% e                
+let (%<=%) e e' = !%(e' %>% e)
+let (%>=%) e e' = !%(e' %<% e)
 
 let rec mkMember el set =
   match set with
@@ -348,7 +352,7 @@ let rec mkMember el set =
   | Union (set, set') -> mkMember el set %+% mkMember el set'
   | _ -> Member(el, set)
                
-let mkImplies assum conseq = mkOr (mkNeg assum) conseq
+let mkImplies assum conseq =  mkOr (mkNeg assum) conseq
 let (%=>%) = mkImplies
 
 let mkIff lhs rhs = (lhs %=>% rhs) %&% (rhs %=>% lhs)
@@ -864,9 +868,8 @@ let no_negated_holes ss =
         no_negated_holes_test cond
           && no_negated_holes_cmd act)
 
-(** replace all vars in cmd that are also in holes with holes having the same name*)
-let holify holes c =
-  let rec holify_expr1 (e : expr1) : expr1 =
+
+let rec holify_expr1 holes (e : expr1) : expr1 =
     match e with
     | Hole1 _ | Value1 _ -> e
     | Var1 (x,sz) ->
@@ -874,12 +877,12 @@ let holify holes c =
       | None -> e
       | Some _ -> Hole1 ("?" ^ x, sz)
       end
-    | Plus (e,e') -> Plus (holify_expr1 e, holify_expr1 e')
-    | Times (e,e') -> Times (holify_expr1 e, holify_expr1 e')
-    | Minus (e,e') -> Minus (holify_expr1 e, holify_expr1 e')
-    | Tuple es -> List.map es ~f:holify_expr1 |>  Tuple 
-  in
-  let rec holify_expr2 (e : expr2) : expr2 =
+    | Plus (e,e') -> Plus (holify_expr1 holes e, holify_expr1 holes  e')
+    | Times (e,e') -> Times (holify_expr1 holes  e, holify_expr1 holes  e')
+    | Minus (e,e') -> Minus (holify_expr1 holes  e, holify_expr1 holes  e')
+    | Tuple es -> List.map es ~f:(holify_expr1 holes) |>  Tuple 
+
+and holify_expr2 holes (e : expr2) : expr2 =
     match e with
     | Value2 _ -> e
     | Hole2 _ -> e
@@ -888,34 +891,34 @@ let holify holes c =
        | None -> e 
        | Some _ -> Hole2 ("?" ^ x,sz)
        end
-    | Single e -> Single (holify_expr1 e)
-    | Union (e,e') -> Union (holify_expr2 e, holify_expr2 e')
-  in
-  let rec holify_test b : test =
+    | Single e -> Single (holify_expr1 holes e)
+    | Union (e,e') -> Union (holify_expr2 holes e, holify_expr2 holes e')
+and holify_test holes b : test =
     match b with
     | True | False | LocEq _ -> b
-    | Eq (e, e') -> holify_expr1 e %=% holify_expr1 e'
-    | Lt (e, e') -> holify_expr1 e %<% holify_expr1 e'
-    | Member (expr, set) -> mkMember (holify_expr1 expr) (holify_expr2 set)
-    | And (b, b') -> holify_test b %&% holify_test b'
-    | Or (b, b')  -> holify_test b %+% holify_test b'
-    | Neg b       -> !%(holify_test b)
-  in
-  let rec holify_cmd c : cmd=
-    match c with
-    | Skip | SetLoc _ -> c
-    | Assign (f, e) -> f %<-% holify_expr1 e
-    | Assert t -> Assert (holify_test t)
-    | Assume t -> Assume (holify_test t)
-    | Seq (c, c') ->
-      holify_cmd c %:% holify_cmd c'
-    | While (t, c) ->
-      mkWhile (holify_test t) (holify_cmd c)
+    | Eq (e, e') -> holify_expr1 holes  e %=% holify_expr1 holes  e'
+    | Lt (e, e') -> holify_expr1 holes  e %<% holify_expr1 holes  e'
+    | Member (expr, set) -> mkMember (holify_expr1 holes expr) (holify_expr2 holes set)
+    | And (b, b') -> holify_test holes b %&% holify_test holes b'
+    | Or (b, b')  -> holify_test holes b %+% holify_test holes b'
+    | Neg b       -> !%(holify_test holes b)
+and holify_cmd holes c : cmd=
+  match c with
+  | Skip | SetLoc _ -> c
+  | Assign (f, e) -> f %<-% holify_expr1 holes e
+  | Assert t -> Assert (holify_test holes t)
+  | Assume t -> Assume (holify_test holes t)
+  | Seq (c, c') ->
+     holify_cmd holes c %:% holify_cmd holes c'
+  | While (t, c) ->
+     mkWhile (holify_test holes t) (holify_cmd holes c)
     | Select (styp, cases) ->
-      List.map cases ~f:(fun (t, c) -> holify_test t, holify_cmd c)
-      |> mkSelect styp
+       List.map cases ~f:(fun (t, c) -> holify_test holes t, holify_cmd holes c)
+       |> mkSelect styp
     | Apply (name,keys,acts,dflt)
-      -> Apply(name, keys, List.map acts ~f:holify_cmd, holify_cmd dflt)
-  in
-  holify_cmd c
+      -> Apply(name, keys, List.map acts ~f:(holify_cmd holes), holify_cmd holes dflt)
+              
+    
+(** replace all vars in cmd that are also in holes with holes having the same name*)
+let holify holes c =  holify_cmd holes c
         
