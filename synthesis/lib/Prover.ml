@@ -149,14 +149,24 @@ let initSolver typ solver ctx test =
   | `Valid ->
      init [] (holes_of_test test) (Z3.Boolean.mk_not ctx)
   | `Synth rhoVars -> init rhoVars (free_vars_of_test test) (fun x -> x)
-  
+
+
+
+let parse_int str =
+  let open String in
+  let parse_z3string str = int_of_string ("0" ^ chop_prefix_exn str ~prefix:"#")in
+  if is_prefix str ~prefix:"#"
+  then if is_prefix str ~prefix:"#b"
+       then (parse_z3string str, (String.length str -2))
+       else (parse_z3string str, (String.length str - 2 * 4))
+  else (int_of_string str, int_of_float((2. ** (float_of_int (int_of_string str)))) -1)
 (*
  Converts a Z3 expression to Motley expression 
 *)
 let mkMotleyExpr expr =	
   match Z3.AST.get_ast_kind (Z3.Expr.ast_of_expr expr) with
-  | NUMERAL_AST -> let i = int_of_string (Z3.Expr.to_string expr) in
-                   Int (i, int_of_float((2. ** (float_of_int i) )))
+  | NUMERAL_AST ->
+     Z3.Expr.to_string expr |> parse_int |> Int
   | APP_AST  
   | VAR_AST   
   | _  -> raise (Failure ("Prover: still not supporting: " ^ (Z3.AST.to_string (Z3.Expr.ast_of_expr expr)) ^ "\n"))
@@ -193,14 +203,18 @@ let check typ test =
   let response = Z3.Solver.check mySolver [] in
   (* Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver); *)
   match response with
-  | UNSATISFIABLE -> Printf.printf "UNSAT\n%!"; None
-  | UNKNOWN -> Printf.printf "UNKNOWN:\n \t%s \n%!" (Z3.Solver.get_reason_unknown mySolver); None
+  | UNSATISFIABLE ->
+     (* Printf.printf "UNSAT\n%!"; *)
+     None
+  | UNKNOWN ->
+     (* Printf.printf "UNKNOWN:\n \t%s \n%!" (Z3.Solver.get_reason_unknown mySolver); *)
+     None
   | SATISFIABLE ->
     match Z3.Solver.get_model mySolver with 
-    | Some _ ->      
-      (* let model = mkMotleyModel m in *)
-      (* Printf.printf "SAT: %s \n%!" (string_of_map model); *)
-       Some StringMap.empty (*model*)
+    | Some m ->      
+       Printf.printf "SAT: %s \n%!" (Z3.Model.to_string m);
+       let model = mkMotleyModel m in
+       Some model
     | None -> None
 
 (* Checks SMT Query for validity. Returns None (VALID) or Some model (Counter Example) *)          

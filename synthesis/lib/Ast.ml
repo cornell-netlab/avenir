@@ -291,7 +291,7 @@ let (!%) = mkNeg
              
 let rec mkEq (e : expr1) (e':expr1) = 
   if e = e' then
-    (Printf.printf "[=] %s and %s are equal, so True\n" (string_of_expr1 e) (string_of_expr1 e');
+    ((*Printf.printf "[=] %s and %s are equal, so True\n" (string_of_expr1 e) (string_of_expr1 e');*)
     True) else
     let ord e = match e with
       | Var1 _ -> 0
@@ -305,7 +305,7 @@ let rec mkEq (e : expr1) (e':expr1) =
     match e, e' with 
     | Value1 _, Value1 _
       ->
-       Printf.printf "[=] %s and %s are unequal values so False\n" (string_of_expr1 e) (string_of_expr1 e');
+       (*Printf.printf "[=] %s and %s are unequal values so False\n" (string_of_expr1 e) (string_of_expr1 e');*)
        False
     | Hole1 x , Hole1 x'
     | Var1 x, Var1 x'
@@ -316,11 +316,11 @@ let rec mkEq (e : expr1) (e':expr1) =
       -> begin match es, es' with
          | [], [] -> True
          | _, [] | [], _ ->            
-            Printf.printf "[=] %s and %s are unequal length so False \n" (string_of_expr1 e) (string_of_expr1 e');
+            (*Printf.printf "[=] %s and %s are unequal length so False \n" (string_of_expr1 e) (string_of_expr1 e');*)
             False
          | (h::es), (h'::es')
            ->
-            Printf.printf "[=] %s and %s are equal length so far\n" (string_of_expr1 e) (string_of_expr1 e');
+            (*Printf.printf "[=] %s and %s are equal length so far\n" (string_of_expr1 e) (string_of_expr1 e');*)
             mkEq (Tuple es) (Tuple es')
               |> mkAnd (mkEq h h') 
          end
@@ -366,8 +366,8 @@ let rec string_of_test t =
   | Eq (left, right) -> string_of_expr1 left ^ " = " ^ string_of_expr1 right
   | Lt (left, right) -> string_of_expr1 left ^ " < " ^ string_of_expr1 right
   | Member (expr, set) -> string_of_expr1 expr ^ " in " ^ string_of_expr2 set
-  | Or (Neg(assum), conseq) -> "(" ^ string_of_test assum ^ " ==> " ^ string_of_test conseq ^ ")"
-  | Or (left, right) -> "(" ^ string_of_test left ^ " || " ^ string_of_test right ^ ")"
+  | Or (Neg(assum), conseq) -> "(" ^ string_of_test assum ^ " ==> " ^ string_of_test conseq ^ ")\n"
+  | Or (left, right) -> "(" ^ string_of_test left ^ "\n || " ^ string_of_test right ^ ")"
   | And (left, right) -> "(" ^ string_of_test left ^ "&&" ^ string_of_test right ^ ")"
   | Neg t -> "~(" ^ string_of_test t ^ ")"
 

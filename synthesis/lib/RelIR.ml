@@ -48,6 +48,12 @@ type schema =
     actions : action_set list;
     constraints : condition list
   }
+let print_schema schema =
+  List.iter schema.keys ~f:(fun (f,_,_) -> Printf.printf "%s " f);
+  Printf.printf " |  ";
+  List.iteri schema.actions ~f:(fun i _ -> Printf.printf "%d " i);
+  Printf.printf "\n%!"
+                
 
 type key_match =
   | Int of int
@@ -200,21 +206,30 @@ let satisfies (r : instance) (t : schema) : bool =
     ~f:(fun acc c -> if satOne r t c then acc else( Printf.printf "Violated %s\n%!" (string_of_condition c); false))
     
 let is_inst_of (r : instance) (table : schema) : bool =
-  not (List.exists r.keys
+  if List.exists r.keys
          ~f:(fun row_keys ->
-           List.length row_keys <> List.length table.keys))
-  && not (List.exists r.actions
-            ~f:(fun row_acts -> List.length row_acts <> List.length table.keys))
-  && List.fold r.actions ~init:true
-       ~f:(fun rslt act_row ->
-         List.foldi act_row ~init:true
-           ~f:(fun idx rslt' act ->
-             List.exists (List.nth_exn table.actions idx) ~f:((=) act)
-             && rslt')
-         && rslt)
-  && satisfies r table
-
-
+           List.length row_keys <> List.length table.keys)
+  then (Printf.printf "keys are incorrect length!\n%!"; false)
+  else
+    match List.findi r.actions
+            ~f:(fun _ row_acts -> List.length row_acts <> List.length table.actions)
+    with
+    | Some (i,_) -> (Printf.printf "acts %d are incorrect length, must be %d \n%!"
+                       (i) (List.length table.keys)
+                ; false)
+    | None -> 
+       (if List.fold r.actions ~init:true
+            ~f:(fun rslt act_row ->
+              List.foldi act_row ~init:true
+                ~f:(fun idx rslt' act ->
+                  List.exists (List.nth_exn table.actions idx) ~f:((=) act)
+                  && rslt')
+              && rslt)
+        then true
+        else (Printf.printf "theres an unknown action in the table!"; false))
+       && satisfies r table
+                    
+                         
 let inject_keys (tbl_log : schema) (tbl_phys : schema) (key_log : key_match list) : key_match list =
   List.fold tbl_phys.keys ~init:[]
     ~f:(fun  acc_row (name, lo, hi) ->
@@ -344,8 +359,24 @@ let cmd_equalable bound_vars (a1 : action) (a2 : action) : test option =
   let open Option in
   let wp1 = symb_wp a1 ~fvs:(free_vars_of_cmd a2) in
   let wp2 = symb_wp a2 ~fvs:(free_vars_of_cmd a1) in
+  test_to_valuation wp1 >>= fun v1 ->
+  test_to_valuation wp2 >>= fun v2 -> 
+  let _ = printf "wp1 = %s \n wp2 = %s\n%!" (string_of_test wp1) (string_of_test wp2) in
+  let _ =
+    Printf.printf "v1 = [\n%!";
+    List.iter v1 ~f:(fun (x,e) -> Printf.printf "   %s |-> %s ,\n%!" x (string_of_expr1 e));
+    Printf.printf "]\n%!"
+  in
+  let _ =
+    Printf.printf "v2 = [\n%!";
+    List.iter v2 ~f:(fun (x,e) -> Printf.printf "%s |-> %s ,\n%!" x (string_of_expr1 e));
+    Printf.printf "]\n%!"
+  in
   let condition = compute_eq_cond (test_to_valuation wp1) (test_to_valuation wp2) in
-  Printf.printf "Checking whether sat %s == %s\n via the formula %s!\n%!" (string_of_cmd a1) (string_of_cmd a2) (string_of_test condition);
+  Printf.printf "Checking whether sat %s == %s\n via the formula %s!\n%!"
+    (string_of_cmd a1)
+    (string_of_cmd a2)
+    (string_of_test condition);
   holify_test bound_vars condition |> check `Sat >>= const (Some condition)
     
 let candidates (phys : schema) (log_row : action_seq) : (test * action_seq) list =
@@ -387,14 +418,14 @@ let match_test (tbl : schema) (matches : key_match list) =
                               acc)
     
 
+let check_keys_sat_cond phys_tbl phys_matches (cond, act) =
+  let open Option in
+  check `Sat (match_test phys_tbl phys_matches %=>% cond) >>| const act
+
     
 let cands_for_row  (phys_tbl : schema) (phys_matches : key_match list) (log_acts : action_seq)  =
-  let open Option in
   candidates phys_tbl log_acts
-  |> List.filter_map
-       ~f:(fun (cond, act) ->
-         check `Sat (match_test phys_tbl phys_matches %=>% cond)
-         >>| const act)
+  |> List.filter_map ~f:(check_keys_sat_cond phys_tbl phys_matches)
   
                            
 let rec flatten (alts_for_inst : action_seq list list) : action_seq list list =
@@ -414,12 +445,28 @@ let rec flatten (alts_for_inst : action_seq list list) : action_seq list list =
 
 let instantize (ms : key_match list list) =
   List.map ~f:(fun acts -> {keys = ms; actions = acts})
+
+let compute_candidate_map (log : schema) (phys : schema) :
+      ((action_seq * ((test * action_seq) list)) list ) =
+  list_cross log.actions
+  |> List.map  ~f:(fun actseq ->
+      (actseq, List.dedup_and_sort (candidates phys actseq) ~compare))
            
-let one_table_synth (tbl_log : schema) (tbl_phys : schema) (rlog : instance) =
-  if is_inst_of rlog tbl_log && well_formed rlog  then
+let one_table_synth
+      ?cand_map:(cand_map=None)
+      (tbl_log : schema) (tbl_phys : schema) (rlog : instance)
+  =
+  if is_inst_of rlog tbl_log  && well_formed rlog  then
     let key_mapper = inject_keys tbl_log tbl_phys in
-    (* let get_cands = candidates tbl_phys.actions in *)
-    let get_cands = cands_for_row tbl_phys  in
+    let get_cands matches acts =
+      match cand_map with
+      | None -> cands_for_row tbl_phys matches acts
+      | Some m -> match List.find m ~f:(fun (a, _) -> acts = a) with
+                  | None ->
+                     failwith "Malformed Map Supplied"
+                  | Some (_, cands) ->
+                     List.filter_map cands ~f:(check_keys_sat_cond tbl_phys matches)
+    in
     let new_matches = List.map rlog.keys ~f:key_mapper in
     let search_space_big = List.map2_exn new_matches rlog.actions ~f:get_cands in
     let _ =
@@ -448,7 +495,9 @@ let one_table_synth (tbl_log : schema) (tbl_phys : schema) (rlog : instance) =
              false)
         )
   else
-    failwith "Precondition Failure: rlog has to be a well-formed instance of tbl_log"
+    (print_schema tbl_log;
+     print_instance rlog;
+     failwith "Precondition Failure: above has to be a well-formed instance of tbl_log")
              
 
 
@@ -476,9 +525,18 @@ let dominating_vars (act_seq : action_set list) (keys : (string * size * size) l
   List.fold keys ~init:[] ~f:(fun acc k-> acc @ delta'' act_seq k)
   |> List.dedup_and_sort ~compare
   
-  
-  
-                  
+    
+let rec range lo hi =
+  if lo >= hi
+  then []
+  else if lo + 1 = hi
+  then [lo]
+  else lo :: range (lo + 1) hi
+
+
+
+(**************************** NORMALIZATION ***********************************)
+
 let compose_schemas (s : schema) (t : schema) : schema =
   let open List in
   let dom_vars = dominating_vars s.actions t.keys in
@@ -504,16 +562,13 @@ let compose_schemas (s : schema) (t : schema) : schema =
   { keys = new_keys;
     actions = s.actions @ t.actions;
     constraints = [s_is_table; st_is_table; comp_is_decomp]
-  }  
+  }
     
-let rec range lo hi =
-  if lo >= hi
-  then []
-  else if lo + 1 = hi
-  then [lo]
-  else lo :: range (lo + 1) hi
+(*************************** END NORMALIZATION *******************************)                   
 
 
+
+                   
 
 (* TESTS *)
 let append_instance (s : instance) (t : instance) =
@@ -538,235 +593,301 @@ let rec generate_valid_instance ?n:(n = 10) ~table =
   then instance
   else generate_valid_instance ~n ~table
 
-let rec qc reps n f ~table = 
+let rec qc ~reps ~size f ~table = 
   if reps = 0 then true else     
-    let inst = generate_valid_instance ~n ~table in
+    let inst = generate_valid_instance ~n:size ~table in
     if f inst
     then
-      qc (reps - 1) n f ~table
+      qc ~reps:(reps - 1) ~size f ~table
     else
       (Printf.printf "Counter Example. The following cannot be mapped\n%!"
       ; print_instance inst
       ; false)
         
-let%test _ =
-  let log_schema =
-    { keys = [("x", 0, 2);
-              ("y", 0, 3)               
-             ];
-      actions = [
-          ["op" %<-% Value1 (Int (1,2));
-           "op" %<-% Value1 (Int (0,2))
-          ];
-          ["op" %<-% Value1 (Int (1,2));
-           Assume True]
-        ];
-      constraints = [FD ([0], [2]); FD ([1], [3]); FD([0;1],[2;3])]
-    }
-  in
-  let phys_schema =
-     { keys = [("x", 0, 2);
-              ("y", 0, 2)               
-             ];
-      actions = [
-          ["op" %<-% Value1 (Int (1,2));
-           "op" %<-% Value1 (Int (0,2))
-          ];
-          ["op" %<-% Value1 (Int (1,2));
-           "op" %<-% Value1 (Int (0,2))]
-        ];
-      constraints = [FD([0;1],[2;3])]
-     } 
- in
-  let log_rel = (* op = x *)
-    { keys =
-        [[Int 0; Int 0];
-         [Int 0; Int 1];
-         [Int 1; Int 0];
-         [Int 1; Int 1]
-        ];
-      actions =
-        [ ["op" %<-% Value1 (Int (0,2)); Assume True];
-          ["op" %<-% Value1 (Int (0,2)); Assume True];
-          ["op" %<-% Value1 (Int (1,2)); Assume True];
-          ["op" %<-% Value1 (Int (1,2)); Assume True]
-        ]
-    } in
-  one_table_synth log_schema phys_schema log_rel
+(* let%test _ =
+ *   let log_schema =
+ *     { keys = [("x", 0, 2);
+ *               ("y", 0, 3)               
+ *              ];
+ *       actions = [
+ *           ["op" %<-% Value1 (Int (1,2));
+ *            "op" %<-% Value1 (Int (0,2))
+ *           ];
+ *           ["op" %<-% Value1 (Int (1,2));
+ *            Assume True]
+ *         ];
+ *       constraints = [FD ([0], [2]); FD ([1], [3]); FD([0;1],[2;3])]
+ *     }
+ *   in
+ *   let phys_schema =
+ *      { keys = [("x", 0, 2);
+ *               ("y", 0, 2)               
+ *              ];
+ *       actions = [
+ *           ["op" %<-% Value1 (Int (1,2));
+ *            "op" %<-% Value1 (Int (0,2))
+ *           ];
+ *           ["op" %<-% Value1 (Int (1,2));
+ *            "op" %<-% Value1 (Int (0,2))]
+ *         ];
+ *       constraints = [FD([0;1],[2;3])]
+ *      } 
+ *  in
+ *   let log_rel = (\* op = x *\)
+ *     { keys =
+ *         [[Int 0; Int 0];
+ *          [Int 0; Int 1];
+ *          [Int 1; Int 0];
+ *          [Int 1; Int 1]
+ *         ];
+ *       actions =
+ *         [ ["op" %<-% Value1 (Int (0,2)); Assume True];
+ *           ["op" %<-% Value1 (Int (0,2)); Assume True];
+ *           ["op" %<-% Value1 (Int (1,2)); Assume True];
+ *           ["op" %<-% Value1 (Int (1,2)); Assume True]
+ *         ]
+ *     } in
+ *   one_table_synth log_schema phys_schema log_rel
+ * 
+ * let%test _ =
+ *   let phys_schema =
+ *     { keys = [("x", 0, 2);
+ *               ("y", 0, 3)               
+ *              ];
+ *       actions = [
+ *           ["op" %<-% Value1 (Int (1,2));
+ *            "op" %<-% Value1 (Int (0,2))
+ *           ];
+ *           ["op" %<-% Value1 (Int (1,2));
+ *            Assume True]
+ *         ];
+ *       constraints = [FD ([0], [2]); FD ([1], [3]); FD([0;1],[2;3])]
+ *     }
+ *   in
+ *   let log_schema =
+ *     { keys = [("x", 0, 2);
+ *               ("y", 0, 2)               
+ *              ];
+ *       actions = [
+ *           ["op" %<-% Value1 (Int (1,2));
+ *            "op" %<-% Value1 (Int (0,2))
+ *           ];
+ *           ["op" %<-% Value1 (Int (1,2));
+ *            "op" %<-% Value1 (Int (0,2))]
+ *         ];
+ *       constraints = [FD([0;1],[2;3])]
+ *     } 
+ *   in
+ *   let log_rel = (\* op = x *\)
+ *     { keys =
+ *         [[Int 0; Int 0];
+ *          [Int 0; Int 1];
+ *          [Int 1; Int 0];
+ *          [Int 1; Int 1]
+ *         ];
+ *       actions =
+ *         [ ["op" %<-% Value1 (Int (0,2)); "op" %<-% Value1 (Int (0,2))];
+ *           ["op" %<-% Value1 (Int (0,2)); "op" %<-% Value1 (Int (0,2))];
+ *           ["op" %<-% Value1 (Int (1,2)); "op" %<-% Value1 (Int (1,2))];
+ *           ["op" %<-% Value1 (Int (1,2)); "op" %<-% Value1 (Int (1,2))]
+ *         ]
+ *     } in
+ *   one_table_synth log_schema phys_schema log_rel
+ *                   
+ * 
+ * let%test _ =
+ *   let phys_schema =
+ *     { keys = [("src", 0, 2);
+ *               ("x0", 0, 2)               
+ *              ];
+ *       actions = [
+ *           ["x1" %<-% Value1 (Int (1,2));
+ *            "x1" %<-% Var1 ("x0", 2);
+ *            Assume True
+ *           ];
+ *           ["dst" %<-% Value1 (Int (1,2));
+ *            "dst" %<-% Value1 (Int (2,2));
+ *            "dst" %<-% Value1 (Int (3,2));
+ *            "dst" %<-% Value1 (Int (4,2));
+ *            Assume True
+ *           ]
+ *         ];
+ *       constraints = [FD ([0], [2]);
+ *                      SemFD {act=[2]; inputs=[1]; outputs = ["x1"]; range=[3]};
+ *                      FD([0;1],[2;3])]
+ *     }
+ *   in
+ *   let log_schema =
+ *     { keys = [("src", 0, 2);
+ *               ("x0", 0, 2)               
+ *              ];
+ *       actions =
+ *         [["x1" %<-% Value1 (Int (1,2));
+ *           "x1" %<-% Var1 ("x0", 2);
+ *           "dst" %<-% Value1 (Int (1,2));
+ *           "dst" %<-% Value1 (Int (2,2));
+ *           "dst" %<-% Value1 (Int (3,2));
+ *           "dst" %<-% Value1 (Int (4,2))
+ *          ];
+ *          ["x1" %<-% Value1 (Int (1,2));
+ *           "x1" %<-% Var1 ("x0", 2);
+ *           "dst" %<-% Value1 (Int (1,2));
+ *           "dst" %<-% Value1 (Int (2,2));
+ *           "dst" %<-% Value1 (Int (3,2));
+ *           "dst" %<-% Value1 (Int (4,2))
+ *         ]];
+ *       constraints = [FD([0;1],[2;3])]
+ *     } 
+ *   in
+ *   let log_rel = (\* op = x *\)
+ *     { keys =
+ *         [ [Int 0; Int 0];
+ *           [Int 0; Int 1];
+ *           [Int 1; Int 0];
+ *           [Int 1; Int 1]
+ *         ];
+ *       actions =
+ *         [ ["dst" %<-% Value1 (Int (1,2)); "x1" %<-% Value1 (Int (1,2))];
+ *           ["dst" %<-% Value1 (Int (1,2)); "x1" %<-% Value1 (Int (1,2))];
+ *           ["dst" %<-% Value1 (Int (2,2)); "x1" %<-% Var1 ("x0",2)];
+ *           ["dst" %<-% Value1 (Int (1,2)); "x1" %<-% Var1 ("x0",2)]
+ *         ];
+ *     } in
+ *   one_table_synth log_schema phys_schema log_rel
+ *   && not ((one_table_synth log_schema phys_schema)
+ *           |> qc ~reps:20 ~size:2 ~table:log_schema)
+ *         
+ * 
+ * let%test _ =
+ *   let phys_schema =
+ *     { keys = [("src", 0, 2);
+ *               ("y", 0, 2)               
+ *              ];
+ *       actions = [
+ *           [ "x1" %<-% Var1 ("y", 2);
+ *           ];
+ *           ["dst" %<-% Value1 (Int (1,2));
+ *            "dst" %<-% Value1 (Int (2,2));
+ *            "dst" %<-% Value1 (Int (3,2));
+ *            "dst" %<-% Value1 (Int (4,2));
+ *           ]
+ *         ];
+ *       constraints = [FD ([0], [2]);
+ *                      SemFD {act=[2]; inputs=[1]; outputs = ["x1"]; range=[3]};
+ *                      FD([0;1],[2;3])]
+ *     }
+ *   in
+ *   let log_schema =
+ *     { keys = [("src", 0, 2);
+ *               ("y", 0, 2)               
+ *              ];
+ *       actions =
+ *         [[  "x1" %<-% mkVInt (0,2);
+ *             "x1" %<-% mkVInt (1,2)
+ *          ];
+ *          [
+ *            "dst" %<-% Value1 (Int (1,2));
+ *            "dst" %<-% Value1 (Int (2,2));
+ *            "dst" %<-% Value1 (Int (3,2));
+ *            "dst" %<-% Value1 (Int (4,2))
+ *          ]
+ *         ];
+ *       constraints = [FD([0;1],[2;3])]
+ *     } 
+ *   in
+ *   let log_rel_succeed = 
+ *     { keys =
+ *         [ [Int 0; Int 1];
+ *           [Int 1; Int 1];
+ *           [Int 0; Int 0];
+ *           [Int 1; Int 0]
+ *         ];
+ *       actions =
+ *         [ ["x1" %<-% mkVInt (1,2); "dst" %<-% mkVInt (1,2)];
+ *           ["x1" %<-% mkVInt (1,2); "dst" %<-% mkVInt (1,2)];
+ *           ["x1" %<-% mkVInt (0,2); "dst" %<-% mkVInt (1,2)];
+ *           ["x1" %<-% mkVInt (0,2); "dst" %<-% mkVInt (1,2)]
+ *         ];
+ *     } in
+ *   let log_rel_fail =
+ *     { keys =
+ *         [ [Int 0; Int 1];
+ *           [Int 1; Int 1];
+ *           [Int 0; Int 0];
+ *           [Int 1; Int 0]
+ *         ];
+ *       actions =
+ *         [ ["x1" %<-% mkVInt (1,2); "dst" %<-% mkVInt (1,2)];
+ *           ["x1" %<-% mkVInt (1,2); "dst" %<-% mkVInt (1,2)];
+ *           ["x1" %<-% mkVInt (0,2); "dst" %<-% mkVInt (1,2)];
+ *           ["x1" %<-% mkVInt (1,2); "dst" %<-% mkVInt (1,2)]
+ *         ];
+ *     } in
+ *   one_table_synth log_schema phys_schema log_rel_succeed
+ *   && not (one_table_synth log_schema phys_schema log_rel_fail) *)
 
-let%test _ =
-  let phys_schema =
-    { keys = [("x", 0, 2);
-              ("y", 0, 3)               
-             ];
-      actions = [
-          ["op" %<-% Value1 (Int (1,2));
-           "op" %<-% Value1 (Int (0,2))
-          ];
-          ["op" %<-% Value1 (Int (1,2));
-           Assume True]
-        ];
-      constraints = [FD ([0], [2]); FD ([1], [3]); FD([0;1],[2;3])]
-    }
-  in
-  let log_schema =
-    { keys = [("x", 0, 2);
-              ("y", 0, 2)               
-             ];
-      actions = [
-          ["op" %<-% Value1 (Int (1,2));
-           "op" %<-% Value1 (Int (0,2))
-          ];
-          ["op" %<-% Value1 (Int (1,2));
-           "op" %<-% Value1 (Int (0,2))]
-        ];
-      constraints = [FD([0;1],[2;3])]
-    } 
-  in
-  let log_rel = (* op = x *)
-    { keys =
-        [[Int 0; Int 0];
-         [Int 0; Int 1];
-         [Int 1; Int 0];
-         [Int 1; Int 1]
-        ];
-      actions =
-        [ ["op" %<-% Value1 (Int (0,2)); "op" %<-% Value1 (Int (0,2))];
-          ["op" %<-% Value1 (Int (0,2)); "op" %<-% Value1 (Int (0,2))];
-          ["op" %<-% Value1 (Int (1,2)); "op" %<-% Value1 (Int (1,2))];
-          ["op" %<-% Value1 (Int (1,2)); "op" %<-% Value1 (Int (1,2))]
-        ]
-    } in
-  one_table_synth log_schema phys_schema log_rel
-                  
 
-let%test _ =
-  let phys_schema =
-    { keys = [("src", 0, 2);
-              ("x0", 0, 2)               
-             ];
-      actions = [
-          ["x1" %<-% Value1 (Int (1,2));
-           "x1" %<-% Var1 ("x0", 2);
-           Assume True
-          ];
-          ["dst" %<-% Value1 (Int (1,2));
-           "dst" %<-% Value1 (Int (2,2));
-           "dst" %<-% Value1 (Int (3,2));
-           "dst" %<-% Value1 (Int (4,2));
-           Assume True
-          ]
-        ];
-      constraints = [FD ([0], [2]);
-                     SemFD {act=[2]; inputs=[1]; outputs = ["x1"]; range=[3]};
-                     FD([0;1],[2;3])]
-    }
-  in
-  let log_schema =
-    { keys = [("src", 0, 2);
-              ("x0", 0, 2)               
-             ];
-      actions =
-        [["x1" %<-% Value1 (Int (1,2));
-          "x1" %<-% Var1 ("x0", 2);
-          "dst" %<-% Value1 (Int (1,2));
-          "dst" %<-% Value1 (Int (2,2));
-          "dst" %<-% Value1 (Int (3,2));
-          "dst" %<-% Value1 (Int (4,2))
-         ];
-         ["x1" %<-% Value1 (Int (1,2));
-          "x1" %<-% Var1 ("x0", 2);
-          "dst" %<-% Value1 (Int (1,2));
-          "dst" %<-% Value1 (Int (2,2));
-          "dst" %<-% Value1 (Int (3,2));
-          "dst" %<-% Value1 (Int (4,2))
-        ]];
-      constraints = [FD([0;1],[2;3])]
-    } 
-  in
-  let log_rel = (* op = x *)
-    { keys =
-        [ [Int 0; Int 0];
-          [Int 0; Int 1];
-          [Int 1; Int 0];
-          [Int 1; Int 1]
-        ];
-      actions =
-        [ ["dst" %<-% Value1 (Int (1,2)); "x1" %<-% Value1 (Int (1,2))];
-          ["dst" %<-% Value1 (Int (1,2)); "x1" %<-% Value1 (Int (1,2))];
-          ["dst" %<-% Value1 (Int (2,2)); "x1" %<-% Var1 ("x0",2)];
-          ["dst" %<-% Value1 (Int (1,2)); "x1" %<-% Var1 ("x0",2)]
-        ];
-    } in
-  one_table_synth log_schema phys_schema log_rel
-  && not ((one_table_synth log_schema phys_schema)
-          |> qc 20 2 ~table:log_schema)
-        
+       
+(*** Andy's Examples ***)
+let keyify = List.map ~f:(fun x -> (x, 0, 3))
+let actify = List.map ~f:(fun x ->
+             List.map (range 0 3)
+               ~f:(fun v -> x %<-% mkVInt(v,2)))
 
-let%test _ =
-  let phys_schema =
-    { keys = [("src", 0, 2);
-              ("y", 0, 2)               
-             ];
-      actions = [
-          [ "x1" %<-% Var1 ("y", 2);
-          ];
-          ["dst" %<-% Value1 (Int (1,2));
-           "dst" %<-% Value1 (Int (2,2));
-           "dst" %<-% Value1 (Int (3,2));
-           "dst" %<-% Value1 (Int (4,2));
-          ]
-        ];
-      constraints = [FD ([0], [2]);
-                     SemFD {act=[2]; inputs=[1]; outputs = ["x1"]; range=[3]};
-                     FD([0;1],[2;3])]
-    }
-  in
-  let log_schema =
-    { keys = [("src", 0, 2);
-              ("y", 0, 2)               
-             ];
-      actions =
-        [[  "x1" %<-% mkVInt (0,2);
-            "x1" %<-% mkVInt (1,2)
-         ];
-         [
-           "dst" %<-% Value1 (Int (1,2));
-           "dst" %<-% Value1 (Int (2,2));
-           "dst" %<-% Value1 (Int (3,2));
-           "dst" %<-% Value1 (Int (4,2))
-         ]
-        ];
-      constraints = [FD([0;1],[2;3])]
-    } 
-  in
-  let log_rel_succeed = 
-    { keys =
-        [ [Int 0; Int 1];
-          [Int 1; Int 1];
-          [Int 0; Int 0];
-          [Int 1; Int 0]
-        ];
-      actions =
-        [ ["x1" %<-% mkVInt (1,2); "dst" %<-% mkVInt (1,2)];
-          ["x1" %<-% mkVInt (1,2); "dst" %<-% mkVInt (1,2)];
-          ["x1" %<-% mkVInt (0,2); "dst" %<-% mkVInt (1,2)];
-          ["x1" %<-% mkVInt (0,2); "dst" %<-% mkVInt (1,2)]
-        ];
-    } in
-  let log_rel_fail =
-    { keys =
-        [ [Int 0; Int 1];
-          [Int 1; Int 1];
-          [Int 0; Int 0];
-          [Int 1; Int 0]
-        ];
-      actions =
-        [ ["x1" %<-% mkVInt (1,2); "dst" %<-% mkVInt (1,2)];
-          ["x1" %<-% mkVInt (1,2); "dst" %<-% mkVInt (1,2)];
-          ["x1" %<-% mkVInt (0,2); "dst" %<-% mkVInt (1,2)];
-          ["x1" %<-% mkVInt (1,2); "dst" %<-% mkVInt (1,2)]
-        ];
-    } in
-  one_table_synth log_schema phys_schema log_rel_succeed
-  && not (one_table_synth log_schema phys_schema log_rel_fail)
+let a = ["w"; "x"; "y"; "z"]
+let b = ["a"; "b"; "c"; "d";"e"]
+let c = ["p"; "q"]
+let d = ["r";"s";"t"]
+
+(* let%test _ =
+ *   match cmd_equalable a
+ *           ("p" %<-% mkVInt (2,2)
+ *            %:% ("q" %<-% mkVInt (2,2))
+ *            %:% ("r" %<-% mkVInt (2,2))
+ *            %:% ("s" %<-% mkVInt (1,2))
+ *            %:% ("t" %<-% mkVInt (0,2)))
+ *           ("r" %<-% mkVInt (2,2)
+ *            %:% ("s" %<-% mkVInt (1,2))
+ *            %:% ("t" %<-% mkVInt (1,2))
+ *            %:% ("p" %<-% mkVInt (2,2))
+ *            %:% ("q" %<-% mkVInt (2,2)))
+ *   with
+ *   | None -> true
+ *   | Some t ->
+ *      Printf.printf ("Implementable With %s\n%!") (string_of_test t); false *)
+          
+(* let%test _ =
+ *   let a_to_c = { keys = keyify a; actions = actify c; constraints = [] } in
+ *   let b_to_d = { keys = keyify b; actions = actify d; constraints = [] } in
+ *   let log = compose_schemas a_to_c b_to_d in
+ *   let phys = compose_schemas b_to_d a_to_c in
+ *   let cand_map = compute_candidate_map log phys in
+ *   let counts = List.map cand_map ~f:(fun (_, cands) -> List.length cands) in
+ *   Printf.printf "Candidate for each act-seq : on average %f, max %d, min %d"
+ *     ((float_of_int (List.fold counts ~init:0 ~f:(+))) /. float_of_int(List.length counts))
+ *     (List.max_elt ~compare counts |> Option.value_exn)
+ *     (List.min_elt ~compare counts |> Option.value_exn)
+ *   ; List.iter cand_map
+ *       ~f:(fun (aseq, cands) ->
+ *         Printf.printf "%s -> \n%!" (List.reduce_exn aseq ~f:(%:%)|> string_of_cmd);
+ *         List.iter cands ~f:(fun (phi, cs) ->
+ *             Printf.printf "   %s ==> %s\n%!"
+ *               (string_of_test phi)
+ *               (List.reduce_exn cs ~f:(%:%)|> string_of_cmd));
+ *         Printf.printf "\n\n%!")
+ *   ; true one_table_synth log phys ~cand_map:(Some cand_map)
+  |> qc ~reps:2 ~size:2 ~table:log*)
+
+(* let%test _ =
+ *   let a_to_bc = { keys = keyify a; actions = actify b @ actify c; constraints = [] } in
+ *   let b_to_d = { keys = keyify b; actions = actify d; constraints = []} in
+ *   let act_bcd = actify b @ actify c @ actify d in
+ *   let a_to_bcd = {keys = keyify a; actions = act_bcd;
+ *                   constraints = [FD (range 0 (List.length a),
+ *                                      range (List.length a) (List.length act_bcd))]
+ *                  } in
+ *   let log = compose_schemas a_to_bc b_to_d in
+ *   let cand_map = compute_candidate_map log a_to_bcd |> Some in
+ *   one_table_synth log a_to_bcd ~cand_map
+ *   |> qc ~reps:2 ~size:2 ~table:log *)
+  

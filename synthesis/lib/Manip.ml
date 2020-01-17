@@ -93,7 +93,6 @@ let rec substitute ex subsMap =
   | Eq (e,e') ->  substituteE e %=% substituteE e'
   | Lt (e,e') ->  substituteE e %<% substituteE e'
   | Member(e,set) -> Member(substituteE e, set)
-
               
 (* computes weakest pre-condition of condition phi w.r.t command c *)
 let rec wp c phi =
@@ -120,7 +119,7 @@ let rec wp c phi =
   | Assume t -> t %=>% phi
               
   (* requires at least one guard to be true *)
-  | Select (Total, []) -> False
+  | Select (Total, []) -> True
   | Select (Total, cmds) ->
     concatMap cmds ~c:(%+%) ~f:fst 
     %&% concatMap cmds ~c:(%&%) ~f:guarded_wp
@@ -128,7 +127,7 @@ let rec wp c phi =
   (* doesn't require at any guard to be true *)
   | Select (Partial, []) -> True
   | Select (Partial, cmds) ->
-    concatMap cmds ~c:(%&%) ~f:guarded_wp
+     concatMap cmds ~c:(%&%) ~f:guarded_wp
 
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
@@ -210,4 +209,60 @@ let rec fill_holes (c : cmd) subst =
     -> Apply(n, keys
              , List.map acts ~f:(fun act -> fill_holes act subst)
              , fill_holes dflt subst)
-     
+            
+
+
+let rec wp_paths c phi : test list =
+  let rec subst_location l phi =
+    match phi with
+    (* Do the Work *)
+    | LocEq l' -> if l' = l then True else False
+    (* Do nothing *)
+    | True | False | Eq _ | Lt _ | Member _ -> phi
+    (* Homorphically recurse *)
+    | And (p, q) -> subst_location l p %&% subst_location l q
+    | Or (p, q) -> subst_location l p %+% subst_location l q
+    | Neg p -> !%(subst_location l p)
+  in
+  match c with
+  | Skip -> [phi]
+  | Seq (firstdo, thendo) ->
+     List.(wp_paths thendo phi >>= wp_paths firstdo)
+  | SetLoc l -> [subst_location l phi]
+  | Assign (field, value) ->
+     [substitute phi (StringMap.singleton field value)]
+  | Assert t -> [t %&% phi]
+  | Assume t -> [!%t; t %&% phi]
+                  
+  (* requires at least one guard to be true *)
+  | Select (Total, []) -> [True]
+  | Select (Total, cmds) ->
+     let open List in
+     (cmds >>| fun (t,c) -> Assert t %:% c)
+     >>= Fun.flip wp_paths phi
+
+                  
+  (* doesn't require at any guard to be true *)
+  | Select (Partial, []) -> [True]
+  | Select (Partial, cmds) ->
+     let open List in
+     (cmds >>| fun (t,c) -> Assume t %:% c)
+     >>= Fun.flip wp_paths phi
+                  
+  (* negates the previous conditions *)
+  | Select (Ordered, cmds) ->
+     let open List in
+     (cmds >>| fun (t,c) -> Assume t %:% c)
+     >>= Fun.flip wp_paths phi
+  (* List.fold cmds ~init:(True, False) ~f:(fun (wp_so_far, prev_conds) (cond, act) ->
+   *     guarded_wp (cond %&% !%prev_conds, act) %&% wp_so_far
+   *                                        , prev_conds %+% cond
+   *   )
+   * |> fst *)
+
+  | Apply (_, _, acts, dflt) ->
+     let open List in
+     (dflt :: acts) >>= Fun.flip wp_paths phi
+  | While _ ->
+     Printf.printf "[WARNING] skipping While loop, because loops must be unrolled\n%!";
+     [phi]

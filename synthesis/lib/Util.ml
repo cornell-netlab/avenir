@@ -21,14 +21,14 @@ let random_int_nin domain =
   let _ = Random.init ((Time_now.nanoseconds_since_unix_epoch ())
                        |> Base.Int63.to_int_trunc)
   in
-  let max_list = List.fold_left ~init:(0) ~f:(fun oldmax curr -> max oldmax curr) in
-  let rec random_int_nin_rec domain = 
-    let r = Random.int (max_list domain) in
+  let max_list = List.fold_left domain ~init:(0) ~f:(fun oldmax curr -> max oldmax curr) in
+  let rec random_int_nin_rec _ = 
+    let r = if max_list = 0 then 0 else Random.int max_list in
     match List.findi domain ~f:(fun _ x -> x = r) with
     | None ->  r
-    | Some _ -> random_int_nin_rec domain
+    | Some _ -> random_int_nin_rec ()
   in
-  random_int_nin_rec domain
+  random_int_nin_rec ()
                   
 (** constructs a pair from the arguments *)
 let mkPair a b = (a, b)

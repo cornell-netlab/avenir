@@ -51,7 +51,7 @@ let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   | Member (e, set) -> member pkt_loc e set
 
 
-let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packet.located * (int list)) option =
+let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packet.located * cmd) option =
   (* Printf.printf "\n###TRACE EVAL\nPROGRAM:\n%s\n\tPACKET: %s\n\tLOCATION: %s\n%!"
    *   (string_of_cmd cmd)
    *   (Packet.string_of_packet (fst pkt_loc))
@@ -63,50 +63,56 @@ let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packe
     | [] -> default ()
     | (cond, action) :: rest ->
        if check_test cond pkt_loc then
-         action
+         (cond, action)
        else
-         find_match rest ~default
+         (find_match rest ~default)
   in
   let (pkt, loc_opt) = pkt_loc in
   if gas = 0
   then (Printf.printf "========OUT OF EVAL GAS============\n"; None)
   else match cmd with
-    | Skip ->
-      Some (pkt_loc, [])
-    | SetLoc i ->
-      (* Printf.printf "\tSetting Loc to %d\n" i; *)
-      Some ((pkt, Some i), [i])
-    | Assign (f, e) ->
-      Some ((Packet.set_field_of_expr1 pkt f e, loc_opt), [])
-    | Assert (t) ->
-      if check_test t pkt_loc then
-        Some (pkt_loc, [])
-      else
-        failwith ("AssertionFailure: " ^ string_of_test t ^ "was false")
-    | Assume _ ->
-      Some (pkt_loc, [])
-    | Seq (firstdo, thendo) ->
-      let open Option in
-      trace_eval ~gas firstdo pkt_loc >>= fun (pkt_loc', trace') ->
-      trace_eval ~gas thendo pkt_loc' >>= fun (pkt_loc'', trace'') ->
-      Some (pkt_loc'', trace' @ trace'')
-    | Select (styp, selects) ->
-      let default _ = match styp with
-        | Total   -> failwith "SelectionError: Could not find match in [if total]"
-        | Partial
-        | Ordered ->
-          Printf.printf "[EVAL (%d)] Skipping selection, no match for %s\n"
-            (gas)
-            (string_of_test (Packet.to_test pkt %&% LocEq (Option.value loc_opt ~default:(-100))));
-          Skip
-      in
-      trace_eval ~gas (find_match selects ~default) pkt_loc
-    | While ( cond , body ) ->
-      if check_test cond pkt_loc then
-        trace_eval ~gas:(gas-1) (Seq(body,cmd)) pkt_loc
-      else 
-        Some (pkt_loc, [])
-    | Apply _ -> failwith "Cannot Evaluate table -- need configuration"
+       | Skip ->
+          Some (pkt_loc, Skip)
+       | SetLoc i ->
+          (* Printf.printf "\tSetting Loc to %d\n" i; *)
+          Some ((pkt, Some i), SetLoc i)
+       | Assign (f, e) ->
+          Some ((Packet.set_field_of_expr1 pkt f e, loc_opt), Assign (f, e))
+       | Assert (t) ->
+          if check_test t pkt_loc then
+            Some (pkt_loc, Assert t)
+          else
+            failwith ("AssertionFailure: " ^ string_of_test t ^ "was false")
+       | Assume b ->
+          Some (pkt_loc, Assume b)
+       | Seq (firstdo, thendo) ->
+          let open Option in
+          trace_eval ~gas firstdo pkt_loc >>= fun (pkt_loc', trace') ->
+          trace_eval ~gas thendo pkt_loc' >>= fun (pkt_loc'', trace'') ->
+          Some (pkt_loc'', trace' %:% trace'')
+       | Select (styp, selects) ->
+          let default _ = match styp with
+            | Total   -> failwith "SelectionError: Could not find match in [if total]"
+            | Partial
+              | Ordered ->
+               Printf.printf "[EVAL (%d)] Skipping selection, no match for %s\n"
+                 (gas)
+                 (string_of_test (Packet.to_test pkt %&% LocEq (Option.value loc_opt ~default:(-100))));
+               (True, Skip)
+          in
+          let (t, a) = find_match selects ~default in
+          let open Option in 
+          trace_eval ~gas a pkt_loc
+          >>| fun (pkt_loc',  c) ->
+          (pkt_loc', Assume t %:% a %:% c)
+
+       | While ( _ , _ ) ->
+          failwith "Cannot process while loops"
+          (* if check_test cond pkt_loc then
+           *   trace_eval ~gas:(gas-1) (Seq(body,cmd)) pkt_loc
+           * else 
+           *   Some (pkt_loc, []) *)
+       | Apply _ -> failwith "Cannot Evaluate table -- need configuration"
 
 
 let eval_act (act : cmd) (pkt : Packet.t) : Packet.t =

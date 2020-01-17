@@ -242,6 +242,26 @@ let%test _ = (* wp behaves well with ordereds *)
     false
   )
 
+let%test _ =
+  let i x = mkVInt (x,2) in
+  let ls = SetLoc 0 in
+  let le = LocEq 0 in
+  let v s = Var1 (s, 2) in
+  let s x = v x %=% v (symbolize x) in
+  let dsteq x = le %&% (Var1 ("dst", 2) %=% i x) in
+  let setOut x = "out" %<-% i x %:% ls in
+  Printf.printf "TEST %s\n"
+    (wp (ls
+         %:% mkPartial
+               [ dsteq 2, setOut 2
+               ; dsteq 1, setOut 1
+               ; dsteq 3, setOut 3
+               ; le, setOut 0 ])
+       (s "dst" %&% s "out")
+     |> string_of_test);
+  true
+
+
 
 let%test _ =
   let cond = Var1 ("pkt",8) %=% Var1 ("ALPHA",8) in
@@ -365,21 +385,21 @@ let test_trace p_string expected_trace =
   | Some (_, tr) -> tr = expected_trace
   
 
-let%test _ = test_trace
-               "loc:=0; loc:=0"
-               [0; 0]
-let%test _ = test_trace
-               "loc:=0; loc := 1"
-               [0; 1]
-let%test _ = test_trace
-               "loc:=0; if total loc = 0 -> loc := 1 fi; loc := 2"
-               [0; 1; 2]
-let%test _ = test_trace
-               "loc:=0; while (~ loc = 1) { loc := 1 }"
-               [0; 1]
-let%test _ = test_trace
-               "loc := 0; while (~ loc = 1) { if partial loc = 0 && pkt = 100 -> pkt := 101; loc := 1 fi }"
-               [0;1]
+(* let%test _ = test_trace
+ *                "loc:=0; loc:=0"
+ *                [0; 0]
+ * let%test _ = test_trace
+ *                "loc:=0; loc := 1"
+ *                [0; 1]
+ * let%test _ = test_trace
+ *                "loc:=0; if total loc = 0 -> loc := 1 fi; loc := 2"
+ *                [0; 1; 2]
+ * let%test _ = test_trace
+ *                "loc:=0; while (~ loc = 1) { loc := 1 }"
+ *                [0; 1]
+ * let%test _ = test_trace
+ *                "loc := 0; while (~ loc = 1) { if partial loc = 0 && pkt#8 = 100#8 -> pkt := 101#8; loc := 1 fi }"
+ *                [0;1] *)
 
                             (* TESTING Formula Construction *)
 
@@ -391,9 +411,9 @@ let%test _ =
   let indices = mk_deBruijn (List.map ~f:fst (free_vars_of_test t)) in
   let get = StringMap.find indices in
   let z3test = mkZ3Test [] t ctx indices (free_vars_of_test t) in
-  let expz3string = "(let ((a!1 (not (or (= (:var 2) 5) (and (= (:var 2) 3) (= (:var 1) 6))))))\n  (or a!1 (not (or (= (:var 2) hole0) (= (:var 0) hole1)))))" in
+  let expz3string = "(let ((a!1 (not (or (= (:var 2) #x05) (and (= (:var 2) #x03) (= (:var 1) #x06))))))\n  (or a!1 (not (or (= (:var 2) hole0) (= (:var 0) hole1)))))" in
   let qform = bind_vars `All ctx exp_fvs z3test in
-  let exp_qform_string ="(forall ((x Int) (z Int) (y Int))\n  (let ((a!1 (not (or (= x 5) (and (= x 3) (= z 6))))))\n    (or a!1 (not (or (= x hole0) (= y hole1))))))" in
+  let exp_qform_string ="(forall ((x (_ BitVec 8)) (z (_ BitVec 8)) (y (_ BitVec 8)))\n  (let ((a!1 (not (or (= x #x05) (and (= x #x03) (= z #x06))))))\n    (or a!1 (not (or (= x hole0) (= y hole1))))))" in
   let success = free_vars_of_test t = exp_fvs
                 &&  get "x" = Some 2 && get "y" = Some 0 && get "z" = Some 1
                 && String.strip(Z3.Expr.to_string z3test) = String.strip(expz3string)
@@ -405,7 +425,7 @@ let%test _ =
     StringMap.iteri indices ~f:(fun ~key ~data ->
         Printf.printf "\t %s -> %d\n%!" key data;
       );
-    Printf.printf "Z3STRING:\n%s\n\n%!EXPECTED:\n%s\n\n%!" (Z3.Expr.to_string z3test) expz3string;
+    Printf.printf "Z3STRING:\n%s\n\n%!EXPECTED:\n%s\n\n%!" (Z3.Expr.to_string qform) exp_qform_string;
     Printf.printf "----------------------------\n%!";
     success )
 
@@ -481,13 +501,13 @@ let%test _ = (* [no_negated_holes] rejects programs with negated holes]*)
     
 (* TESTING FOR CEGIS PROCEDURE *)
 
-let%test _ =
-  let pkt = Packet.(set_field empty "pkt" (mkInt (100,8))) in
-  let log  = parse "loc := 0; while (~ loc = 1) { if partial loc = 0 && pkt = 100 -> pkt := 101; loc := 1 fi } " in
-  let real = parse "loc := 0 ; while (~ loc = 1) { if partial loc = 0 && pkt = ?_hole0 -> pkt := ?_hole1; loc := 1 fi } " in
-  let model = get_one_model pkt log real in
-  let _ = model in
-  true
+(* let%test _ =
+ *   let pkt = Packet.(set_field empty "pkt" (mkInt (100,8))) in
+ *   let log  = parse "loc := 0#8; while (~ loc = 1) { if partial loc = 0#8 && pkt#8 = 100#8 -> pkt := 101#8; loc := 1 fi } " in
+ *   let real = parse "loc := 0 ; while (~ loc = 1) { if partial loc = 0 && pkt#8 = ?_hole0#8 -> pkt := ?_hole1#8; loc := 1 fi } " in
+ *   let model = get_one_model pkt log real in
+ *   let _ = model in
+ *   true *)
 
 
 (* let%test _ =
@@ -529,3 +549,65 @@ let%test _ =
  *     (string_of_cmd (fixup real model)) ;
  *   true *)
   
+
+
+let%test _ =
+  let log_line =
+    Apply("log"
+        , [("dst", 2)]
+        , ["x" %<-% mkVInt (0,2) %:% ("out" %<-% mkVInt (0,2));
+           "x" %<-% mkVInt (1,2) %:% ("out" %<-% mkVInt (1,2));
+           "x" %<-% mkVInt (2,2) %:% ("out" %<-% mkVInt (2,2));
+           "x" %<-% mkVInt (3,2) %:% ("out" %<-% mkVInt (3,2))]
+        , "x" %<-% mkVInt (0,2) %:% ("out" %<-% mkVInt (0,2)))
+  in
+  let phys_line =
+    Apply("phys1"
+        , [("dst",2)]
+        , ["x" %<-% mkVInt (0,2);
+           "x" %<-% mkVInt (1,2);
+           "x" %<-% mkVInt (2,2);
+           "x" %<-% mkVInt (3,2)]
+        ,"x" %<-% mkVInt (0,2))
+    %:%
+      Apply("phys2"
+           ,[("x", 2)]
+           ,["out" %<-% mkVInt (0,2)
+            ; "out" %<-% mkVInt (1,2)
+            ; "out" %<-% mkVInt (2,2)
+            ; "out" %<-% mkVInt (3,2)]
+           , "out" %<-% mkVInt (0,2))
+  in
+  let log_inst =
+    StringMap.of_alist_exn [ ]
+  in
+  let edit = ("log", ([mkVInt (2,2)], 2)) in
+  let phys_inst =
+    StringMap.of_alist_exn [] in
+  ignore(synthesize_edit ~fvs:[("dst",2); ("out",2); ("x", 2)] log_line phys_line log_inst phys_inst edit);
+  true
+
+(* let%test _ =
+ *   let log_line =
+ *     Apply("log"
+ *         , [("dst", 2)]
+ *         , ["out" %<-% mkVInt (0,2);
+ *            "out" %<-% mkVInt (1,2);]
+ *         ,"out" %<-% mkVInt (0,2))
+ *   in
+ *   let phys_line =
+ *     Apply("phys"
+ *         , [("dst", 2)]
+ *         , ["out" %<-% mkVInt (0,2);
+ *            "out" %<-% mkVInt (1,2);]
+ *         ,"out" %<-% mkVInt (0,2))    
+ *   in
+ *   let log_inst =
+ *     StringMap.of_alist_exn
+ *       [("log", [ [mkVInt (0,2)], 0]) ]
+ *   in
+ *   let phys_inst =
+ *     StringMap.of_alist_exn
+ *       [("phys", [ [mkVInt (0,2)], 0])] in
+ *   let edit = ("log", ([mkVInt (1,2)], 1)) in
+ *   ignore (synthesize_edit log_line phys_line log_inst phys_inst edit); true *)

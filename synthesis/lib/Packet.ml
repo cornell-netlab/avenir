@@ -55,14 +55,13 @@ let rec init_field_to_value_in (values : value1 list) pkt (f, sz) =
      else
        init_field_to_value_in (List.filter values ~f:(fun x -> x <> vi)) pkt (f, sz)
 
-let to_test (pkt : t) =
+let to_test ?fvs:(fvs = []) (pkt : t) =
   StringMap.fold pkt ~init:True
     ~f:(fun ~key ~data test ->
-      if key = "loc" then
-        test
-      else 
+      if key <> "loc" && List.exists fvs ~f:(fun (x,_) -> key = x) then
         Var1 (key,size_of_value1 data) %=% Value1 data
         %&% test
+      else test
     )
 
 let empty = StringMap.empty
