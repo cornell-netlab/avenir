@@ -2,6 +2,7 @@ open Core
 open Util
 
 type size = int
+let enable_smart_constructors = true
        
 type value1 =
   | Int of (int * size)
@@ -259,37 +260,47 @@ type test =
 
 
 let rec mkOr (t : test) (t' : test) : test =
-  match t, t' with
-  | False, x  | x, False -> x
-  | True, _ | _, True -> True
-  | _, Or (t'', t''') -> (* left-associative *)
-     mkOr (mkOr t t'') t'''
-  | _ -> Or (t, t')
+  if enable_smart_constructors then begin
+      match t, t' with
+      | False, x  | x, False -> x
+      | True, _ | _, True -> True
+      | _, Or (t'', t''') -> (* left-associative *)
+         mkOr (mkOr t t'') t'''
+      | _ -> Or (t, t')
+    end
+  else Or (t,t')
 
 let (%+%) = mkOr
 
 let rec mkAnd (t : test) (t' : test) =
-  if t = t' then t else
-    match t, t' with
-    | True, x | x, True -> x
-    | False, _ | _, False -> False
-    | _, And ( t'', t''') -> (* left-associative *)
-       mkAnd (mkAnd t t'') t'''
-    | _ -> And (t, t')
+  if enable_smart_constructors then begin
+      if t = t' then t else
+        match t, t' with
+        | True, x | x, True -> x
+        | False, _ | _, False -> False
+        | _, And ( t'', t''') -> (* left-associative *)
+           mkAnd (mkAnd t t'') t'''
+        | _ -> And (t, t')
+    end
+  else And(t,t')
 
 let (%&%) = mkAnd
        
 let mkNeg t =
-  match t with
-  | True -> False
-  | False -> True
-  | Neg t -> t
-  | _ -> Neg t
+  if enable_smart_constructors then begin
+      match t with
+      | True -> False
+      | False -> True
+      | Neg t -> t
+      | _ -> Neg t
+    end
+  else Neg t
 
 let (!%) = mkNeg
 
              
-let rec mkEq (e : expr1) (e':expr1) = 
+let rec mkEq (e : expr1) (e':expr1) =
+  if not enable_smart_constructors then Eq(e,e') else 
   if e = e' then
     ((*Printf.printf "[=] %s and %s are equal, so True\n" (string_of_expr1 e) (string_of_expr1 e');*)
     True) else
@@ -330,7 +341,9 @@ let rec mkEq (e : expr1) (e':expr1) =
        else Eq (e', e)
 
 
-let mkLt (e : expr1) (e' : expr1) : test = match e, e' with
+let mkLt (e : expr1) (e' : expr1) : test =
+  if not enable_smart_constructors then Lt(e,e') else
+  match e, e' with
     | Value1(Int first), Value1(Int second) -> 
        if first < second then True else False
     | _, _ -> Lt(e, e')
@@ -526,16 +539,19 @@ type cmd =
   | Select of (select_typ * ((test * cmd) list))
   | Apply of (string * (string * size) list * cmd list * cmd)
 
-
-let clean_selects_list =
-  concatMap ~init:(Some []) ~c:(@)
-    ~f:(fun (cond, act) ->
-        if cond = False then
-          []
-        else
-          [cond, act])
+let clean_selects_list ss = 
+  List.rev ss
+  |> List.fold ~init:([], [])
+    ~f:(fun (acc,seen) (c,a) ->
+      if c = False || List.exists seen ~f:((=) c) then
+        (acc,seen)
+      else
+        ((c,a) :: acc, c :: seen)
+    )
+  |> fst
 
 let mkPartial ss =
+  if not enable_smart_constructors then Select(Partial, ss) else
   let selects = clean_selects_list ss in
   if List.length selects = 0 then
     Skip
@@ -543,6 +559,7 @@ let mkPartial ss =
     Select (Partial, selects)
 
 let mkTotal ss =
+  if not enable_smart_constructors then Select(Total, ss) else
   let selects = clean_selects_list ss in
   if List.length selects = 0 then
     Assert False
@@ -550,6 +567,7 @@ let mkTotal ss =
     Select (Total, selects)
 
 let mkOrdered ss =
+  if not enable_smart_constructors then Select(Ordered, ss) else
   let selects = clean_selects_list ss
                 |> List.remove_consecutive_duplicates
                   ~which_to_keep:`First
@@ -561,6 +579,7 @@ let mkOrdered ss =
     Select (Ordered, selects)
 
 let mkSeq first scnd =
+  if not enable_smart_constructors then Seq(first, scnd) else
   match first, scnd with
   | Skip, x | x, Skip -> x
   | _,_ -> Seq(first, scnd)

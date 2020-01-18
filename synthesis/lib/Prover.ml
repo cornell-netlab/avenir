@@ -137,8 +137,8 @@ let bind_vars typ ctx vs formula =
 let initSolver typ solver ctx test =
   (* Printf.printf "SENDING TEST TO Z3: %s\n%!" (sexp_string_of_test test); *)
   let init funcArgs bindable ctor =
-    let () = Printf.printf "Free Variables are \n%!";
-             List.iter bindable ~f:(fun (v,sz) -> Printf.printf "\t%s#%d\n%!" v sz) in
+    (* let () = Printf.printf "Free Variables are \n%!";
+     *          List.iter bindable ~f:(fun (v,sz) -> Printf.printf "\t%s#%d\n%!" v sz) in *)
     let phi = mkZ3Test funcArgs test ctx (mk_deBruijn (List.map ~f:fst bindable)) bindable
     in
     Z3.Solver.add solver [ctor (bind_vars `All ctx bindable phi)]
@@ -197,30 +197,30 @@ let toZ3String test =
  Checks SMT query. Returns either None (UNSAT) or SAT (model map) 
 *)
 let check typ test =
+  let st = Time.now() in
   let mySolver = solver () in
   let _ = initSolver typ mySolver context test in
-  let _ = Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in
+  (* let _ = Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in *)
   let response = Z3.Solver.check mySolver [] in
+  let dur = Time.(diff (now()) st) in
   (* Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver); *)
   match response with
   | UNSATISFIABLE ->
      (* Printf.printf "UNSAT\n%!"; *)
-     None
+     (None,dur)
   | UNKNOWN ->
      (* Printf.printf "UNKNOWN:\n \t%s \n%!" (Z3.Solver.get_reason_unknown mySolver); *)
-     None
+     (None, dur)
   | SATISFIABLE ->
-    match Z3.Solver.get_model mySolver with 
-    | Some m ->      
-       Printf.printf "SAT: %s \n%!" (Z3.Model.to_string m);
-       let model = mkMotleyModel m in
-       Some model
-    | None -> None
+     match Z3.Solver.get_model mySolver with 
+     | Some m ->      
+        Printf.printf "SAT: %s \n%!" (Z3.Model.to_string m);
+        let model = mkMotleyModel m in
+        (Some model, dur)
+     | None -> (None, dur)
 
 (* Checks SMT Query for validity. Returns None (VALID) or Some model (Counter Example) *)          
 let check_valid test = check `Valid test
-
-
 
 let rec all_agree (vs :  (string * size) list) =
   match vs with

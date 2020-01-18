@@ -106,41 +106,56 @@ let complete cmd = complete_inner ~falsify:true cmd
 let get_one_model ?fvs:(fvs = []) (pkt : Packet.t) (logical : cmd) (phys : cmd) =
   let pkt_loc', _ = trace_eval logical (pkt,None) |> Option.value_exn in
   let phi = Packet.to_test ~fvs (fst pkt_loc') in
+  let st = Time.now () in
   let wp_phys_paths = wp_paths phys phi |> List.filter ~f:(fun pre -> pre <> False) in
-  if wp_phys_paths = [] then failwith "No feasible paths!" else
-    Printf.printf "%d feasible paths\n\n%!" (List.length wp_phys_paths);
-  Printf.printf "------------------------------------------------\n";
-  List.iter wp_phys_paths ~f:(fun path ->
-      Printf.printf "%s\n\n%!" (string_of_test path)
-    )
-  ; Printf.printf "----------------------------------------------------\n%!"
-  ; List.find_map wp_phys_paths ~f:(fun wp_phys ->
+  let wp_time = Time.diff (Time.now ()) st in
+  
+  (* if wp_phys_paths = [] then failwith "No feasible paths!" else
+   *   Printf.printf "%d feasible paths\n\n%!" (List.length wp_phys_paths); *)
+  (* Printf.printf "------------------------------------------------\n";
+   * List.iter wp_phys_paths ~f:(fun path ->
+   *     Printf.printf "%s\n\n%!" (string_of_test path)
+   *   )
+   * ; Printf.printf "----------------------------------------------------\n%!"
+   * ; *)
+  let time_spent_in_z3 = ref Time.Span.zero in
+  let num_calls_to_z3 = ref 0 in
+  let model = List.find_map wp_phys_paths ~f:(fun wp_phys ->
       let _ = Printf.printf "PHYSICAL WEAKEST_PRECONDITION:\n%s\n\nOF PROGRAM:\n%s\nwrt condition: %s \n%!"
-                (string_of_test wp_phys)
-                (string_of_cmd phys)
-                (string_of_test phi)
-      in
-      if wp_phys = False
-      then (Printf.printf "-- contradictory WP\n%!"; None (*find_match rest_paths*))
-      else
-        (* let condition = Packet.to_test pkt %=>% wp_phys in *)
-        let _ = Printf.printf "Substituting %s into\n %s\n%!"
-                  (Packet.string__packet pkt)
-                  (string_of_test wp_phys) in
-        let condition = substitute wp_phys (StringMap.filter_mapi pkt
-                                              ~f:(fun ~key ~data ->
-                                                if is_symbolic key
-                                                then None
-                                                else Some(Value1 data) )) in
-        let _ = Printf.printf "CONDITION: \n%s\n%!" (string_of_test condition) in
-        match check `Sat condition with
-        | None -> Printf.printf "unsolveable!\n%!"; None (*find_match rest_paths*)
-        | Some model -> Some model
-    )
-         
+                  (string_of_test wp_phys)
+                  (string_of_cmd phys)
+                  (string_of_test phi)
+        in
+        if wp_phys = False
+        then (Printf.printf "-- contradictory WP\n%!"; None (*find_match rest_paths*))
+        else
+          (* let condition = Packet.to_test pkt %=>% wp_phys in *)
+          let _ = Printf.printf "Substituting %s into\n %s\n%!"
+                    (Packet.string__packet pkt)
+                    (string_of_test wp_phys) in
+          let condition = substitute wp_phys (StringMap.filter_mapi pkt
+                                                ~f:(fun ~key ~data ->
+                                                  if is_symbolic key
+                                                  then None
+                                                  else Some(Value1 data) )) in
+          let _ = Printf.printf "CONDITION: \n%s\n%!" (string_of_test condition) in
+          num_calls_to_z3 := !num_calls_to_z3 + 1;
+          match check `Sat condition with
+          | (None, d) -> Printf.printf "unsolveable!\n%!";
+                         time_spent_in_z3 := Time.Span.(!time_spent_in_z3 + d);
+                         None
+                                                             
+          | Some model, d ->
+             time_spent_in_z3 := Time.Span.(!time_spent_in_z3 + d);
+             Some model)
+  in
+  Printf.printf "Took %d reps over %s to find model\n!"
+    (!num_calls_to_z3)
+    (Time.Span.to_string !time_spent_in_z3)
+  ; model, !time_spent_in_z3, !num_calls_to_z3, wp_time
 	       
 let rec fixup_val (model : value1 StringMap.t) (e : expr1)  : expr1 =
-  let _ = Printf.printf "FIXUP\n%!" in
+  (* let _ = Printf.printf "FIXUP\n%!" in *)
   let binop op e e' = op (fixup_val model e) (fixup_val model e') in
   match e with
   | Value1 _ | Var1 _ -> e
@@ -235,37 +250,44 @@ let symb_wp ?fvs:(fvs=[]) cmd =
   |> wp cmd
   
 let implements fvs logical real =
-  let _ = Printf.printf ("IMPLEMENTS?\n%!") in
+  let _ = Printf.printf "IMPLEMENTS on\n%!    ";
+          List.iter fvs ~f:(fun (x,_) -> Printf.printf " %s" x);
+          Printf.printf "\n%!"
+  in
   let u_log = logical in
   let u_rea = real |> complete in
-  (* let fvs = List.dedup_and_sort ~compare (free_vars_of_cmd u_log @ free_vars_of_cmd u_rea) in
-   * let pkt = symbolic_pkt fvs in *)
-  let _ = Printf.printf ("Completed REal program\n%!") in
+  let st_log = Time.now () in
   let log_wp  = symb_wp u_log ~fvs in
-  let _ = Printf.printf "Computed Log WP \n%!" in
+  let log_time = Time.(diff (now()) st_log) in
+  let st_real = Time.now () in
   let real_wp = symb_wp u_rea ~fvs in
-  Printf.printf "\n==== Checking Implementation =====\n%!\nLOGICAL SPEC:\n%s\n\nLOGICAL PROGRAM:\n%s\n\nREAL SPEC: \n%s\n\nREAL PROGRAM:\n%s\n\n%!"
-    (string_of_test log_wp)
-    (string_of_cmd u_log)
-    (string_of_test real_wp)
-    (string_of_cmd u_rea);
-  match check_valid (log_wp %=>% real_wp) with
-  | None   -> Printf.printf "++++++++++valid++++++++++++++++++\n%!"; `Yes
-  | Some x ->
+  let real_time = Time.(diff (now()) st_real) in
+  (* Printf.printf "\n==== Checking Implementation =====\n%!\nLOGICAL \
+   *                SPEC:\n%s\n\nREAL SPEC: \n%s\n\n%!"
+   *   (string_of_test log_wp)
+   *   (string_of_test real_wp); *)
+  match check_valid (log_wp %<=>% real_wp) with
+  | None, z3time   -> Printf.printf "++++++++++valid++++(%s)+++++++++\n%!"
+                        (Time.Span.to_string z3time)
+                    ; `Yes, z3time, log_time, real_time
+  | Some x, z3time ->
      let pce = Packet.from_CE x in
      Printf.printf "----------invalid----------------\n%! CE = %s\n%!" (Packet.string__packet pce)
-     ; `NoAndCE (Packet.from_CE x) 
+     ; `NoAndCE (Packet.from_CE x) , z3time, log_time, real_time
                    
 (** solves the inner loop **)
 let solve_concrete ?fvs:(fvs = []) ?packet:(packet=None) (logical : cmd) (real : cmd) =
   let values = multi_ints_of_cmd logical |> List.map ~f:(fun x -> Int x) in
   let pkt = packet |> Option.value ~default:(Packet.generate fvs ~values) in
   match get_one_model ~fvs pkt logical real with
-  | None -> failwith "Couldnt find a model"
-  | Some model ->
+  | None, z3time, ncalls, _ ->
+     Printf.sprintf "Couldnt find a model in %d calls and %f"
+       ncalls (Time.Span.to_ms z3time)
+     |> failwith
+  | Some model, z3time, ncalls, wp_time ->
      let real' =  fixup real model in
-     Printf.printf "\n\nNEXT ITERATION OF REAL PROGRAM:\n%s\n%!\n" (string_of_cmd real');
-     real'
+     Printf.printf "\n\nNEXT ITERATION OF REAL PROGRAM:\n%s\n%!\n" (string_of_cmd real')
+     ; real', z3time, ncalls, wp_time
 
 let check_edit (_:int) (_:cmd) (_:cmd) = failwith ""
 
@@ -541,25 +563,47 @@ let cegis ?fvs:(fvs = []) ?gas:(gas=1000) (logical : cmd) (real : cmd) =
             then (Printf.printf "Computing the FVS!\n%!";
                   free_vars_of_cmd logical @ free_vars_of_cmd real)
             else fvs in
+  let implements_time = ref Time.Span.zero in
+  let implements_calls = ref 0 in
+  let model_time = ref Time.Span.zero in
+  let model_calls = ref 0 in
+  let wp_time = ref Time.Span.zero in
+  let log_wp_time = ref Time.Span.zero in
+  let phys_wp_time = ref Time.Span.zero in
   let rec loop gas real =
-    Printf.printf "======================= LOOP (%d) =======================\n%!" (gas);   
-    match Printf.printf "==++?+===++?\n%!"; implements fvs logical real with
-    | `Yes -> Some (real) 
+    Printf.printf "======================= LOOP (%d) =======================\n%!" (gas);
+    let (res, z3time, log_time, phys_time) = implements fvs logical real in
+    implements_time := Time.Span.(!implements_time + z3time);
+    implements_calls := !implements_calls + 1;
+    log_wp_time := Time.Span.(!log_wp_time + log_time);
+    phys_wp_time := Time.Span.(!phys_wp_time + phys_time);
+    match Printf.printf "==++?+===++?\n%!"; res with
+    | `Yes ->
+       Some real
     | `NoAndCE counter ->
-      if gas = 0 then Some real else
-      solve_concrete ~fvs ~packet:(Some counter) logical real |> loop (gas-1)
+       if gas = 0 then Some real else
+         let (real', ex_z3_time, ncalls, wpt) = solve_concrete ~fvs ~packet:(Some counter) logical real in
+         model_time := Time.Span.(!model_time + ex_z3_time);
+         model_calls := !model_calls + ncalls;
+         wp_time := Time.Span.(!wp_time + wpt);
+         loop (gas-1) real'
   in
-  loop gas real
+  let res = loop gas real in
+  Printf.printf "total z3 time to synthesize %s + %s = %s\n%!"
+    (Time.Span.to_string !implements_time)
+    (Time.Span.to_string !model_time)
+    (Time.Span.(to_string (!implements_time + !model_time)));
+  (res, !implements_time, !implements_calls, !model_time, !model_calls, !wp_time, !log_wp_time, !phys_wp_time)
     
 let synthesize ?fvs:(fvs=[]) logical real =
   let start = Time.now () in
-  let prog = cegis ~fvs ~gas:1 logical real
-             |> Option.value ~default:(Assert False)
-             |> complete in
-  let stop = Time.now() in
-  Printf.printf "\nSynthesized Program:\n%s\n\n%!"
-    (string_of_cmd prog);
-  (Time.diff stop start, prog)
+  let (prog, checktime, checkcalls, searchtime, searchcalls, wpt, lwpt, pwpt) =
+    cegis ~fvs ~gas:2 logical real in
+  let comp_prog = Option.value ~default:(Assert False) prog (*|> complete*) in
+    let stop = Time.now() in
+    Printf.printf "\nSynthesized Program:\n%s\n\n%!"
+      (string_of_cmd (comp_prog));
+    (Time.diff stop start, checktime, checkcalls, searchtime, searchcalls, wpt, lwpt, pwpt, comp_prog)
 
 
 let apply_edit inst (tbl, edit) =
@@ -586,6 +630,7 @@ let rec apply_inst tag ?cnt:(cnt=0) inst prog : (cmd * int) =
          ) in
      (mkSelect typ ss, ss_cnt)
   | Apply (tbl, keys, acts, def) ->
+     let actSize = log2(List.length acts) in
      let selects =
        StringMap.find_multi inst tbl
        |> List.fold ~init:[]
@@ -594,11 +639,11 @@ let rec apply_inst tag ?cnt:(cnt=0) inst prog : (cmd * int) =
                  ~init:(LocEq cnt)
                  ~f:(fun acc x m ->
                    acc %&% (Var1 x %=% m))
-              , ((List.nth_exn acts action)
+              , ((* (tbl ^ "_actID") %<-% mkVInt(action, actSize)
+                  * %:% *) (List.nth_exn acts action)
                  %:% SetLoc (cnt (*+ 1*))))
               :: acc)
      in
-     let actSize = log2(List.length acts) in
      let add_row_hole = Hole1 ("?AddRowTo" ^ tbl, 1) in
      let which_act_hole = Hole1 ("?ActIn" ^ tbl, actSize) in
      let holes =
@@ -614,13 +659,20 @@ let rec apply_inst tag ?cnt:(cnt=0) inst prog : (cmd * int) =
        | `NoHoles -> []
      in
      let dflt_row =
-       [ (LocEq cnt %&% (add_row_hole %=% mkVInt (0,1))
-         , def %:% SetLoc (cnt (*+ 1*))) ] in
+       let cond =
+         LocEq cnt %&%
+           match tag with
+           | `WithHoles -> True (*add_row_hole %=% mkVInt (0,1)*)
+           | `NoHoles -> True in
+       [(cond, def %:% SetLoc (cnt (*+ 1*))) ] in
      (selects @ holes @ dflt_row |> mkOrdered
      , cnt (*+ 1*))
 
    
-let synthesize_edit ?fvs:(fvs=[]) (log_pipeline : cmd) (phys_pipeline : cmd) linst pinst
+let synthesize_edit ?fvs:(fvs=[])
+      (log_pipeline : cmd) (phys_pipeline : cmd)
+      (linst :  (expr1 list * int) list StringMap.t)
+      (pinst : (expr1 list * int) list StringMap.t)
       (ledit : (string * (expr1 list * int))) =  
   let linst' = apply_edit linst ledit in
   let (log,_) = apply_inst `NoHoles linst' log_pipeline in

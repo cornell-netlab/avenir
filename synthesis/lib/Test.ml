@@ -304,8 +304,9 @@ let%test _ =
              %:% inner %:% inner %:% inner
              %:% Assert (LocEq 6) in
   let got = wp prog cond in
-  check_valid (exp %<=>% got) = None
-  
+  match check_valid (exp %<=>% got) with
+  | (None,_) -> true
+  | _ -> false
 
                            (* TEST PARSING *)
 
@@ -433,8 +434,8 @@ let%test _ =
 let%test _ =
   let t = (!%( (Var1 ("x",8) %=% mkVInt (5,8)) %+% ((Var1 ("x",8) %=% mkVInt (3,8)) %&% (Var1 ("z",8) %=% mkVInt (6,8))))
            %+% !%( (Var1 ("x",8) %=% Hole1 ("hole0",8)) %+% (Var1 ("y",8) %=% Hole1 ("hole1",8)))) in
-  let r = check `Sat t in
-  let r' = check `Sat t in
+  let (r,_) = check `Sat t in
+  let (r',_) = check `Sat t in
   r = None (* i.e. is unsat *)
   && r = r'
            

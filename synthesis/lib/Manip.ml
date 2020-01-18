@@ -131,9 +131,10 @@ let rec wp c phi =
 
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
-    List.fold cmds ~init:(True, False) ~f:(fun (wp_so_far, prev_conds) (cond, act) ->
-        guarded_wp (cond %&% !%prev_conds, act) %&% wp_so_far
-      , prev_conds %+% cond
+    List.fold cmds ~init:(False, False) ~f:(fun (wp_so_far, prev_conds) (cond, act) ->
+        (cond %&% (!%prev_conds) %&% wp act phi
+         %+% wp_so_far
+        , prev_conds %+% cond)
       )
     |> fst
 
@@ -252,7 +253,7 @@ let rec wp_paths c phi : test list =
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
      let open List in
-     (cmds >>| fun (t,c) -> Assume t %:% c)
+     (cmds >>| fun (t,c) -> Assert t %:% c)
      >>= Fun.flip wp_paths phi
   (* List.fold cmds ~init:(True, False) ~f:(fun (wp_so_far, prev_conds) (cond, act) ->
    *     guarded_wp (cond %&% !%prev_conds, act) %&% wp_so_far
