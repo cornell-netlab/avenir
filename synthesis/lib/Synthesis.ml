@@ -519,15 +519,17 @@ let implements fvs logical linst ledit real pinst =
    *                SPEC:\n%s\n\nREAL SPEC: \n%s\n\n%!"
    *   (string_of_test log_wp)
    *   (string_of_test real_wp); *)
-  if log_wp = real_wp then Printf.printf "theyres syntactically equal";
-  match check_valid (log_wp %<=>% real_wp) with
-  | None, z3time   -> Printf.printf "++++++++++valid++++(%s)+++++++++\n%!"
-                        (Time.Span.to_string z3time)
-                    ; `Yes, z3time, log_time, real_time
-  | Some x, z3time ->
-     let pce = Packet.from_CE x in
-     Printf.printf "----------invalid----------------\n%! CE = %s\n%!" (Packet.string__packet pce)
-     ; `NoAndCE (Packet.from_CE x) , z3time, log_time, real_time
+  if log_wp = real_wp then Printf.printf "theyre syntactically equal\n%!";
+  let condition = log_wp %<=>% real_wp in
+  let model_opt, z3time = check_valid condition in
+  let pkt_opt = match model_opt with
+    | None  -> Printf.printf "++++++++++valid+++++++++++++\n%!";
+               `Yes
+    | Some x ->
+       let pce = Packet.from_CE x in
+       Printf.printf "----------invalid----------------\n%! CE = %s\n%!" (Packet.string__packet pce)
+     ; `NoAndCE pce
+  in pkt_opt, z3time, log_time, real_time, num_nodes_in_test condition
 
 
 let rec get_schema_of_table name phys =
@@ -608,14 +610,16 @@ let cegis ?fvs:(fvs = []) ~hints ?gas:(gas=1000) (logical : cmd) linst ledit (re
   let wp_time = ref Time.Span.zero in
   let log_wp_time = ref Time.Span.zero in
   let phys_wp_time = ref Time.Span.zero in
+  let tree_sizes = ref [] in
   let rec loop gas pinst =
     Printf.printf "======================= LOOP (%d) =======================\n%!" (gas);
-    let (res, z3time, log_time, phys_time) =
+    let (res, z3time, log_time, phys_time, treesize) =
       implements fvs logical linst ledit real pinst in
     implements_time := Time.Span.(!implements_time + z3time);
     implements_calls := !implements_calls + 1;
     log_wp_time := Time.Span.(!log_wp_time + log_time);
     phys_wp_time := Time.Span.(!phys_wp_time + phys_time);
+    tree_sizes := treesize :: !tree_sizes;
     match Printf.printf "==++?+===++?\n%!"; res with
     | `Yes ->
        Some pinst
@@ -633,18 +637,18 @@ let cegis ?fvs:(fvs = []) ~hints ?gas:(gas=1000) (logical : cmd) linst ledit (re
     (Time.Span.to_string !implements_time)
     (Time.Span.to_string !model_time)
     (Time.Span.(to_string (!implements_time + !model_time)));
-  (pinst', !implements_time, !implements_calls, !model_time, !model_calls, !wp_time, !log_wp_time, !phys_wp_time)
+  (pinst', !implements_time, !implements_calls, !model_time, !model_calls, !wp_time, !log_wp_time, !phys_wp_time, !tree_sizes)
     
 let synthesize ?fvs:(fvs=[]) ?hints:(hints = None) ?gas:(gas = 1000)
       logical linst ledit phys pinst =
   let start = Time.now () in
-  let (pinst', checktime, checkcalls, searchtime, searchcalls, wpt, lwpt, pwpt) =
+  let (pinst', checktime, checkcalls, searchtime, searchcalls, wpt, lwpt, pwpt, tree_sizes) =
     cegis ~fvs ~hints ~gas logical linst ledit phys pinst in
   let pinst_out = Option.value ~default:(StringMap.empty) pinst' (*|> complete*) in
-    let stop = Time.now() in
-    Printf.printf "\nSynthesized Program:\n%s\n\n%!"
-      (apply_inst `NoHoles pinst_out phys |> fst |> string_of_cmd);
-    (Time.diff stop start, checktime, checkcalls, searchtime, searchcalls, wpt, lwpt, pwpt, pinst_out)
+  let stop = Time.now() in
+  Printf.printf "\nSynthesized Program:\n%s\n\n%!"
+    (apply_inst `NoHoles pinst_out phys |> fst |> string_of_cmd);
+  (Time.diff stop start, checktime, checkcalls, searchtime, searchcalls, wpt, lwpt, pwpt, tree_sizes, pinst_out)
 
 
 

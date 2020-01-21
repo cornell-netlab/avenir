@@ -83,21 +83,27 @@ let reorder_benchmark length max_inserts =
     match seq with
     | [] -> []
     | edit::edits ->
-       let (totalt,checkt,checkn, searcht, searchn, wpt,lwpt,pwpt,_)  =
+       let (totalt,checkt,checkn, searcht, searchn, wpt,lwpt,pwpt,sizes,_)  =
          synthesize_edit ~gas:1 ~fvs ~hints log phys linst pinst edit in
-       (i, totalt, checkt, checkn, searcht, searchn, wpt,lwpt,pwpt)
+       (i, totalt, checkt, checkn, searcht, searchn, wpt,lwpt,pwpt, sizes)
        :: run_experiment (i + 1) edits (apply_edit linst edit) (apply_edit pinst edit)
   in
   let data = run_experiment 0 insertion_sequence linst pinst in
-  Printf.printf "size,time,check_time,num_z3_calls_check,model_search_z3_time,num_z3_calls_model_search,search_wp_time,check_log_wp_time,check_phys_wp_time\n";
-  List.iter data ~f:(fun (i,t,c,cn,s,sn,wpt,lwpt, pwpt) ->
-      Printf.printf "%d,%f,%f,%d,%f,%d,%f,%f,%f\n"
+  let mean ds = List.fold ds ~init:0 ~f:((+)) / List.length ds in
+  let max_l ds = List.fold ds ~init:0 ~f:(max) in
+  let min_l ds = List.fold ds ~init:(max_l ds) ~f:(min) in
+  Printf.printf "size,time,check_time,num_z3_calls_check,model_search_z3_time,num_z3_calls_model_search,search_wp_time,check_log_wp_time,check_phys_wp_time,mean_tree_size,max_tree_size,min_tree_size\n";
+  List.iter data ~f:(fun (i,t,c,cn,s,sn,wpt,lwpt, pwpt,sizes) ->
+      Printf.printf "%d,%f,%f,%d,%f,%d,%f,%f,%f,%d,%d,%d\n"
         i (Time.Span.to_ms t)
         (Time.Span.to_ms c) cn
         (Time.Span.to_ms s) sn
         (Time.Span.to_ms wpt)
         (Time.Span.to_ms lwpt)
         (Time.Span.to_ms pwpt)
+        (mean sizes)
+        (max_l sizes)
+        (min_l sizes)
     )
     
     

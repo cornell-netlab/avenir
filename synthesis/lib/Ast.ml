@@ -132,6 +132,15 @@ let rec size_of_expr1 (e : expr1) : size =
                       s s')
   | Tuple es -> List.fold es ~init:0 ~f:(fun sum e -> size_of_expr1 e + sum)
 
+let rec num_nodes_in_expr1 e =
+  match e with
+  | Value1 _ | Var1 _ | Hole1 _ -> 1
+  | Plus (e,e') | Minus(e,e') | Times(e,e') ->
+     num_nodes_in_expr1 e
+     + num_nodes_in_expr1 e'
+     + 1
+  | Tuple es -> List.fold es ~init:0 ~f:(fun sum e -> size_of_expr1 e + sum)
+
                                                                             
 let mkInt i = Int i     
 let mkVInt i = Value1 (mkInt i)    
@@ -397,6 +406,17 @@ let rec sexp_string_of_test t =
   | Or  (left, right) -> binop "Or" left right sexp_string_of_test
   | And (left, right) -> binop "And" left right sexp_string_of_test
   | Neg t -> "Neg(" ^ sexp_string_of_test t ^ ")"
+
+let rec num_nodes_in_test t =
+  match t with
+  | True | False  | LocEq _ -> 1
+  | Eq (left, right) -> size_of_expr1 left + size_of_expr1 right + 1
+  | Lt (left, right) -> size_of_expr1 left + size_of_expr1 right + 1
+  | Member _ -> failwith "Membership not supported"
+  | Or (left, right) -> num_nodes_in_test left + num_nodes_in_test right + 1
+  | And (left, right) -> num_nodes_in_test left + num_nodes_in_test right + 1
+  | Neg t -> num_nodes_in_test t + 1
+                          
            
 let rec remove_dups y xs =
   match xs with
