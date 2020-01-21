@@ -284,92 +284,49 @@ let compute_candidates h pkt phys =
 (** Solves the inner loop of the cegis procedure. 
  * pre-condition: pkt is at an ingress host 
 **)
-(* let get_one_model ?fvs:(fvs = []) ~hints (pkt : Packet.t) (logical : cmd) (phys : cmd) =
- *   let (pkt',_), _ = trace_eval logical (pkt,None) |> Option.value_exn in
- *   let _ = Printf.printf "input: %s\n output: %s\n%!" (Packet.string__packet pkt) (Packet.string__packet pkt') in 
- *   let st = Time.now () in
- *   let phi = Packet.to_test ~fvs pkt' in
- *   let cands = compute_candidates hints pkt phys in
- *   let _ = Printf.printf "Candidate programs:\n%!";
- *           List.iter cands ~f:(fun c -> Printf.printf "\n%s\n%!" (string_of_cmd c));
- *           Printf.printf "\n" in
- *   let wp_phys_paths =
- *     List.(cands >>= Fun.flip wp_paths phi
- *           |> filter ~f:(fun pre -> pre <> False)) in
- *   let wp_time = Time.diff (Time.now ()) st in
- *   if wp_phys_paths = [] then failwith "No feasible paths!" else
- *     Printf.printf "%d feasible paths\n\n%!" (List.length wp_phys_paths);
- *   Printf.printf "------------------------------------------------\n";
- *   List.iter wp_phys_paths ~f:(fun path ->
- *       Printf.printf "%s\n\n%!" (string_of_test path)
- *     )
- *   ; Printf.printf "----------------------------------------------------\n%!"
- *   ;
- *     let time_spent_in_z3 = ref Time.Span.zero in
- *     let num_calls_to_z3 = ref 0 in
- *     let model =
- *       List.find_map wp_phys_paths ~f:(fun wp_phys ->
- *           let _ = Printf.printf "PHYSICAL WEAKEST_PRECONDITION:\n%s\n\nOF PROGRAM:\n%s\n%!"
- *                     (string_of_test wp_phys)
- *                     (string_of_cmd phys)
- *           in
- *           if wp_phys = False
- *           then (Printf.printf "-- contradictory WP\n%!"; None (\*find_match rest_paths*\))
- *           else
- *             (\* let condition = Packet.to_test pkt %=>% wp_phys in *\)
- *             (\* let _ = Printf.printf "Substituting %s into\n %s\n%!"
- *              *           (Packet.string__packet pkt)
- *              *           (string_of_test wp_phys) in
- *              * let condition = (StringMap.filter_mapi pkt
- *              *                    ~f:(fun ~key ~data ->
- *              *                      if is_symbolic key
- *              *                         || String.is_substring key
- *              *                              ~substring:"ActIn"
- *              *                         || String.is_substring key
- *              *                              ~substring:"AddRow"
- *              *                      then None
- *              *                      else Some(Value1 data)))
- *              *                 |> substitute wp_phys in             *\)
- *             let condition = (StringMap.filter_keys pkt
- *                                ~f:(fun key ->
- *                                  not(is_symbolic key
- *                                      || String.is_substring key
- *                                           ~substring:"ActIn"
- *                                      || String.is_substring key
- *                                           ~substring:"AddRow")
- *                                )
- *                              |> Packet.to_test) %=>% wp_phys in
- *             let _ = Printf.printf "CONDITION: \n%s\n%!" (string_of_test condition) in
- *             num_calls_to_z3 := !num_calls_to_z3 + 1;
- *             match check `Sat condition with
- *             | (None, d) -> Printf.printf "unsolveable!\n%!";
- *                            time_spent_in_z3 := Time.Span.(!time_spent_in_z3 + d);
- *                            None
- *                              
- *             | Some model, d ->
- *                time_spent_in_z3 := Time.Span.(!time_spent_in_z3 + d);
- *                let model' = 
- *                  StringMap.fold pkt ~init:model
- *                    ~f:(fun ~key ~data acc ->
- *                      (\* StringMap.update acc key ~f:(function
- *                       *     | None -> data
- *                       *     | Some d -> d)) in *\)
- *                      if String.is_substring key ~substring:"ActIn"
- *                         || String.is_substring key ~substring:"AddRow"
- *                      then StringMap.update acc key
- *                             ~f:(function
- *                               | None -> data
- *                               | Some d -> d)
- *                      else acc)
- *                in
- *                Printf.printf "MODEL : %s\n%!" (Packet.string__packet model');
- *                Some model'
- *         )
- *     in
- *     Printf.printf "Took %d reps over %s to find model\n!"
- *       (!num_calls_to_z3)
- *       (Time.Span.to_string !time_spent_in_z3)
- *     ; model, !time_spent_in_z3, !num_calls_to_z3, wp_time *)
+let get_one_model ?fvs:(fvs = []) (pkt : Packet.t) (logical : cmd) (phys : cmd) =
+  let (pkt',_), _ = trace_eval logical (pkt,None) |> Option.value_exn in
+  let _ = Printf.printf "input: %s\n output: %s\n%!" (Packet.string__packet pkt) (Packet.string__packet pkt') in 
+  let st = Time.now () in
+  let phi = Packet.to_test ~fvs pkt' in
+  let wp_phys_paths = wp_paths phys phi  |> List.filter ~f:(fun pre -> pre <> False) in
+  let wp_time = Time.diff (Time.now ()) st in
+  if wp_phys_paths = [] then failwith "No feasible paths!" else
+    Printf.printf "%d feasible paths\n\n%!" (List.length wp_phys_paths);
+  Printf.printf "------------------------------------------------\n";
+  List.iter wp_phys_paths ~f:(fun path ->
+      Printf.printf "%s\n\n%!" (string_of_test path)
+    )
+  ; Printf.printf "----------------------------------------------------\n%!"
+  ;
+    let time_spent_in_z3 = ref Time.Span.zero in
+    let num_calls_to_z3 = ref 0 in
+    let model =
+      List.find_map wp_phys_paths ~f:(fun wp_phys ->
+          let _ = Printf.printf "PHYSICAL WEAKEST_PRECONDITION:\n%s\n\nOF PROGRAM:\n%s\n%!"
+                    (string_of_test wp_phys)
+                    (string_of_cmd phys)
+          in
+          if wp_phys = False
+          then (Printf.printf "-- contradictory WP\n%!"; None (*find_match rest_paths*))
+          else
+            let condition = substV wp_phys pkt in
+            let _ = Printf.printf "CONDITION: \n%s\n%!" (string_of_test condition) in
+            num_calls_to_z3 := !num_calls_to_z3 + 1;
+            match check `Sat condition with
+            | (None, d) -> Printf.printf "unsolveable!\n%!";
+                           time_spent_in_z3 := Time.Span.(!time_spent_in_z3 + d);
+                           None
+                             
+            | Some model, d ->
+               time_spent_in_z3 := Time.Span.(!time_spent_in_z3 + d);
+               Some model
+        )
+    in
+    Printf.printf "Took %d reps over %s to find model\n!"
+      (!num_calls_to_z3)
+      (Time.Span.to_string !time_spent_in_z3)
+    ; model, !time_spent_in_z3, !num_calls_to_z3, wp_time
 
 
 let rec compute_cand_for_trace line t : cmd =
@@ -705,4 +662,4 @@ let synthesize_edit ?fvs:(fvs=[]) ?hints:(hints=None)
   print_instance "Physical" pinst;
   synthesize ~fvs ~gas ~hints (SetLoc 0 %:% log_pipeline) linst ledit
     (SetLoc 0 %:% phys_pipeline) pinst
-    
+       

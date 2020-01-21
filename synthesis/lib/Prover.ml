@@ -59,7 +59,7 @@ let rec mkZ3Value2 rhoVars set ctx (deBruijn : int StringMap.t) quantified : Z3.
   match set with
   | Value2 (vSet) -> List.fold (value2_to_list vSet) ~init:(emptyset ctx (size_of_value2 vSet))
                        ~f:(fun acc v -> Z3.Z3Array.mk_store ctx acc (mkZ3Value rhoVars (Value1 v) ctx deBruijn quantified) (Z3.Boolean.mk_true ctx))
-     
+                       
   | Var2 (x,sz) | Hole2 (x,sz) ->
      if List.exists ~f:(fun (x',_) -> x = x') quantified then
        begin match StringMap.find deBruijn x with
@@ -76,9 +76,9 @@ let rec mkZ3Value2 rhoVars set ctx (deBruijn : int StringMap.t) quantified : Z3.
   | Single e ->
      Z3.Z3Array.mk_store ctx (emptyset ctx (size_of_expr1 e)) (mkZ3Value rhoVars e ctx deBruijn quantified) (Z3.Boolean.mk_true ctx)
   | Union (s,s') -> Z3.Z3Array.mk_map ctx
-                         (Z3.Expr.get_func_decl (Z3.Boolean.mk_and ctx []))
-                         [ mkZ3Value2 rhoVars s ctx deBruijn quantified
-                         ; mkZ3Value2 rhoVars s' ctx deBruijn quantified]
+                      (Z3.Expr.get_func_decl (Z3.Boolean.mk_and ctx []))
+                      [ mkZ3Value2 rhoVars s ctx deBruijn quantified
+                      ; mkZ3Value2 rhoVars s' ctx deBruijn quantified]
                       
 let rec mkZ3Test (rhoVars : (string * size) list) (t : test) ctx deBruijn quantified =
   (* let () = Printf.printf "Building z3 test for %s \n %!" (string_of_test t) in *)
@@ -195,26 +195,31 @@ let toZ3String test =
 (*
  Checks SMT query. Returns either None (UNSAT) or SAT (model map) 
 *)
-let check typ test =
-  let st = Time.now() in
+let check typ =
   let mySolver = solver () in
-  let _ = initSolver typ mySolver context test in
-  (* let _ = Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in *)
+  fun test ->
+  let st = Time.now() in
+  let _ = Z3.Solver.push mySolver;
+          initSolver typ mySolver context test in
+  let _ = Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in
   let response = Z3.Solver.check mySolver [] in
   let dur = Time.(diff (now()) st) in
   (* Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver); *)
   match response with
   | UNSATISFIABLE ->
      (* Printf.printf "UNSAT\n%!"; *)
+     Z3.Solver.pop mySolver 1;
      (None,dur)
   | UNKNOWN ->
      (* Printf.printf "UNKNOWN:\n \t%s \n%!" (Z3.Solver.get_reason_unknown mySolver); *)
+     Z3.Solver.pop mySolver 1;
      (None, dur)
   | SATISFIABLE ->
      match Z3.Solver.get_model mySolver with 
-     | Some m ->      
+     | Some m ->
         Printf.printf "SAT: %s \n%!" (Z3.Model.to_string m);
         let model = mkMotleyModel m in
+        Z3.Solver.pop mySolver 1;
         (Some model, dur)
      | None -> (None, dur)
 

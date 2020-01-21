@@ -52,6 +52,7 @@ let reorder_benchmark length max_inserts =
    *                 )]
    *               ) in *)
   let hints = Some (List.return) in
+  (* let hints = None in *)
   let log = to_cmd logical_pipeline in
   let phys = to_cmd physical_pipeline in
   let insertion_sequence = generate_n_insertions length max_inserts [] in
