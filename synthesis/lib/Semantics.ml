@@ -1,12 +1,13 @@
 open Core
-open Ast    
+open Ast
+open Util
 
 let rec eval_expr1 (pkt_loc : Packet.located) ( e : expr1 ) : value1 =
   let binop op e e' = op (eval_expr1 pkt_loc e) (eval_expr1 pkt_loc e') in
   match e with
   | Value1 v -> v
   | Var1 (v,_) -> Packet.get_val (fst pkt_loc) v
-  | Hole1 (h,_) -> failwith ("Cannot evaluate symbolic hole " ^ h)
+  | Hole1 (h,_) -> Packet.get_val (fst pkt_loc) h
   | Plus  (e, e') -> binop add_values1 e e'
   | Times (e, e') -> binop multiply_values1 e e'
   | Minus (e, e') -> binop subtract_values1 e e'
@@ -51,6 +52,15 @@ let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   | Member (e, set) -> member pkt_loc e set
 
 
+let rec find_match ?idx:(idx = 0) pkt_loc ss ~default:default =
+  match ss with 
+  | [] -> default ()
+  | (cond, action) :: rest ->
+     if check_test cond pkt_loc then
+       (cond, action, idx)
+     else
+       (find_match ~idx:(idx+1) pkt_loc rest ~default)
+
 let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packet.located * cmd) option =
   (* Printf.printf "\n###TRACE EVAL\nPROGRAM:\n%s\n\tPACKET: %s\n\tLOCATION: %s\n%!"
    *   (string_of_cmd cmd)
@@ -58,15 +68,6 @@ let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packe
    *   (match snd pkt_loc with
    *    | None -> "None"
    *    | Some l -> string_of_int l); *)
-  let rec find_match ss ~default:default =
-    match ss with 
-    | [] -> default ()
-    | (cond, action) :: rest ->
-       if check_test cond pkt_loc then
-         (cond, action)
-       else
-         (find_match rest ~default)
-  in
   let (pkt, loc_opt) = pkt_loc in
   if gas = 0
   then (Printf.printf "========OUT OF EVAL GAS============\n"; None)
@@ -98,9 +99,9 @@ let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packe
                Printf.printf "[EVAL (%d)] Skipping selection, no match for %s\n"
                  (gas)
                  (string_of_test (Packet.to_test pkt %&% LocEq (Option.value loc_opt ~default:(-100))));
-               (True, Skip)
+               (True, Skip, List.length selects)
           in
-          let (t, a) = find_match selects ~default in
+          let (t, a, _) = find_match pkt_loc selects ~default in
           let open Option in 
           trace_eval ~gas a pkt_loc
           >>| fun (pkt_loc',  c) ->
@@ -115,6 +116,98 @@ let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packe
        | Apply _ -> failwith "Cannot Evaluate table -- need configuration"
 
 
+let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) inst (pkt_loc : Packet.located) : (Packet.located * int StringMap.t) =
+  let (pkt, loc_opt) = pkt_loc in
+  if gas = 0
+  then (failwith "========OUT OF EVAL GAS============\n")
+  else match cmd with
+       | Skip ->
+          (pkt_loc, StringMap.empty)
+       | SetLoc i ->
+          (* Printf.printf "\tSetting Loc to %d\n" i; *)
+          ((pkt, Some i), StringMap.empty)
+       | Assign (f, e) ->
+          ((Packet.set_field_of_expr1 pkt f e, loc_opt), StringMap.empty)
+       | Assert t ->
+          if check_test t pkt_loc then
+           (pkt_loc, StringMap.empty)
+          else
+            failwith ("AssertionFailure: " ^ string_of_test t ^ "was false")
+       | Assume _ ->
+          (pkt_loc, StringMap.empty)
+       | Seq (firstdo, thendo) ->
+          let pkt_loc', trace' = trace_eval_inst ~gas firstdo inst pkt_loc in
+          let pkt_loc'', trace'' = trace_eval_inst ~gas thendo inst pkt_loc' in
+          (pkt_loc''
+              , StringMap.merge trace' trace'' ~f:(fun ~key:_ -> function
+                    | `Left v -> Some v
+                    | `Right v -> Some v
+                    | `Both (v,_) -> Some v)
+            )
+       | Select (styp, selects) ->
+          let default _ = match styp with
+            | Total   -> failwith "SelectionError: Could not find match in [if total]"
+            | Partial
+              | Ordered ->
+               Printf.printf "[EVAL (%d)] Skipping selection, no match for %s\n"
+                 (gas)
+                 (string_of_test (Packet.to_test pkt %&% LocEq (Option.value loc_opt ~default:(-100))));
+               (True, Skip, List.length selects)
+          in
+          let (_, a, _) = find_match pkt_loc selects ~default in
+          trace_eval_inst ~gas a inst pkt_loc
+
+       | Apply (name, keys, actions, default) ->
+          let action_to_execute =
+            List.fold ~init:None
+              ~f:(fun rst (matches, action) ->
+                match rst  with
+                | None -> 
+                   let cond = List.fold2_exn keys matches ~init:True ~f:(fun acc k m->
+                                  acc %&% (Var1 k %=% m)
+                                ) in
+                   if check_test cond pkt_loc
+                   then Some action
+                   else rst
+                | Some x ->
+                   Some x
+              )
+          in
+          begin match StringMap.find inst name with
+          | None -> trace_eval_inst default inst pkt_loc 
+          | Some rules ->
+             begin
+               match action_to_execute rules with
+               | None ->
+                  let pkt', trace = trace_eval_inst default inst pkt_loc in
+                  (pkt' , StringMap.set ~key:name ~data:(List.length actions) trace )
+               | Some aid ->
+                  let pkt', trace = trace_eval_inst (List.nth_exn actions aid) inst pkt_loc in
+                  (pkt', StringMap.set ~key:name ~data:aid trace)
+             end
+          end
+          
+
+       | While ( _ , _ ) ->
+          failwith "Cannot process while loops"
+          (* if check_test cond pkt_loc then
+           *   trace_eval ~gas:(gas-1) (Seq(body,cmd)) pkt_loc
+           * else 
+           *   Some (pkt_loc, []) *)
+
+
+
+
+
+
+
+
+
+
+
+
+
+                             
 let eval_act (act : cmd) (pkt : Packet.t) : Packet.t =
   match trace_eval act (pkt, None) with
   | None -> failwith "Ran out of gas -- but it's an action!?"

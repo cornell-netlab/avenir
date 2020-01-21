@@ -1,5 +1,7 @@
 open Core
 
+module StringMap = Map.Make (String)
+
 (* Applies f to every element in the list and then combines them pairwise using c.
  * Roughly equivalent to [map exprs f |> fold ~init ~f:c], except that [init] is optional
  * If it is provided, then if the input list is empty, it simply returns the provided [init] value
@@ -59,7 +61,18 @@ let liftO2 f a_opt b_opt =
   let open Option in
   a_opt >>= fun a ->
   b_opt >>= fun b ->
-  Some (f a b)
+  return (f a b)
 
+let liftL2 f al bl =
+  let open List in
+  al >>= fun a ->
+  bl >>= fun b ->
+  return (f a b)
+
+       
 let mkCons x xs = x :: xs
           
+let rec range_ex lo hi =
+  if lo = hi then []
+  else
+  lo :: range_ex (lo + 1) hi

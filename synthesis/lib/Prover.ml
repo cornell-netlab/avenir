@@ -5,9 +5,8 @@
 open Core
 open Ast
 open Util
-
    
-module StringMap = Map.Make (String)
+
     
 let string_of_map m =
   StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value1 v) ^ ") " ^ acc)) m ~init:""

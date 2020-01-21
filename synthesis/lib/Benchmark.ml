@@ -1,7 +1,8 @@
 open Core
 open Ast
 open Synthesis
-open Prover
+open Util
+open Packet
        
 let permute l =
   List.map l ~f:(fun x -> (Random.int (List.length l), x))
@@ -20,37 +21,73 @@ let rec mk_pipeline n =
     ) :: mk_pipeline (n-1)
 
 
-let rec generate_n_insertions length n : (string * (expr1 list * int)) list =
+let rec generate_n_insertions length n generated : (string * (expr1 list * int)) list =
   if n = 0 then [] else
-    let i = Random.int length + 1 in
-    (tbl i, ([mkVInt (Random.int 4, 2)], Random.int 4))
-    :: generate_n_insertions length (n-1)
+    let rec loop_keys _ =
+      let i = Random.int length + 1 in
+      let key = mkVInt (Random.int 4, 2) in
+      if List.exists generated ~f:((=) (tbl i, key))
+      then loop_keys ()
+      else (tbl i, key)
+    in
+    let (tbl_name, keys) = loop_keys () in
+    (tbl_name, ([keys], Random.int 4))
+    :: generate_n_insertions length (n-1) ((tbl_name, keys)::generated)
 
 module IntMap = Map.Make(Int)
                              
 let reorder_benchmark length max_inserts =
   let logical_pipeline = mk_pipeline length in
   let physical_pipeline = permute logical_pipeline in
+  let mk_empty_inst acc (name,_,_,_) =    Map.set acc ~key:name ~data:[]  in
+  let linst = List.fold logical_pipeline ~init:StringMap.empty ~f:mk_empty_inst in
+  let pinst = List.fold logical_pipeline ~init:StringMap.empty ~f:mk_empty_inst in
   let to_cmd line =  List.((line >>| fun t -> Apply t)
                            |> reduce_exn ~f:(%:%)) in
+  (* let hints = Some(fun vMap -> (\*[vMap]*\)
+   *                 [List.fold ~init:vMap (range_ex 1 (length + 2))
+   *                   ~f:(fun acc i ->
+   *                     StringMap.set acc ~key:("?AddRowTo" ^ tbl i)
+   *                       ~data:(mkVInt(1,1))
+   *                 )]
+   *               ) in *)
+  let hints = Some (List.return) in
   let log = to_cmd logical_pipeline in
   let phys = to_cmd physical_pipeline in
-  let insertion_sequence = generate_n_insertions length max_inserts in
-  (* let hints =
-   *   let open List in
-   *   (logical_pipeline >>| (fun (tbl, _, acts, _) ->
-   *      List.mapi acts ~f:(fun i _-> (tbl, i))))
-   *   |> RelIR.list_cross >>| fun x -> (x,x)
+  let insertion_sequence = generate_n_insertions length max_inserts [] in
+  (* let rec all_paths i =
+   *   if i = 0 then [[]] else
+   *     liftL2 mkCons (range_ex 0 4) (all_paths (i-1))
    * in *)
+  (* (\* let hints_map =
+   *  *   all_paths length
+   *  *   |> List.fold ~init:StringMap.empty
+   *  *        ~f:( fun acc actSeq ->
+   *  *             List.fold_right actSeq ~init:acc
+   *  *               ~f:(fun i acc actId ->
+   *  *                 StringMap.set acc ~key:(tbl i)
+   *  *                   ~data:(mkVInt(actId, 4))))
+   *  * in *\)
+   * let hints h = Some h in *)
+  let fvs = range_ex 1 (length + 1)
+            |> List.map ~f:(fun i ->
+                   [("k_" ^tbl i, 2)
+                   ; (symbolize("k_" ^tbl i),2)
+                   ; (symbolize("x_" ^tbl i), 2)
+                   (* ; ("?ActIn"^tbl i, 2) *)
+                 ])
+            |> List.join
+  in
   let rec run_experiment i seq linst pinst =
     match seq with
     | [] -> []
     | edit::edits ->
-       let (totalt,checkt,checkn, searcht, searchn, wpt,lwpt,pwpt,_)  = synthesize_edit log phys linst pinst edit in
+       let (totalt,checkt,checkn, searcht, searchn, wpt,lwpt,pwpt,_)  =
+         synthesize_edit ~gas:1 ~fvs ~hints log phys linst pinst edit in
        (i, totalt, checkt, checkn, searcht, searchn, wpt,lwpt,pwpt)
        :: run_experiment (i + 1) edits (apply_edit linst edit) (apply_edit pinst edit)
   in
-  let data = run_experiment 0 insertion_sequence StringMap.empty StringMap.empty in
+  let data = run_experiment 0 insertion_sequence linst pinst in
   Printf.printf "size,time,check_time,num_z3_calls_check,model_search_z3_time,num_z3_calls_model_search,search_wp_time,check_log_wp_time,check_phys_wp_time\n";
   List.iter data ~f:(fun (i,t,c,cn,s,sn,wpt,lwpt, pwpt) ->
       Printf.printf "%d,%f,%f,%d,%f,%d,%f,%f,%f\n"
@@ -62,6 +99,6 @@ let reorder_benchmark length max_inserts =
         (Time.Span.to_ms pwpt)
     )
     
-       
-       
-       
+    
+    
+    

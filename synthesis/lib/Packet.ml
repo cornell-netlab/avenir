@@ -15,7 +15,7 @@ let set_field (pkt : t) (field : string) (v : value1) : t  =
     
 let get_val (pkt : t) (field : string) : value1 =
   match StringMap.find pkt field with
-    | None -> failwith ("UseBeforeDef error" ^ field)
+    | None -> failwith ("UseBeforeDef error " ^ field ^ " packet is " ^ string__packet pkt)
     | Some v -> v     
               
 let rec set_field_of_expr1 (pkt : t) (field : string) (e : expr1) : t =
@@ -67,7 +67,7 @@ let to_test ?fvs:(fvs = []) (pkt : t) =
 let empty = StringMap.empty
 
 let equal (pkt:t) (pkt':t) = StringMap.equal (=) pkt pkt'
-  
+                                                                                          
 let generate ?bound:(bound=10000000) ?values:(values=([] : value1 list))  (vars : (string * size) list) =
   match values with
   | [] ->
@@ -75,12 +75,21 @@ let generate ?bound:(bound=10000000) ?values:(values=([] : value1 list))  (vars 
   | _ ->
     List.fold vars ~init:empty ~f:(init_field_to_value_in values)
 
+let is_symbolic = String.is_suffix ~suffix:"_SYMBOLIC"
+let symbolize str =
+  if is_symbolic str then str else
+    str ^ "_SYMBOLIC"
+let unsymbolize = String.substr_replace_all ~pattern:"_SYMBOLIC" ~with_:""
+              
 let from_CE (model : value1 StringMap.t) : t =
   StringMap.fold model ~init:empty
     ~f:(fun ~key ~data pkt ->
-        if String.get key 0 = '$'
-        then pkt
-        else set_field pkt key data)
+      let key = String.split key ~on:('!') |> List.hd_exn in
+      if is_symbolic key && not(String.is_prefix key ~prefix:"?ActIn")
+      then pkt
+      else
+        let key = unsymbolize key in
+        set_field pkt key data)
 
         
         

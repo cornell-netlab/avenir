@@ -2,6 +2,7 @@ open Core
 open Ast
 open Manip
 open Graph
+open Packet
 open Semantics
 open Synthesis
 open Prover

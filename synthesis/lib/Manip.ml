@@ -2,7 +2,6 @@ open Core
 open Ast
 open Util
 
-module StringMap = Map.Make (String)
 
 
 (* computes the product of two lists of disjuncitons *)
@@ -71,13 +70,20 @@ let rec unroll n p =
 let get_val subsMap str default =
   StringMap.find subsMap str |> Option.value ~default
 
-(** computes ex[xs -> vs], replacing Vars only *)
-let rec substitute ex subsMap =
+                                             
+(** computes ex[xs -> vs], replacing only Vars whenever holes is false, replacing both whenever holes is true *)
+let rec substitute ?holes:(holes = false) ex subsMap =
   let subst = get_val subsMap in
   let rec substituteE e =
     match e with
     | Var1 (field,_) -> subst field e
-    | Value1 _ | Hole1 _ -> e
+    | Hole1 (field,_) ->
+       if holes then
+         let e' = subst field e in
+         (Printf.printf "%s -> %s \n%!" field (string_of_expr1 e');
+          e')
+       else (Printf.printf "NO SUBST\n%!";  e)
+    | Value1 _ -> e
     | Plus (e, e') -> Plus (substituteE e, substituteE e')
     | Times (e, e') -> Times (substituteE e, substituteE e')
     | Minus (e, e') -> Minus (substituteE e, substituteE e')
@@ -86,14 +92,18 @@ let rec substitute ex subsMap =
   match ex with
   | True | False | LocEq _ -> ex
   (* Homomorphic Rules*)               
-  | Neg e       -> !%(substitute e subsMap)
-  | Or  (e, e') -> substitute e subsMap %+% substitute e' subsMap
-  | And (e, e') -> substitute e subsMap %&% substitute e' subsMap
+  | Neg e       -> !%(substitute ~holes e subsMap)
+  | Or  (e, e') -> substitute ~holes e subsMap %+% substitute ~holes e' subsMap
+  | And (e, e') -> substitute ~holes e subsMap %&% substitute ~holes e' subsMap
   (* Do the work *)
   | Eq (e,e') ->  substituteE e %=% substituteE e'
   | Lt (e,e') ->  substituteE e %<% substituteE e'
   | Member(e,set) -> Member(substituteE e, set)
-              
+
+let substV ?holes:(holes = false) ex substMap =
+  StringMap.map substMap ~f:(fun v -> Value1 v)
+  |> substitute ~holes ex
+                           
 (* computes weakest pre-condition of condition phi w.r.t command c *)
 let rec wp c phi =
   let guarded_wp (cond, act) = cond %=>% wp act phi in
@@ -131,9 +141,9 @@ let rec wp c phi =
 
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
-    List.fold cmds ~init:(False, False) ~f:(fun (wp_so_far, prev_conds) (cond, act) ->
-        (cond %&% (!%prev_conds) %&% wp act phi
-         %+% wp_so_far
+    List.fold cmds ~init:(True, False) ~f:(fun (wp_so_far, prev_conds) (cond, act) ->
+        (cond %&% (!%prev_conds) %=>% wp act phi
+         %&% wp_so_far
         , prev_conds %+% cond)
       )
     |> fst
@@ -233,7 +243,7 @@ let rec wp_paths c phi : test list =
   | Assign (field, value) ->
      [substitute phi (StringMap.singleton field value)]
   | Assert t -> [t %&% phi]
-  | Assume t -> [!%t; t %&% phi]
+  | Assume t -> [t %=>% phi]
                   
   (* requires at least one guard to be true *)
   | Select (Total, []) -> [True]
@@ -253,7 +263,7 @@ let rec wp_paths c phi : test list =
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
      let open List in
-     (cmds >>| fun (t,c) -> Assert t %:% c)
+     (cmds >>| fun (t,c) -> Assume t %:% c)
      >>= Fun.flip wp_paths phi
   (* List.fold cmds ~init:(True, False) ~f:(fun (wp_so_far, prev_conds) (cond, act) ->
    *     guarded_wp (cond %&% !%prev_conds, act) %&% wp_so_far
