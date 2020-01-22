@@ -481,22 +481,22 @@ let%test _ = (* Test deBruijn Indices*)
  *             [ LocEq 0, "x" %<-% mkVInt (100,8) %:% Assert (LocEq 9)]) *)
 
 
-let%test _ = (* [no_negated_holes] accepts programs with no negated holes*)
-  no_negated_holes
-    [ (True, Skip)
-    ; (True, Assert (Hole1 ("_0",8) %=% Hole1 ("_1",8)))
-    ; (Hole1 ("_0",8) %=% mkVInt (100,8),  Assign ("x", mkVInt (100,8)))
-    ; (Neg(Neg(Hole1 ("_0",8) %=% mkVInt (99,8))), Skip)
-    ; (Neg(And(Neg (Hole1 ("_0",8) %=% mkVInt (99,8)), True)), Skip)]
-
-
-let%test _ = (* [no_negated_holes] rejects programs with negated holes]*)
-  not (no_negated_holes [(Neg (Hole1 ("_8",8) %=% mkVInt (100,8)), Skip)])
-  && not (no_negated_holes [(True, Assert (Hole1 ("_8",8) %<>% mkVInt (99,8)))])
-  && not (no_negated_holes [(Neg (Neg (And (Hole1 ("_8",8) %<>% mkVInt (99,8), True))), Skip)])
-                                         
-    
-(* TESTING FOR CEGIS PROCEDURE *)
+(* let%test _ = (\* [no_negated_holes] accepts programs with no negated holes*\)
+ *   no_negated_holes
+ *     [ (True, Skip)
+ *     ; (True, Assert (Hole1 ("_0",8) %=% Hole1 ("_1",8)))
+ *     ; (Hole1 ("_0",8) %=% mkVInt (100,8),  Assign ("x", mkVInt (100,8)))
+ *     ; (Neg(Neg(Hole1 ("_0",8) %=% mkVInt (99,8))), Skip)
+ *     ; (Neg(And(Neg (Hole1 ("_0",8) %=% mkVInt (99,8)), True)), Skip)]
+ * 
+ * 
+ * let%test _ = (\* [no_negated_holes] rejects programs with negated holes]*\)
+ *   not (no_negated_holes [(Neg (Hole1 ("_8",8) %=% mkVInt (100,8)), Skip)])
+ *   && not (no_negated_holes [(True, Assert (Hole1 ("_8",8) %<>% mkVInt (99,8)))])
+ *   && not (no_negated_holes [(Neg (Neg (And (Hole1 ("_8",8) %<>% mkVInt (99,8), True))), Skip)])
+ *                                          
+ *)     
+ (*  testing FOR CEGIS PROCEDURE *)
 
 (* let%test _ =
  *   let pkt = Packet.(set_field empty "pkt" (mkInt (100,8))) in

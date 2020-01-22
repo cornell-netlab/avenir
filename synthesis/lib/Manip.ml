@@ -32,8 +32,12 @@ let rec nnf t : test =
   | Neg (Neg t) -> nnf t
   | And (a, b) -> mkAnd (nnf a) (nnf b)
   | Or (a, b) -> mkOr (nnf a) (nnf b)
-  | Neg(And(a, b)) -> mkOr (Neg a) (Neg b) |> nnf
-  | Neg(Or(a, b)) -> mkAnd (Neg a) (Neg b) |> nnf
+  | Impl (a, b) -> nnf (!%(a) %+% b)
+  | Iff (a, b) -> nnf (mkAnd (Impl(a,b)) (Impl (b,a)))
+  | Neg(And(a, b)) -> mkOr (mkNeg a) (mkNeg b) |> nnf
+  | Neg(Or(a, b)) -> mkAnd (mkNeg a) (mkNeg b) |> nnf
+  | Neg(Impl(a, b)) -> mkAnd a (mkNeg b) |> nnf
+  | Neg(Iff (a, b)) -> mkOr (mkAnd a (mkNeg b)) (mkAnd (mkNeg b) a)
 
 
 (* Computes the Disjunctive Normal form of a test *)
@@ -42,6 +46,8 @@ let rec dnf t : test list =
   match t' with
   | And(a, b) -> multiply (dnf a) (dnf b)
   | Or (a, b) -> dnf a @ dnf b
+  | Impl(a, b) -> dnf (nnf (!%(a) %+% b))
+  | Iff(a,b) -> dnf (Impl (a,b) %&% Impl(b,a))
   | Member (_,_)
   | Eq _
   | Lt _ 
@@ -90,8 +96,10 @@ let rec substitute ?holes:(holes = false) ex subsMap =
   | True | False -> ex
   (* Homomorphic Rules*)               
   | Neg e       -> !%(substitute ~holes e subsMap)
-  | Or  (e, e') -> substitute ~holes e subsMap %+% substitute ~holes e' subsMap
-  | And (e, e') -> substitute ~holes e subsMap %&% substitute ~holes e' subsMap
+  | Or   (e, e') -> substitute ~holes e subsMap %+% substitute ~holes e' subsMap
+  | And  (e, e') -> substitute ~holes e subsMap %&% substitute ~holes e' subsMap
+  | Impl (e, e') -> substitute ~holes e subsMap %=>% substitute ~holes e' subsMap
+  | Iff  (e, e') -> substitute ~holes e subsMap %<=>% substitute ~holes e' subsMap
   (* Do the work *)
   | Eq (e,e') ->  substituteE e %=% substituteE e'
   | Lt (e,e') ->  substituteE e %<% substituteE e'
@@ -100,7 +108,23 @@ let rec substitute ?holes:(holes = false) ex subsMap =
 let substV ?holes:(holes = false) ex substMap =
   StringMap.map substMap ~f:(fun v -> Value1 v)
   |> substitute ~holes ex
-                           
+
+let rec exact_only t =
+  match t with
+  | Lt _ | Member _ -> false
+  | True | False | Eq _ -> true
+  | Neg(a) -> exact_only a
+  | And(a,b) | Or(a,b) | Impl(a,b) | Iff(a,b)
+    -> exact_only a && exact_only b
+
+let regularize cond misses =
+  if exact_only cond
+  then if cond = True
+       then !%misses
+       else cond
+  else failwith "Don't know how to regularize anything but equivalences" 
+         
+                
 (* computes weakest pre-condition of condition phi w.r.t command c *)
 let rec wp c phi =
   let guarded_wp (cond, act) = cond %=>% wp act phi in
@@ -126,10 +150,10 @@ let rec wp c phi =
 
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
-    List.fold cmds ~init:(True, False) ~f:(fun (wp_so_far, prev_conds) (cond, act) ->
-        (cond %&% (!%prev_conds) %=>% wp act phi
-         %&% wp_so_far
-        , prev_conds %+% cond)
+     List.fold cmds ~init:(True, False) ~f:(fun (wp_so_far, misses) (cond, act) ->
+         let guard = regularize cond misses in
+        (guard %=>% wp act phi %&% wp_so_far
+        , cond %+% misses )
       )
     |> fst
 
@@ -140,7 +164,57 @@ let rec wp c phi =
     Printf.printf "[WARNING] skipping While loop, because loops must be unrolled\n%!";
     phi
 
+let good_execs c =
+  let rec passify sub c =
+    match c with
+    | Skip -> (Some sub, Skip)
+    | Assert b ->
+       if b = False
+       then (None, Assert False)
+       else (Some sub, Assert (indexVars b sub))
+    | Assume b ->
+       if b = False
+       then (None, Assert False)
+       else (Some sub, Assert (indexVars b sub))
+    | Assign (v,e) ->
+       (StringMap.update sub v ~f:(fun idx ->
+            match idx with
+            | None -> 0
+            | Some i -> i +1 ) |> Some
+       , v %<-% (indexVars_expr1 sub e))
+    | Seq (c1, c2) ->
+       let (sub1, c1') = passify sub c1 in
+       let (sub2, c2') = passify sub c2 in
+       (sub2, c1' %:% c2)
+    | Select (Total, _) -> failwith "Don't know what to do for if total"
+    | Select (_, ss) ->
+       (* let passify_demon_bin (t1,c1) (t2,c2) =
+        *   let t1' = indexVars sub t1 in
+        *   let t2' = indexVars sub t2 in
+        *   let sub1, c1' = passify sub c1 in
+        *   let sub2, c2' = passify sub c2 in
+        *   let (sub', r1, r2) = merge sub1 sub2 in
+        *   (sub', (t1, c1' %:% r1, c2' %:% r2))
+        * in *)
+       let subs = List.map ss ~f:(fun (t,c) ->
+                      let sub, c' = passify sub c in
+                      (sub, (indexVars sub t, c'))) in
+       let conflicts = in
+       let 
+       
+    | While _ ->
+       failwith "Cannot passify While loops Unsupported"
+    | Apply _ ->
+       failwith "Cannot passify (yet) table applications"
+       
 
+  in
+  let rec good_wp _ = True in
+  passify c
+  |> good_wp
+  
+  
+  
 
 (** [fill_holes(|_value|_test]) replace the applies the substitution
    [subst] to the supplied cmd|value|test. It only replaces HOLES, and
@@ -170,10 +244,12 @@ let rec fill_holes_test t subst =
   match t with
   | True | False -> t
   | Neg a -> mkNeg (fill_holes_test a subst)
-  | And (a, b) -> binop mkAnd fill_holes_test  a b
-  | Or (a, b)  -> binop mkOr  fill_holes_test  a b
-  | Lt (a, b)  -> binop mkLt  fill_holes_expr1 a b
-  | Eq (a, b)  -> binop mkEq  fill_holes_expr1 a b
+  | And  (a, b)   -> binop (%&%)   fill_holes_test  a b
+  | Or   (a, b)   -> binop (%+%)   fill_holes_test  a b
+  | Impl (a, b)   -> binop (%=>%)  fill_holes_test  a b
+  | Iff  (a, b)   -> binop (%<=>%) fill_holes_test  a b
+  | Lt   (a, b)   -> binop (%<=%)  fill_holes_expr1 a b
+  | Eq   (a, b)   -> binop (%=%)   fill_holes_expr1 a b
   | Member (a, s) -> Member(fill_holes_expr1 a subst, s)
 
 let rec fill_holes (c : cmd) subst =

@@ -263,6 +263,8 @@ type test =
   | Member of (expr1 * expr2)
   | And of (test * test)
   | Or of (test * test)
+  | Impl of (test * test)
+  | Iff of (test * test)
   | Neg of test       
 
 
@@ -373,10 +375,20 @@ let rec mkMember el set =
   | Union (set, set') -> mkMember el set %+% mkMember el set'
   | _ -> Member(el, set)
                
-let mkImplies assum conseq =  mkOr (mkNeg assum) conseq
+let mkImplies assum conseq =
+  if not enable_smart_constructors then Impl(assum, conseq) else
+    if assum = conseq then True else
+    match assum, conseq with
+    | True, _ -> conseq
+    | _, False -> !%(assum)
+    | _, _ -> Impl(assum, conseq) 
+
 let (%=>%) = mkImplies
 
-let mkIff lhs rhs = (lhs %=>% rhs) %&% (rhs %=>% lhs)
+let mkIff lhs rhs =
+  if enable_smart_constructors
+  then if lhs = rhs then True else Iff(lhs, rhs)
+  else Iff(lhs, rhs)
 let (%<=>%) = mkIff
 
 let rec string_of_test t =
@@ -386,7 +398,8 @@ let rec string_of_test t =
   | Eq (left, right) -> string_of_expr1 left ^ " = " ^ string_of_expr1 right
   | Lt (left, right) -> string_of_expr1 left ^ " < " ^ string_of_expr1 right
   | Member (expr, set) -> string_of_expr1 expr ^ " in " ^ string_of_expr2 set
-  | Or (Neg(assum), conseq) -> "(" ^ string_of_test assum ^ " ==> " ^ string_of_test conseq ^ ")\n"
+  | Impl (assum, conseq) -> "(" ^ string_of_test assum ^ " ==> " ^ string_of_test conseq ^ ")\n"
+  | Iff (left, right) -> "(" ^ string_of_test left ^ " <==> " ^ string_of_test right ^ ")\n"
   | Or (left, right) -> "(" ^ string_of_test left ^ "\n || " ^ string_of_test right ^ ")"
   | And (left, right) -> "(" ^ string_of_test left ^ "&&" ^ string_of_test right ^ ")"
   | Neg t -> "~(" ^ string_of_test t ^ ")"
@@ -399,7 +412,9 @@ let rec sexp_string_of_test t =
   | False -> "False"
   | Eq  (left, right) -> binop "Eq" left right sexp_string_of_expr1
   | Lt  (left, right) -> binop "Lt" left right sexp_string_of_expr1
-  | Member (expr, set) -> "Member(" ^ string_of_expr1 expr ^ "," ^ string_of_expr2 set ^ ")" 
+  | Member (expr, set) -> "Member(" ^ string_of_expr1 expr ^ "," ^ string_of_expr2 set ^ ")"
+  | Impl (assum, conseq) -> binop "Impl" assum conseq sexp_string_of_test
+  | Iff (left, right) -> binop "Iff" left right sexp_string_of_test
   | Or  (left, right) -> binop "Or" left right sexp_string_of_test
   | And (left, right) -> binop "And" left right sexp_string_of_test
   | Neg t -> "Neg(" ^ sexp_string_of_test t ^ ")"
@@ -407,11 +422,11 @@ let rec sexp_string_of_test t =
 let rec num_nodes_in_test t =
   match t with
   | True | False -> 1
-  | Eq (left, right) -> size_of_expr1 left + size_of_expr1 right + 1
-  | Lt (left, right) -> size_of_expr1 left + size_of_expr1 right + 1
+  | Eq (left, right) -> num_nodes_in_expr1 left + num_nodes_in_expr1 right + 1
+  | Lt (left, right) -> num_nodes_in_expr1 left + num_nodes_in_expr1 right + 1
   | Member _ -> failwith "Membership not supported"
-  | Or (left, right) -> num_nodes_in_test left + num_nodes_in_test right + 1
-  | And (left, right) -> num_nodes_in_test left + num_nodes_in_test right + 1
+  | Iff (left, right) | Or (left, right) | And(left, right) | Impl(left, right)
+    -> num_nodes_in_test left + 1 + num_nodes_in_test right
   | Neg t -> num_nodes_in_test t + 1
                           
            
@@ -454,7 +469,7 @@ let rec free_of_test typ test : (string * size) list =
   begin match test with
   | True | False -> 
     []
-  | Or (l,r) | And (l, r) ->
+  | Or (l,r) | And (l, r) | Impl (l,r) | Iff (l, r) ->
      free_of_test typ l @ free_of_test typ r
   | Neg t ->
      free_of_test typ t
@@ -502,7 +517,9 @@ let rec multi_ints_of_test test : (int * size) list =
   begin match test with
     | True | False -> 
       []
-    | Or (l, r) | And (l, r) ->
+    | Or (l, r) | And (l, r)
+      | Impl (l, r) | Iff (l,r)
+      ->
       multi_ints_of_test l
       @ multi_ints_of_test r
     | Neg t ->
@@ -512,22 +529,6 @@ let rec multi_ints_of_test test : (int * size) list =
     | Eq (e, e') | Lt (e, e') ->
        multi_ints_of_expr1 e @ multi_ints_of_expr1 e'
   end
-
-let rec remove_locs_neq l (t:test) : test =
-  match t with
-   | True
-  | False
-  | Eq _
-  | Lt _
-  | Member _
-    -> t
-  | Neg t
-    -> !%(remove_locs_neq l t)
-  | And (a, b)
-    -> remove_locs_neq l a %&% remove_locs_neq l b
-  | Or (a, b)
-    -> remove_locs_neq l a %+% remove_locs_neq l b
-
 
 type select_typ =
   | Partial
@@ -766,134 +767,6 @@ let rec multi_ints_of_cmd c : (int * size) list =
      List.fold actions ~init:(multi_ints_of_cmd default)
        ~f:(fun rst act -> rst @ multi_ints_of_cmd act)
 
-let no_nesting ss =
-  let rec no_while_or_select_in_cmd c =
-    match c with
-    | Skip
-    | Assign _
-    | Assert _
-    | Assume _
-      -> true
-    | Seq (c, c')
-      -> no_while_or_select_in_cmd c
-         && no_while_or_select_in_cmd c'
-    | Apply (_,_,actions, default)
-      -> List.fold actions ~init:(no_while_or_select_in_cmd default)
-           ~f:(fun acc act -> acc && no_while_or_select_in_cmd act)
-    | While _
-    | Select _
-      -> false
-  in
-  concatMap ss ~init:(Some true) ~c:(&&)
-    ~f:(fun (_,act) -> no_while_or_select_in_cmd act)
-
-let instrumented =
-  let rec instrumented_test found_loc t =
-    if found_loc then true else
-      match t with
-      | True
-      | False
-      | Eq _
-      | Lt _
-      | Member _
-        -> false
-      | And (a, b) ->
-        instrumented_test false a
-        || instrumented_test false b
-      | Or (a, b) ->
-        instrumented_test false a
-        && instrumented_test false b
-      | Neg _ ->
-        failwith "Borked, [instrumented] can only be called on a list of selects with no negative tests"
-  in
-  let rec instrumented_cmd found_loc c =
-    if found_loc then found_loc else
-      match c with
-      | Skip
-      | Assign _
-      | Assert _
-      | Assume _
-        -> false
-      | Apply (_,_,acts,dflt)
-        -> List.fold acts  ~init:(instrumented_cmd found_loc dflt)
-             ~f:(fun found act -> found || instrumented_cmd found act)
-      | Seq (p, q)
-        -> instrumented_cmd false p
-           || instrumented_cmd false q
-      | While _
-      | Select _
-        -> failwith "Borked, instrumented can only be called on a list of selects with no nesting"
-  in
-  concatMap ~c:(&&)
-    ~f:(fun (cond, act) ->
-        instrumented_test false cond
-        && instrumented_cmd false act)
-       
-let no_negated_holes ss =
-  let rec no_negated_holes_test t =
-    match t with
-    | True
-    | False
-    | Eq _
-    | Lt _
-    | Member _
-      -> true
-    | And (a, b)
-      -> no_negated_holes_test a && no_negated_holes_test b
-    | Or (a,b)
-      -> no_negated_holes_test a && no_negated_holes_test b
-    | Neg a ->
-      let rec has_hole t =
-        match t with
-        | True
-        | False
-          -> false
-        | Eq (e, e')
-        | Lt (e, e')
-          -> begin match (e, e') with
-              | Hole1 _, _ | _, Hole1 _ ->
-                true
-              | _, _ ->
-                false
-             end
-        | Member (expr, set)
-          -> begin match (expr, set) with
-             | Hole1 _, _ | _, Hole2 _ ->  true
-             | _ ,_ -> false
-             end
-        | Neg t' (* double-negation *)
-          -> not (has_hole t')
-        | And (a, b)
-        | Or (a, b)
-          -> has_hole a || has_hole b
-      in
-      not (has_hole a)
-  and no_negated_holes_cmd c =
-    let gpair (t, c) =
-      no_negated_holes_test t && no_negated_holes_cmd c
-    in
-    match c with
-    | Skip
-    | Assign _
-      -> true
-    | Assume t
-    | Assert t
-      -> no_negated_holes_test t
-    | Seq (c, c')
-      -> no_negated_holes_cmd c && no_negated_holes_cmd c'
-    | While (cond, body)
-      -> gpair (cond, body)
-    | Select (_,ss)
-      -> concatMap ss ~init:(Some true) ~c:(&&) ~f:gpair
-    | Apply (_,_,acts,dflt)
-      -> List.fold acts ~init:(no_negated_holes_cmd dflt)
-           ~f:(fun acc act -> acc && no_negated_holes_cmd act )
-  in
-  concatMap ss ~init:(Some true) ~c:(&&)
-    ~f:(fun (cond, act) ->
-        no_negated_holes_test cond
-          && no_negated_holes_cmd act)
-
 
 let rec holify_expr1 holes (e : expr1) : expr1 =
     match e with
@@ -927,6 +800,8 @@ and holify_test holes b : test =
     | Member (expr, set) -> mkMember (holify_expr1 holes expr) (holify_expr2 holes set)
     | And (b, b') -> holify_test holes b %&% holify_test holes b'
     | Or (b, b')  -> holify_test holes b %+% holify_test holes b'
+    | Impl(b,b') -> holify_test holes b %=>% holify_test holes b'
+    | Iff(b, b') -> holify_test holes b %=>% holify_test holes b'
     | Neg b       -> !%(holify_test holes b)
 and holify_cmd holes c : cmd=
   match c with
