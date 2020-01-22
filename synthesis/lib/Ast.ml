@@ -258,7 +258,6 @@ let rec lt_values1 (v : value1) (v' : value1) : bool =
                   
 type test =
   | True | False
-  | LocEq of int
   | Eq of (expr1 * expr1)
   | Lt of (expr1 * expr1)
   | Member of (expr1 * expr2)
@@ -384,7 +383,6 @@ let rec string_of_test t =
   match t with
   | True -> "true"
   | False -> "false"
-  | LocEq i -> "loc = " ^ string_of_int i
   | Eq (left, right) -> string_of_expr1 left ^ " = " ^ string_of_expr1 right
   | Lt (left, right) -> string_of_expr1 left ^ " < " ^ string_of_expr1 right
   | Member (expr, set) -> string_of_expr1 expr ^ " in " ^ string_of_expr2 set
@@ -399,7 +397,6 @@ let rec sexp_string_of_test t =
   match t with
   | True -> "True"
   | False -> "False"
-  | LocEq l -> "LocEq(" ^ string_of_int l ^ ")"
   | Eq  (left, right) -> binop "Eq" left right sexp_string_of_expr1
   | Lt  (left, right) -> binop "Lt" left right sexp_string_of_expr1
   | Member (expr, set) -> "Member(" ^ string_of_expr1 expr ^ "," ^ string_of_expr2 set ^ ")" 
@@ -409,7 +406,7 @@ let rec sexp_string_of_test t =
 
 let rec num_nodes_in_test t =
   match t with
-  | True | False  | LocEq _ -> 1
+  | True | False -> 1
   | Eq (left, right) -> size_of_expr1 left + size_of_expr1 right + 1
   | Lt (left, right) -> size_of_expr1 left + size_of_expr1 right + 1
   | Member _ -> failwith "Membership not supported"
@@ -455,7 +452,7 @@ let rec free_of_expr2 typ set =
                 
 let rec free_of_test typ test : (string * size) list =
   begin match test with
-  | True | False | LocEq _ ->
+  | True | False -> 
     []
   | Or (l,r) | And (l, r) ->
      free_of_test typ l @ free_of_test typ r
@@ -503,7 +500,7 @@ let rec multi_ints_of_expr2 e2 : (int * size) list =
                   
 let rec multi_ints_of_test test : (int * size) list =
   begin match test with
-    | True | False | LocEq _ ->
+    | True | False -> 
       []
     | Or (l, r) | And (l, r) ->
       multi_ints_of_test l
@@ -518,9 +515,7 @@ let rec multi_ints_of_test test : (int * size) list =
 
 let rec remove_locs_neq l (t:test) : test =
   match t with
-  | LocEq l'
-    -> if l = l' then True else False
-  | True
+   | True
   | False
   | Eq _
   | Lt _
@@ -550,7 +545,6 @@ let sexp_string_of_select_typ styp =
 
 type cmd =
   | Skip
-  | SetLoc of int
   | Assign of (string * expr1)
   | Assert of test
   | Assume of test
@@ -601,7 +595,12 @@ let mkOrdered ss =
 let mkSeq first scnd =
   if not enable_smart_constructors then Seq(first, scnd) else
   match first, scnd with
-  | Skip, x | x, Skip -> x
+  | Skip, x | x, Skip
+    | Assert True, x | x, Assert True
+    | Assume True, x | x, Assume False
+    -> x
+  | Assert False, _ | _, Assert False
+    -> Assert False
   | _,_ -> Seq(first, scnd)
 
 let mkSelect styp =
@@ -654,7 +653,6 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
   | Assume t ->
     (* repeat "\t" depth ^ *)
     "assume (" ^ string_of_test t ^ ")"
-  | SetLoc i -> "loc := " ^ string_of_int i
   | Assign (field, expr) ->
     field ^ " := " ^ string_of_expr1 expr
   | Select (styp, es) ->
@@ -688,7 +686,6 @@ let rec sexp_string_of_cmd e : string =
   | Seq (p, q) -> "Seq(" ^ sexp_string_of_cmd p ^ "," ^ sexp_string_of_cmd q ^ ")"
   | Assert t -> "Assert(" ^ sexp_string_of_test t ^ ")"
   | Assume t -> "Assume(" ^ sexp_string_of_test t ^ ")"
-  | SetLoc l ->  "SetLoc(" ^ string_of_int l ^ ")"
   | Assign (f,e) -> "Assign(" ^ f ^ "," ^ string_of_expr1 e ^")"
   | Select (styp,es) ->
     let cases_string = match es with
@@ -707,7 +704,7 @@ let rec sexp_string_of_cmd e : string =
 
 let rec tables_of_cmd (c:cmd) : string list =
   match c with
-  | Skip | SetLoc _ | Assign _  | Assume _ | Assert _  -> []
+  | Skip | Assign _  | Assume _ | Assert _  -> []
   | Seq (c,c') -> tables_of_cmd c @ tables_of_cmd c'
   | Select (_, cs) -> concatMap cs ~c:(@) ~init:(Some []) ~f:(fun (_, c) -> tables_of_cmd c)
   | While (_,c) -> tables_of_cmd c
@@ -717,7 +714,7 @@ let rec tables_of_cmd (c:cmd) : string list =
     
 let rec free_of_cmd typ (c:cmd) : (string * size) list =
   begin match c with
-  | Skip | SetLoc _ -> []
+  | Skip -> []
   | Assign (f, e) ->  (f,size_of_expr1 e) :: free_of_expr1 typ e
   | Seq (c, c') ->
      free_of_cmd typ c @ free_of_cmd typ c'
@@ -744,9 +741,7 @@ let holes_of_cmd = free_of_cmd `Hole
       
 let rec multi_ints_of_cmd c : (int * size) list =
   match c with
-  | Skip
-  | SetLoc _ ->
-    []
+  | Skip -> []
   (* | Assign (_, Int i) ->
    *   [i] *)
   (* Only collect _tested_ inputs*)
@@ -775,7 +770,6 @@ let no_nesting ss =
   let rec no_while_or_select_in_cmd c =
     match c with
     | Skip
-    | SetLoc _
     | Assign _
     | Assert _
     | Assume _
@@ -797,8 +791,6 @@ let instrumented =
   let rec instrumented_test found_loc t =
     if found_loc then true else
       match t with
-      | LocEq _
-        -> true
       | True
       | False
       | Eq _
@@ -822,8 +814,6 @@ let instrumented =
       | Assert _
       | Assume _
         -> false
-      | SetLoc _
-        -> true
       | Apply (_,_,acts,dflt)
         -> List.fold acts  ~init:(instrumented_cmd found_loc dflt)
              ~f:(fun found act -> found || instrumented_cmd found act)
@@ -844,7 +834,6 @@ let no_negated_holes ss =
     match t with
     | True
     | False
-    | LocEq _
     | Eq _
     | Lt _
     | Member _
@@ -858,7 +847,6 @@ let no_negated_holes ss =
         match t with
         | True
         | False
-        | LocEq _
           -> false
         | Eq (e, e')
         | Lt (e, e')
@@ -887,7 +875,6 @@ let no_negated_holes ss =
     match c with
     | Skip
     | Assign _
-    | SetLoc _
       -> true
     | Assume t
     | Assert t
@@ -934,7 +921,7 @@ and holify_expr2 holes (e : expr2) : expr2 =
     | Union (e,e') -> Union (holify_expr2 holes e, holify_expr2 holes e')
 and holify_test holes b : test =
     match b with
-    | True | False | LocEq _ -> b
+    | True | False -> b
     | Eq (e, e') -> holify_expr1 holes  e %=% holify_expr1 holes  e'
     | Lt (e, e') -> holify_expr1 holes  e %<% holify_expr1 holes  e'
     | Member (expr, set) -> mkMember (holify_expr1 holes expr) (holify_expr2 holes set)
@@ -943,7 +930,7 @@ and holify_test holes b : test =
     | Neg b       -> !%(holify_test holes b)
 and holify_cmd holes c : cmd=
   match c with
-  | Skip | SetLoc _ -> c
+  | Skip -> c
   | Assign (f, e) -> f %<-% holify_expr1 holes e
   | Assert t -> Assert (holify_test holes t)
   | Assume t -> Assume (holify_test holes t)

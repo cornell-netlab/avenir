@@ -88,7 +88,6 @@ let rec mkZ3Test (rhoVars : (string * size) list) (t : test) ctx deBruijn quanti
   match t with 
   | True -> Z3.Boolean.mk_true ctx
   | False -> Z3.Boolean.mk_false ctx
-  | LocEq _ -> failwith "dont know how to insert locations into tests"
   | Eq (left, right) -> Z3.Boolean.mk_eq ctx   (z3_value left) (z3_value right)
   | Lt (left, right) -> Z3.Arithmetic.mk_lt ctx   (z3_value left) (z3_value right)
   | Member (expr, set) ->

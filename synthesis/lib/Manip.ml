@@ -19,14 +19,12 @@ let multiply orlist orlist' =
 (* Computes the Negation Normal Form of a test*)               
 let rec nnf t : test =
   match t with
-  | LocEq _
   | Eq(_, _)
   | Lt(_, _)
   | Member(_,_)
   | True
   | False
   | Neg(Eq(_, _))
-  | Neg(LocEq _)
   | Neg(Lt(_, _))
   | Neg(Member(_,_))
   | Neg(True)
@@ -45,7 +43,6 @@ let rec dnf t : test list =
   | And(a, b) -> multiply (dnf a) (dnf b)
   | Or (a, b) -> dnf a @ dnf b
   | Member (_,_)
-  | LocEq _
   | Eq _
   | Lt _ 
   | Neg _ (* will not be And/Or because NNF*)
@@ -90,7 +87,7 @@ let rec substitute ?holes:(holes = false) ex subsMap =
     | Tuple es -> List.map es ~f:substituteE |> Tuple
   in
   match ex with
-  | True | False | LocEq _ -> ex
+  | True | False -> ex
   (* Homomorphic Rules*)               
   | Neg e       -> !%(substitute ~holes e subsMap)
   | Or  (e, e') -> substitute ~holes e subsMap %+% substitute ~holes e' subsMap
@@ -107,22 +104,10 @@ let substV ?holes:(holes = false) ex substMap =
 (* computes weakest pre-condition of condition phi w.r.t command c *)
 let rec wp c phi =
   let guarded_wp (cond, act) = cond %=>% wp act phi in
-  let rec subst_location l phi =
-    match phi with
-    (* Do the Work *)
-    | LocEq l' -> if l' = l then True else False
-    (* Do nothing *)
-    | True | False | Eq _ | Lt _ | Member _ -> phi
-    (* Homorphically recurse *)
-    | And (p, q) -> subst_location l p %&% subst_location l q
-    | Or (p, q) -> subst_location l p %+% subst_location l q
-    | Neg p -> !%(subst_location l p)
-  in
   match c with
   | Skip -> phi
   | Seq (firstdo, thendo) ->
     wp firstdo (wp thendo phi)
-  | SetLoc l -> subst_location l phi
   | Assign (field, value) ->
      substitute phi (StringMap.singleton field value)
   | Assert t -> t %&% phi
@@ -183,7 +168,7 @@ let rec fill_holes_expr1 e (subst : value1 StringMap.t) =
 let rec fill_holes_test t subst =
   let binop cnstr rcall left right = cnstr (rcall left subst) (rcall right subst) in
   match t with
-  | True | False | LocEq _ -> t
+  | True | False -> t
   | Neg a -> mkNeg (fill_holes_test a subst)
   | And (a, b) -> binop mkAnd fill_holes_test  a b
   | Or (a, b)  -> binop mkOr  fill_holes_test  a b
@@ -204,7 +189,7 @@ let rec fill_holes (c : cmd) subst =
                  (if sz <> sz' then (Printf.printf "[Warning] replacing %s#%d with %s#%d, but the sizes may be different, taking the size of %s to be ground truth" h sz strv (size_of_value1 v) strv));
                  Assign (f, Value1 v)
      end
-  | SetLoc _ | Assign (_, _) -> c
+  | Assign (_, _) -> c
   | Seq (firstdo, thendo) ->
      fill_holes firstdo subst %:% fill_holes thendo subst
   | Assert t ->
@@ -224,22 +209,10 @@ let rec fill_holes (c : cmd) subst =
 
 
 let rec wp_paths c phi : test list =
-  let rec subst_location l phi =
-    match phi with
-    (* Do the Work *)
-    | LocEq l' -> if l' = l then True else False
-    (* Do nothing *)
-    | True | False | Eq _ | Lt _ | Member _ -> phi
-    (* Homorphically recurse *)
-    | And (p, q) -> subst_location l p %&% subst_location l q
-    | Or (p, q) -> subst_location l p %+% subst_location l q
-    | Neg p -> !%(subst_location l p)
-  in
   match c with
   | Skip -> [phi]
   | Seq (firstdo, thendo) ->
      List.(wp_paths thendo phi >>= wp_paths firstdo)
-  | SetLoc l -> [subst_location l phi]
   | Assign (field, value) ->
      [substitute phi (StringMap.singleton field value)]
   | Assert t -> [t %&% phi]

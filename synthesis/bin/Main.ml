@@ -148,7 +148,7 @@ module WeakestPrecondition = struct
       +> flag "-z3" no_arg ~doc: "z3-ready output")
 
   let run file z3 () =
-    let cmd = parse_file file |> Synthesis.unroll_fully in
+    let cmd = parse_file file in
     let _ = Printf.printf "PROGRAM: %s \n%!" (Ast.string_of_cmd cmd) in
     let wp = Synthesis.symb_wp cmd in
     if z3 then

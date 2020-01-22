@@ -191,7 +191,7 @@ let lookup_action_exn prog ctx action_name =
 let dispatch prog ctx members =
   match members with
   | [] -> failwith "[RuntimeException] Tried to Dispatch an empty list of names"
-  | [(_,"mark_to_drop")] -> `Motley (SetLoc (-1))
+  | [(_,"mark_to_drop")] -> `Motley ("drop" %<-% mkVInt(1,1))
   | [member] ->
     failwith ("[Unimplemented] Tried to apply " ^ snd member ^ " as a function, but i'm not sure what it is")
   | member :: members' ->

@@ -6,7 +6,6 @@
 %token OR AND NOT IMPLIES
 %token EQ LESS GREATER LEQ GEQ NEQ
 %token PLUS TIMES MINUS
-%token LOC
 %token WHILE SKIP SEMICOLON ASSIGN
 %token ASSERT ASSUME ABORT APPLY
 %token IF TOTAL PARTIAL ORDERED CASE BRACKETS FI
@@ -33,8 +32,6 @@ command :
   { Ast.Seq (c, cs) }
 | WHILE; LPAREN; t = test; RPAREN; LBRACE; c = command; RBRACE
   { Ast.mkWhile t c }
-| LOC; ASSIGN; i = INT
-  { Ast.SetLoc i }
 | f = ID; ASSIGN; e = expr
   { Ast.Assign (f, e) }
 | ASSERT; LPAREN; t = test ; RPAREN
@@ -85,8 +82,6 @@ test :
   { Ast.True }
 | FALSE
   { Ast.False }
-| LOC; EQ; i = INT;
-  { Ast.LocEq i }
 | t = test; OR; tt = test
   { Ast.Or (t, tt) }
 | t = test; AND; tt = test

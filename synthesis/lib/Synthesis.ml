@@ -9,33 +9,12 @@ open Util
 
 
        
-let well_formed (c:cmd) : bool =
-  let well_formed_selects (ss : (test * cmd) list) : bool =
-    no_nesting ss
-    (* && instrumented ss *)
-    (* && no_topo_loops ss *)
-    && no_negated_holes ss
-  in
-  match c with
-  | Seq(SetLoc _, While (_, body)) ->
-    begin
-      match body with
-      | Select (_,ss)
-        -> well_formed_selects ss
-      | _
-        -> false
-    end
-  | _ -> false
-
-
-
 let apply_edit inst (tbl, edit) =
   StringMap.add_multi inst ~key:tbl  ~data:edit
   
 let rec apply_inst tag ?cnt:(cnt=0) inst prog : (cmd * int) =
   match prog with
   | Skip 
-    | SetLoc _
     | Assign _
     | Assert _ 
     | Assume _ -> (prog, cnt)
@@ -61,15 +40,14 @@ let rec apply_inst tag ?cnt:(cnt=0) inst prog : (cmd * int) =
         * | `NoHoles -> ("?ActIn"^tbl) %<-% mkVInt(id, actSize) *)
        in
        (t, ghost
-           %:% act
-           %:% SetLoc (cnt (*+ 1*)))
+           %:% act)
      in
      let selects =
        StringMap.find_multi inst tbl
        |> List.fold ~init:[]
             ~f:(fun acc (matches, action) ->
               let t = List.fold2_exn keys matches
-                 ~init:(LocEq cnt)
+                 ~init:True
                  ~f:(fun acc x m ->
                    (acc %&% (Var1 x %=% m))) in
               if action >= List.length acts then
@@ -85,16 +63,15 @@ let rec apply_inst tag ?cnt:(cnt=0) inst prog : (cmd * int) =
        | `WithHoles -> 
           List.mapi acts
             ~f:(fun i a -> 
-              (List.fold keys ~init:(LocEq cnt)
+              (List.fold keys ~init:True
                  ~f:(fun acc (x,sz) -> acc %&% (Var1 (x,sz) %=% Hole1 ("?"^x,sz)))
                %&% (add_row_hole %=% mkVInt (1,1))
                %&% (which_act_hole %=% mkVInt (i,actSize))
-              , a %:% SetLoc (cnt(*+1*))))
+              , a))
        | `NoHoles -> []
      in
      let dflt_row =
        let cond =
-         LocEq cnt %&%
            match tag with
            | `WithHoles -> True (*add_row_hole %=% mkVInt (0,1)*)
            | `NoHoles -> True in
@@ -139,7 +116,7 @@ let complete_inner ~falsify (cmd : cmd) =
            comp x (Value1 (Int (i,sz)))
     in
     match t with
-    | True | False | LocEq _ -> t
+    | True | False -> t
     | Neg b -> !%(complete_aux_test ~falsify b)
     | And (a, b) -> complete_aux_test ~falsify a %&% complete_aux_test ~falsify b
     | Or (a, b) -> complete_aux_test ~falsify a %+% complete_aux_test ~falsify b
@@ -149,7 +126,7 @@ let complete_inner ~falsify (cmd : cmd) =
     | Member _ -> failwith "What do?"
   and complete_aux ~falsify cmd =
     match cmd with
-    | Skip | SetLoc _ -> cmd
+    | Skip -> cmd
     | Assign (f, v) ->
       begin
         match v with
@@ -185,7 +162,7 @@ let rec project_cmd_on_acts c (subst : expr1 StringMap.t) : cmd list =
   Printf.printf "PROJECTING\n%!";
   let holes = true in
   match c with
-  | Skip | SetLoc _ -> [c]
+  | Skip -> [c]
   | Assume b ->
      begin  match subst |> substitute ~holes b with
      | False -> []
@@ -232,7 +209,7 @@ let rec contains_inst_var e =
 
 let rec remove_inst_test b =
   match b with
-  | True | False | LocEq _ -> b
+  | True | False -> b
   | And(b1,b2) -> remove_inst_test b1 %&% remove_inst_test b2
   | Or (b1,b2) -> remove_inst_test b1 %+% remove_inst_test b2
   | Neg b1 -> !%(remove_inst_test b1)
@@ -247,7 +224,7 @@ let rec remove_inst_test b =
                         
 let rec remove_inst_cmd cmd =
   match cmd with
-  | Skip | SetLoc _ -> cmd
+  | Skip -> cmd
   | Assume b -> remove_inst_test b |> Assume
   | Assert b -> remove_inst_test b |> Assert
   | Assign (v, e) ->
@@ -335,7 +312,7 @@ let rec compute_cand_for_trace line t : cmd =
     | Assert _
     | Assume _ 
     | Assign _
-    | SetLoc _ -> line
+    -> line
   | Seq (c1,c2) -> compute_cand_for_trace c1 t
                    %:% compute_cand_for_trace c2 t
   | Select(typ, cs) ->
@@ -444,7 +421,7 @@ let rec fixup_val2 (model : value1 StringMap.t) (set : expr2) : expr2 =
 let rec fixup_test (model : value1 StringMap.t) (t : test) : test =
   let binop ctor call left right = ctor (call left) (call right) in 
   match t with
-  | True | False | LocEq _ -> t
+  | True | False -> t
   | Neg p -> mkNeg (fixup_test model p)
   | And(p, q) -> binop mkAnd (fixup_test model) p q
   | Or(p, q) -> binop mkOr (fixup_test model) p q
@@ -472,7 +449,6 @@ and fixup (real:cmd) (model : value1 StringMap.t) : cmd =
   (* Printf.printf "FIXUP WITH MODEL: %s\n%!\n" (string_of_map model); *)
   match real with
   | Skip -> Skip
-  | SetLoc l -> SetLoc l
   | Assign (f, v) -> Assign(f, fixup_val model v)
   | Assert t -> Assert (fixup_test model t)
   | Assume t -> Assume (fixup_test model t)
@@ -535,7 +511,6 @@ let implements fvs logical linst ledit real pinst =
 let rec get_schema_of_table name phys =
   match phys with
   | Skip 
-    | SetLoc _
     | Assume _
     | Assert _
     | Assign _
@@ -664,6 +639,6 @@ let synthesize_edit ?fvs:(fvs=[]) ?hints:(hints=None)
     (string_of_cmd (apply_inst `NoHoles pinst phys_pipeline |> fst));
   print_instance "Logical" linst;
   print_instance "Physical" pinst;
-  synthesize ~fvs ~gas ~hints (SetLoc 0 %:% log_pipeline) linst ledit
-    (SetLoc 0 %:% phys_pipeline) pinst
-       
+  synthesize ~fvs ~gas ~hints (log_pipeline) linst ledit
+    (phys_pipeline) pinst
+    

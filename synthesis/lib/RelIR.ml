@@ -188,7 +188,6 @@ let rec satOneRow keys t b  =
   | Or (a,b) -> satOneRow keys t a && satOneRow keys t b
   | Eq (x, y) -> evalRel keys t x = evalRel keys t y
   | Lt (x, y) -> evalRel keys t x = evalRel keys t y
-  | LocEq _ -> failwith "Error :: Don't know how to evaluate location in a table"
   | Member _ -> failwith " Error (Unimplemented) :: Membership Evaluation"
                          
                   
@@ -326,7 +325,6 @@ let rec test_to_valuation (t : test) : (string * expr1) list option =
   | Or _ -> failwith "cannot convert a disjunction into a valuation"
   | Neg _ -> failwith "cannot convert a negation into a valuation"
   | Lt _ -> failwith "cannot convert a < into a valuation"
-  | LocEq _ -> failwith "locations are deprecated"
   | Member _ -> failwith "membership is deprecated"
 
 let compute_eq_cond (u : (string * expr1) list option) (v : (string * expr1) list option) =

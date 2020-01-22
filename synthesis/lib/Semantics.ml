@@ -38,12 +38,6 @@ let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   match cond with
   | True -> true
   | False -> false
-  | LocEq testLoc ->    
-    (* Printf.printf "\tTESTING LOCATION: %d\n%!" testLoc; *)
-    begin match snd pkt_loc with
-         | None -> false
-         | Some l -> (l = testLoc)
-    end
   | Neg (cond) -> not (check_test cond pkt_loc)
   | And (a, b) -> binopt (&&) a b
   | Or (a, b) -> binopt (||) a b
@@ -74,9 +68,6 @@ let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packe
   else match cmd with
        | Skip ->
           Some (pkt_loc, Skip)
-       | SetLoc i ->
-          (* Printf.printf "\tSetting Loc to %d\n" i; *)
-          Some ((pkt, Some i), SetLoc i)
        | Assign (f, e) ->
           Some ((Packet.set_field_of_expr1 pkt f e, loc_opt), Assign (f, e))
        | Assert (t) ->
@@ -98,7 +89,7 @@ let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packe
               | Ordered ->
                Printf.printf "[EVAL (%d)] Skipping selection, no match for %s\n"
                  (gas)
-                 (string_of_test (Packet.to_test pkt %&% LocEq (Option.value loc_opt ~default:(-100))));
+                 (string_of_test (Packet.to_test pkt));
                (True, Skip, List.length selects)
           in
           let (t, a, _) = find_match pkt_loc selects ~default in
@@ -123,9 +114,6 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) inst (pkt_loc : Packet.located
   else match cmd with
        | Skip ->
           (pkt_loc, StringMap.empty)
-       | SetLoc i ->
-          (* Printf.printf "\tSetting Loc to %d\n" i; *)
-          ((pkt, Some i), StringMap.empty)
        | Assign (f, e) ->
           ((Packet.set_field_of_expr1 pkt f e, loc_opt), StringMap.empty)
        | Assert t ->
@@ -151,7 +139,7 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) inst (pkt_loc : Packet.located
               | Ordered ->
                Printf.printf "[EVAL (%d)] Skipping selection, no match for %s\n"
                  (gas)
-                 (string_of_test (Packet.to_test pkt %&% LocEq (Option.value loc_opt ~default:(-100))));
+                 (string_of_test (Packet.to_test pkt));
                (True, Skip, List.length selects)
           in
           let (_, a, _) = find_match pkt_loc selects ~default in

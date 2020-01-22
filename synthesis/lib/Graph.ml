@@ -54,7 +54,6 @@ let rec split_test_on_loc test =
        ^ (string_of_test test) ^")")
   | True -> (None, True)
   | False -> (None, False)
-  | LocEq l -> (Some l, True)
   | Eq (v, v') -> (None, mkEq v v')
   | Lt (v, v') -> (None, mkLt v v')
   | Member (v, set) -> (None, Member (v, set))
@@ -74,7 +73,6 @@ let rec split_cmd_on_loc (cmd:cmd) : (cmd * int option) =
   match cmd with
   | While _ -> failwith "cannot handle while nested under select"
   | Select _ -> failwith "Cannot handle nested selects"
-  | SetLoc l -> (Skip, Some l)
   | Assign _
     | Skip
     | Assert _
@@ -113,7 +111,7 @@ let ordered_selects ss =
        
 let rec get_selects (e : Ast.cmd) =
   match e with
-  | Skip | SetLoc _ | Assign _ | Assert _ | Assume _ | Apply _ -> []
+  | Skip | Assign _ | Assert _ | Assume _ | Apply _ -> []
   | While (_, body) -> get_selects body
   | Seq (firstdo, thendo) -> get_selects firstdo @ get_selects thendo
   | Select (styp, ss) ->
