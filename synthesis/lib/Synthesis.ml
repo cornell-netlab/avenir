@@ -2,7 +2,6 @@ open Core
 open Ast
 open Packet
 open Semantics
-open Graph
 open Prover
 open Manip
 open Util
@@ -84,19 +83,6 @@ let rec apply_inst tag ?cnt:(cnt=0) inst prog : (cmd * int) =
 (* let symbolize x = x ^ "_SYMBOLIC" *)
 (* let unsymbolize = String.chop_suffix_exn ~suffix:"_SYMBOLIC" *)
 let is_symbolic = String.is_suffix ~suffix:"_SYMBOLIC"
-           
-
-(* Computes the traces between two points in graph *)
-let find_traces (graph:graph) (in_loc : int) (out_loc : int) =
-  let traces = get_all_paths_between graph in_loc out_loc in
-  let _ = Printf.printf "ALL PATHS from %d to %d ;\n" in_loc out_loc;
-          List.iter traces ~f:(fun tr ->
-              Printf.printf "\t[ ";
-              List.iter tr ~f:(Printf.printf "%d ");
-              Printf.printf "]\n%!") in
-  traces
-
-
 
 (** [complete] A completion takes a cmd to which a substitution has
    already been applied and replaces the remaining holes with integers
@@ -120,6 +106,8 @@ let complete_inner ~falsify (cmd : cmd) =
     | Neg b -> !%(complete_aux_test ~falsify b)
     | And (a, b) -> complete_aux_test ~falsify a %&% complete_aux_test ~falsify b
     | Or (a, b) -> complete_aux_test ~falsify a %+% complete_aux_test ~falsify b
+    | Impl (a, b) -> complete_aux_test ~falsify a %=>% complete_aux_test ~falsify b
+    | Iff (a, b) -> complete_aux_test ~falsify a %<=>% complete_aux_test ~falsify b
     | Eq (Hole1 (_,sz), x) | Eq (x, Hole1 (_,sz)) -> hole_replace x sz (%=%)
     | Lt (Hole1 (_,sz), x) | Lt (x, Hole1 (_,sz)) -> hole_replace x sz (%<%)
     | Eq _ | Lt _ -> t
@@ -210,8 +198,10 @@ let rec contains_inst_var e =
 let rec remove_inst_test b =
   match b with
   | True | False -> b
-  | And(b1,b2) -> remove_inst_test b1 %&% remove_inst_test b2
-  | Or (b1,b2) -> remove_inst_test b1 %+% remove_inst_test b2
+  | And  (b1,b2) -> remove_inst_test b1 %&% remove_inst_test b2
+  | Or   (b1,b2) -> remove_inst_test b1 %+% remove_inst_test b2
+  | Impl (b1,b2) -> remove_inst_test b1 %=>% remove_inst_test b2
+  | Iff  (b1,b2) -> remove_inst_test b1 %<=>% remove_inst_test b2
   | Neg b1 -> !%(remove_inst_test b1)
   | Eq(e1,e2) -> if contains_inst_var e1 || contains_inst_var e2
                  then True
@@ -423,8 +413,10 @@ let rec fixup_test (model : value1 StringMap.t) (t : test) : test =
   match t with
   | True | False -> t
   | Neg p -> mkNeg (fixup_test model p)
-  | And(p, q) -> binop mkAnd (fixup_test model) p q
-  | Or(p, q) -> binop mkOr (fixup_test model) p q
+  | And  (p, q) -> binop (%&%)   (fixup_test model) p q
+  | Or   (p, q) -> binop (%+%)   (fixup_test model) p q
+  | Impl (p, q) -> binop (%=>%)  (fixup_test model) p q
+  | Iff  (p, q) -> binop (%<=>%) (fixup_test model) p q
   | Eq (v, w) -> binop mkEq (fixup_val model) v w
   | Lt (v, w) -> binop mkLt (fixup_val model) v w
   | Member(v,set) -> mkMember (fixup_val model v) (fixup_val2 model set)
@@ -461,8 +453,6 @@ and fixup (real:cmd) (model : value1 StringMap.t) : cmd =
             , List.map acts ~f:(fun a -> fixup a model)
             , fixup dflt model)
 
-let unroll_fully c = unroll (diameter c) c 
-
 let symbolic_pkt fvs = 
   List.fold fvs ~init:True
     ~f:(fun acc_test (var,sz) ->
@@ -478,34 +468,38 @@ let symb_wp ?fvs:(fvs=[]) cmd =
   |> symbolic_pkt
   |> wp cmd
   
-let implements fvs logical linst ledit real pinst =
+let implements _ logical linst ledit real pinst =
   (* let _ = Printf.printf "IMPLEMENTS on\n%!    ";
    *         List.iter fvs ~f:(fun (x,_) -> Printf.printf " %s" x);
    *         Printf.printf "\n%!" *)
   (* in *)
   let u_log,_ = logical |> apply_inst `NoHoles (apply_edit linst ledit)  in
   let u_rea,_ = real |> apply_inst `NoHoles pinst in
-  let st_log = Time.now () in
-  let log_wp  = symb_wp u_log ~fvs in
-  let log_time = Time.(diff (now()) st_log) in
-  let st_real = Time.now () in
-  let real_wp = symb_wp u_rea ~fvs in
-  let real_time = Time.(diff (now()) st_real) in
+  (* let st_log = Time.now () in
+   * let log_wp  = symb_wp u_log ~fvs in
+   * let log_time = Time.(diff (now()) st_log) in
+   * let st_real = Time.now () in
+   * let real_wp = symb_wp u_rea ~fvs in
+   * let real_time = Time.(diff (now()) st_real) in *)
   (* Printf.printf "\n==== Checking Implementation =====\n%!\nLOGICAL \
    *                SPEC:\n%s\n\nREAL SPEC: \n%s\n\n%!"
    *   (string_of_test log_wp)
    *   (string_of_test real_wp); *)
-  if log_wp = real_wp then Printf.printf "theyre syntactically equal\n%!";
-  let condition = log_wp %<=>% real_wp in
+  (* if log_wp = real_wp then Printf.printf "theyre syntactically equal\n%!";
+   * let condition = log_wp %<=>% real_wp in *)
+  let st_mk_cond = Time.now () in
+  let condition = equivalent u_log u_rea in
+  let nd_mk_cond = Time.now () in
+  let mk_cond_time = Time.diff nd_mk_cond st_mk_cond in
   let model_opt, z3time = check_valid condition in
   let pkt_opt = match model_opt with
     | None  -> Printf.printf "++++++++++valid+++++++++++++\n%!";
                `Yes
     | Some x ->
-       let pce = Packet.from_CE x in
+       let pce = Packet.from_CE x |> Packet.un_SSA in
        Printf.printf "----------invalid----------------\n%! CE = %s\n%!" (Packet.string__packet pce)
      ; `NoAndCE pce
-  in pkt_opt, z3time, log_time, real_time, num_nodes_in_test condition
+  in pkt_opt, z3time, mk_cond_time, mk_cond_time, num_nodes_in_test condition
 
 
 let rec get_schema_of_table name phys =

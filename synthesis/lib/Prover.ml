@@ -98,6 +98,8 @@ let rec mkZ3Test (rhoVars : (string * size) list) (t : test) ctx deBruijn quanti
                           
   | Or (left, right) -> Z3.Boolean.mk_or ctx   [(z3_test left); (z3_test right)]
   | And (left, right) -> Z3.Boolean.mk_and ctx [(z3_test left); (z3_test right)]
+  | Impl (left, right) -> Z3.Boolean.mk_implies ctx (z3_test left) (z3_test right)
+  | Iff (left, right) -> Z3.Boolean.mk_eq ctx (z3_test left) (z3_test right)
   | Neg tt -> Z3.Boolean.mk_not ctx (z3_test tt) 
 
 

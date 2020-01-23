@@ -41,6 +41,8 @@ let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   | Neg (cond) -> not (check_test cond pkt_loc)
   | And (a, b) -> binopt (&&) a b
   | Or (a, b) -> binopt (||) a b
+  | Impl(a, b) -> check_test (!%(a) %+% b) pkt_loc
+  | Iff (a, b) -> check_test ((!%(a) %+% b) %&% (!%b %+% a)) pkt_loc
   | Eq (e,e') -> binope (equal_values1) e e'
   | Lt (e,e') -> binope (lt_values1) e e'
   | Member (e, set) -> member pkt_loc e set
