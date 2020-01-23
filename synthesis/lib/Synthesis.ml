@@ -468,34 +468,38 @@ let symb_wp ?fvs:(fvs=[]) cmd =
   |> symbolic_pkt
   |> wp cmd
   
-let implements fvs logical linst ledit real pinst =
+let implements _ logical linst ledit real pinst =
   (* let _ = Printf.printf "IMPLEMENTS on\n%!    ";
    *         List.iter fvs ~f:(fun (x,_) -> Printf.printf " %s" x);
    *         Printf.printf "\n%!" *)
   (* in *)
   let u_log,_ = logical |> apply_inst `NoHoles (apply_edit linst ledit)  in
   let u_rea,_ = real |> apply_inst `NoHoles pinst in
-  let st_log = Time.now () in
-  let log_wp  = symb_wp u_log ~fvs in
-  let log_time = Time.(diff (now()) st_log) in
-  let st_real = Time.now () in
-  let real_wp = symb_wp u_rea ~fvs in
-  let real_time = Time.(diff (now()) st_real) in
+  (* let st_log = Time.now () in
+   * let log_wp  = symb_wp u_log ~fvs in
+   * let log_time = Time.(diff (now()) st_log) in
+   * let st_real = Time.now () in
+   * let real_wp = symb_wp u_rea ~fvs in
+   * let real_time = Time.(diff (now()) st_real) in *)
   (* Printf.printf "\n==== Checking Implementation =====\n%!\nLOGICAL \
    *                SPEC:\n%s\n\nREAL SPEC: \n%s\n\n%!"
    *   (string_of_test log_wp)
    *   (string_of_test real_wp); *)
-  if log_wp = real_wp then Printf.printf "theyre syntactically equal\n%!";
-  let condition = log_wp %<=>% real_wp in
+  (* if log_wp = real_wp then Printf.printf "theyre syntactically equal\n%!";
+   * let condition = log_wp %<=>% real_wp in *)
+  let st_mk_cond = Time.now () in
+  let condition = equivalent u_log u_rea in
+  let nd_mk_cond = Time.now () in
+  let mk_cond_time = Time.diff nd_mk_cond st_mk_cond in
   let model_opt, z3time = check_valid condition in
   let pkt_opt = match model_opt with
     | None  -> Printf.printf "++++++++++valid+++++++++++++\n%!";
                `Yes
     | Some x ->
-       let pce = Packet.from_CE x in
+       let pce = Packet.from_CE x |> Packet.un_SSA in
        Printf.printf "----------invalid----------------\n%! CE = %s\n%!" (Packet.string__packet pce)
      ; `NoAndCE pce
-  in pkt_opt, z3time, log_time, real_time, num_nodes_in_test condition
+  in pkt_opt, z3time, mk_cond_time, mk_cond_time, num_nodes_in_test condition
 
 
 let rec get_schema_of_table name phys =

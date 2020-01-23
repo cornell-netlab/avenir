@@ -91,7 +91,16 @@ let from_CE (model : value1 StringMap.t) : t =
         let key = unsymbolize key in
         set_field pkt key data)
 
-        
+let un_SSA (pkt : t) : t =
+  StringMap.fold pkt ~init:empty
+    ~f:(fun ~key ~data acc_pkt ->
+      match String.rsplit2 key ~on:'$' with
+      | None ->
+         StringMap.set acc_pkt ~key ~data
+      | Some (key', _) ->
+         StringMap.set acc_pkt ~key:key' ~data
+    )
+                 
         
 let mk_packet_from_list (assoc : (string * value1) list) : t =
   List.fold assoc ~init:empty
