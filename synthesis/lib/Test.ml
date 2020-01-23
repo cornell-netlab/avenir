@@ -578,7 +578,7 @@ let%test _ =
   let log_inst =
     StringMap.of_alist_exn [ ]
   in
-  let edit = ("log", ([mkVInt (2,2)], 2)) in
+  let edit = ("log", ([Exact (2,2)], 2)) in
   let phys_inst =
     StringMap.of_alist_exn [] in
   ignore(synthesize_edit ~fvs:[("dst",2); ("out",2); ("x", 2)] log_line phys_line log_inst phys_inst edit);

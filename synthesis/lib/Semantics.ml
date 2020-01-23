@@ -109,6 +109,12 @@ let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packe
        | Apply _ -> failwith "Cannot Evaluate table -- need configuration"
 
 
+let encode_match k m =
+  match m with 
+  | Exact (x,sz) -> (Var1 k %=% mkVInt(x,sz))
+  | Between (lo, hi,sz) -> ((Var1 k %<=% mkVInt(hi,sz)) %&% (Var1 k %<=% mkVInt(lo,sz)))
+                                 
+
 let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) inst (pkt_loc : Packet.located) : (Packet.located * int StringMap.t) =
   let (pkt, loc_opt) = pkt_loc in
   if gas = 0
@@ -153,8 +159,8 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) inst (pkt_loc : Packet.located
               ~f:(fun rst (matches, action) ->
                 match rst  with
                 | None -> 
-                   let cond = List.fold2_exn keys matches ~init:True ~f:(fun acc k m->
-                                  acc %&% (Var1 k %=% m)
+                   let cond = List.fold2_exn keys matches ~init:True ~f:(fun acc k m ->
+                                  acc %&% encode_match k m
                                 ) in
                    if check_test cond pkt_loc
                    then Some action

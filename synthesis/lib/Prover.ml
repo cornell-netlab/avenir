@@ -88,8 +88,8 @@ let rec mkZ3Test (rhoVars : (string * size) list) (t : test) ctx deBruijn quanti
   match t with 
   | True -> Z3.Boolean.mk_true ctx
   | False -> Z3.Boolean.mk_false ctx
-  | Eq (left, right) -> Z3.Boolean.mk_eq ctx   (z3_value left) (z3_value right)
-  | Lt (left, right) -> Z3.Arithmetic.mk_lt ctx   (z3_value left) (z3_value right)
+  | Eq (left, right) -> Z3.Boolean.mk_eq ctx (z3_value left) (z3_value right)
+  | Lt (left, right) -> Z3.BitVector.mk_ult ctx (z3_value left) (z3_value right)
   | Member (expr, set) ->
      let z = Z3.Z3Array.mk_select ctx (z3_value2 set) (z3_value expr) in
      let () = Printf.printf "Making Z3 Membership query for \n \t %s \n%!" (string_of_test t) in
@@ -153,12 +153,16 @@ let initSolver typ solver ctx test =
 
 
 let parse_int str =
-  let open String in
-  let parse_z3string str = int_of_string ("0" ^ chop_prefix_exn str ~prefix:"#")in
-  if is_prefix str ~prefix:"#"
-  then if is_prefix str ~prefix:"#b"
-       then (parse_z3string str, (String.length str -2))
-       else (parse_z3string str, (String.length str - 2 * 4))
+  let parse_z3string str = int_of_string ("0" ^ String.chop_prefix_exn str ~prefix:"#")in
+  if String.is_prefix str ~prefix:"#"
+  then if String.is_prefix str ~prefix:"#b"
+       then (parse_z3string str, (String.length str - 2))
+       else
+         let nchars = String.length str - 2 in
+         if nchars <= 0
+         then failwith ("Error parsing int " ^ str ^ " length is " ^ string_of_int nchars)
+         else
+         (parse_z3string str, ((String.length str - 2) * 4))
   else (int_of_string str, int_of_float((2. ** (float_of_int (int_of_string str)))) -1)
 (*
  Converts a Z3 expression to Motley expression 
@@ -202,7 +206,7 @@ let check typ =
   let st = Time.now() in
   let _ = Z3.Solver.push mySolver;
           initSolver typ mySolver context test in
-  let _ = Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in
+  (* let _ = Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in *)
   let response = Z3.Solver.check mySolver [] in
   let dur = Time.(diff (now()) st) in
   (* Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver); *)

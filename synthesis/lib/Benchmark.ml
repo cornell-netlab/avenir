@@ -15,17 +15,17 @@ let tbl = Printf.sprintf "tbl%d"
 let rec mk_pipeline n =
   if n = 0 then [] else
     (tbl n
-    , [("k_" ^tbl n, 2)]
-    , List.fold [0;1;2;3] ~init:[] ~f:(fun acc i -> (("x_"^tbl n) %<-% mkVInt (i,2)) :: acc)
-    , ("x_"^tbl n) %<-% mkVInt (0,2)
+    , [("k_" ^tbl n, 8)]
+    , List.fold (range_ex 0 256)  ~init:[] ~f:(fun acc i -> (("x_"^tbl n) %<-% mkVInt (i,8)) :: acc)
+    , ("x_"^tbl n) %<-% mkVInt (0,8)
     ) :: mk_pipeline (n-1)
 
 
-let rec generate_n_insertions length n generated : (string * (expr1 list * int)) list =
+let rec generate_n_insertions length n generated : edit list =
   if n = 0 then [] else
     let rec loop_keys _ =
       let i = Random.int length + 1 in
-      let key = mkVInt (Random.int 4, 2) in
+      let key = Exact (Random.int 256, 8) in
       if List.exists generated ~f:((=) (tbl i, key))
       then loop_keys ()
       else (tbl i, key)
@@ -45,7 +45,7 @@ let reorder_benchmark length max_inserts =
   let to_cmd line =  List.((line >>| fun t -> Apply t)
                            |> reduce_exn ~f:(%:%)) in
   (* let hints = Some(fun vMap -> (\*[vMap]*\)
-   *                 [List.fold ~init:vMap (range_ex 1 (length + 2))
+   *                 [List.fold ~init:vMap (range_ex 1 (length + 8))
    *                   ~f:(fun acc i ->
    *                     StringMap.set acc ~key:("?AddRowTo" ^ tbl i)
    *                       ~data:(mkVInt(1,1))
@@ -72,10 +72,10 @@ let reorder_benchmark length max_inserts =
    * let hints h = Some h in *)
   let fvs = range_ex 1 (length + 1)
             |> List.map ~f:(fun i ->
-                   [("k_" ^tbl i, 2)
-                   ; (symbolize("k_" ^tbl i),2)
-                   ; (symbolize("x_" ^tbl i), 2)
-                   (* ; ("?ActIn"^tbl i, 2) *)
+                   [("k_" ^tbl i, 8)
+                   ; (symbolize("k_" ^tbl i),8)
+                   ; (symbolize("x_" ^tbl i), 8)
+                   (* ; ("?ActIn"^tbl i, 8) *)
                  ])
             |> List.join
   in

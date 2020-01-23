@@ -7,11 +7,49 @@ open Manip
 open Util
 
 
-       
-let apply_edit inst (tbl, edit) =
-  StringMap.add_multi inst ~key:tbl  ~data:edit
+let rec widen_matches (ts : match_expr list) (hs : match_expr list) : match_expr list option =
+    match ts, hs with
+    | [], [] -> Some []
+    | _, [] | [],_ -> failwith "different lengths!"
+    | t::ts, h::hs ->
+       let rec_cons m = Option.(widen_matches ts hs >>| mkCons m) in
+       match t, h with
+       | Exact (i,sz), Exact (j,_) ->
+          if i = j
+          then Exact (i,sz) |> rec_cons
+          else if i = j + 1 || j = i + 1
+          then Between (min i j, max i j, sz) |> rec_cons
+          else None
+       | Exact(i,sz), Between (lo, hi, _)
+         | Between (lo, hi, _), Exact(i,sz)
+         -> if i >= lo-1 && i <= hi + 1
+            then Between (min i lo, max i hi, sz) |> rec_cons
+            else None
+       | Between(lo,hi,sz), Between (lo', hi', _)
+         -> if hi >= lo' - 1 && lo <= hi' + 1
+            then Between (min lo lo', max hi hi', sz) |> rec_cons
+            else None
+
+let rec insert_minimally (rows : row list) (row : row) : row list =
+  match rows with
+  | [] -> [row]
+  | (m,a)::rows' ->
+     let (m', a') = row in
+     if a' = a
+     then match widen_matches m m' with
+              | None -> (m,a) :: insert_minimally rows' row
+              | Some m'' -> (m'',a) :: rows'
+     else (m,a) :: insert_minimally rows' row
+                       
+let apply_edit (inst : instance) ((tbl, row) : edit) =
+  StringMap.update inst tbl
+    ~f:(fun rows_opt ->
+      match rows_opt with
+      | None -> [row]
+      | Some rows ->
+         insert_minimally rows row)
   
-let rec apply_inst tag ?cnt:(cnt=0) inst prog : (cmd * int) =
+let rec apply_inst tag ?cnt:(cnt=0) (inst : instance) (prog : cmd) : (cmd * int) =
   match prog with
   | Skip 
     | Assign _
@@ -47,8 +85,7 @@ let rec apply_inst tag ?cnt:(cnt=0) inst prog : (cmd * int) =
             ~f:(fun acc (matches, action) ->
               let t = List.fold2_exn keys matches
                  ~init:True
-                 ~f:(fun acc x m ->
-                   (acc %&% (Var1 x %=% m))) in
+                 ~f:(fun acc x m -> (acc %&% encode_match x m)) in
               if action >= List.length acts then
                 []
               else
@@ -468,7 +505,7 @@ let symb_wp ?fvs:(fvs=[]) cmd =
   |> symbolic_pkt
   |> wp cmd
   
-let implements _ logical linst ledit real pinst =
+let implements _ (logical : cmd) (linst : instance) (ledit : edit) (real : cmd) (pinst : instance) =
   (* let _ = Printf.printf "IMPLEMENTS on\n%!    ";
    *         List.iter fvs ~f:(fun (x,_) -> Printf.printf " %s" x);
    *         Printf.printf "\n%!" *)
@@ -522,8 +559,8 @@ let rec get_schema_of_table name phys =
 
 
 
-let fixup_edit match_model action_map phys (pinst : (expr1 list * int) list Util.StringMap.t) =
-  let mk_new_row tbl_name act =
+let fixup_edit match_model action_map phys (pinst : instance) : instance =
+  let mk_new_row tbl_name act : row list =
     match get_schema_of_table tbl_name phys with
     | None -> failwith ("Couldnt find keys for table " ^ tbl_name)
     | Some (ks, _, _) ->
@@ -533,7 +570,8 @@ let fixup_edit match_model action_map phys (pinst : (expr1 list * int) list Util
              match acc, fixup_val match_model (Hole1("?"^v,sz)) with
              | None, _ -> None
              | _, Hole1 _ -> None
-             | Some ks, v -> Some (ks @ [v])
+             | Some ks, Value1(Int(i,sz)) -> Some (ks @ [Exact (i,sz)])
+             | _, _ -> failwith "got something that wasn't a model"
            ) in
        match keys_holes with
        | None -> []
@@ -543,7 +581,7 @@ let fixup_edit match_model action_map phys (pinst : (expr1 list * int) list Util
       StringMap.update acc tbl_name
         ~f:(function
           | None -> mk_new_row tbl_name act
-          | Some rows -> rows @ mk_new_row tbl_name act
+          | Some rows -> List.(mk_new_row tbl_name act >>= insert_minimally rows)
 
         )
     )
@@ -552,9 +590,9 @@ let fixup_edit match_model action_map phys (pinst : (expr1 list * int) list Util
 let solve_concrete
       ?fvs:(fvs = [])
       ~hints ?packet:(packet=None)
-      (logical : cmd) linst edit
-      (phys : cmd) pinst
-    : (((expr1 list * int) list) StringMap.t * Time.Span.t * int * Time.Span.t) =
+      (logical : cmd) (linst : instance) (edit : edit)
+      (phys : cmd) (pinst : instance)
+    : (instance * Time.Span.t * int * Time.Span.t) =
   let values = multi_ints_of_cmd logical |> List.map ~f:(fun x -> Int x) in
   let pkt = packet |> Option.value ~default:(Packet.generate fvs ~values) in
   match get_one_model_edit ~fvs ~hints pkt logical linst edit phys pinst with
@@ -564,7 +602,6 @@ let solve_concrete
      |> failwith
   | Some (model, action_map), z3time, ncalls, wp_time ->
      let pinst' = fixup_edit model action_map phys pinst in
-     print_instance "NEW Physical" pinst';
      pinst', z3time, ncalls, wp_time
   
 let cegis ?fvs:(fvs = []) ~hints ?gas:(gas=1000) (logical : cmd) linst ledit (real : cmd) pinst =
@@ -625,14 +662,12 @@ let synthesize ?fvs:(fvs=[]) ?hints:(hints = None) ?gas:(gas = 1000)
 let synthesize_edit ?fvs:(fvs=[]) ?hints:(hints=None)
       ?gas:(gas=1000)
       (log_pipeline : cmd) (phys_pipeline : cmd)
-      (linst :  (expr1 list * int) list StringMap.t)
-      (pinst : (expr1 list * int) list StringMap.t)
-      (ledit : (string * (expr1 list * int))) =  
+      (linst : instance)
+      (pinst : instance)
+      (ledit : edit) =  
   Printf.printf "Logical:\n%s\n\nPhysical:\n%s\n"
     (string_of_cmd (apply_inst `NoHoles (apply_edit linst ledit) log_pipeline |> fst))
     (string_of_cmd (apply_inst `NoHoles pinst phys_pipeline |> fst));
-  print_instance "Logical" linst;
-  print_instance "Physical" pinst;
   synthesize ~fvs ~gas ~hints (log_pipeline) linst ledit
     (phys_pipeline) pinst
     

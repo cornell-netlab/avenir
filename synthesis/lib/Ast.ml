@@ -2,6 +2,15 @@ open Core
 open Util
 
 type size = int
+              
+type match_expr =
+  | Exact of int * size
+  | Between of int * int * size 
+
+type row = match_expr list * int
+type instance = row list StringMap.t
+type edit = string * row
+                             
 let enable_smart_constructors = true
        
 type value1 =
