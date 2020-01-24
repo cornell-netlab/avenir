@@ -125,12 +125,13 @@ let editSynth : Command.t =
 module Bench = struct
   let spec = Command.Spec.(
       empty
+      +> anon ("varsize" %: int)
       +> anon ("num_tables" %: int)
       +> anon ("max_inserts" %: int))
    
 
-  let run num_tables max_inserts () =
-    Benchmark.reorder_benchmark num_tables max_inserts
+  let run varsize num_tables max_inserts () =
+    Benchmark.reorder_benchmark varsize num_tables max_inserts
 end
     
 

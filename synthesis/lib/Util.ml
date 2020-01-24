@@ -48,6 +48,10 @@ let rec difference (xs : 'a list) (ys : 'a list) : 'a list =
      else
        x :: difference xs' ys
 
+(*computes x^y*)                       
+let pow (x : int) (y : int) : int =
+  float_of_int(x) ** float_of_int(y) |> int_of_float
+                                
 let log2 (x : int) : int =
   int_of_float(Core.log (float_of_int x) /. Core.log (float_of_int 2))
 
