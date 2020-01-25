@@ -1,17 +1,31 @@
 open Core
 open Util
 
+let enable_smart_constructors = true
+
+       
 type size = int
               
 type match_expr =
   | Exact of int * size
   | Between of int * int * size 
-
+let string_of_match m =
+  match m with 
+  | Exact (i,s) -> Printf.sprintf "%d#%d" i s
+  | Between (lo,hi,s) -> Printf.sprintf "[%d,%d]#%d" lo hi s
+                                       
+                             
 type row = match_expr list * int
+let string_of_row (mtchs, actid) =
+  Printf.sprintf "%s   ------> %d"
+    (List.fold mtchs ~init:"" ~f:(fun acc m -> Printf.sprintf "%s, %s" acc (string_of_match m)))
+    actid
+
 type instance = row list StringMap.t
 type edit = string * row
+let string_of_edit (nm, row) =
+  Printf.sprintf "%s <++ %s" nm (string_of_row row)
                              
-let enable_smart_constructors = true
        
 type value1 =
   | Int of (int * size)
@@ -372,8 +386,8 @@ let (%<>%) v v' = Neg(v %=% v')
 
 let (%<%) = mkLt
 let (%>%) e e' = e' %<% e                
-let (%<=%) e e' = !%(e' %>% e)
-let (%>=%) e e' = !%(e' %<% e)
+let (%<=%) e e' = !%(e %>% e')
+let (%>=%) e e' = !%(e %<% e')
 
 let rec mkMember el set =
   match set with
@@ -411,7 +425,10 @@ let rec string_of_test t =
   | Iff (left, right) -> "(" ^ string_of_test left ^ " <==> " ^ string_of_test right ^ ")\n"
   | Or (left, right) -> "(" ^ string_of_test left ^ "\n || " ^ string_of_test right ^ ")"
   | And (left, right) -> "(" ^ string_of_test left ^ "&&" ^ string_of_test right ^ ")"
-  | Neg t -> "~(" ^ string_of_test t ^ ")"
+  | Neg (Lt(left, right)) ->
+     Printf.sprintf "(%s <= %s)" (string_of_expr1 right) (string_of_expr1 left)
+  | Neg t ->
+     "~(" ^ string_of_test t ^ ")"
 
 let rec sexp_string_of_test t =
   let binop opname left right recfun : string=

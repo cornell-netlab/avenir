@@ -279,6 +279,7 @@ let good_execs fvs c =
   let init_sub = List.fold fvs ~init:StringMap.empty ~f:(fun sub (v,sz) ->
                      StringMap.set sub ~key:v ~data:(0,sz)
                    ) in
+  Printf.printf "active : \n %s \n" (string_of_cmd c);
   let merged_sub, passive_c = passify init_sub c  in
   Printf.printf "passive : \n %s\n" (string_of_cmd passive_c);
   (merged_sub, good_wp passive_c)
@@ -354,20 +355,20 @@ let equivalent l p =
   let pin = inits sub_p in
   let lout = finals sub_l in
   let pout = finals sub_p in
-  let _ = Printf.printf "lin: ";
-          List.iter lin ~f:(fun (v, _) -> Printf.printf " %s" v);
-          Printf.printf "\n";
-          Printf.printf "pin: ";
-          List.iter pin ~f:(fun (v, _) -> Printf.printf " %s" v);
-          Printf.printf "\n"
-  in
+  (* let _ = Printf.printf "lin: ";
+   *         List.iter lin ~f:(fun (v, _) -> Printf.printf " %s" v);
+   *         Printf.printf "\n";
+   *         Printf.printf "pin: ";
+   *         List.iter pin ~f:(fun (v, _) -> Printf.printf " %s" v);
+   *         Printf.printf "\n"
+   * in *)
   let in_eq = zip_eq_exn lin pin in
   let out_eq = zip_eq_exn lout pout in
-  Printf.printf "===Verifying===\n%s\nand\n%s\nand\n%s\nimplies\n%s"
-    (string_of_test gl)
-    (string_of_test gp)
-    (string_of_test in_eq)
-    (string_of_test out_eq);
+  (* Printf.printf "===Verifying===\n%s\nand\n%s\nand\n%s\nimplies\n%s"
+   *   (string_of_test gl)
+   *   (string_of_test gp)
+   *   (string_of_test in_eq)
+   *   (string_of_test out_eq); *)
   (gl %&% gp %&% in_eq) %=>% out_eq
 
     

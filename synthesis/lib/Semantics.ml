@@ -112,7 +112,7 @@ let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packe
 let encode_match k m =
   match m with 
   | Exact (x,sz) -> (Var1 k %=% mkVInt(x,sz))
-  | Between (lo, hi,sz) -> ((Var1 k %<=% mkVInt(hi,sz)) %&% (Var1 k %<=% mkVInt(lo,sz)))
+  | Between (lo, hi,sz) -> (Var1 k %>=% mkVInt(lo,sz)) %&% (Var1 k %<=% mkVInt(hi,sz))
                                  
 
 let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) inst (pkt_loc : Packet.located) : (Packet.located * int StringMap.t) =

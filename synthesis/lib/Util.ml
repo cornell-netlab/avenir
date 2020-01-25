@@ -1,6 +1,7 @@
 open Core
 
 module StringMap = Map.Make (String)
+module IntMap = Map.Make(Int)
 
 (* Applies f to every element in the list and then combines them pairwise using c.
  * Roughly equivalent to [map exprs f |> fold ~init ~f:c], except that [init] is optional
@@ -80,3 +81,6 @@ let rec range_ex lo hi =
   if lo = hi then []
   else
   lo :: range_ex (lo + 1) hi
+
+let inj_l x y = (y, x)
+let inj_r x y = (x, y)                  

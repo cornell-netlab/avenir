@@ -5,49 +5,114 @@ open Semantics
 open Prover
 open Manip
 open Util
+       
 
-
-let rec widen_matches (ts : match_expr list) (hs : match_expr list) : match_expr list option =
-    match ts, hs with
-    | [], [] -> Some []
-    | _, [] | [],_ -> failwith "different lengths!"
-    | t::ts, h::hs ->
-       let rec_cons m = Option.(widen_matches ts hs >>| mkCons m) in
-       match t, h with
-       | Exact (i,sz), Exact (j,_) ->
-          if i = j
-          then Exact (i,sz) |> rec_cons
-          else if i = j + 1 || j = i + 1
-          then Between (min i j, max i j, sz) |> rec_cons
-          else None
-       | Exact(i,sz), Between (lo, hi, _)
-         | Between (lo, hi, _), Exact(i,sz)
-         -> if i >= lo-1 && i <= hi + 1
-            then Between (min i lo, max i hi, sz) |> rec_cons
-            else None
-       | Between(lo,hi,sz), Between (lo', hi', _)
-         -> if hi >= lo' - 1 && lo <= hi' + 1
-            then Between (min lo lo', max hi hi', sz) |> rec_cons
-            else None
-
-let rec insert_minimally (rows : row list) (row : row) : row list =
-  match rows with
-  | [] -> [row]
-  | (m,a)::rows' ->
-     let (m', a') = row in
-     if a' = a
-     then match widen_matches m m' with
-              | None -> (m,a) :: insert_minimally rows' row
-              | Some m'' -> (m'',a) :: rows'
-     else (m,a) :: insert_minimally rows' row
+(* let rec widen_matches (ts : match_expr list) (hs : match_expr list) : match_expr list option =
+ *     match ts, hs with
+ *     | [], [] -> Some []
+ *     | _, [] | [],_ -> failwith "different lengths!"
+ *     | t::ts, h::hs ->
+ *        let rec_cons m = Option.(widen_matches ts hs >>| mkCons m) in
+ *        match t, h with
+ *        | Exact (i,sz), Exact (j,_) ->
+ *           if i = j
+ *           then Exact (i,sz) |> rec_cons
+ *           else if i = j + 1 || j = i + 1
+ *           then Between (min i j, max i j, sz) |> rec_cons
+ *           else None
+ *        | Exact(i,sz), Between (lo, hi, _)
+ *          | Between (lo, hi, _), Exact(i,sz)
+ *          -> if i >= lo-1 && i <= hi + 1
+ *             then Between (min i lo, max i hi, sz) |> rec_cons
+ *             else None
+ *        | Between(lo,hi,sz), Between (lo', hi', _)
+ *          -> if hi >= lo' - 1 && lo <= hi' + 1
+ *             then Between (min lo lo', max hi hi', sz) |> rec_cons
+ *             else None
+ * 
+ * (\*ASSUMES ROWS ARE DISJOINT*\)                   
+ * let rec insert_minimally (rows : row list) (row : row) : row list =
+ *   match rows with
+ *   | [] -> [row]
+ *   | (m,a)::rows' ->
+ *      let (m', a') = row in
+ *      if a' = a
+ *      then match widen_matches m m' with
+ *               | None -> (m,a) :: insert_minimally rows' row
+ *               | Some m'' -> (m'',a) :: rows'
+ *      else (m,a) :: insert_minimally rows' row
+ * 
+ * 
+ *                                     
+ * 
+ * let rec make_disjoint_matches novel exists : match_expr list list=
+ *   match exists, novel with
+ *   | [], [] -> [[]]
+ *   | [], _ | _, [] -> failwith "Error different numbers of matches in existing and novel tables!"
+ *   | (ex::exs), (nv::nvs)
+ *     ->
+ *      let cons_rec c = List.(make_disjoint_matches exs nvs >>| mkCons c) in
+ *      match ex, nv with
+ *      |  Exact (i,_), Exact (j, _) ->
+ *          if i = j
+ *          then []
+ *          else cons_rec nv
+ *      | Between (lo, hi, sz), Exact(j,_) ->
+ *         if lo = hi
+ *         then make_disjoint_matches (Exact (lo, sz)::exs) novel
+ *         else if j >= lo && j <= hi
+ *         then []
+ *         else cons_rec nv
+ *      | Exact (i, sz), Between (lo, hi, _) ->
+ *         if lo = hi then
+ *           make_disjoint_matches exists (Exact (lo, sz)::nvs)
+ *         else if i < lo || i > hi
+ *         then cons_rec nv
+ *         else cons_rec (Between (lo, i-1, sz)) @ cons_rec (Between (lo, i + 1, sz))
+ *      | Between(lo,hi,sz), Between(lo',hi',sz') ->
+ *         if lo = hi
+ *         then make_disjoint_matches (Exact (lo, sz)::exs) novel
+ *         else if lo' = hi'
+ *         then make_disjoint_matches exists (Exact (lo', sz')::exs)
+ *         else if hi < lo' || hi' < lo
+ *         then cons_rec nv
+ *         else if hi' <= hi && lo' <= lo (\*nv covered by ex*\)
+ *         then []
+ *         else if hi <= hi' && lo >= lo' (\*ex subinterval of nv*\)
+ *         then cons_rec (Between(lo',lo-1,sz))
+ *              @ cons_rec (Between (hi+1, hi, sz))
+ *         else if hi <= hi' && lo <= lo'
+ *         then cons_rec (Between (hi+1, hi, sz))
+ *         else cons_rec (Between (lo', lo+1, sz))
+ *                        
+ *                         
+ * let make_disjoint_rows (novel : row) (exists : row) : row list =
+ *   let (ex_mtchs, _) = exists in
+ *   let (nv_mtchs, nv_act) = novel in
+ *   let new_rows = List.(make_disjoint_matches nv_mtchs ex_mtchs
+ *                        >>| inj_l nv_act) in
+ *   (\* List.iter new_rows ~f:(fun row -> Printf.printf "  %s\n%!" (string_of_row row)); *\)
+ *   new_rows
+ *   
+ * 
+ * let disjoint_insertions (rows : row list) (new_row : row) =
+ *   if rows = []
+ *   then [new_row]
+ *   else 
+ *     List.(rows >>= make_disjoint_rows new_row) *)
+            
+(* let insert_optimally rows new_row =
+ *   let inserts = disjoint_insertions rows new_row in
+ *   rows @ inserts *)
+                                    
                        
 let apply_edit (inst : instance) ((tbl, row) : edit) =
   StringMap.update inst tbl
     ~f:(fun rows_opt ->
       match rows_opt with
       | None -> [row]
-      | Some rows ->
-         insert_minimally rows row)
+      | Some rows -> row::rows)
+         
   
 let rec apply_inst tag ?cnt:(cnt=0) (inst : instance) (prog : cmd) : (cmd * int) =
   match prog with
@@ -68,28 +133,19 @@ let rec apply_inst tag ?cnt:(cnt=0) (inst : instance) (prog : cmd) : (cmd * int)
            acc @ [(t,c')], cnt'
          ) in
      (mkSelect typ ss, ss_cnt)
-  | Apply (tbl, keys, acts, def) ->
+  | Apply (tbl, keys, acts, default) ->
      let actSize = log2(List.length acts) in
-     let instrument_row t act _  =
-       let ghost = Skip (* Assume(Hole1("?ActIn"^tbl, actSize) %=% mkVInt(id, actSize))*)
-       (* match tag with
-        * | `WithHoles -> Assume(Hole1("?ActIn"^tbl, actSize) %=% mkVInt(id, actSize))
-        * | `NoHoles -> ("?ActIn"^tbl) %<-% mkVInt(id, actSize) *)
-       in
-       (t, ghost
-           %:% act)
-     in
      let selects =
        StringMap.find_multi inst tbl
        |> List.fold ~init:[]
             ~f:(fun acc (matches, action) ->
               let t = List.fold2_exn keys matches
-                 ~init:True
-                 ~f:(fun acc x m -> (acc %&% encode_match x m)) in
+                        ~init:True
+                        ~f:(fun acc x m -> (acc %&% encode_match x m)) in
               if action >= List.length acts then
                 []
               else
-                instrument_row t (List.nth_exn acts action) action
+                (t, (List.nth acts action |> Option.value ~default))
                 :: acc)
      in
      let add_row_hole = Hole1 ("?AddRowTo" ^ tbl, 1) in
@@ -108,10 +164,10 @@ let rec apply_inst tag ?cnt:(cnt=0) (inst : instance) (prog : cmd) : (cmd * int)
      in
      let dflt_row =
        let cond =
-           match tag with
-           | `WithHoles -> True (*add_row_hole %=% mkVInt (0,1)*)
-           | `NoHoles -> True in
-       [instrument_row cond def 3] in
+         match tag with
+         | `WithHoles -> True (*add_row_hole %=% mkVInt (0,1)*)
+         | `NoHoles -> True in
+       [(cond, default)] in
      (selects @ holes @ dflt_row |> mkOrdered
      , cnt (*+ 1*))
            
@@ -290,7 +346,7 @@ let compute_candidates h pkt phys =
 **)
 let get_one_model ?fvs:(fvs = []) (pkt : Packet.t) (logical : cmd) (phys : cmd) =
   let (pkt',_), _ = trace_eval logical (pkt,None) |> Option.value_exn in
-  let _ = Printf.printf "input: %s\n output: %s\n%!" (Packet.string__packet pkt) (Packet.string__packet pkt') in 
+  (* let _ = Printf.printf "input: %s\n output: %s\n%!" (Packet.string__packet pkt) (Packet.string__packet pkt') in  *)
   let st = Time.now () in
   let phi = Packet.to_test ~fvs pkt' in
   let wp_phys_paths = wp_paths phys phi  |> List.filter ~f:(fun pre -> pre <> False) in
@@ -403,8 +459,9 @@ let get_one_model_edit
   let model =
     List.find_map wp_phys_paths ~f:(fun (wp_phys, acts) ->
         if wp_phys = False then None else
-          let _ = Printf.printf "Packet %s\n wp %s" (Packet.string__packet pkt) (string_of_test wp_phys) in
-          let _ = Printf.printf "Checking %s \n%!"
+          let _ = Printf.printf "Packet %s\n wp %s\n%!" (Packet.string__packet pkt) (string_of_test wp_phys) in
+          let _ = Printf.printf "Checking %s become %s \n%!"
+                    (string_of_test wp_phys)
                     (substV wp_phys pkt |> string_of_test) in
           let (res, time) = check `Sat (substV wp_phys pkt) in
           time_spent_in_z3 := Time.Span.(!time_spent_in_z3 + time);
@@ -558,7 +615,108 @@ let rec get_schema_of_table name phys =
   | While (_, c) -> get_schema_of_table name c
 
 
+let match_cap m m' =
+  match m, m' with
+  | Exact (i,_), Exact (j,_) ->
+     if i = j then [m] else []
+  | Exact (i,_), Between (lo, hi, _)
+    | Between (lo, hi, _), Exact(i,_)->
+     if lo <= i && i <= hi then
+       [m]
+     else
+       []
+  | Between (lo, hi, sz), Between (lo', hi', _) ->
+     let lo'' = max lo lo' in
+     let hi'' = min hi hi' in
+     if lo'' < hi'' then
+       [Between (lo'', hi'', sz)]
+     else if lo'' = hi'' then
+       [Exact(lo'',sz)]
+     else
+       []
 
+let off_by_one i j =  max i j - min i j = 1
+  
+let match_cup m m' =
+  match m, m' with
+  | Exact (i,_), Exact (j,sz) ->
+     if i = j then
+       [m]
+     else if off_by_one i j
+     then [Between (min i j, max i j, sz)]
+     else [m; m']
+  | Exact (i,_), Between (lo, hi, sz)
+    | Between (lo, hi, sz), Exact(i,_)->
+     if lo <= i && i <= hi then
+       [Between (lo, hi, sz)]
+     else if i + 1 = lo || hi + 1 = i
+     then [Between(min lo i, max hi i, sz)]
+     else [m;m']
+  | Between (lo, hi, sz), Between (lo', hi', _) ->
+     if hi >= lo - 1 && lo <= hi + 1
+     then [Between (min lo lo', max hi hi', sz)]
+     else [m;m']
+
+let matches_cup ms =
+  List.fold ms ~init:[]
+    ~f:(fun acc m ->
+      List.fold acc ~init:[]
+        ~f:(fun acc' m' ->
+          acc' @ match_cup m m' ))
+          
+
+let match_sub m m' =
+  match m, m' with
+  | Exact (i, _), Exact (j, _) -> i = j
+  | Exact (i, _), Between (lo', hi',_) -> lo' <= i && i <= hi'
+  | Between (lo, hi, _), Exact (j,_) -> lo = j && hi = j
+  | Between (lo, hi, _), Between (lo', hi', _) ->  lo <= hi' && lo' <= hi
+            
+let rec match_minus m ms =
+  let compare m m' =
+    match m, m' with
+    | Exact(i,_), Exact(j,_) -> compare i j
+    | Exact(i,_), Between(lo,_,_) -> compare i lo
+    | Between(lo, _,_), Exact(i,_) -> compare lo i
+    | Between(lo, _, _), Between(lo',_,_) -> compare lo lo'
+  in
+  match m with
+  | Exact(_, _) ->
+     if List.exists ms ~f:(match_sub m)
+     then []
+     else [m]
+  | Between(lo,hi, sz) ->
+     match ms with
+     | [] -> [m]
+     | (m'::ms') ->
+        match m' with
+        | Exact(j,_) ->
+           if j < lo || j > hi
+           then match_minus (Between (lo,hi,sz)) ms'
+           else if j = lo then
+             match_minus (Between(lo+1, hi, sz)) ms'
+           else if j = hi then
+             match_minus (Between (lo, hi-1, sz)) ms'
+           else
+             match_minus (Between (lo, j-1, sz)) ms'
+             @ match_minus (Between (j+1, hi, sz)) ms'
+             |> matches_cup
+             |> List.sort ~compare
+
+        | Between(lo', hi', _) ->
+           if lo' <= lo && hi <= hi'
+           then []
+           else if lo' <= lo
+           then match_minus (Between(hi'+1, hi, sz)) ms'
+           else if hi <= hi' then
+             match_minus (Between(lo, lo'-1,sz)) ms'
+           else (*lo < lo' && hi > hi'*)
+             match_minus (Between (lo, lo'-1, sz)) ms'
+             @ match_minus (Between (hi'+1, hi, sz)) ms'
+             |> matches_cup
+             |> List.sort ~compare
+                                        
+                                       
 let fixup_edit match_model action_map phys (pinst : instance) : instance =
   let mk_new_row tbl_name act : row list =
     match get_schema_of_table tbl_name phys with
@@ -581,8 +739,7 @@ let fixup_edit match_model action_map phys (pinst : instance) : instance =
       StringMap.update acc tbl_name
         ~f:(function
           | None -> mk_new_row tbl_name act
-          | Some rows -> List.(mk_new_row tbl_name act >>= insert_minimally rows)
-
+          | Some rows -> mk_new_row tbl_name act @ rows
         )
     )
                                                          
@@ -630,13 +787,15 @@ let cegis ?fvs:(fvs = []) ~hints ?gas:(gas=1000) (logical : cmd) linst ledit (re
     | `Yes ->
        Some pinst
     | `NoAndCE counter ->
-       if gas = 0 then Some pinst else
+       if gas = 0 then failwith "RAN OUT OF GAS" else
          let (pinst', ex_z3_time, ncalls, wpt) =
            solve_concrete ~fvs ~hints ~packet:(Some counter) logical linst ledit real pinst in
          model_time := Time.Span.(!model_time + ex_z3_time);
          model_calls := !model_calls + ncalls;
          wp_time := Time.Span.(!wp_time + wpt);
-         loop (gas-1) pinst'
+         if StringMap.equal (=) pinst pinst'
+         then failwith ("Could not make progress on edit " ^ string_of_edit ledit)
+         else loop (gas-1) pinst'
   in
   let pinst' = loop gas pinst in
   Printf.printf "total z3 time to synthesize %s + %s = %s\n%!"
