@@ -109,7 +109,7 @@ let reorder_benchmark varsize length max_inserts =
        Printf.printf "==== BENCHMARKING INSERTION OF (%s) =====\n%!"
          (string_of_edit edit);
        let (totalt,checkt,checkn, searcht, searchn, wpt,lwpt,pwpt,sizes,_)  =
-         synthesize_edit ~gas:5 ~fvs ~hints log phys linst pinst edit in
+         synthesize_edit ~gas:5 ~fvs ~hints (Prover.solver ()) log phys linst pinst edit in
        Printf.printf "=== DONE=================================\n%!";
        (i, totalt, checkt, checkn, searcht, searchn, wpt,lwpt,pwpt, sizes)
        :: run_experiment (i + 1) edits (apply_edit linst edit) (apply_edit pinst edit)

@@ -200,8 +200,8 @@ let toZ3String test =
 (*
  Checks SMT query. Returns either None (UNSAT) or SAT (model map) 
 *)
-let check typ =
-  let mySolver = solver () in
+let check mySolver typ =
+  (* let mySolver = solver () in *)
   fun test ->
   let st = Time.now() in
   let _ = Z3.Solver.push mySolver;
@@ -213,8 +213,11 @@ let check typ =
   match response with
   | UNSATISFIABLE ->
      (* Printf.printf "UNSAT\n%!"; *)
-     Z3.Solver.pop mySolver 1;
-     (None,dur)
+     begin match typ with
+     | `Valid -> (Z3.Solver.pop mySolver 1; (None,dur))
+     | `Sat -> (Z3.Solver.pop mySolver 1;
+                (None, dur))
+     end
   | UNKNOWN ->
      (* Printf.printf "UNKNOWN:\n \t%s \n%!" (Z3.Solver.get_reason_unknown mySolver); *)
      Z3.Solver.pop mySolver 1;
@@ -229,7 +232,7 @@ let check typ =
      | None -> (None, dur)
 
 (* Checks SMT Query for validity. Returns None (VALID) or Some model (Counter Example) *)          
-let check_valid test = check `Valid test
+let check_valid mySolver test = check mySolver `Valid test
 
 let rec all_agree (vs :  (string * size) list) =
   match vs with

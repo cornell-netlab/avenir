@@ -430,8 +430,8 @@ let%test _ =
 let%test _ =
   let t = (!%( (Var1 ("x",8) %=% mkVInt (5,8)) %+% ((Var1 ("x",8) %=% mkVInt (3,8)) %&% (Var1 ("z",8) %=% mkVInt (6,8))))
            %+% !%( (Var1 ("x",8) %=% Hole1 ("hole0",8)) %+% (Var1 ("y",8) %=% Hole1 ("hole1",8)))) in
-  let (r,_) = check `Sat t in
-  let (r',_) = check `Sat t in
+  let (r,_) = check (Prover.solver ()) `Sat t in
+  let (r',_) = check (Prover.solver ()) `Sat t in
   r = None (* i.e. is unsat *)
   && r = r'
            
@@ -581,7 +581,7 @@ let%test _ =
   let edit = ("log", ([Exact (2,2)], 2)) in
   let phys_inst =
     StringMap.of_alist_exn [] in
-  ignore(synthesize_edit ~fvs:[("dst",2); ("out",2); ("x", 2)] log_line phys_line log_inst phys_inst edit);
+  ignore(synthesize_edit ~fvs:[("dst",2); ("out",2); ("x", 2)]  (Prover.solver ()) log_line phys_line log_inst phys_inst edit);
   true
 
 (* let%test _ =
