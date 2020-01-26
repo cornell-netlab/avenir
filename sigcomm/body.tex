@@ -1,0 +1,95 @@
+\section{Introduction}
+
+\todo[inline]{write short introduction}
+
+\section{The Problem}
+\todo[inline]{Explain problem of Control Plane Synthesis with example }
+
+\section{Synthesis by Sketching is a Solution}
+\todo[inline]{Explain GCL/WP/CEGIS/Sketching formalisms at a very how
+  it can be applied to P4 programs }
+
+\todo[inline]{Conclude that this monolithic solution is too slow}
+
+\section{Challenges}
+\todo[inline]{Describe the technical challenges with this approach with forward pointers to solutions}
+\begin{itemize}
+\item Programs are big, but control plane APIs are incremental
+\item CEGIS loop is clunky
+  \begin{itemize}
+  \item Many paths to search through
+    \begin{itemize} \item candidate map \end{itemize}
+  \item One logical rule may correspond to many physical rules
+    \begin{itemize} \item symbolic execution to compute membership VCs \end{itemize}
+  \item VCs are big
+    \begin{itemize}
+    \item cormac
+    \item hybrid solvers
+    \end{itemize}
+  \end{itemize}
+Abduction -- when does our loop work?
+  \begin{itemize}
+  \item conditions on action usability
+  \item ??dataflow??
+  \end{itemize}
+\end{itemize}
+
+\section{A Scalable Solution}
+\todo[inline]{Describe the Solution}
+\subsection{Syntax}
+\subsection{Semantics}
+\begin{itemize}
+\item tables, edits, instances
+\item denotational semantics
+\item wp semantics
+\end{itemize}
+\subsection{Incremental CEGIS}
+\todo[inline]{describe the algorithm here}
+\subsection{Optimizations}
+\begin{itemize}
+\item Candidate map
+\item generalizing counter examples for range queries
+\item Linear-size VCs
+\end{itemize}
+
+\subsection{Abduction}
+\begin{itemize}
+\item cross-product examination of paths
+\item Dataflow analysis
+\end{itemize}
+
+\subsection{Theoretical Results}
+\begin{itemize}
+\item Soundness
+\item Completeness of Synthesis
+\item Completeness of Abduction
+\end{itemize}
+
+\section{Implementation}
+\todo[inline]{Describe the Implementation}
+\begin{itemize}
+\item P4 $\to$ Pipeline (including ternary explosion)
+\item Pipeline + Instance $\to$  GCL
+\end{itemize}
+
+\subsection{Limitations}
+\begin{itemize}
+\item equivalent parsers
+\item registers
+\item worst-case blowup from ternary
+\end{itemize}
+
+\section{Evaluation}
+\todo[inline]{Describe the experimental setup and analyze results}
+\subsection{Real World Examples from ONF's Trellis}
+\subsection{Synthetic Examples}
+\subsection{Benchmark Abduction}
+
+\section{Related Work}
+\todo[inline]{Write Related Work} \todo[inline]{Sketch, p4v, Synthesis
+  for P4, domino, panopticon, control plane stuff for openflow}
+\todo[inline]{other synthesis stuff?}
+
+\section{Conclusion}
+\todo[inline]{Write Conclusion}
+
