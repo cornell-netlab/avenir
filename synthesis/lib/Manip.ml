@@ -279,9 +279,9 @@ let good_execs fvs c =
   let init_sub = List.fold fvs ~init:StringMap.empty ~f:(fun sub (v,sz) ->
                      StringMap.set sub ~key:v ~data:(0,sz)
                    ) in
-  Printf.printf "active : \n %s \n" (string_of_cmd c);
+  (* Printf.printf "active : \n %s \n" (string_of_cmd c); *)
   let merged_sub, passive_c = passify init_sub c  in
-  Printf.printf "passive : \n %s\n" (string_of_cmd passive_c);
+  (* Printf.printf "passive : \n %s\n" (string_of_cmd passive_c); *)
   (merged_sub, good_wp passive_c)
 
 

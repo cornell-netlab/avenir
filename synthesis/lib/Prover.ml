@@ -104,7 +104,9 @@ let rec mkZ3Test (rhoVars : (string * size) list) (t : test) ctx deBruijn quanti
 
 
 let context = Z3.mk_context [("model", "true")]
-let solver _ = Z3.Solver.mk_solver context None
+let satsolver _ = Z3.Solver.mk_solver_t context (Z3.Tactic.mk_tactic context "ufbv")
+let vdsolver _ = Z3.Solver.mk_solver_t context (Z3.Tactic.mk_tactic context "qfbv")
+let solver = satsolver
 
 let mk_deBruijn vars : int StringMap.t =
   let ctr = ref 0 in
@@ -192,7 +194,7 @@ let mkMotleyModel model =
   StringMap.of_alist_exn(name_vals)
 
 let toZ3String test =
-  let mySolver = solver () in
+  let mySolver = satsolver () in
   let _ = initSolver `Sat mySolver context test in
   Printf.sprintf "%s" (Z3.Solver.to_string mySolver)
 
@@ -200,8 +202,12 @@ let toZ3String test =
 (*
  Checks SMT query. Returns either None (UNSAT) or SAT (model map) 
 *)
-let check mySolver typ =
+let check _ typ =
   (* let mySolver = solver () in *)
+  let mySolver = match typ with
+    | `Valid -> vdsolver ()
+    | `Sat -> satsolver ()
+  in
   fun test ->
   let st = Time.now() in
   let _ = Z3.Solver.push mySolver;
@@ -210,11 +216,11 @@ let check mySolver typ =
   let response = Z3.Solver.check mySolver [] in
   let dur = Time.(diff (now()) st) in
   (* Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver); *)
-  match response with
+  match response with  
   | UNSATISFIABLE ->
      (* Printf.printf "UNSAT\n%!"; *)
      begin match typ with
-     | `Valid -> (Z3.Solver.pop mySolver 1; (None,dur))
+     | `Valid -> (None,dur)
      | `Sat -> (Z3.Solver.pop mySolver 1;
                 (None, dur))
      end
@@ -229,7 +235,9 @@ let check mySolver typ =
         let model = mkMotleyModel m in
         Z3.Solver.pop mySolver 1;
         (Some model, dur)
-     | None -> (None, dur)
+     | None ->
+        Z3.Solver.pop mySolver 1;
+        (None, dur)
 
 (* Checks SMT Query for validity. Returns None (VALID) or Some model (Counter Example) *)          
 let check_valid mySolver test = check mySolver `Valid test
@@ -282,7 +290,7 @@ let check_valid_impl (logUniv : test) (realUniv : test) (logOneUniv : test) (rea
   let () = Printf.printf "debruijn indicies are \n%!";
            StringMap.iteri indices ~f:(fun ~key ~data -> Printf.printf "\t%s -> %d\n%!" key data) in
   let phi = mkZ3Test [] test context indices allBound in
-  let mySolver = solver () in
+  let mySolver = satsolver () in
   (* let () = Printf.printf "the test, pre-binding \n %s \n%!" (Z3.Expr.to_string phi) in *)
   let () = Printf.printf "=============\nthe inner bound expression\n %s \n =============="
              (Z3.Expr.to_string (bind_vars `Exists context pktAndMtchs phi)) in
@@ -307,7 +315,7 @@ let check_valid_impl (logUniv : test) (realUniv : test) (logOneUniv : test) (rea
 
 
 let checkSynthProblem rhoVars logwp realwp log1wp realNwp =
-  let mySolver = solver () in
+  let mySolver = satsolver () in
   let ctx = context in
   let eqAssm = logwp %<=>% realwp in
   let eqAssm_free = free_vars_of_test eqAssm in

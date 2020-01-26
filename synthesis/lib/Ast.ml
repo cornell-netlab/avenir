@@ -403,6 +403,7 @@ let mkImplies assum conseq =
     if assum = conseq then True else
     match assum, conseq with
     | True, _ -> conseq
+    | _, True -> True
     | _, False -> !%(assum)
     | _, _ -> Impl(assum, conseq) 
 

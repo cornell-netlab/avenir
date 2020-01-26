@@ -115,31 +115,35 @@ let encode_match k m =
   | Between (lo, hi,sz) -> (Var1 k %>=% mkVInt(lo,sz)) %&% (Var1 k %<=% mkVInt(hi,sz))
                                  
 
-let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) inst (pkt_loc : Packet.located) : (Packet.located * int StringMap.t) =
+let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) inst (pkt_loc : Packet.located)
+        : (Packet.located * cmd * int StringMap.t) =
   let (pkt, loc_opt) = pkt_loc in
   if gas = 0
   then (failwith "========OUT OF EVAL GAS============\n")
   else match cmd with
        | Skip ->
-          (pkt_loc, StringMap.empty)
+          (pkt_loc, cmd, StringMap.empty)
        | Assign (f, e) ->
-          ((Packet.set_field_of_expr1 pkt f e, loc_opt), StringMap.empty)
+          ((Packet.set_field_of_expr1 pkt f e, loc_opt), cmd, StringMap.empty)
        | Assert t ->
+          (* failwith "Asserts are deprecated" *)
           if check_test t pkt_loc then
-           (pkt_loc, StringMap.empty)
+            (pkt_loc, cmd, StringMap.empty)
           else
             failwith ("AssertionFailure: " ^ string_of_test t ^ "was false")
        | Assume _ ->
-          (pkt_loc, StringMap.empty)
+          (* failwith "Raw assumes are deprecated" *)
+          (pkt_loc, cmd, StringMap.empty)
        | Seq (firstdo, thendo) ->
-          let pkt_loc', trace' = trace_eval_inst ~gas firstdo inst pkt_loc in
-          let pkt_loc'', trace'' = trace_eval_inst ~gas thendo inst pkt_loc' in
+          let pkt_loc', cmd', trace' = trace_eval_inst ~gas firstdo inst pkt_loc in
+          let pkt_loc'', cmd'', trace'' = trace_eval_inst ~gas thendo inst pkt_loc' in
           (pkt_loc''
-              , StringMap.merge trace' trace'' ~f:(fun ~key:_ -> function
-                    | `Left v -> Some v
-                    | `Right v -> Some v
-                    | `Both (v,_) -> Some v)
-            )
+          , cmd' %:% cmd''
+          , StringMap.merge trace' trace'' ~f:(fun ~key:_ -> function
+                | `Left v -> Some v
+                | `Right v -> Some v
+                | `Both (v,_) -> Some v)
+          )
        | Select (styp, selects) ->
           let default _ = match styp with
             | Total   -> failwith "SelectionError: Could not find match in [if total]"
@@ -155,18 +159,17 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) inst (pkt_loc : Packet.located
 
        | Apply (name, keys, actions, default) ->
           let action_to_execute =
-            List.fold ~init:None
+            List.fold ~init:(True,None)
               ~f:(fun rst (matches, action) ->
                 match rst  with
-                | None -> 
+                | ((*missed*) _, None) -> 
                    let cond = List.fold2_exn keys matches ~init:True ~f:(fun acc k m ->
                                   acc %&% encode_match k m
                                 ) in
                    if check_test cond pkt_loc
-                   then Some action
-                   else rst
-                | Some x ->
-                   Some x
+                   then ((*missed %&%*) cond, Some action)
+                   else ((*missed %&% !%(cond)*) True, None)
+                | (_, _) -> rst
               )
           in
           begin match StringMap.find inst name with
@@ -174,16 +177,14 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) inst (pkt_loc : Packet.located
           | Some rules ->
              begin
                match action_to_execute rules with
-               | None ->
-                  let pkt', trace = trace_eval_inst default inst pkt_loc in
-                  (pkt' , StringMap.set ~key:name ~data:(List.length actions) trace )
-               | Some aid ->
-                  let pkt', trace = trace_eval_inst (List.nth_exn actions aid) inst pkt_loc in
-                  (pkt', StringMap.set ~key:name ~data:aid trace)
+               | (cond, None) ->
+                  let pkt',cmd', trace = trace_eval_inst default inst pkt_loc in
+                  (pkt' , Assert cond %:% cmd', StringMap.set ~key:name ~data:(List.length actions) trace )
+               | (cond, Some aid) ->
+                  let pkt', cmd', trace = trace_eval_inst (List.nth_exn actions aid) inst pkt_loc in
+                  (pkt', Assert cond %:% cmd', StringMap.set ~key:name ~data:aid trace)
              end
           end
-          
-
        | While ( _ , _ ) ->
           failwith "Cannot process while loops"
           (* if check_test cond pkt_loc then
