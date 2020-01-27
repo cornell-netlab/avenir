@@ -11,6 +11,55 @@
 
 \todo[inline]{Conclude that this monolithic solution is too slow}
 
+Sketching~\cite{armando-thesis,armando2013sketch} is a program synthesis technology that 
+takes high-level insights about the desired system and automatically infers the details.
+The input to the synthesis procedure is partial program (sketch) that has {\em holes}
+in place of code fragments.
+The task of the synthesizer is to fill up the holes with the right pieces so that the 
+result program meets the required specification.  
+The algorithm to generate code for the holes in a sketch is counterexample-guided inductive synthesis (CEGIS).
+To describe sketching and CEGIS in the context of our problem we use the running 
+example of Figure~\ref{fig:table-wp}.
+
+\begin{figure}[h]
+\centering
+\begin{minipage}[t]{.23\textwidth}
+\centering
+\begin{framed}
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,language=C, lineskip = 0em,numbersep=0pt,resetmargins=true, xleftmargin=-1em]
+control L1 {
+apply {
+ if (src==1) {smac=1} 
+ elseif (src==2) {dst=1}
+ else skip;
+}}
+control L2 {
+apply {
+ if (dst==1) {out=1} 
+ elseif (dst==2) {out=2}
+ else skip;
+}}
+Logical (L1;L2);
+\end{lstlisting}
+\end{framed}
+\end{minipage}
+\begin{minipage}[t]{.23\textwidth}
+\centering
+\begin{framed}
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,language=C, lineskip = 0em,numbersep=0pt,resetmargins=true, xleftmargin=-1em]
+control P {
+apply {
+ if (src==* && dst==*)
+   {skip} 
+}}
+\end{lstlisting}
+\end{framed}
+\end{minipage}
+
+\label{fig:table-wp}
+\caption{Logical and physical descriptions}
+\end{figure}
+
 % Example
 
 % - cross product
