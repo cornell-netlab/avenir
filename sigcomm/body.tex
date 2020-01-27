@@ -11,6 +11,90 @@
 
 \todo[inline]{Conclude that this monolithic solution is too slow}
 
+% Example
+
+% - cross product
+% - set-read dependencies
+% % - backtracking
+% % - action data
+
+% a in A and b in  B
+% A must set y sometimes
+
+% two logical tables 
+% (, src, A,skip).apply();(dst, B, skip).apply()
+
+% A = {(\v -> smac := v)
+%   + skip
+%   + (\v -> dst := v)}
+
+% B = {(\v -> out := v)
+%   + skip}
+
+% L = {(\v1 -> \v2 -> smac := v1; out := v2)
+%   + (\v -> smac:=v)
+%   + skip
+%   + (\v1 -> \v2 -> dst := v1; out:= v2)
+%   + (\v -> dst:= v) }
+
+% src |   A         dst | B
+% ---------------; -----------
+% 1     smac:= 1    1      out :=1
+% 2     dst := 1    2      out :=2
+% *     skip        *     skip
+% ------>
+
+% Logical table encoding : spec
+% if
+% src = 1 ---> smac := 1
+% src = 2 --> dst := 2
+% *  ----> skip
+% fi;
+% if
+% dst = 1 ----> out := 1
+% dst = 2 ----> out := 2
+% *       ---> skip
+% fi
+
+% one physical table
+% (p, (src,dst), L, skip).apply()
+
+% src  dst  | L
+% -------------------
+% *     *      skip
+
+% physical sketch:  sketch
+% if
+% src = ?src /\ dst = ?dst
+% ->
+%   if
+%   (?select_p = 0) ->  smac := ?v1; out := ?v2
+%   (?select_p = 1) -> (smac := ?v)
+%   .....
+%   fi
+% * -> skip
+
+% phi = //\\ { x = x' | x in hdrs, x' is fresh}
+
+% sketch' = assign random values to holes in sketch
+% Equivalence:
+% wp(spec, phi) <=> wp(sketch', phi)
+% | Valid -> done
+% | CE pkt -> 
+% Model-finding:
+% [|spec|](pkt) = pkt'
+% wp(sketch, pkt') = phi
+% ask z3 find model for holes:
+% \exists holes  \forall hdrs. pkt /\ phi
+% | UNSAT -> fail ``sorry go home''
+% | Sat model ->  
+% Update:
+%   convert ?keys -> keys
+%   convert ?select_p -> action choice
+%   convert ?vs -> action data
+
+% go to equivalence  
+  
 \section{Challenges}
 \todo[inline]{Describe the technical challenges with this approach with forward pointers to solutions}
 \begin{itemize}
