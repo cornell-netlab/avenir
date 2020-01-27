@@ -74,7 +74,6 @@ let liftL2 f al bl =
   bl >>= fun b ->
   return (f a b)
 
-       
 let mkCons x xs = x :: xs
           
 let rec range_ex lo hi =

@@ -54,8 +54,8 @@ keys :
 | k = ID; POUND; size = INT; COMMA; ks = keys { ((k, size)::ks) }
 
 actions :
-| LBRACE; c = command; RBRACE; { [c] }
-| LBRACE; c = command; RBRACE; BAR; a = actions { c::a }
+| LBRACE; c = command; RBRACE; { [([],c)] }
+| LBRACE; c = command; RBRACE; BAR; a = actions { ([],c)::a }
                         
 select :
 | t = test; CASE; c = command; BRACKETS { [ t, c ] }

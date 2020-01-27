@@ -40,6 +40,9 @@ let rec nnf t : test =
   | Neg(Iff (a, b)) -> mkOr (mkAnd a (mkNeg b)) (mkAnd (mkNeg b) a)
 
 
+
+                         
+
 (* Computes the Disjunctive Normal form of a test *)
 let rec dnf t : test list =
   let t' = nnf t in
@@ -54,7 +57,9 @@ let rec dnf t : test list =
   | Neg _ (* will not be And/Or because NNF*)
   | True
   | False  ->  [t']
-               
+
+
+                 
                  
 (* Unrolls all loops in the program p n times *)
 let rec unroll n p =
@@ -158,7 +163,7 @@ let rec wp c phi =
     |> fst
 
   | Apply (_, _, acts, dflt)
-    -> concatMap acts  ~f:(fun a -> wp a phi) ~c:(mkAnd) ~init:(Some True)
+    -> concatMap acts  ~f:(fun (scope, a) -> wp (holify scope a) phi) ~c:(mkAnd) ~init:(Some True)
       %&% wp dflt phi
   | While _ ->
     Printf.printf "[WARNING] skipping While loop, because loops must be unrolled\n%!";
@@ -335,7 +340,7 @@ let rec prepend pfx c =
   | Apply(name, keys, acts, def) ->
      Apply(pfx ^ name
          , List.map keys ~f:(fun (k,sz) -> (pfx ^ k, sz))
-         , List.map acts ~f:(prepend pfx)
+         , List.map acts ~f:(fun (scope, act) -> (List.map scope ~f:(fun x -> pfx ^ x), prepend pfx act))
          , prepend pfx def)
   
                  
@@ -437,7 +442,7 @@ let rec fill_holes (c : cmd) subst =
   | While (cond, body) -> While (fill_holes_test cond subst, fill_holes body subst)
   | Apply (n,keys, acts, dflt)
     -> Apply(n, keys
-             , List.map acts ~f:(fun act -> fill_holes act subst)
+             , List.map acts ~f:(fun (scope, a) -> (scope, fill_holes a subst))
              , fill_holes dflt subst)
             
 
@@ -480,7 +485,15 @@ let rec wp_paths c phi : test list =
 
   | Apply (_, _, acts, dflt) ->
      let open List in
-     (dflt :: acts) >>= Fun.flip wp_paths phi
+     (dflt :: List.map ~f:(fun (sc, a) -> holify sc a) acts) >>= Fun.flip wp_paths phi
   | While _ ->
      Printf.printf "[WARNING] skipping While loop, because loops must be unrolled\n%!";
      [phi]
+
+
+
+let bind_action_data vars (scope, cmd) : cmd =
+  List.fold2_exn scope vars
+    ~init:StringMap.empty
+    ~f:(fun acc x v -> StringMap.set acc ~key:x ~data:(Int v))
+  |> fill_holes (holify scope cmd) 
