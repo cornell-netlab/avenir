@@ -26,58 +26,90 @@ example of Figure~\ref{fig:table-wp}.
 \begin{minipage}[t]{.23\textwidth}
 \centering
 \begin{framed}\hspace{-.5em}
-% \begin{lstlisting}[basicstyle=\ttfamily\footnotesize,language=C, lineskip = 0em,numbersep=0pt,resetmargins=true, xleftmargin=-1em]
-% control L1 {
-% apply {
-%  if (src==1) {smac=1} 
-%  elseif (src==2) {dst=1}
-%  else skip;
-% }}
-% control L2 {
-% apply {
-%  if (dst==1) {out=1} 
-%  elseif (dst==2) {out=2}
-%  else skip;
-% }}
-% Logical (L1;L2);
-% \end{lstlisting}
-  \[
-    \begin{array}{l}
-      \IF~\var{src} = 1 \to \var{smac} := 1 \\
-      \phantom{\IF}~\var{src} = 2 \to \var{dst} := 1\\
-      \phantom{\IF}~\var{src} = \var{*} \to \SKIP \\
-      \ENDIF ; \\
-      \IF~\var{dst} = 1 \to \var{out} := 1 \\
-      \phantom{\IF}~\var{dst} = 2 \to \var{out} := 2 \\
-      \phantom{\IF}~\var{dst} = \var{*} \to \SKIP \\
-      \ENDIF
-    \end{array}
-  \]
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,language=C, lineskip = 0em,numbersep=0pt,resetmargins=true, xleftmargin=-1em]
+action _smac(v)
+  {smac = v}
+action _dst(v)
+  {dst = d}
+action _out(v)
+  {out = v}
+table L1 {
+  keys = {src:exact}
+  actions =
+    {_smac; _dst}
+}
+table L2 {
+  keys = {dst:exact}
+  actions = {_out}
+}
+control Ingress {
+  L1.apply();
+  L2.apply()
+}
+\end{lstlisting}
+
 \end{framed}
 \end{minipage}
 \begin{minipage}[t]{.23\textwidth}
 \centering
 \begin{framed}\hspace{-1em}
-% \begin{lstlisting}[basicstyle=\ttfamily\footnotesize,language=C, lineskip = 0em,numbersep=0pt,resetmargins=true, xleftmargin=-1em]
-% control P {
-% apply {
-%  if (src==* && dst==*)
-%    {skip} 
-% }}
-% \end{lstlisting}
-  \[
-    \begin{array}{l}
-      \IF~\\
-      \phantom{\IF}~\var{src} = \var{*} \wedge \var{dst} = \var{*}\\
-      \phantom{\IF}~~~\to \SKIP \\
-      \ENDIF 
-    \end{array}
-  \]
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,language=C, lineskip = 0em,numbersep=0pt,resetmargins=true, xleftmargin=-1em]
+action _smac_out(v1,v2)
+  { smac=v1;out=v2 }
+action _dst_out(v1,v2)
+  { dst=v1;out=v2 }
+action _out(v)
+  { out=v }
+table P {
+  keys = { src:exact
+         ; dst:exact }
+  actions =
+   { _smac_out
+   ; _dst_out
+   ; _out }
+}
+control Ingress {
+  P.apply()
+}
+\end{lstlisting}
+
 \end{framed}
 \end{minipage}
 
 \label{fig:table-wp}
 \caption{Logical and physical descriptions}
+\end{figure}
+
+\begin{figure}
+  \begin{minipage}[t]{0.23\textwidth}
+    \begin{framed}
+
+      \[
+        \begin{array}{l}
+          \IF~\var{src} = 1 \to \var{smac} := 1 \\
+          \phantom{\IF}~\var{src} = 2 \to \var{dst} := 1\\
+          \phantom{\IF}~\var{src} = \var{*} \to \SKIP \\
+          \ENDIF ; \\
+          \IF~\var{dst} = 1 \to \var{out} := 1 \\
+          \phantom{\IF}~\var{dst} = 2 \to \var{out} := 2 \\
+          \phantom{\IF}~\var{dst} = \var{*} \to \SKIP \\
+          \ENDIF
+        \end{array}
+      \]
+    \end{framed}
+  \end{minipage}  \begin{minipage}[t]{0.23\textwidth}
+    \begin{framed}
+      \[
+        \begin{array}{l}
+          \IF~\\
+          \phantom{\IF}~\var{src} = \var{*} \wedge \var{dst} = \var{*}\\
+          \phantom{\IF}~~~\to \SKIP \\
+          \ENDIF 
+        \end{array}
+      \]
+    \end{framed}
+  \end{minipage}
+  \caption{Logical and Physical Encodings}
 \end{figure}
 
 % Example
