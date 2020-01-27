@@ -25,34 +25,54 @@ example of Figure~\ref{fig:table-wp}.
 \centering
 \begin{minipage}[t]{.23\textwidth}
 \centering
-\begin{framed}
-\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,language=C, lineskip = 0em,numbersep=0pt,resetmargins=true, xleftmargin=-1em]
-control L1 {
-apply {
- if (src==1) {smac=1} 
- elseif (src==2) {dst=1}
- else skip;
-}}
-control L2 {
-apply {
- if (dst==1) {out=1} 
- elseif (dst==2) {out=2}
- else skip;
-}}
-Logical (L1;L2);
-\end{lstlisting}
+\begin{framed}\hspace{-.5em}
+% \begin{lstlisting}[basicstyle=\ttfamily\footnotesize,language=C, lineskip = 0em,numbersep=0pt,resetmargins=true, xleftmargin=-1em]
+% control L1 {
+% apply {
+%  if (src==1) {smac=1} 
+%  elseif (src==2) {dst=1}
+%  else skip;
+% }}
+% control L2 {
+% apply {
+%  if (dst==1) {out=1} 
+%  elseif (dst==2) {out=2}
+%  else skip;
+% }}
+% Logical (L1;L2);
+% \end{lstlisting}
+  \[
+    \begin{array}{l}
+      \IF~\var{src} = 1 \to \var{smac} := 1 \\
+      \phantom{\IF}~\var{src} = 2 \to \var{dst} := 1\\
+      \phantom{\IF}~\var{src} = \var{*} \to \SKIP \\
+      \ENDIF ; \\
+      \IF~\var{dst} = 1 \to \var{out} := 1 \\
+      \phantom{\IF}~\var{dst} = 2 \to \var{out} := 2 \\
+      \phantom{\IF}~\var{dst} = \var{*} \to \SKIP \\
+      \ENDIF
+    \end{array}
+  \]
 \end{framed}
 \end{minipage}
 \begin{minipage}[t]{.23\textwidth}
 \centering
-\begin{framed}
-\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,language=C, lineskip = 0em,numbersep=0pt,resetmargins=true, xleftmargin=-1em]
-control P {
-apply {
- if (src==* && dst==*)
-   {skip} 
-}}
-\end{lstlisting}
+\begin{framed}\hspace{-1em}
+% \begin{lstlisting}[basicstyle=\ttfamily\footnotesize,language=C, lineskip = 0em,numbersep=0pt,resetmargins=true, xleftmargin=-1em]
+% control P {
+% apply {
+%  if (src==* && dst==*)
+%    {skip} 
+% }}
+% \end{lstlisting}
+  \[
+    \begin{array}{l}
+      \IF~\\
+      \phantom{\IF}~\var{src} = \var{*} \wedge \var{dst} = \var{*}\\
+      \phantom{\IF}~~~\to \SKIP \\
+      \ENDIF 
+    \end{array}
+  \]
 \end{framed}
 \end{minipage}
 
