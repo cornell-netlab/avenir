@@ -1,0 +1,40 @@
+\newcommand{\name}{our system}
+
+% Syntax
+%% Commands
+\newcommand{\assume}{\ensuremath{\mathsf{assume}}}
+\newcommand{\IF}{\ensuremath{\mathsf{if}}}
+\newcommand{\ENDIF}{\ensuremath{\mathsf{fi}}}
+\newcommand{\SKIP}{\ensuremath{\mathsf{skip}}}
+\newcommand{\apply}{\ensuremath{\mathsf{apply}()}}
+
+%% Expressions
+\newcommand{\mask}{\ensuremath{\mathbin{\texttt{\&}}}}
+
+% Types
+\newcommand{\typ}[1]{\ensuremath{\mathsf{#1}}}
+\newcommand{\Field}{\typ{Field}}
+\newcommand{\TableName}{\typ{TableName}}
+\newcommand{\Entry}{\typ{Entry}}
+\newcommand{\Metadata}{\typ{Metadata}}
+\newcommand{\BitVector}{\typ{BitVector}}
+\newcommand{\Pkt}{\typ{Packet}}
+\newcommand{\Edit}{\typ{Edit}}
+
+% Packets
+\newcommand{\pkt}{\mathit{pkt}}
+\newcommand{\meta}{\mathit{meta}}
+
+% Semantics
+\newcommand{\denote}[1]{\llbracket #1 \rrbracket}
+
+
+% operators and operations
+\newcommand{\append}{\mathbin{\texttt{++}}}
+\renewcommand{\wp}{\ensuremath{\mathop{\textit{wp}}}}
+\newcommand{\hit}{\ensuremath{\mathop{\textsf{hit}}}}
+\newcommand{\allmiss}{\ensuremath{\mathop{\textsf{allmiss}}}}
+\newcommand{\miss}{\ensuremath{\mathop{\textsf{miss}}}}
+\newcommand{\match}{\ensuremath{\mathop{\textsf{match}}}}
+\newcommand{\dom}{\ensuremath{\mathop{\textrm{dom}}}}
+\newcommand{\run}{\ensuremath{\mathop{\textsf{run}}}}
