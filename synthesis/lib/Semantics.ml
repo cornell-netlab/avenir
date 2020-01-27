@@ -1,6 +1,7 @@
 open Core
 open Ast
 open Util
+open Manip
 
 let rec eval_expr1 (pkt_loc : Packet.located) ( e : expr1 ) : value1 =
   let binop op e e' = op (eval_expr1 pkt_loc e) (eval_expr1 pkt_loc e') in
@@ -115,8 +116,8 @@ let encode_match k m =
   | Between (lo, hi,sz) -> (Var1 k %>=% mkVInt(lo,sz)) %&% (Var1 k %<=% mkVInt(hi,sz))
                                  
 
-let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) inst (pkt_loc : Packet.located)
-        : (Packet.located * cmd * int StringMap.t) =
+let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : instance) (pkt_loc : Packet.located)
+        : (Packet.located * cmd * ((int * size) list * int) StringMap.t) =
   let (pkt, loc_opt) = pkt_loc in
   if gas = 0
   then (failwith "========OUT OF EVAL GAS============\n")
@@ -158,16 +159,16 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) inst (pkt_loc : Packet.located
           trace_eval_inst ~gas a inst pkt_loc
 
        | Apply (name, keys, actions, default) ->
-          let action_to_execute =
-            List.fold ~init:(True,None)
-              ~f:(fun rst (matches, action) ->
+          let action_to_execute (rows : row list ) =
+            List.fold rows ~init:(True,None)
+              ~f:(fun rst (matches, data, action) ->
                 match rst  with
                 | ((*missed*) _, None) -> 
                    let cond = List.fold2_exn keys matches ~init:True ~f:(fun acc k m ->
                                   acc %&% encode_match k m
                                 ) in
                    if check_test cond pkt_loc
-                   then ((*missed %&%*) cond, Some action)
+                   then ((*missed %&%*) cond, Some (data, action))
                    else ((*missed %&% !%(cond)*) True, None)
                 | (_, _) -> rst
               )
@@ -179,10 +180,10 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) inst (pkt_loc : Packet.located
                match action_to_execute rules with
                | (cond, None) ->
                   let pkt',cmd', trace = trace_eval_inst default inst pkt_loc in
-                  (pkt' , Assert cond %:% cmd', StringMap.set ~key:name ~data:(List.length actions) trace )
-               | (cond, Some aid) ->
-                  let pkt', cmd', trace = trace_eval_inst (List.nth_exn actions aid) inst pkt_loc in
-                  (pkt', Assert cond %:% cmd', StringMap.set ~key:name ~data:aid trace)
+                  (pkt' , Assert cond %:% cmd', StringMap.set ~key:name ~data:([],List.length actions) trace )
+               | (cond, Some (data, aid)) ->
+                  let pkt', cmd', trace = trace_eval_inst (List.nth_exn actions aid |> bind_action_data data) inst pkt_loc in
+                  (pkt', Assert cond %:% cmd', StringMap.set ~key:name ~data:(data, aid) trace)
              end
           end
        | While ( _ , _ ) ->

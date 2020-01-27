@@ -113,7 +113,7 @@ let apply_edit (inst : instance) ((tbl, row) : edit) =
       | None -> [row]
       | Some rows -> row::rows)
          
-  
+    
 let rec apply_inst tag ?cnt:(cnt=0) (inst : instance) (prog : cmd) : (cmd * int) =
   match prog with
   | Skip 
@@ -138,14 +138,16 @@ let rec apply_inst tag ?cnt:(cnt=0) (inst : instance) (prog : cmd) : (cmd * int)
      let selects =
        StringMap.find_multi inst tbl
        |> List.fold ~init:[]
-            ~f:(fun acc (matches, action) ->
+            ~f:(fun acc (matches, data, action) ->
               let t = List.fold2_exn keys matches
                         ~init:True
                         ~f:(fun acc x m -> (acc %&% encode_match x m)) in
               if action >= List.length acts then
                 []
               else
-                (t, (List.nth acts action |> Option.value ~default))
+                (t, (List.nth acts action
+                     |> Option.value ~default:([], default)
+                     |> bind_action_data data))
                 :: acc)
      in
      let add_row_hole = Hole1 ("?AddRowTo" ^ tbl, 1) in
@@ -154,12 +156,12 @@ let rec apply_inst tag ?cnt:(cnt=0) (inst : instance) (prog : cmd) : (cmd * int)
        match tag with
        | `WithHoles -> 
           List.mapi acts
-            ~f:(fun i a -> 
+            ~f:(fun i (scope, act) -> 
               (List.fold keys ~init:True
                  ~f:(fun acc (x,sz) -> acc %&% (Var1 (x,sz) %=% Hole1 ("?"^x,sz)))
                %&% (add_row_hole %=% mkVInt (1,1))
                %&% (which_act_hole %=% mkVInt (i,actSize))
-              , a))
+              , holify scope act))
        | `NoHoles -> []
      in
      let dflt_row =
@@ -230,7 +232,7 @@ let complete_inner ~falsify (cmd : cmd) =
     | Apply (name, keys, acts, dflt)
       -> Apply (name
               , keys
-              , List.map acts ~f:(complete_aux ~falsify)
+              , List.map acts ~f:(fun (data, a) -> (data, complete_aux a ~falsify))
               , complete_aux ~falsify dflt)
   in
   complete_aux ~falsify cmd
@@ -414,7 +416,7 @@ let rec compute_cand_for_trace line (pinst : instance) t : cmd =
       * in *)
      begin match StringMap.find t name with
      | None -> Assume False
-     | Some act_idx ->
+     | Some (data, act_idx) ->
         if act_idx >= List.length acts
         then (*Assert (misses) %:%*) default
         else List.fold keys ~init:True (*misses*)
@@ -422,12 +424,15 @@ let rec compute_cand_for_trace line (pinst : instance) t : cmd =
                                       %&% (Hole1("?"^x^"_lo", sz) %<=% Var1(x, sz))
                                       %&% (Var1(x, sz)  %<=% Hole1("?"^x^"_hi", sz)))
              |> Assert
-             |> Fun.flip mkSeq (List.nth_exn acts act_idx)
+             |> Fun.flip mkSeq (List.nth_exn acts act_idx |> bind_action_data data )
      end
   | While _ -> failwith "go away"
   
                                                     
-let apply_hints h_opt m pline pinst  =
+let apply_hints
+      (h_opt : ((action_data * int) StringMap.t -> (action_data * int) StringMap.t list) option)
+      m
+      pline pinst : (cmd * (action_data * int) StringMap.t) list =
   match h_opt with
   | None -> [apply_inst `WithHoles pinst pline |> fst, StringMap.empty]
   | Some h ->
@@ -449,7 +454,7 @@ let get_one_model_edit
       ?fvs:(_ = [])
       ~hints (pkt : Packet.t)
       mySolver
-      (lline : cmd) linst ledit
+      (lline : cmd) (linst : instance) (ledit : edit)
       (pline : cmd) pinst
   =
   (* print_instance "Logical" (apply_edit linst ledit);
@@ -558,7 +563,7 @@ and fixup (real:cmd) (model : value1 StringMap.t) : cmd =
   | Apply (name, keys, acts, dflt)
     -> Apply (name
             , keys
-            , List.map acts ~f:(fun a -> fixup a model)
+            , List.map acts ~f:(fun (data, a) -> (data, fixup a model))
             , fixup dflt model)
 
 let symbolic_pkt fvs = 
@@ -731,8 +736,8 @@ let rec match_minus m ms =
              |> List.sort ~compare
                                         
                                        
-let fixup_edit match_model action_map phys (pinst : instance) : instance =
-  let mk_new_row tbl_name act : row list =
+let fixup_edit match_model (action_map : (action_data * size) StringMap.t) phys (pinst : instance) : instance =
+  let mk_new_row tbl_name data act : row list =
     match get_schema_of_table tbl_name phys with
     | None -> failwith ("Couldnt find keys for table " ^ tbl_name)
     | Some (ks, _, _) ->
@@ -756,13 +761,13 @@ let fixup_edit match_model action_map phys (pinst : instance) : instance =
            ) in
        match keys_holes with
        | None -> []
-       | Some ks -> [(ks, act)]
+       | Some ks -> [(ks, data, act)]
   in
-  StringMap.fold ~init:pinst action_map ~f:(fun ~key:tbl_name ~data:act acc ->
+  StringMap.fold ~init:pinst action_map ~f:(fun ~key:tbl_name ~data:(act_data,act) acc ->
       StringMap.update acc tbl_name
         ~f:(function
-          | None -> mk_new_row tbl_name act
-          | Some rows -> mk_new_row tbl_name act @ rows
+          | None -> mk_new_row tbl_name act_data act
+          | Some rows -> mk_new_row tbl_name act_data act @ rows
         )
     )
                                                          
@@ -770,7 +775,8 @@ let fixup_edit match_model action_map phys (pinst : instance) : instance =
 let solve_concrete
       ?fvs:(fvs = [])
       mySolver
-      ~hints ?packet:(packet=None)
+      ~hints
+      ?packet:(packet=None)
       (logical : cmd) (linst : instance) (edit : edit)
       (phys : cmd) (pinst : instance)
     : (instance * Time.Span.t * int * Time.Span.t) =
@@ -785,10 +791,10 @@ let solve_concrete
      let pinst' = fixup_edit model action_map phys pinst in
      pinst', z3time, ncalls, wp_time
   
-let cegis ?fvs:(fvs = []) ~hints ?gas:(gas=1000) ~iter mySolver (logical : cmd) linst ledit (real : cmd) pinst =
+let cegis ?fvs:(fvs = []) ~hints ?gas:(gas=1000) ~iter mySolver (logical : cmd) linst (ledit : edit) (real : cmd) pinst =
   let fvs = if fvs = []
             then ((* Printf.printf "Computing the FVS!\n%!"; *)
-                  free_vars_of_cmd logical @ free_vars_of_cmd real)
+              free_vars_of_cmd logical @ free_vars_of_cmd real)
             else fvs in
   let implements_time = ref Time.Span.zero in
   let implements_calls = ref 0 in

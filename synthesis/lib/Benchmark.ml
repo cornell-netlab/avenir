@@ -15,13 +15,11 @@ let permute l =
 let tbl = Printf.sprintf "tbl%d"
     
 let rec mk_pipeline varsize =
-  let rng = (range_ex 0 (pow 2 varsize)) in
   fun n ->
   if n = 0 then [] else
     (tbl n
     , [("k_" ^tbl n, varsize)]
-    , List.fold rng  ~init:[]
-        ~f:(fun acc i -> (("x_"^tbl n) %<-% mkVInt (i,varsize)) :: acc)
+    , [(["v"],("x_"^tbl n) %<-% Var1("v",varsize))]
     , ("x_"^tbl n) %<-% mkVInt (0,varsize)
     ) :: mk_pipeline varsize (n-1)
 
@@ -57,8 +55,8 @@ let rec generate_n_insertions varsize length n avail_tables maxes =
                 (hi + 1, Between (lo, hi, varsize))
           in
           let maxes' = StringMap.set maxes ~key:(tbl i) ~data:max' in
-          let action = Random.int (pow 2 varsize) in
-          let row = ([mtch], action) in
+          let act_data = (Random.int (pow 2 varsize),varsize) in
+          let row = ([mtch], [act_data], 0) in
           Some (maxes', avail_tables, tbl i, row)
     in
     match loop_free_match avail_tables with
