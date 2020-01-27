@@ -35,20 +35,312 @@ Abduction -- when does our loop work?
 \end{itemize}
 
 \section{A Scalable Solution}
-\todo[inline]{Describe the Solution}
+\todo[inline]{High level description of the Solution}
+
 \subsection{Syntax}
+
+\begin{figure}
+  \fbox{
+  \begin{minipage}[t]{0.53\columnwidth} 
+  \[
+    \begin{array}{>{\hspace{-.5em}}lcll}
+      c &::=&\\
+        & \mid & \SKIP & \mathit{Skip} \\
+        & \mid & x := e & \mathit{Assign} \\
+        & \mid & t.\apply & \mathit{Table} \\
+        & \mid & c;c & \mathit{Sequence} \\
+        & \mid & \IF~\overline{b \to e}~\ENDIF & \mathit{Select} \\
+      t & ::=  & (s, \overline{f}, \overline{c}, c)  \\
+      s & \in & \multicolumn 2 l {\TableName} \\
+      x & \in & \multicolumn 2 l {\Field \cup \Metadata} \\
+      v & \in & \multicolumn 2 l {\{0,1\}^+ = \BitVector}
+    \end{array}
+  \]
+\end{minipage} \vline \begin{minipage}[t]{0.45\columnwidth}
+  \[
+    \begin{array}{lcll}
+      e & ::= & \\
+        & \mid & v & \mathit{Value} \\
+        &  \mid & x & \mathit{Variable} \\
+        & \mid & e + e & \mathit{Plus}\\
+        & \mid & e - e & \mathit{Minus}\\
+        & \mid & e \mask e & \mathit{Mask}\\
+      b & ::= & \\
+        & \mid & 0 & \mathit{Zero}\\
+        & \mid & b \Rightarrow b  &\mathit{Implies}\\
+        & \mid & e = e &\mathit{Equals} \\
+        & \mid & e < e & \mathit{Less}
+    \end{array}
+  \]
+\end{minipage}}
+\caption{The syntax of packet processing pipelines}
+\label{fig:syntax}
+\end{figure}
+
+Our syntactic representation of packet-processing pipelines can be
+found in Figure~\ref{fig-syntax}. Notice that it is more or less the
+same as the syntax for GCL, except for the additional table
+application command $t.\apply$, which indicates that the controller
+can install rules that obey the schema $t$ into this table. A table
+schema $t$ is a tuple $(s, \overline f, \overline c, d)$, where $s$ is
+a unique identifer for the table, $\overline f$ is the sequence of
+fields that the table will match on, $\overline c$ is the set of
+actions that can be applied, and $d$ is the default action. Just like
+in P4, actions are a subset of full commands, namely, they can only be
+assignments and sequences.
+
+Our expression sublanguage focuses solely on bitvector arithmetic and
+masking operations. The simplest expression is a bitvector literal. We
+can write down variables $x$ that are used to represent packet fields
+or metadata. We can combine two expressions expressions $e$ and $e'$
+into more complicated ones using unsigned arithmetic addition
+$e + e'$, unsigned arithmetic subtraction $e - e'$, or bitwise
+intersection $e \mask e'$. We could easily add additional arithmetic
+and bitvector operators, but these operators suffice for this
+exposition.
+
+The language of booleans is standard. We can express falsehood ($0$),
+implication ($\Rightarrow$), bitvector equality $(=)$, and comparison
+($<$). In what follows, we will use the standard syntactic sugar
+encodings of the remaining boolean and comparison operators freely.
+
 \subsection{Semantics}
+\begin{figure*}
+  \[\begin{array}{lcl}
+      \denote{\SKIP}^\tau~(\pkt,\meta)
+      &\triangleq
+      & (\pkt,\meta) \\
+      \denote{f := e}^\tau(\pkt,\meta)
+      &\triangleq
+      & (\pkt\{f \mapsto \denote{e}(\pkt,\meta)\}, \meta)\\
+      \denote{m := e}^\tau(\pkt, \meta)
+      &\triangleq
+      & (\pkt, \meta\{f \mapsto \denote{e}^\tau(\pkt,\meta)\})\\
+      \denote{c_1;c_2}^\tau(\pkt, \meta)
+      &\triangleq
+      & \denote{c_2}\left(\denote{c_1}^\tau(\pkt, \meta)\right)\\
+      \denote{\IF~\ENDIF}^\tau(\pkt, \meta)
+      & \triangleq
+      & (\pkt, meta) \\
+      \denote{\IF~\overline{b \to c}~\ENDIF}^\tau (\pkt,\meta)
+      & \triangleq & \begin{cases}
+        \denote{c_1}^\tau(\pkt,\meta)& \denote{b_1}^\tau(\pkt, \meta) = 1 \\
+        \denote{\IF~b_2 \to c_2 \cdots b_n \to c_n~\ENDIF}^\tau (\pkt,\meta) & \mathit{otherwise}
+      \end{cases} \\
+      \denote{t.\apply}^\tau(\pkt,\meta)
+      & \triangleq
+      & \run(\tau(s),\overline f, c_0)(\pkt,\meta) \\\\
+      \run(\cdot, \overline f, \overline c, c_0)(\pkt, \meta)
+      & \triangleq
+      & \denote{c_0}^\tau(\pkt,\meta) \\
+      \run(((\overline k, a)\cdot\overline e), \overline f, \overline c,  c_0) (\pkt, meta)
+      & \triangleq
+      & \begin{cases}
+        \denote{c_a}^\tau(\pkt, \meta) & \denote{\overline k = \overline f} (\pkt, \meta) = 1 \\
+        \run(\overline e, \overline f,\overline c, c_0) (\pkt, \meta) & \mathit{otherwise} \\
+        \end{cases}
+    \end{array}
+  \]
+  \caption{Semantics of pipeline processing programs. The denotations
+    of bitvector and boolean expressions are omitted for brevity}
+\end{figure*}
+
+In a formal setting, we can model the denotation of packet processing
+programs as functions on packets ($\Pkt \to \Pkt$). However, our
+commands are not fully executable on their own -- we need to know how
+to populate the tables before we know what function the programs
+denote. We record the existing table rules in a \emph{table
+  instantiation function},
+$\tau : \TableName \rightharpoonup \Entry^*$, which maps the name of
+table, to a list of the entries that have been inserted by the
+controller. A valid entry $(k_1,\ldots, k_n, i) \in \Entry$ in a table
+$t$ with keys $f_1, \ldots, f_m$, actions $a_1, \ldots, a_l$ and
+default action $a_0$, has $n = m$, and $i \in \{0, \ldots, l\}$, where
+each $k_i \in \BitVector$.
+\todo[inline]{Incorporate inexact matches}
+
+We also need to consider the packet metadata, which we will encode as
+a separate packet, and will not be considered in packet equality.
+
+Most of the cases of our denotational semantics are standard. The
+denotation $\SKIP$ is the identity function; assignment $x := e$
+updates the metadata $\meta$ or the packet $\pkt$ depending on whether
+$x \in \Metadata$ or $x \in \Field$; sequence $c_1;c_2$ first executes
+$c_1$ and then executes $c_2$; and selection
+$\IF~\overline{b \to c}~\ENDIF$ iterates through the list of guards
+$b$, and executes the first $c_i$ for which $b_i$ holds true.
+
+The semantics of table application
+$(s, \overline f, \overline c, d).\apply$ is a bit nonstandard, but
+very similar to the semantics of selection. We iterate through the
+rows $\overline{(\overline k, i)}$ of $\tau(s)$, executing the first
+$a_i$ for which
+$\denote{\overline f = \overline k}^\tau~\pkt~\meta = 1$. If no such
+entry exists then the default action is chosen. Note that the
+semantics for a table application are undefined if $\tau(s)$ is
+undefined.
+
+The semantics of expressions and booleans are standard, although we
+make the assumption the expressions are ``well-typed'', i.e. the
+expressions on either side of the operators denote vectors of the same
+length. This property is easy to statically check.
+
+\subsection{Edits}
+
+However, the controller doesn't interface with a switch, or a table,
+in terms of full instantiations, interacts with the tables in terms of
+incremental insertions. There are three kinds of operations that a
+controller can take: \emph{insertion}, \emph{deletion}, and
+\emph{update}. For the purposes of this paper, we only focus on
+insertions, since deletions and assertions require the same mechanisms
+as insertion does.
+
+We write an edit $e \in \Edit$ as a pair $(s, \rho)$ with
+$s \in \TableName$ and $\rho \in \Entry$, which denotes the insertion
+of row $\rho$ into table $s$. Given a table instantiation function
+$\tau$, we can write $\tau + e$ to mean the map
+$\tau[s \mapsto \tau(s) \append \rho]$. Note that the edit inserts a
+row at the end of the sequence of entries, which means it has the
+lowest priority (ahead of only the default action).
+
+\todo[inline]{Say something about priority insertion}
+
+\subsection{Predicate Transformer Semantics}
+
+\begin{figure}
+  \[
+    \begin{array}{lcl}
+      \wp_\tau(\SKIP,\phi)
+      & \triangleq
+      & \phi \\
+      \wp_\tau(x := e, \phi)
+      & \triangleq
+      & \phi[e/x]\\
+      \wp_\tau(c_1;c_2, \phi)
+      & \triangleq
+      & \wp_\tau(c_2, \wp_\tau(c_1, \phi)) \\
+      \wp_\tau(\IF~\overline{b \to c}~\ENDIF, \phi)
+      & \triangleq
+      & (\bigvee_i b_i) \wedge \\
+      && \bigwedge_i\left(b_i \wedge \bigwedge_{j=1}^{j-1}\neg b_j\right) \Rightarrow \wp_\tau(c_i, \phi)\\
+      \wp_\tau(t.\apply, \phi)
+      &\triangleq
+      &  \bigwedge_{(\overline{k_i}, i) \in \tau(s)}\hit\left(\tau(s), \overline f, i\right)\Rightarrow \wp(c_i,\phi) \\
+      && \wedge \allmiss(\tau,s) \Rightarrow \wp(c_0, \phi) \\
+      && \textit{where } t = (s, \overline f, \overline c, c_0) \\
+      \hit\left(\overline{\left(\overline{k}, a\right)},\overline f, i\right)
+      &\triangleq& \overline{k_i} = \overline f \wedge \bigwedge_{0<j<i} \overline k \neq \overline f\\
+      \allmiss\left(\tau,s\right) &\triangleq& \bigwedge_{\left(\overline k, a\right) \in \tau(s)} \overline k \neq \overline f
+    \end{array}
+  \]
+  \caption{Weakest Precondition for pipelines}
+  \label{fig:table-wp}
+\end{figure}
+
+The CEGIS algorithm relies on a way to generate boolean formulae that
+capture the behavior of the programs. As in the standard CEGIS
+approach, we compute the weakest precondition of a symbolic packet to
+denote the input-output relation denoted by the command. However, just
+as in the denotational semantics, we need a table instantation in
+order to describe the behavior of tables. In previous work~\cite{pv4},
+tables have been implemented as a n-ary nondeterministic demonic
+choice between the actions. While this certainly covers all possible
+behaviors of the table, it throws away information about the keys --
+which is necessary knowledge for our synthesis problem.
+
+Unlike~\cite{p4v}, we are doing our verification and synthesis with
+our table instances $\tau$ in hand, which gives us the power to
+describe more precisely the behavior of tables in our logical
+formulae. This is captured in the function $\wp_\tau(c, \phi)$
+described in Figure~\ref{fig:table-wp}. When we compute the weakest
+precondition of table $t = (s, \overline f, \overline c, c_0)$ of a
+formula $\phi$ with respect to an instantiation
+$\tau(s) = (\overline{k_1}, a_1), \ldots, (\overline{k_n}, a_n)$, we
+separately compute the condition $\hit(\tau, s, i)$ under which each
+entry $i$, and the weakest precondition of executing that action
+$\wp_\tau(c_{a_i}, \phi)$. Then we intersect
+$\hit(\tau, s, i) \Rightarrow \wp(c_{a_i}, \phi)$ for every $i$. Then
+for the default action, we compute $\allmiss(\tau, s)$, which just
+negates the match condition of every entry, as the guard for
+$\wp_\tau(c_i, \phi)$.
+
+The predicate $\hit(\tau, s, i)$ must be true if entry $i$ is hit.
+The entry will be hit iff the the keys match
+$(\overline{k_i} = \overline f)$ and if none of the previous keys do
+$\bigwedge_{j<i}\overline {k_j} \neq \overline f$. So
+$\hit(\tau, s, i)$ is just the conjunct of these two predicates.
+
+The predicate $\allmiss(\tau, s , i)$ could be defined as
+$\bigwedge_i \neg(\hit(\tau, s, i))$, but we can define it
+equivalently, and much more simply as
+$\bigwedge_i \overline {k_i} \neq \overline f$.
+
+
+\subsection{Incremental Synthesis}
+
+The monolithic Sketching alorithm was designed for general-purpose
+programs, and as such, is designed to be run once, in an offline
+fashion, to statically synthesize a performant program. A direct port
+of this algorithm will try to recompute all of physical rules in the
+logical program upon every rule insertion. To witness this, imagine
+the controller executes a sequence of rules insertions
+$e_1,\ldots, e_n$, which corresponds to a sequence of logical table
+instantiation functions $\tau_1, \ldots, \tau_n$. Then, the monolithic
+CEGIS algorithm will synthesize a corresponding sequence of physical
+table instantiations $\tau_1', \ldots, \tau_n'$.
+
+This seems wasteful. Each $\tau_{i+1} = \tau_i + e_{i+1}$, and as
+defined, an insertion can only append a single rule to the bottom of a
+single table. And in many cases $\tau_{i+1} = \tau_i +
+\overline{e'}$. Why not leverage the fact that we already had two
+instatiation functions that induced equivalent functions? All we need
+to do is synthesize the deltas!
+
+\todo[inline]{describe translation here or in earlier CEGIS Section}
+
+Instead of asking the CEGIS loop to recompute every insertion in
+$\tau_i$, we can ask it to only compute the sequence of additions in
+$\overline{e}$. Instead of instrumenting the physical program with a
+completely blank slate, we use the previous $\tau'$ and only add holes
+necessary to compute the insertions. We insert 3 categories of holes
+into each table $(s, \overline f, \overline c, c_0)$:
 \begin{itemize}
-\item tables, edits, instances
-\item denotational semantics
-\item wp semantics
+\item (Necessity) Add a binary hole $\mathit{?AddTo}_s$ that is true
+  when we need to insert a rule into that table
+\item (Action Choice) For every action, add a sequence of guards
+  $\mathit{?Act}_s = i$, following the command $c_i$.
+\item (Keys) For each key $f_i$, add holes $\mathit{?f}_i$.
 \end{itemize}
-\subsection{Incremental CEGIS}
-\todo[inline]{describe the algorithm here}
+
+Together these three holes correspond to a new row in the select
+corresponding\todo{define this somewhere!} to table $s$ of the form
+\[
+  \begin{array}l
+    \overline{f} = \overline{\mathit{?f}} \wedge \mathit{?AddTo}_s = 1
+    \to \left(\begin{array}l \IF \\
+          \qquad \mathit{?Act}_s = 1 \to c_1 \\
+          \qquad \cdots\\
+          \qquad \mathit{?Act}_s = n \to c_n \\
+          \ENDIF
+        \end{array} \right)
+  \end{array}
+\]
+
+This way, when z3 gives us a model for these holes, we know that we
+must insert a rule into every table $s$ for which corresponding to
+$\mathit{?AddTo}_s$ is true, and that rule will have the form
+$(\overline{\mathit{?f}}, \mathit{?Act}_s)$.
+
+\todo[inline]{example}
+
+\todo[inline]{Conflict step!}
+
 \subsection{Optimizations}
 \begin{itemize}
+\item Get models using paths
 \item Candidate map
 \item generalizing counter examples for range queries
+\item caching rule templates
 \item Linear-size VCs
 \end{itemize}
 
@@ -66,7 +358,7 @@ Abduction -- when does our loop work?
 \end{itemize}
 
 \section{Implementation}
-\todo[inline]{Describe the Implementation}
+\todo[inline]{Describe the Implementation}XS
 \begin{itemize}
 \item P4 $\to$ Pipeline (including ternary explosion)
 \item Pipeline + Instance $\to$  GCL

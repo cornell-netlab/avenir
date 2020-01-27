@@ -198,22 +198,22 @@
 \ClassInfo{\@classname}{Using fontsize \ACM@fontsize}
 \LoadClass[\ACM@fontsize, reqno]{amsart}
 \RequirePackage{microtype}
-\ifcase\ACM@format@nr
- \relax % manuscript
- \or % acmsmall
- \or % acmlarge
- \or % acmtog
-   \RequirePackage{flushend}
- \or % sigconf
-   \RequirePackage{flushend}
- \or % siggraph
-   \RequirePackage{flushend}
- \or % sigplan
-   \RequirePackage{flushend}
- \or % sigchi
-   \RequirePackage{flushend}
- \or % sigchi-a
-\fi
+% \ifcase\ACM@format@nr
+%  \relax % manuscript
+%  \or % acmsmall
+%  \or % acmlarge
+%  \or % acmtog
+%    \RequirePackage{flushend}
+%  \or % sigconf
+%    \RequirePackage{flushend}
+%  \or % siggraph
+%    \RequirePackage{flushend}
+%  \or % sigplan
+%    \RequirePackage{flushend}
+%  \or % sigchi
+%    \RequirePackage{flushend}
+%  \or % sigchi-a
+% \fi
 \RequirePackage{etoolbox}
 \RequirePackage{refcount}
 \RequirePackage{totpages}
