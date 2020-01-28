@@ -57,16 +57,23 @@ let string_of_binop (e : Op.bin) : string =
 let rec dispatch_list ((info,expr) : Expression.t) : P4String.t list =
   let module E = Expression in
   let type_error name =
-    failwith ("[TypeError] Tried to call a " ^ name ^ "as a function at " ^ Petr4.Info.to_string info)
+    failwith ("[TypeError] Tried to call a " ^ name ^ " as a function at " ^ Petr4.Info.to_string info)
   in
   match expr with
   | E.Name s -> [s]
   | E.ExpressionMember {expr; name} -> dispatch_list expr @ [name]
+  | E.FunctionCall {func; type_args=[]; args=[]} -> dispatch_list func
   | _ ->  ctor_name_expression (info,expr) |> type_error
 
 let string_of_memberlist =
   concatMap ~f:(snd) ~c:(fun x y -> x ^ "." ^ y) 
-   
+  
+let validity_bit members =
+  string_of_memberlist (List.take members (List.length members - 1)) ^ "_valid()"
+
+let hit_bit members =
+  string_of_memberlist members ^ "_hit()"
+
 let rec encode_expression_to_value (e : Expression.t) : expr1 =
   let module E= Expression in
   let unimplemented name =
@@ -79,8 +86,8 @@ let rec encode_expression_to_value (e : Expression.t) : expr1 =
     op (encode_expression_to_value e) (encode_expression_to_value e')
   in
   match snd e with
-  | E.True -> type_error "True"
-  | E.False -> type_error "False"
+  | E.True -> Value1 (Int (1, 1))
+  | E.False -> Value1 (Int (0, 1))
   | E.Int (_,i) -> Value1 (Int (Bigint.to_int_exn i.value, -1))
   | E.Name (_,s) -> Var1 (s,-1)
   | E.ExpressionMember _ -> Var1 (dispatch_list e |> string_of_memberlist, -1)
@@ -95,6 +102,14 @@ let rec encode_expression_to_value (e : Expression.t) : expr1 =
        -> type_error (string_of_binop op)
      | Shl | Shr | PlusSat | MinusSat | BitAnd | BitXor | BitOr | PlusPlus
        -> unimplemented (string_of_binop op)
+     end
+  | E.FunctionCall {func; type_args=[]; args=[]} ->
+     let members = dispatch_list func in
+     begin match List.last members with
+     | None -> unimplemented "Function Call with nothing to dispatch"
+     | Some (_,"isValid") ->
+        Var1 (validity_bit members, -1)
+     | Some _ -> unimplemented ("FunctionCall for members " ^ string_of_memberlist members)
      end
   | _ -> unimplemented (ctor_name_expression e)
 
@@ -119,7 +134,7 @@ let rec encode_expression_to_test (e: Expression.t) : test =
   | E.False -> False
   | E.Int _ -> type_error "an integer"
   | E.String (_,s) -> type_error ("a string \"" ^ s ^ "\"")
-  | E.Name (_,s) -> type_error ("a name "^ s)
+  | E.Name (_,s) -> Eq(Var1(s, -1), Value1(Int(1, -1))) (* This must be a boolean value *)
   | E.TopLevel (_,s) -> type_error ("a TopLevel " ^ s)
   | E.ArrayAccess _ -> type_error ("an array access")
   | E.BitStringAccess _ -> type_error ("a bitstring access")
@@ -160,11 +175,18 @@ let rec encode_expression_to_test (e: Expression.t) : test =
      begin match List.last members with
      | None -> unimplemented "Function Call with nothing to dispatch"
      | Some (_,"isValid") ->
-        Var1 (string_of_memberlist members ^ "()", -1) %=% Value1(Int (1, 1) )
+        Var1 (validity_bit members, -1) %=% Value1(Int (1, -1))
      | Some _ -> unimplemented ("FunctionCall for members " ^ string_of_memberlist members)
      end
   | E.FunctionCall _ ->
      unimplemented ("FunctionCall with (type?) arguments")
+  | E.ExpressionMember {expr;name} ->
+    let members = dispatch_list expr in
+     begin match name with
+     | (_,"hit") ->
+        Var1 (hit_bit members, -1) %=% Value1(Int (1, -1))
+     | _ -> unimplemented ("ExpressionMember for members " ^ string_of_memberlist members)
+     end
   | _ -> unimplemented (ctor_name_expression e)
 
 
@@ -174,7 +196,7 @@ let lookup_exn (Program(top_decls) : program) (ctx : Declaration.t list) (ident 
     List.find ~f:(fun d -> snd (D.name d) = snd name) in
   match find ident ctx with
   | None -> begin match find ident (get_decls top_decls) with
-      | None -> failwith ("[Error: UseBeforeDef] Couldnt find " ^ snd ident)
+      | None -> failwith ("[Error: UseBeforeDef] Couldnt find " ^ snd ident ^ " from " ^ Petr4.Info.to_string (fst ident))
       | Some d -> d
     end
   | Some d -> d
@@ -188,12 +210,19 @@ let lookup_action_exn prog ctx action_name =
                    ^ "but it resolved to something else at " ^ Petr4.Info.to_string (fst action_name))
           
 
-let dispatch prog ctx members =
+let rec dispatch prog ctx members =
   match members with
   | [] -> failwith "[RuntimeException] Tried to Dispatch an empty list of names"
   | [(_,"mark_to_drop")] -> `Motley ("drop" %<-% mkVInt(1,1))
+
+  | _ when Option.map (List.last members) ~f:snd = Some "setInvalid" ->
+    `Motley ((validity_bit members) %<-% mkVInt(1,0))
+
   | [member] ->
-    failwith ("[Unimplemented] Tried to apply " ^ snd member ^ " as a function, but i'm not sure what it is")
+    begin match lookup_action_exn prog ctx member with
+      | (act, []) -> `Motley (encode_action ~action_data:[] prog ctx act)
+      | _ -> failwith ("[Unimplemented] Tried to apply " ^ snd member ^ " as a function, but i'm not sure what it is")
+    end
   | member :: members' ->
     let open Declaration in 
     match lookup_exn prog ctx member with
@@ -202,9 +231,10 @@ let dispatch prog ctx members =
         `Petr4 tbl
       else
         "[UndefinedMethod] Tied to call methods " ^ string_of_memberlist members ^ "() on a table" |> failwith
-    | _ -> failwith "unimplemented"
+    | (_, Instantiation _) as inst -> `Petr4 inst
+    | x -> failwith ("unimplemented" ^ Sexp.to_string (sexp_of_t x))
 
-let rec encode_statement prog (ctx : Declaration.t list) ((info, stmt) : Statement.t) : cmd =
+and encode_statement prog (ctx : Declaration.t list) ((info, stmt) : Statement.t) : cmd =
   let open Statement in
   let unimplemented name =
     failwith ("[Unimplemented Statement " ^ name ^"] at " ^ Petr4.Info.to_string info)
@@ -215,6 +245,7 @@ let rec encode_statement prog (ctx : Declaration.t list) ((info, stmt) : Stateme
     (* unimplemented (concatMap dispList ~f:(fun x -> snd x) ~c:(fun x y -> x ^ "." ^ y) ^ "()") *)
     begin match dispatch prog ctx dispList with
     | `Petr4 (_,Declaration.Table t) -> encode_table prog ctx t.properties
+    | `Petr4 (_,Declaration.Instantiation _) -> Skip
     | `Motley c -> c
     | _ -> failwith "unimplemented, only know how to resolve table dispatches"
     end
@@ -223,8 +254,9 @@ let rec encode_statement prog (ctx : Declaration.t list) ((info, stmt) : Stateme
       | Var1 (f,_) -> f %<-% encode_expression_to_value rhs
       | _ -> failwith ("[TypeError] lhs of assignment must be a field, at " ^ Petr4.Info.to_string info)
     end
-  | DirectApplication _ ->
-    unimplemented "DirectApplication"
+  | DirectApplication {typ; args} ->
+    dispatch_direct_app prog typ args
+    (* unimplemented ("DirectApplication" ^ Sexp.to_string ([%sexp_of: Statement.pre_t] stmt)) *)
   | Conditional {cond; tru; fls} ->
     let fls_case = match fls with
       | None -> []
@@ -238,12 +270,43 @@ let rec encode_statement prog (ctx : Declaration.t list) ((info, stmt) : Stateme
     Assert False (* TODO :: is this right? *)
   | EmptyStatement ->
     Skip
-  | Return _ ->
-    unimplemented "Return"
+  | Return {expr} ->
+    (match expr with
+      | None -> Assume False (* We ignore the rest of the control. *)
+      | _ -> unimplemented "Return")
   | Switch _ ->
     unimplemented "Switch"
   | DeclarationStatement _ ->
     unimplemented "DeclarationStatement"
+
+and dispatch_direct_app prog ((_, ident) : Type.t) (args : Argument.t list) =
+  let open Type in
+  match ident with
+    | TypeName n -> dispatch_control prog n args
+    | _ -> failwith ("[Unimplemented Type]")
+
+and dispatch_control (Program(top_decls) as prog : program) (ident : P4String.t) (args : Argument.t list) =
+  let open Declaration in
+  match List.find (get_decls top_decls) ~f:(fun d -> snd (Declaration.name d) = snd ident) with
+  | None -> failwith ("Could not find module" ^ snd ident)
+  | Some (_, Control c) ->
+    (match List.zip (c.params) args with
+      | Ok param_args ->
+        let b = List.map param_args ~f:assign_param in
+        List.fold b ~init:(encode_control prog c.locals c.apply)
+        ~f:(fun assgn prog -> prog %:% assgn )
+      | Unequal_lengths -> failwith "Parameters and arguments don't match")
+  | Some _ -> failwith "Found a module called MyIngress, but it wasn't a control module"
+
+
+and assign_param (param_arg : Parameter.t * Argument.t) =
+  let open Parameter in
+  let open Argument in
+  let param = snd (fst param_arg) in
+  let arg = snd (snd param_arg) in
+  match arg with
+    | Expression {value} -> Assign (snd param.variable, encode_expression_to_value value)
+    | _ -> failwith "Unhandled argument"
 
 and encode_block : program -> Declaration.t list ->  Block.t -> cmd =
   encode_action ~action_data:[]
@@ -252,11 +315,12 @@ and encode_block : program -> Declaration.t list ->  Block.t -> cmd =
 and encode_action prog (ctx : Declaration.t list) ( (_,act) : Block.t ) ~action_data : cmd =
  let open Block in
   List.fold act.statements ~init:Skip
-    ~f:(fun rst stmt -> encode_statement prog ctx stmt %:% rst )
+    ~f:(fun rst stmt -> rst %:% encode_statement prog ctx stmt)
   |> holify (List.map ~f:snd action_data)
 
 and encode_control prog (ctx : Declaration.t list) ( body : Block.t ) =
   encode_block prog ctx body
+
 
 and encode_program (Program(top_decls) as prog : program ) =
   let open Declaration in
