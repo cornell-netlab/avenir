@@ -68,8 +68,11 @@ let rec dispatch_list ((info,expr) : Expression.t) : P4String.t list =
 let string_of_memberlist =
   concatMap ~f:(snd) ~c:(fun x y -> x ^ "." ^ y) 
   
+let validity_bit_no_removal members =
+  string_of_memberlist members ^ "_valid()"
+
 let validity_bit members =
-  string_of_memberlist (List.take members (List.length members - 1)) ^ "_valid()"
+  validity_bit_no_removal (List.take members (List.length members - 1)) ^ "_valid()"
 
 let hit_bit members =
   string_of_memberlist members ^ "_hit()"
@@ -189,7 +192,6 @@ let rec encode_expression_to_test (e: Expression.t) : test =
      end
   | _ -> unimplemented (ctor_name_expression e)
 
-
 let lookup_exn (Program(top_decls) : program) (ctx : Declaration.t list) (ident : P4String.t) : Declaration.t =
   let find name =
     let module D = Declaration in 
@@ -292,20 +294,53 @@ and dispatch_control (Program(top_decls) as prog : program) (ident : P4String.t)
   | Some (_, Control c) ->
     (match List.zip (c.params) args with
       | Ok param_args ->
-        let b = List.map param_args ~f:assign_param in
-        List.fold b ~init:(encode_control prog c.locals c.apply)
-        ~f:(fun assgn prog -> prog %:% assgn )
+        let b = List.concat_map param_args ~f:assign_param in
+        let r = List.concat_map param_args ~f:return_args in
+        let added_b = List.fold b ~init:(encode_control prog c.locals c.apply)
+                      ~f:(fun assgn prog -> prog %:% assgn ) in
+        let added_r = List.fold r ~init:(added_b)
+                      ~f:(fun assgn prog -> assgn %:% prog ) in
+        added_r
       | Unequal_lengths -> failwith "Parameters and arguments don't match")
   | Some _ -> failwith "Found a module called MyIngress, but it wasn't a control module"
 
 
 and assign_param (param_arg : Parameter.t * Argument.t) =
+  let open Direction in
   let open Parameter in
   let open Argument in
   let param = snd (fst param_arg) in
   let arg = snd (snd param_arg) in
   match arg with
-    | Expression {value} -> Assign (snd param.variable, encode_expression_to_value value)
+    | Expression {value} ->
+      let val_assgn = Assign (snd param.variable, encode_expression_to_value value) in
+      begin match param.direction with
+        | Some (_, In)
+        | None -> [val_assgn]
+        | Some (_, Out) -> []
+        | Some (_, InOut) ->
+          let n = dispatch_list value in
+          [Assign(validity_bit_no_removal [param.variable], Var1(validity_bit_no_removal n, -1)); val_assgn]
+      end
+    | _ -> failwith "Unhandled argument"
+
+and return_args (param_arg : Parameter.t * Argument.t) =
+  let open Direction in
+  let open Parameter in
+  let open Argument in
+  let param = snd (fst param_arg) in
+  let arg = snd (snd param_arg) in
+  match arg with
+    | Expression {value} ->
+      begin match param.direction with
+        | Some (_, In)
+        | None -> []
+        | Some (_, Out) -> []
+        | Some (_, InOut) ->
+          let n = dispatch_list value in
+          let val_assgn = Assign (string_of_memberlist n, Var1(snd param.variable, -1)) in
+          [Assign(validity_bit_no_removal n, Var1(validity_bit_no_removal [param.variable], -1)); val_assgn]
+      end
     | _ -> failwith "Unhandled argument"
 
 and encode_block : program -> Declaration.t list ->  Block.t -> cmd =
