@@ -218,7 +218,7 @@ let rec dispatch prog ctx members =
   | [(_,"mark_to_drop")] -> `Motley ("drop" %<-% mkVInt(1,1))
 
   | _ when Option.map (List.last members) ~f:snd = Some "setInvalid" ->
-    `Motley ((validity_bit members) %<-% mkVInt(1,0))
+    `Motley ((validity_bit members) %<-% mkVInt(0,1))
 
   | [member] ->
     begin match lookup_action_exn prog ctx member with
@@ -226,11 +226,11 @@ let rec dispatch prog ctx members =
       | _ -> failwith ("[Unimplemented] Tried to apply " ^ snd member ^ " as a function, but i'm not sure what it is")
     end
   | member :: members' ->
-    let open Declaration in 
+    let open Declaration in
     match lookup_exn prog ctx member with
     | (_, Table _ ) as tbl ->
       if List.map ~f:snd members' = ["apply"] then
-        `Petr4 tbl
+         `Petr4 tbl
       else
         "[UndefinedMethod] Tied to call methods " ^ string_of_memberlist members ^ "() on a table" |> failwith
     | (_, Instantiation _) as inst -> `Petr4 inst
@@ -242,12 +242,13 @@ and encode_statement prog (ctx : Declaration.t list) ((info, stmt) : Statement.t
     failwith ("[Unimplemented Statement " ^ name ^"] at " ^ Petr4.Info.to_string info)
   in
   match stmt with
-  | MethodCall {func; type_args=_; args=_ } ->
-    let dispList = dispatch_list func in
+  | MethodCall {func; type_args=_; args } ->
+    let dispList = dispatch_list func in 
     (* unimplemented (concatMap dispList ~f:(fun x -> snd x) ~c:(fun x y -> x ^ "." ^ y) ^ "()") *)
     begin match dispatch prog ctx dispList with
     | `Petr4 (_,Declaration.Table t) -> encode_table prog ctx t.properties
-    | `Petr4 (_,Declaration.Instantiation _) -> Skip
+    | `Petr4 (_,Declaration.Instantiation {typ;_}) ->
+      dispatch_direct_app prog typ args
     | `Motley c -> c
     | _ -> failwith "unimplemented, only know how to resolve table dispatches"
     end

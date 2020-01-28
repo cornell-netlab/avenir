@@ -2,7 +2,7 @@ open Core
 open Util
 
 type size = int
-let enable_smart_constructors = true
+let enable_smart_constructors = false
        
 type value1 =
   | Int of (int * size)
