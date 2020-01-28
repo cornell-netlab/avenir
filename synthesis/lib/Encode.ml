@@ -72,7 +72,7 @@ let validity_bit_no_removal members =
   string_of_memberlist members ^ "_valid()"
 
 let validity_bit members =
-  validity_bit_no_removal (List.take members (List.length members - 1)) ^ "_valid()"
+  validity_bit_no_removal (List.take members (List.length members - 1))
 
 let hit_bit members =
   string_of_memberlist members ^ "_hit()"
