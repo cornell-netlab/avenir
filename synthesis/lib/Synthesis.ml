@@ -5,13 +5,116 @@ open Semantics
 open Prover
 open Manip
 open Util
-
-
        
-let apply_edit inst (tbl, edit) =
-  StringMap.add_multi inst ~key:tbl  ~data:edit
-  
-let rec apply_inst tag ?cnt:(cnt=0) inst prog : (cmd * int) =
+
+(* let rec widen_matches (ts : match_expr list) (hs : match_expr list) : match_expr list option =
+ *     match ts, hs with
+ *     | [], [] -> Some []
+ *     | _, [] | [],_ -> failwith "different lengths!"
+ *     | t::ts, h::hs ->
+ *        let rec_cons m = Option.(widen_matches ts hs >>| mkCons m) in
+ *        match t, h with
+ *        | Exact (i,sz), Exact (j,_) ->
+ *           if i = j
+ *           then Exact (i,sz) |> rec_cons
+ *           else if i = j + 1 || j = i + 1
+ *           then Between (min i j, max i j, sz) |> rec_cons
+ *           else None
+ *        | Exact(i,sz), Between (lo, hi, _)
+ *          | Between (lo, hi, _), Exact(i,sz)
+ *          -> if i >= lo-1 && i <= hi + 1
+ *             then Between (min i lo, max i hi, sz) |> rec_cons
+ *             else None
+ *        | Between(lo,hi,sz), Between (lo', hi', _)
+ *          -> if hi >= lo' - 1 && lo <= hi' + 1
+ *             then Between (min lo lo', max hi hi', sz) |> rec_cons
+ *             else None
+ * 
+ * (\*ASSUMES ROWS ARE DISJOINT*\)                   
+ * let rec insert_minimally (rows : row list) (row : row) : row list =
+ *   match rows with
+ *   | [] -> [row]
+ *   | (m,a)::rows' ->
+ *      let (m', a') = row in
+ *      if a' = a
+ *      then match widen_matches m m' with
+ *               | None -> (m,a) :: insert_minimally rows' row
+ *               | Some m'' -> (m'',a) :: rows'
+ *      else (m,a) :: insert_minimally rows' row
+ * 
+ * 
+ *                                     
+ * 
+ * let rec make_disjoint_matches novel exists : match_expr list list=
+ *   match exists, novel with
+ *   | [], [] -> [[]]
+ *   | [], _ | _, [] -> failwith "Error different numbers of matches in existing and novel tables!"
+ *   | (ex::exs), (nv::nvs)
+ *     ->
+ *      let cons_rec c = List.(make_disjoint_matches exs nvs >>| mkCons c) in
+ *      match ex, nv with
+ *      |  Exact (i,_), Exact (j, _) ->
+ *          if i = j
+ *          then []
+ *          else cons_rec nv
+ *      | Between (lo, hi, sz), Exact(j,_) ->
+ *         if lo = hi
+ *         then make_disjoint_matches (Exact (lo, sz)::exs) novel
+ *         else if j >= lo && j <= hi
+ *         then []
+ *         else cons_rec nv
+ *      | Exact (i, sz), Between (lo, hi, _) ->
+ *         if lo = hi then
+ *           make_disjoint_matches exists (Exact (lo, sz)::nvs)
+ *         else if i < lo || i > hi
+ *         then cons_rec nv
+ *         else cons_rec (Between (lo, i-1, sz)) @ cons_rec (Between (lo, i + 1, sz))
+ *      | Between(lo,hi,sz), Between(lo',hi',sz') ->
+ *         if lo = hi
+ *         then make_disjoint_matches (Exact (lo, sz)::exs) novel
+ *         else if lo' = hi'
+ *         then make_disjoint_matches exists (Exact (lo', sz')::exs)
+ *         else if hi < lo' || hi' < lo
+ *         then cons_rec nv
+ *         else if hi' <= hi && lo' <= lo (\*nv covered by ex*\)
+ *         then []
+ *         else if hi <= hi' && lo >= lo' (\*ex subinterval of nv*\)
+ *         then cons_rec (Between(lo',lo-1,sz))
+ *              @ cons_rec (Between (hi+1, hi, sz))
+ *         else if hi <= hi' && lo <= lo'
+ *         then cons_rec (Between (hi+1, hi, sz))
+ *         else cons_rec (Between (lo', lo+1, sz))
+ *                        
+ *                         
+ * let make_disjoint_rows (novel : row) (exists : row) : row list =
+ *   let (ex_mtchs, _) = exists in
+ *   let (nv_mtchs, nv_act) = novel in
+ *   let new_rows = List.(make_disjoint_matches nv_mtchs ex_mtchs
+ *                        >>| inj_l nv_act) in
+ *   (\* List.iter new_rows ~f:(fun row -> Printf.printf "  %s\n%!" (string_of_row row)); *\)
+ *   new_rows
+ *   
+ * 
+ * let disjoint_insertions (rows : row list) (new_row : row) =
+ *   if rows = []
+ *   then [new_row]
+ *   else 
+ *     List.(rows >>= make_disjoint_rows new_row) *)
+            
+(* let insert_optimally rows new_row =
+ *   let inserts = disjoint_insertions rows new_row in
+ *   rows @ inserts *)
+                                    
+                       
+let apply_edit (inst : instance) ((tbl, row) : edit) =
+  StringMap.update inst tbl
+    ~f:(fun rows_opt ->
+      match rows_opt with
+      | None -> [row]
+      | Some rows -> row::rows)
+         
+    
+let rec apply_inst tag ?cnt:(cnt=0) (inst : instance) (prog : cmd) : (cmd * int) =
   match prog with
   | Skip 
     | Assign _
@@ -30,29 +133,21 @@ let rec apply_inst tag ?cnt:(cnt=0) inst prog : (cmd * int) =
            acc @ [(t,c')], cnt'
          ) in
      (mkSelect typ ss, ss_cnt)
-  | Apply (tbl, keys, acts, def) ->
+  | Apply (tbl, keys, acts, default) ->
      let actSize = log2(List.length acts) in
-     let instrument_row t act _  =
-       let ghost = Skip (* Assume(Hole1("?ActIn"^tbl, actSize) %=% mkVInt(id, actSize))*)
-       (* match tag with
-        * | `WithHoles -> Assume(Hole1("?ActIn"^tbl, actSize) %=% mkVInt(id, actSize))
-        * | `NoHoles -> ("?ActIn"^tbl) %<-% mkVInt(id, actSize) *)
-       in
-       (t, ghost
-           %:% act)
-     in
      let selects =
        StringMap.find_multi inst tbl
        |> List.fold ~init:[]
-            ~f:(fun acc (matches, action) ->
+            ~f:(fun acc (matches, data, action) ->
               let t = List.fold2_exn keys matches
-                 ~init:True
-                 ~f:(fun acc x m ->
-                   (acc %&% (Var1 x %=% m))) in
+                        ~init:True
+                        ~f:(fun acc x m -> (acc %&% encode_match x m)) in
               if action >= List.length acts then
                 []
               else
-                instrument_row t (List.nth_exn acts action) action
+                (t, (List.nth acts action
+                     |> Option.value ~default:([], default)
+                     |> bind_action_data data))
                 :: acc)
      in
      let add_row_hole = Hole1 ("?AddRowTo" ^ tbl, 1) in
@@ -61,20 +156,20 @@ let rec apply_inst tag ?cnt:(cnt=0) inst prog : (cmd * int) =
        match tag with
        | `WithHoles -> 
           List.mapi acts
-            ~f:(fun i a -> 
+            ~f:(fun i (scope, act) -> 
               (List.fold keys ~init:True
                  ~f:(fun acc (x,sz) -> acc %&% (Var1 (x,sz) %=% Hole1 ("?"^x,sz)))
                %&% (add_row_hole %=% mkVInt (1,1))
                %&% (which_act_hole %=% mkVInt (i,actSize))
-              , a))
+              , holify scope act))
        | `NoHoles -> []
      in
      let dflt_row =
        let cond =
-           match tag with
-           | `WithHoles -> True (*add_row_hole %=% mkVInt (0,1)*)
-           | `NoHoles -> True in
-       [instrument_row cond def 3] in
+         match tag with
+         | `WithHoles -> True (*add_row_hole %=% mkVInt (0,1)*)
+         | `NoHoles -> True in
+       [(cond, default)] in
      (selects @ holes @ dflt_row |> mkOrdered
      , cnt (*+ 1*))
            
@@ -137,7 +232,7 @@ let complete_inner ~falsify (cmd : cmd) =
     | Apply (name, keys, acts, dflt)
       -> Apply (name
               , keys
-              , List.map acts ~f:(complete_aux ~falsify)
+              , List.map acts ~f:(fun (data, a) -> (data, complete_aux a ~falsify))
               , complete_aux ~falsify dflt)
   in
   complete_aux ~falsify cmd
@@ -147,7 +242,7 @@ let complete cmd = complete_inner ~falsify:true cmd
 
 
 let rec project_cmd_on_acts c (subst : expr1 StringMap.t) : cmd list =
-  Printf.printf "PROJECTING\n%!";
+  (* Printf.printf "PROJECTING\n%!"; *)
   let holes = true in
   match c with
   | Skip -> [c]
@@ -251,21 +346,21 @@ let compute_candidates h pkt phys =
 (** Solves the inner loop of the cegis procedure. 
  * pre-condition: pkt is at an ingress host 
 **)
-let get_one_model ?fvs:(fvs = []) (pkt : Packet.t) (logical : cmd) (phys : cmd) =
+let get_one_model ?fvs:(fvs = []) mySolver (pkt : Packet.t) (logical : cmd) (phys : cmd) =
   let (pkt',_), _ = trace_eval logical (pkt,None) |> Option.value_exn in
-  let _ = Printf.printf "input: %s\n output: %s\n%!" (Packet.string__packet pkt) (Packet.string__packet pkt') in 
+  (* let _ = Printf.printf "input: %s\n output: %s\n%!" (Packet.string__packet pkt) (Packet.string__packet pkt') in  *)
   let st = Time.now () in
   let phi = Packet.to_test ~fvs pkt' in
   let wp_phys_paths = wp_paths phys phi  |> List.filter ~f:(fun pre -> pre <> False) in
   let wp_time = Time.diff (Time.now ()) st in
-  if wp_phys_paths = [] then failwith "No feasible paths!" else
-    Printf.printf "%d feasible paths\n\n%!" (List.length wp_phys_paths);
-  Printf.printf "------------------------------------------------\n";
-  List.iter wp_phys_paths ~f:(fun path ->
-      Printf.printf "%s\n\n%!" (string_of_test path)
-    )
-  ; Printf.printf "----------------------------------------------------\n%!"
-  ;
+  (* if wp_phys_paths = [] then failwith "No feasible paths!" else
+   *   Printf.printf "%d feasible paths\n\n%!" (List.length wp_phys_paths);
+   * Printf.printf "------------------------------------------------\n";
+   * List.iter wp_phys_paths ~f:(fun path ->
+   *     Printf.printf "%s\n\n%!" (string_of_test path)
+   *   )
+   * ; Printf.printf "----------------------------------------------------\n%!"
+   * ; *)
     let time_spent_in_z3 = ref Time.Span.zero in
     let num_calls_to_z3 = ref 0 in
     let model =
@@ -280,7 +375,7 @@ let get_one_model ?fvs:(fvs = []) (pkt : Packet.t) (logical : cmd) (phys : cmd) 
             let condition = substV wp_phys pkt in
             let _ = Printf.printf "CONDITION: \n%s\n%!" (string_of_test condition) in
             num_calls_to_z3 := !num_calls_to_z3 + 1;
-            match check `Sat condition with
+            match check mySolver `Sat condition with
             | (None, d) -> Printf.printf "unsolveable!\n%!";
                            time_spent_in_z3 := Time.Span.(!time_spent_in_z3 + d);
                            None
@@ -296,38 +391,52 @@ let get_one_model ?fvs:(fvs = []) (pkt : Packet.t) (logical : cmd) (phys : cmd) 
     ; model, !time_spent_in_z3, !num_calls_to_z3, wp_time
 
 
-let rec compute_cand_for_trace line t : cmd =
+let rec compute_cand_for_trace line (pinst : instance) t : cmd =
   match line with
   | Skip 
     | Assert _
     | Assume _ 
     | Assign _
     -> line
-  | Seq (c1,c2) -> compute_cand_for_trace c1 t
-                   %:% compute_cand_for_trace c2 t
+  | Seq (c1,c2) -> compute_cand_for_trace c1 pinst t
+                   %:% compute_cand_for_trace c2 pinst t
   | Select(typ, cs) ->
-     List.map cs ~f:(fun (b, c) -> (b, compute_cand_for_trace c t))
+     List.map cs ~f:(fun (b, c) -> (b, compute_cand_for_trace c pinst t))
      |> mkSelect typ
   | Apply(name, keys, acts, default) ->
      (*might need to use existing instance to negate prior rules *)
+     (* let misses =
+      *   match StringMap.find pinst name with
+      *   | None -> True
+      *   | Some rows ->
+      *      List.fold rows ~init:True
+      *        ~f:(fun acc (ms, _) ->
+      *          acc %&% !%(List.fold2_exn keys ms ~init:True ~f:(fun acc k m -> acc %&% encode_match k m))
+      *        )
+      * in *)
      begin match StringMap.find t name with
      | None -> Assume False
-     | Some act_idx ->
+     | Some (data, act_idx) ->
         if act_idx >= List.length acts
-        then default
-        else List.fold keys ~init:True
-               ~f:(fun acc (x, sz) -> acc %&% (Eq(Var1(x, sz), Hole1("?"^x, sz))))
+        then (*Assert (misses) %:%*) default
+        else List.fold keys ~init:True (*misses*)
+               ~f:(fun acc (x, sz) -> acc
+                                      %&% (Hole1("?"^x^"_lo", sz) %<=% Var1(x, sz))
+                                      %&% (Var1(x, sz)  %<=% Hole1("?"^x^"_hi", sz)))
              |> Assert
-             |> Fun.flip mkSeq (List.nth_exn acts act_idx)
+             |> Fun.flip mkSeq (List.nth_exn acts act_idx |> bind_action_data data )
      end
   | While _ -> failwith "go away"
   
                                                     
-let apply_hints h_opt m pline pinst  =
+let apply_hints
+      (h_opt : ((action_data * int) StringMap.t -> (action_data * int) StringMap.t list) option)
+      m
+      pline pinst : (cmd * (action_data * int) StringMap.t) list =
   match h_opt with
   | None -> [apply_inst `WithHoles pinst pline |> fst, StringMap.empty]
   | Some h ->
-     List.map (h m) ~f:(fun t -> (compute_cand_for_trace pline t, t))
+     List.map (h m) ~f:(fun t -> (compute_cand_for_trace pline pinst t, t))
 
 
 let print_instance label linst =
@@ -342,34 +451,38 @@ let print_instance label linst =
               
 
 let get_one_model_edit
-      ?fvs:(fvs = [])
+      ?fvs:(_ = [])
       ~hints (pkt : Packet.t)
-      (lline : cmd) linst ledit
+      mySolver
+      (lline : cmd) (linst : instance) (ledit : edit)
       (pline : cmd) pinst
   =
   (* print_instance "Logical" (apply_edit linst ledit);
    * print_instance "Physical" pinst; *)
   let time_spent_in_z3, num_calls_to_z3 = (ref Time.Span.zero, ref 0) in
-  let (pkt',_),trace = trace_eval_inst lline (apply_edit linst ledit) (pkt,None) in
+  let (_,_), trace, actions = trace_eval_inst lline (apply_edit linst ledit) (pkt,None) in
   let st = Time.now () in
-  let phi = Packet.to_test ~fvs pkt' in
-  let cands = apply_hints hints trace pline pinst in
+  (* let phi = Packet.to_test ~fvs pkt' in *)
+  let cands = apply_hints hints actions pline pinst in
   (* let _ = Printf.printf "Candidate programs:\n%!";
    *         List.iter cands ~f:(fun (c,_) -> Printf.printf "\n%s\n%!" (string_of_cmd c));
    *         Printf.printf "\n" in *)
   let wp_phys_paths =
     List.filter_map cands ~f:(fun (path, acts) ->
-        let prec = wp path phi in
+        let prec = wp path True in
         if prec = False then None else Some(prec, acts))
   in
+  let log_wp = wp trace True  in
   let wp_time = Time.diff (Time.now ()) st in
   let model =
     List.find_map wp_phys_paths ~f:(fun (wp_phys, acts) ->
         if wp_phys = False then None else
-          let _ = Printf.printf "Packet %s\n wp %s" (Packet.string__packet pkt) (string_of_test wp_phys) in
-          let _ = Printf.printf "Checking %s \n%!"
-                    (substV wp_phys pkt |> string_of_test) in
-          let (res, time) = check `Sat (substV wp_phys pkt) in
+          (* let _ = Printf.printf "LOGWP %s\n PHYSWP %s\n%!" (string_of_test log_wp) (string_of_test wp_phys) in *)
+          (* let _ = Printf.printf "Checking %s become %s \n%!"
+           *           (string_of_test wp_phys)
+           *           (substV wp_phys pkt |> string_of_test) in *)
+          (* let (res, time) = check mySolver `Sat (substV wp_phys pkt) in *)
+          let (res, time) = check mySolver `Sat (log_wp %<=>% wp_phys) in
           time_spent_in_z3 := Time.Span.(!time_spent_in_z3 + time);
           num_calls_to_z3 := !num_calls_to_z3 + 1;
           match res with
@@ -450,7 +563,7 @@ and fixup (real:cmd) (model : value1 StringMap.t) : cmd =
   | Apply (name, keys, acts, dflt)
     -> Apply (name
             , keys
-            , List.map acts ~f:(fun a -> fixup a model)
+            , List.map acts ~f:(fun (data, a) -> (data, fixup a model))
             , fixup dflt model)
 
 let symbolic_pkt fvs = 
@@ -468,7 +581,7 @@ let symb_wp ?fvs:(fvs=[]) cmd =
   |> symbolic_pkt
   |> wp cmd
   
-let implements _ logical linst ledit real pinst =
+let implements _ mySolver (logical : cmd) (linst : instance) (ledit : edit) (real : cmd) (pinst : instance) =
   (* let _ = Printf.printf "IMPLEMENTS on\n%!    ";
    *         List.iter fvs ~f:(fun (x,_) -> Printf.printf " %s" x);
    *         Printf.printf "\n%!" *)
@@ -491,7 +604,7 @@ let implements _ logical linst ledit real pinst =
   let condition = equivalent u_log u_rea in
   let nd_mk_cond = Time.now () in
   let mk_cond_time = Time.diff nd_mk_cond st_mk_cond in
-  let model_opt, z3time = check_valid condition in
+  let model_opt, z3time = check_valid mySolver condition in
   let pkt_opt = match model_opt with
     | None  -> Printf.printf "++++++++++valid+++++++++++++\n%!";
                `Yes
@@ -521,56 +634,167 @@ let rec get_schema_of_table name phys =
   | While (_, c) -> get_schema_of_table name c
 
 
+let match_cap m m' =
+  match m, m' with
+  | Exact (i,_), Exact (j,_) ->
+     if i = j then [m] else []
+  | Exact (i,_), Between (lo, hi, _)
+    | Between (lo, hi, _), Exact(i,_)->
+     if lo <= i && i <= hi then
+       [m]
+     else
+       []
+  | Between (lo, hi, sz), Between (lo', hi', _) ->
+     let lo'' = max lo lo' in
+     let hi'' = min hi hi' in
+     if lo'' < hi'' then
+       [Between (lo'', hi'', sz)]
+     else if lo'' = hi'' then
+       [Exact(lo'',sz)]
+     else
+       []
 
-let fixup_edit match_model action_map phys (pinst : (expr1 list * int) list Util.StringMap.t) =
-  let mk_new_row tbl_name act =
+let off_by_one i j =  max i j - min i j = 1
+  
+let match_cup m m' =
+  match m, m' with
+  | Exact (i,_), Exact (j,sz) ->
+     if i = j then
+       [m]
+     else if off_by_one i j
+     then [Between (min i j, max i j, sz)]
+     else [m; m']
+  | Exact (i,_), Between (lo, hi, sz)
+    | Between (lo, hi, sz), Exact(i,_)->
+     if lo <= i && i <= hi then
+       [Between (lo, hi, sz)]
+     else if i + 1 = lo || hi + 1 = i
+     then [Between(min lo i, max hi i, sz)]
+     else [m;m']
+  | Between (lo, hi, sz), Between (lo', hi', _) ->
+     if hi >= lo - 1 && lo <= hi + 1
+     then [Between (min lo lo', max hi hi', sz)]
+     else [m;m']
+
+let matches_cup ms =
+  List.fold ms ~init:[]
+    ~f:(fun acc m ->
+      List.fold acc ~init:[]
+        ~f:(fun acc' m' ->
+          acc' @ match_cup m m' ))
+          
+
+let match_sub m m' =
+  match m, m' with
+  | Exact (i, _), Exact (j, _) -> i = j
+  | Exact (i, _), Between (lo', hi',_) -> lo' <= i && i <= hi'
+  | Between (lo, hi, _), Exact (j,_) -> lo = j && hi = j
+  | Between (lo, hi, _), Between (lo', hi', _) ->  lo <= hi' && lo' <= hi
+            
+let rec match_minus m ms =
+  let compare m m' =
+    match m, m' with
+    | Exact(i,_), Exact(j,_) -> compare i j
+    | Exact(i,_), Between(lo,_,_) -> compare i lo
+    | Between(lo, _,_), Exact(i,_) -> compare lo i
+    | Between(lo, _, _), Between(lo',_,_) -> compare lo lo'
+  in
+  match m with
+  | Exact(_, _) ->
+     if List.exists ms ~f:(match_sub m)
+     then []
+     else [m]
+  | Between(lo,hi, sz) ->
+     match ms with
+     | [] -> [m]
+     | (m'::ms') ->
+        match m' with
+        | Exact(j,_) ->
+           if j < lo || j > hi
+           then match_minus (Between (lo,hi,sz)) ms'
+           else if j = lo then
+             match_minus (Between(lo+1, hi, sz)) ms'
+           else if j = hi then
+             match_minus (Between (lo, hi-1, sz)) ms'
+           else
+             match_minus (Between (lo, j-1, sz)) ms'
+             @ match_minus (Between (j+1, hi, sz)) ms'
+             |> matches_cup
+             |> List.sort ~compare
+
+        | Between(lo', hi', _) ->
+           if lo' <= lo && hi <= hi'
+           then []
+           else if lo' <= lo
+           then match_minus (Between(hi'+1, hi, sz)) ms'
+           else if hi <= hi' then
+             match_minus (Between(lo, lo'-1,sz)) ms'
+           else (*lo < lo' && hi > hi'*)
+             match_minus (Between (lo, lo'-1, sz)) ms'
+             @ match_minus (Between (hi'+1, hi, sz)) ms'
+             |> matches_cup
+             |> List.sort ~compare
+                                        
+                                       
+let fixup_edit match_model (action_map : (action_data * size) StringMap.t) phys (pinst : instance) : instance =
+  let mk_new_row tbl_name data act : row list =
     match get_schema_of_table tbl_name phys with
     | None -> failwith ("Couldnt find keys for table " ^ tbl_name)
     | Some (ks, _, _) ->
        let keys_holes =
          List.fold ks ~init:(Some [])
            ~f:(fun acc (v, sz) ->
-             match acc, fixup_val match_model (Hole1("?"^v,sz)) with
-             | None, _ -> None
-             | _, Hole1 _ -> None
-             | Some ks, v -> Some (ks @ [v])
+             match acc,
+                   fixup_val match_model (Hole1("?"^v^"_lo", sz)),
+                   fixup_val match_model (Hole1("?"^v^"_hi", sz))
+             with
+             | None, _,_ -> None
+             | _, Hole1 _,_ | _, _, Hole1 _ -> None
+             | Some ks, Value1(Int(lo,_)), Value1(Int(hi,_)) ->
+                let k = if lo = hi
+                        then [Exact (lo, sz)]
+                        else if lo > hi
+                        then failwith "Low value greater than high value in model from z3"
+                        else [Between (lo, hi,sz)] in
+                Some (ks @ k)
+             | _, _,_ -> failwith "got something that wasn't a model"
            ) in
        match keys_holes with
        | None -> []
-       | Some ks -> [(ks, act)]
+       | Some ks -> [(ks, data, act)]
   in
-  StringMap.fold ~init:pinst action_map ~f:(fun ~key:tbl_name ~data:act acc ->
+  StringMap.fold ~init:pinst action_map ~f:(fun ~key:tbl_name ~data:(act_data,act) acc ->
       StringMap.update acc tbl_name
         ~f:(function
-          | None -> mk_new_row tbl_name act
-          | Some rows -> rows @ mk_new_row tbl_name act
-
+          | None -> mk_new_row tbl_name act_data act
+          | Some rows -> mk_new_row tbl_name act_data act @ rows
         )
     )
                                                          
 (** solves the inner loop **)
 let solve_concrete
       ?fvs:(fvs = [])
-      ~hints ?packet:(packet=None)
-      (logical : cmd) linst edit
-      (phys : cmd) pinst
-    : (((expr1 list * int) list) StringMap.t * Time.Span.t * int * Time.Span.t) =
+      mySolver
+      ~hints
+      ?packet:(packet=None)
+      (logical : cmd) (linst : instance) (edit : edit)
+      (phys : cmd) (pinst : instance)
+    : (instance * Time.Span.t * int * Time.Span.t) =
   let values = multi_ints_of_cmd logical |> List.map ~f:(fun x -> Int x) in
   let pkt = packet |> Option.value ~default:(Packet.generate fvs ~values) in
-  match get_one_model_edit ~fvs ~hints pkt logical linst edit phys pinst with
+  match get_one_model_edit ~fvs ~hints pkt mySolver logical linst edit phys pinst with
   | None, z3time, ncalls, _ ->
      Printf.sprintf "Couldnt find a model in %d calls and %f"
        ncalls (Time.Span.to_ms z3time)
      |> failwith
   | Some (model, action_map), z3time, ncalls, wp_time ->
      let pinst' = fixup_edit model action_map phys pinst in
-     print_instance "NEW Physical" pinst';
      pinst', z3time, ncalls, wp_time
   
-let cegis ?fvs:(fvs = []) ~hints ?gas:(gas=1000) (logical : cmd) linst ledit (real : cmd) pinst =
+let cegis ?fvs:(fvs = []) ~hints ?gas:(gas=1000) ~iter mySolver (logical : cmd) linst (ledit : edit) (real : cmd) pinst =
   let fvs = if fvs = []
-            then (Printf.printf "Computing the FVS!\n%!";
-                  free_vars_of_cmd logical @ free_vars_of_cmd real)
+            then ((* Printf.printf "Computing the FVS!\n%!"; *)
+              free_vars_of_cmd logical @ free_vars_of_cmd real)
             else fvs in
   let implements_time = ref Time.Span.zero in
   let implements_calls = ref 0 in
@@ -581,9 +805,9 @@ let cegis ?fvs:(fvs = []) ~hints ?gas:(gas=1000) (logical : cmd) linst ledit (re
   let phys_wp_time = ref Time.Span.zero in
   let tree_sizes = ref [] in
   let rec loop gas pinst =
-    Printf.printf "======================= LOOP (%d) =======================\n%!" (gas);
+    Printf.printf "======================= LOOP (%d, %d) =======================\n%!" (iter) (gas);
     let (res, z3time, log_time, phys_time, treesize) =
-      implements fvs logical linst ledit real pinst in
+      implements fvs mySolver logical linst ledit real pinst in
     implements_time := Time.Span.(!implements_time + z3time);
     implements_calls := !implements_calls + 1;
     log_wp_time := Time.Span.(!log_wp_time + log_time);
@@ -593,26 +817,29 @@ let cegis ?fvs:(fvs = []) ~hints ?gas:(gas=1000) (logical : cmd) linst ledit (re
     | `Yes ->
        Some pinst
     | `NoAndCE counter ->
-       if gas = 0 then Some pinst else
+       if gas = 0 then failwith "RAN OUT OF GAS" else
          let (pinst', ex_z3_time, ncalls, wpt) =
-           solve_concrete ~fvs ~hints ~packet:(Some counter) logical linst ledit real pinst in
+           solve_concrete ~fvs ~hints ~packet:(Some counter) mySolver logical linst ledit real pinst in
          model_time := Time.Span.(!model_time + ex_z3_time);
          model_calls := !model_calls + ncalls;
          wp_time := Time.Span.(!wp_time + wpt);
-         loop (gas-1) pinst'
+         if StringMap.equal (=) pinst pinst'
+         then failwith ("Could not make progress on edit " ^ string_of_edit ledit)
+         else loop (gas-1) pinst'
   in
   let pinst' = loop gas pinst in
-  Printf.printf "total z3 time to synthesize %s + %s = %s\n%!"
-    (Time.Span.to_string !implements_time)
-    (Time.Span.to_string !model_time)
-    (Time.Span.(to_string (!implements_time + !model_time)));
+  (* Printf.printf "total z3 time to synthesize %s + %s = %s\n%!"
+   *   (Time.Span.to_string !implements_time)
+   *   (Time.Span.to_string !model_time)
+   *   (Time.Span.(to_string (!implements_time + !model_time))); *)
   (pinst', !implements_time, !implements_calls, !model_time, !model_calls, !wp_time, !log_wp_time, !phys_wp_time, !tree_sizes)
     
-let synthesize ?fvs:(fvs=[]) ?hints:(hints = None) ?gas:(gas = 1000)
+let synthesize ?fvs:(fvs=[]) ~iter ?hints:(hints = None) ?gas:(gas = 1000)
+      mySolver
       logical linst ledit phys pinst =
   let start = Time.now () in
   let (pinst', checktime, checkcalls, searchtime, searchcalls, wpt, lwpt, pwpt, tree_sizes) =
-    cegis ~fvs ~hints ~gas logical linst ledit phys pinst in
+    cegis ~fvs ~hints ~gas ~iter mySolver logical linst ledit phys pinst in
   let pinst_out = Option.value ~default:(StringMap.empty) pinst' (*|> complete*) in
   let stop = Time.now() in
   Printf.printf "\nSynthesized Program:\n%s\n\n%!"
@@ -624,15 +851,16 @@ let synthesize ?fvs:(fvs=[]) ?hints:(hints = None) ?gas:(gas = 1000)
    
 let synthesize_edit ?fvs:(fvs=[]) ?hints:(hints=None)
       ?gas:(gas=1000)
+      ?iter:(iter = 0)
+      mySolver
       (log_pipeline : cmd) (phys_pipeline : cmd)
-      (linst :  (expr1 list * int) list StringMap.t)
-      (pinst : (expr1 list * int) list StringMap.t)
-      (ledit : (string * (expr1 list * int))) =  
+      (linst : instance)
+      (pinst : instance)
+      (ledit : edit) =  
   Printf.printf "Logical:\n%s\n\nPhysical:\n%s\n"
     (string_of_cmd (apply_inst `NoHoles (apply_edit linst ledit) log_pipeline |> fst))
     (string_of_cmd (apply_inst `NoHoles pinst phys_pipeline |> fst));
-  print_instance "Logical" linst;
-  print_instance "Physical" pinst;
-  synthesize ~fvs ~gas ~hints (log_pipeline) linst ledit
+
+  synthesize ~fvs ~gas ~hints ~iter mySolver (log_pipeline) linst ledit
     (phys_pipeline) pinst
     

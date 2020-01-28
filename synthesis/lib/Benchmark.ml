@@ -3,49 +3,82 @@ open Ast
 open Synthesis
 open Util
 open Packet
-       
+
+module IntMap = Map.Make(Int)
+  
+                        
 let permute l =
-  List.map l ~f:(fun x -> (Random.int (List.length l), x))
+  List.map l ~f:(inj_r (Random.int (List.length l)))
   |> List.sort ~compare:(fun (i, _) (j,_) -> compare i j)
   |> List.map ~f:(snd) 
               
 let tbl = Printf.sprintf "tbl%d"
-
     
-let rec mk_pipeline n =
+let rec mk_pipeline varsize =
+  fun n ->
   if n = 0 then [] else
     (tbl n
-    , [("k_" ^tbl n, 2)]
-    , List.fold [0;1;2;3] ~init:[] ~f:(fun acc i -> (("x_"^tbl n) %<-% mkVInt (i,2)) :: acc)
-    , ("x_"^tbl n) %<-% mkVInt (0,2)
-    ) :: mk_pipeline (n-1)
+    , [("k_" ^tbl n, varsize)]
+    , [(["v"],("x_"^tbl n) %<-% Var1("v",varsize))]
+    , ("x_"^tbl n) %<-% mkVInt (0,varsize)
+    ) :: mk_pipeline varsize (n-1)
 
 
-let rec generate_n_insertions length n generated : (string * (expr1 list * int)) list =
-  if n = 0 then [] else
-    let rec loop_keys _ =
-      let i = Random.int length + 1 in
-      let key = mkVInt (Random.int 4, 2) in
-      if List.exists generated ~f:((=) (tbl i, key))
-      then loop_keys ()
-      else (tbl i, key)
+let rec generate_n_insertions varsize length n avail_tables maxes =
+  if n = 0 then
+    let _ = Printf.printf "--generated--\n%!"in
+    []
+  else if avail_tables = [] then
+    let _ = Printf.printf "--filled up --\n%!" in
+    []
+  else
+    let _ = Printf.printf "generating %d \n%!" n in
+    let rec loop_free_match avail_tables =
+      if avail_tables = []
+      then None
+      else
+        let i = Random.int (List.length avail_tables) |> List.nth_exn avail_tables in
+        let max_i = StringMap.find maxes (tbl i) |> Option.value ~default:0 in
+        Printf.printf "%s max : %d\n%!" (tbl i) max_i;
+        if max_i >= pow 2 varsize
+        then loop_free_match (List.filter avail_tables ~f:((<>) i))
+        else
+          let (max', mtch) =
+            if Random.int 6 < 1 then
+              (max_i + 1, Exact (max_i, varsize))
+            else
+              let lo = max_i in
+              let hi = min (lo + Random.int 3) (pow 2 varsize - 1) in
+              if lo = hi then
+                (hi + 1, Exact (hi, varsize))
+              else
+                (hi + 1, Between (lo, hi, varsize))
+          in
+          let maxes' = StringMap.set maxes ~key:(tbl i) ~data:max' in
+          let act_data = (Random.int (pow 2 varsize),varsize) in
+          let row = ([mtch], [act_data], 0) in
+          Some (maxes', avail_tables, tbl i, row)
     in
-    let (tbl_name, keys) = loop_keys () in
-    (tbl_name, ([keys], Random.int 4))
-    :: generate_n_insertions length (n-1) ((tbl_name, keys)::generated)
-
-module IntMap = Map.Make(Int)
-                             
-let reorder_benchmark length max_inserts =
-  let logical_pipeline = mk_pipeline length in
+    match loop_free_match avail_tables with
+    | None ->
+       let _ = Printf.printf "--filled up --\n%!" in
+       []
+    | Some (maxes', avail_tables', name, row) ->
+       let _ = Printf.printf "Inserting\n%!" in
+       (name, row)
+       :: generate_n_insertions varsize length (n-1) avail_tables' maxes'
+                                  
+let reorder_benchmark varsize length max_inserts =
+  Random.init 99;
+  let logical_pipeline = mk_pipeline varsize length in
   let physical_pipeline = permute logical_pipeline in
-  let mk_empty_inst acc (name,_,_,_) =    Map.set acc ~key:name ~data:[]  in
+  let mk_empty_inst acc (name,_,_,_) = Map.set acc ~key:name ~data:[]  in
   let linst = List.fold logical_pipeline ~init:StringMap.empty ~f:mk_empty_inst in
   let pinst = List.fold logical_pipeline ~init:StringMap.empty ~f:mk_empty_inst in
   let to_cmd line =  List.((line >>| fun t -> Apply t)
                            |> reduce_exn ~f:(%:%)) in
   (* let hints = Some(fun vMap -> (\*[vMap]*\)
-   *                 [List.fold ~init:vMap (range_ex 1 (length + 2))
+   *                 [List.fold ~init:vMap (range_ex 1 (length + 8))
    *                   ~f:(fun acc i ->
    *                     StringMap.set acc ~key:("?AddRowTo" ^ tbl i)
    *                       ~data:(mkVInt(1,1))
@@ -55,27 +88,15 @@ let reorder_benchmark length max_inserts =
   (* let hints = None in *)
   let log = to_cmd logical_pipeline in
   let phys = to_cmd physical_pipeline in
-  let insertion_sequence = generate_n_insertions length max_inserts [] in
-  (* let rec all_paths i =
-   *   if i = 0 then [[]] else
-   *     liftL2 mkCons (range_ex 0 4) (all_paths (i-1))
-   * in *)
-  (* (\* let hints_map =
-   *  *   all_paths length
-   *  *   |> List.fold ~init:StringMap.empty
-   *  *        ~f:( fun acc actSeq ->
-   *  *             List.fold_right actSeq ~init:acc
-   *  *               ~f:(fun i acc actId ->
-   *  *                 StringMap.set acc ~key:(tbl i)
-   *  *                   ~data:(mkVInt(actId, 4))))
-   *  * in *\)
-   * let hints h = Some h in *)
+  let insertion_sequence = 
+    generate_n_insertions varsize length max_inserts (range_ex 1 (length +1)) StringMap.empty
+  in
   let fvs = range_ex 1 (length + 1)
             |> List.map ~f:(fun i ->
-                   [("k_" ^tbl i, 2)
-                   ; (symbolize("k_" ^tbl i),2)
-                   ; (symbolize("x_" ^tbl i), 2)
-                   (* ; ("?ActIn"^tbl i, 2) *)
+                   [("k_" ^tbl i, 32)
+                   ; (symbolize("k_" ^tbl i), 32)
+                   ; (symbolize("x_" ^tbl i), 32)
+                       (* ; ("?ActIn"^tbl i, 8) *)
                  ])
             |> List.join
   in
@@ -83,10 +104,13 @@ let reorder_benchmark length max_inserts =
     match seq with
     | [] -> []
     | edit::edits ->
-       let (totalt,checkt,checkn, searcht, searchn, wpt,lwpt,pwpt,sizes,_)  =
-         synthesize_edit ~gas:1 ~fvs ~hints log phys linst pinst edit in
+       Printf.printf "==== BENCHMARKING INSERTION OF (%s) =====\n%!"
+         (string_of_edit edit);
+       let (totalt,checkt,checkn, searcht, searchn, wpt,lwpt,pwpt,sizes,pinst')  =
+         synthesize_edit ~gas:5 ~fvs ~hints ~iter:i (Prover.solver ()) log phys linst pinst edit in
+       Printf.printf "=== DONE=================================\n%!";
        (i, totalt, checkt, checkn, searcht, searchn, wpt,lwpt,pwpt, sizes)
-       :: run_experiment (i + 1) edits (apply_edit linst edit) (apply_edit pinst edit)
+       :: run_experiment (i + 1) edits (apply_edit linst edit) pinst'
   in
   let data = run_experiment 0 insertion_sequence linst pinst in
   let mean ds = List.fold ds ~init:0 ~f:((+)) / List.length ds in
@@ -105,7 +129,3 @@ let reorder_benchmark length max_inserts =
         (max_l sizes)
         (min_l sizes)
     )
-    
-    
-    
-    

@@ -354,7 +354,7 @@ let cmd_equal (a1 : action) (a2 : action) : bool =
   let wp1 = symb_wp a1 ~fvs:(free_vars_of_cmd a2) in
   let wp2 = symb_wp a2 ~fvs:(free_vars_of_cmd a1) in
   Printf.printf "Checking whether %s == %s\n%!" (string_of_cmd a1) (string_of_cmd a2);
-  check_valid (wp1 %<=>% wp2) |> fst |> Option.is_none
+  check_valid (Prover.solver ()) (wp1 %<=>% wp2) |> fst |> Option.is_none
   
               
 let cmd_equalable bound_vars (a1 : action) (a2 : action) : test option =
@@ -379,7 +379,7 @@ let cmd_equalable bound_vars (a1 : action) (a2 : action) : test option =
     (string_of_cmd a1)
     (string_of_cmd a2)
     (string_of_test condition);
-  holify_test bound_vars condition |> check `Sat |> fst >>= const (Some condition)
+  holify_test bound_vars condition |> check (Prover.solver ()) `Sat |> fst >>= const (Some condition)
     
 let candidates (phys : schema) (log_row : action_seq) : (test * action_seq) list =
   let all_phys_rows = list_cross phys.actions in
@@ -422,7 +422,7 @@ let match_test (tbl : schema) (matches : key_match list) =
 
 let check_keys_sat_cond phys_tbl phys_matches (cond, act) =
   let open Option in
-  check `Sat (match_test phys_tbl phys_matches %=>% cond) |> fst >>| const act
+  check (Prover.solver ()) `Sat (match_test phys_tbl phys_matches %=>% cond) |> fst >>| const act
 
     
 let cands_for_row  (phys_tbl : schema) (phys_matches : key_match list) (log_acts : action_seq)  =

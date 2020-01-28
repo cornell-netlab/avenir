@@ -1,13 +1,39 @@
 open Core
 open Util
 
-type size = int
-let enable_smart_constructors = false
+let enable_smart_constructors = true
        
+type size = int
+              
+type match_expr =
+  | Exact of int * size
+  | Between of int * int * size 
+
+let string_of_match m =
+  match m with 
+  | Exact (i,s) -> Printf.sprintf "%d#%d" i s
+  | Between (lo,hi,s) -> Printf.sprintf "[%d,%d]#%d" lo hi s
+                                       
+
+type action_data = (int * size) list
+type row = match_expr list * action_data * int
+let string_of_row (mtchs, ad, actid) =
+  Printf.sprintf "%s   ---(%s)---> %d"
+    (List.fold mtchs ~init:"" ~f:(fun acc m -> Printf.sprintf "%s, %s" acc (string_of_match m)))
+    (List.fold ad ~init:"" ~f:(fun acc (d,_) -> Printf.sprintf "%s, %d" acc d))
+    actid
+
+type instance = row list StringMap.t
+
+type edit = string * row
+let string_of_edit (nm,(row) : edit) =
+  Printf.sprintf "%s <++ %s" nm (string_of_row row)
+
+                 
 type value1 =
   | Int of (int * size)
   | VTuple of (value1 list)
-   
+
 type expr1 =
   | Value1 of value1
   | Var1 of (string * size)
@@ -363,8 +389,8 @@ let (%<>%) v v' = Neg(v %=% v')
 
 let (%<%) = mkLt
 let (%>%) e e' = e' %<% e                
-let (%<=%) e e' = !%(e' %>% e)
-let (%>=%) e e' = !%(e' %<% e)
+let (%<=%) e e' = !%(e %>% e')
+let (%>=%) e e' = !%(e %<% e')
 
 let rec mkMember el set =
   match set with
@@ -380,6 +406,7 @@ let mkImplies assum conseq =
     if assum = conseq then True else
     match assum, conseq with
     | True, _ -> conseq
+    | _, True -> True
     | _, False -> !%(assum)
     | _, _ -> Impl(assum, conseq) 
 
@@ -402,7 +429,10 @@ let rec string_of_test t =
   | Iff (left, right) -> "(" ^ string_of_test left ^ " <==> " ^ string_of_test right ^ ")\n"
   | Or (left, right) -> "(" ^ string_of_test left ^ "\n || " ^ string_of_test right ^ ")"
   | And (left, right) -> "(" ^ string_of_test left ^ "&&" ^ string_of_test right ^ ")"
-  | Neg t -> "~(" ^ string_of_test t ^ ")"
+  | Neg (Lt(left, right)) ->
+     Printf.sprintf "(%s <= %s)" (string_of_expr1 right) (string_of_expr1 left)
+  | Neg t ->
+     "~(" ^ string_of_test t ^ ")"
 
 let rec sexp_string_of_test t =
   let binop opname left right recfun : string=
@@ -552,7 +582,7 @@ type cmd =
   | Seq of (cmd * cmd)
   | While of (test * cmd)
   | Select of (select_typ * ((test * cmd) list))
-  | Apply of (string * (string * size) list * cmd list * cmd)
+  | Apply of (string * (string * size) list * ((string list * cmd) list) * cmd)
 
 let clean_selects_list ss = 
   List.rev ss
@@ -672,7 +702,7 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
             str ^ "," ^ k ^ "#" ^ string_of_int sz) ^ ")"
       ^ "," ^ List.fold_left acts ~init:""
                 ~f:(fun str a ->
-                  str ^ " | {" ^ string_of_cmd a ^ "}")
+                  str ^ " | { fun (SOME ACTION DATA) -> " ^ string_of_cmd (snd a) ^ "}")
       ^ ", {" ^ string_of_cmd default ^ "})"
                                        
             
@@ -699,7 +729,7 @@ let rec sexp_string_of_cmd e : string =
      ^ name ^ ",["
      ^ List.fold_left keys ~init:"" ~f:(fun str (k,sz) -> str ^ ";\"" ^ k ^ "\"," ^ string_of_int sz ^ "")
      ^ "],["
-     ^ List.fold_left actions ~init:"" ~f:(fun str a -> str ^ ";" ^ sexp_string_of_cmd a)
+     ^ List.fold_left actions ~init:"" ~f:(fun str a -> str ^ ";((SOME ACTION DATA), " ^ sexp_string_of_cmd (snd a) ^")")
      ^ "]," ^ sexp_string_of_cmd default
      ^ ")"
 
@@ -732,7 +762,13 @@ let rec free_of_cmd typ (c:cmd) : (string * size) list =
   | Apply (_,_,actions, default) ->
      List.fold actions
        ~init:(free_of_cmd typ default)
-       ~f:(fun acc a -> acc @ (free_of_cmd typ a))
+       ~f:(fun acc (data, a) ->
+         acc @ (free_of_cmd typ a
+                |> List.filter ~f:(fun (x,_) ->
+                       List.for_all data ~f:((<>) x)
+                     )
+               )
+       )
   end
   |> dedup
 
@@ -765,44 +801,44 @@ let rec multi_ints_of_cmd c : (int * size) list =
       )
   | Apply (_,_,actions, default) ->
      List.fold actions ~init:(multi_ints_of_cmd default)
-       ~f:(fun rst act -> rst @ multi_ints_of_cmd act)
+       ~f:(fun rst act -> rst @ multi_ints_of_cmd (snd act))
 
 
 let rec holify_expr1 holes (e : expr1) : expr1 =
-    match e with
-    | Hole1 _ | Value1 _ -> e
-    | Var1 (x,sz) ->
-      begin match List.find holes ~f:(fun elem -> x = elem)  with
-      | None -> e
-      | Some _ -> Hole1 ("?" ^ x, sz)
-      end
-    | Plus (e,e') -> Plus (holify_expr1 holes e, holify_expr1 holes  e')
-    | Times (e,e') -> Times (holify_expr1 holes  e, holify_expr1 holes  e')
-    | Minus (e,e') -> Minus (holify_expr1 holes  e, holify_expr1 holes  e')
-    | Tuple es -> List.map es ~f:(holify_expr1 holes) |>  Tuple 
+  match e with
+  | Hole1 _ | Value1 _ -> e
+  | Var1 (x,sz) ->
+     begin match List.find holes ~f:(fun elem -> x = elem)  with
+     | None -> e
+     | Some _ -> Hole1 ((*"?" ^*) x, sz)
+     end
+  | Plus (e,e') -> Plus (holify_expr1 holes e, holify_expr1 holes  e')
+  | Times (e,e') -> Times (holify_expr1 holes  e, holify_expr1 holes  e')
+  | Minus (e,e') -> Minus (holify_expr1 holes  e, holify_expr1 holes  e')
+  | Tuple es -> List.map es ~f:(holify_expr1 holes) |>  Tuple 
 
 and holify_expr2 holes (e : expr2) : expr2 =
-    match e with
-    | Value2 _ -> e
-    | Hole2 _ -> e
-    | Var2 (x,sz) ->
-       begin match List.find holes ~f:(fun elem -> x = elem) with
-       | None -> e 
-       | Some _ -> Hole2 ("?" ^ x,sz)
-       end
-    | Single e -> Single (holify_expr1 holes e)
-    | Union (e,e') -> Union (holify_expr2 holes e, holify_expr2 holes e')
+  match e with
+  | Value2 _ -> e
+  | Hole2 _ -> e
+  | Var2 (x,sz) ->
+     begin match List.find holes ~f:(fun elem -> x = elem) with
+     | None -> e 
+     | Some _ -> Hole2 ("?" ^ x,sz)
+     end
+  | Single e -> Single (holify_expr1 holes e)
+  | Union (e,e') -> Union (holify_expr2 holes e, holify_expr2 holes e')
 and holify_test holes b : test =
-    match b with
-    | True | False -> b
-    | Eq (e, e') -> holify_expr1 holes  e %=% holify_expr1 holes  e'
-    | Lt (e, e') -> holify_expr1 holes  e %<% holify_expr1 holes  e'
-    | Member (expr, set) -> mkMember (holify_expr1 holes expr) (holify_expr2 holes set)
-    | And (b, b') -> holify_test holes b %&% holify_test holes b'
-    | Or (b, b')  -> holify_test holes b %+% holify_test holes b'
-    | Impl(b,b') -> holify_test holes b %=>% holify_test holes b'
-    | Iff(b, b') -> holify_test holes b %=>% holify_test holes b'
-    | Neg b       -> !%(holify_test holes b)
+  match b with
+  | True | False -> b
+  | Eq (e, e') -> holify_expr1 holes  e %=% holify_expr1 holes  e'
+  | Lt (e, e') -> holify_expr1 holes  e %<% holify_expr1 holes  e'
+  | Member (expr, set) -> mkMember (holify_expr1 holes expr) (holify_expr2 holes set)
+  | And (b, b') -> holify_test holes b %&% holify_test holes b'
+  | Or (b, b')  -> holify_test holes b %+% holify_test holes b'
+  | Impl(b,b') -> holify_test holes b %=>% holify_test holes b'
+  | Iff(b, b') -> holify_test holes b %=>% holify_test holes b'
+  | Neg b       -> !%(holify_test holes b)
 and holify_cmd holes c : cmd=
   match c with
   | Skip -> c
@@ -813,11 +849,16 @@ and holify_cmd holes c : cmd=
      holify_cmd holes c %:% holify_cmd holes c'
   | While (t, c) ->
      mkWhile (holify_test holes t) (holify_cmd holes c)
-    | Select (styp, cases) ->
-       List.map cases ~f:(fun (t, c) -> holify_test holes t, holify_cmd holes c)
-       |> mkSelect styp
-    | Apply (name,keys,acts,dflt)
-      -> Apply(name, keys, List.map acts ~f:(holify_cmd holes), holify_cmd holes dflt)
+  | Select (styp, cases) ->
+     List.map cases ~f:(fun (t, c) -> holify_test holes t, holify_cmd holes c)
+     |> mkSelect styp
+  | Apply (name,keys,acts,dflt)
+    -> Apply(name, keys, List.map acts ~f:(fun (data, act) ->
+                             let holes' = List.filter holes ~f:(fun h ->
+                                              List.for_all data ~f:((<>) h)
+                                            ) in
+                             (data, holify_cmd holes' act)),
+             holify_cmd holes dflt)
               
     
 (** replace all vars in cmd that are also in holes with holes having the same name*)
