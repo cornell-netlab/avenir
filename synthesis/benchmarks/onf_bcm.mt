@@ -33,7 +33,7 @@ if ordered
          true
            -> apply(l2_unicast_table
                    , (hdr.ethernet.dst_addr : exact)
-		   , ({ \ (port) -> standard_metadta.egress_spec = port })
+		   , ({ \ (port) -> standard_metadata.egress_spec = port })
 		   , skip ) []
        fi []
   true -> exit
@@ -68,7 +68,7 @@ if ordered
   standard_metadata.egress_port == CPU_PORT
     -> hdr.packet_in.setValid();
        hdr.packet_in.ingress_physical_port = standard_metadata.ingress_port;
-       hdr.packet_in.target_egress_prt = local_metadata.egress_spec_at_punt_match;
+       hdr.packet_in.target_egress_port = local_metadata.egress_spec_at_punt_match;
        exit []
   true -> skip 
 fi

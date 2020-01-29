@@ -1,4 +1,3 @@
-
 if ordered
   standard_metadata.ingress_port = CPU_PORT
     -> hdr.packet_out.setValid()
@@ -6,51 +5,43 @@ if ordered
 fi
 hdr.ethernet.setValid();
 fabric_metadata.vlan_ID = DEFAULT_VLAN_ID
-if -- lookahead --
-  hdr.eth_type = ETHERTYPE_QINQ || eth_type = ETHERTYPE_QINQ_NON_STD || ETHERTYPE_VLAN
-   -> eth_type.setValid(); hdr.vlan_tag.setValid(); 
-  true ->
-    hdr.eth_type.setValid();
-    if ordered
-      hdr.eth_type.value = ETHERTYPE_MPLS
-        -> hdr.mpls.setValid();
-	   fabric_metadata.mpls_label = hdr.mpls.label;
-	   fabric_metadata.mpls_ttl = hdr.mpls.ttl;
-	   hdr.ipv4.setValid();
-	   fabric_metadata.ip_proto = hdr.ipv4.protocol;
-	   fabric_metadata.ip_eth_type = ETHERTYPE_IPV4;
-	   last_ipv4_dscp = hdr.ipv4.dscp;
-	   if ordered
-	     hdr.ipv4.protocol = PROTO_TCP -> hdr.tcp.setValid();
-	                                      fabric_metadata.l4_sport = hdr.tcp.sport;
-					      fabric_metadata.l4_dport = hdr.tcp.dport []
+hdr.eth_type.setValid();
+ if ordered
+   hdr.eth_type.value = ETHERTYPE_MPLS
+     -> hdr.mpls.setValid();
+        fabric_metadata.mpls_label = hdr.mpls.label;
+        fabric_metadata.mpls_ttl = hdr.mpls.ttl;
+        hdr.ipv4.setValid();
+	fabric_metadata.ip_proto = hdr.ipv4.protocol;
+	fabric_metadata.ip_eth_type = ETHERTYPE_IPV4;
+	last_ipv4_dscp = hdr.ipv4.dscp;
+	if ordered
+	  hdr.ipv4.protocol = PROTO_TCP -> hdr.tcp.setValid();
+	                                   fabric_metadata.l4_sport = hdr.tcp.sport;
+	                                   fabric_metadata.l4_dport = hdr.tcp.dport []
 					      
-	     hdr.ipv4.protocol = PROTO_UDP -> hdr.udp.setValid();
-	                                      fabric_metadata.l4_sport = hdr.udp.sport;
-					      fabric_metadata.l4_dport = hdr.udp.dport []
-	     hdr.ipv4.protocol = PROTO_ICMP -> hdr.icmp.setValid();
-	     true -> skip
-	   []
-      hdr.eth_type.value = ETHERTYPE_IPV4
-        -> hdr.ipv4.setValid();
-v	   fabric_metadata.ip_proto = hdr.ipv4.protocol;
-	   fabric_metadata.ip_eth_type = ETHERTYPE_IPV4;
-	   last_ipv4_dscp = hdr.ipv4.dscp;
-	   if ordered
-	     hdr.ipv4.protocol = PROTO_TCP -> hdr.tcp.setValid();
-	                                      fabric_metadata.l4_sport = hdr.tcp.sport;
-					      fabric_metadata.l4_dport = hdr.tcp.dport []
+	  hdr.ipv4.protocol = PROTO_UDP -> hdr.udp.setValid();
+	                                   fabric_metadata.l4_sport = hdr.udp.sport;
+					   fabric_metadata.l4_dport = hdr.udp.dport []
+	  hdr.ipv4.protocol = PROTO_ICMP -> hdr.icmp.setValid();
+          true -> skip []
+    hdr.eth_type.value = ETHERTYPE_IPV4
+      -> hdr.ipv4.setValid();
+         fabric_metadata.ip_proto = hdr.ipv4.protocol;
+         fabric_metadata.ip_eth_type = ETHERTYPE_IPV4;
+         last_ipv4_dscp = hdr.ipv4.dscp;
+	 if ordered
+	   hdr.ipv4.protocol = PROTO_TCP -> hdr.tcp.setValid();
+	                                    fabric_metadata.l4_sport = hdr.tcp.sport;
+	                                    fabric_metadata.l4_dport = hdr.tcp.dport []
 					      
-	     hdr.ipv4.protocol = PROTO_UDP -> hdr.udp.setValid();
-	                                      fabric_metadata.l4_sport = hdr.udp.sport;
-					      fabric_metadata.l4_dport = hdr.udp.dport []
-	     hdr.ipv4.protocol = PROTO_ICMP -> hdr.icmp.setValid();
-	     true -> skip
-	   []
-      true -> skip
-    fi[]
-fi[]
-      
+           hdr.ipv4.protocol = PROTO_UDP -> hdr.udp.setValid();
+	                                    fabric_metadata.l4_sport = hdr.udp.sport;
+	                                    fabric_metadata.l4_dport = hdr.udp.dport []
+           hdr.ipv4.protocol = PROTO_ICMP -> hdr.icmp.setValid() []
+	   true -> skip []
+      true -> skip []
+  fi []  
 
 
 ## packet_io_ingress
@@ -61,32 +52,17 @@ if (hdr.packet_out.isValid()) {
   GOTO egress
 }
 
-if (vlan_tag.isValid()){
-  fabric_metadata.vlan_id = hdr.vlan_tag.vlan_id;
-  fabric_metadata.vlan_pri = hdr.vlan_tag.vlan_id;
-  fabric_metadata.vlan_cfi = hdr.vlan_tag.cfi;
-}
 if (!hdr.mlps.isValid()){
   fabric_metadata.mpls_ttl = DEFAULT_MPLS_TTL +1;
 }
 
-apply(ingress_port_vlan
-, (standard_metadata.ingress_port : exact
-  , hdr.vlan_tag.isValid() : exact
-  , hdr.vlan_tag.vlan_id : ternary
-  , hdr.vlan_tag.vlan_id : ternary)
-, ( {\ () -> fabric_metadata.skip_forwarding = 1; fabric_metadata.skip_next = 1  }
-  , {\ () -> skip }
-  , {\ (vlan_id) -> fabric_metadata.vlan_id = vlan_id } )
-, {fabric_metadata.skip_forwarding = 1; fabric_metadata.skip_next = 1}
-);
 apply(fwd_classifier
 , ( standard_metadata.ingress_port : exact
   , hdr.ethernet.dst_addr : ternary
   , hdr.eth_type.value : ternary
   , fabric_metadata.ip_eth_type : exact)
-, ( {\ (fwd_type) -> fabric_metadata.fwd_typ = fwd_type } )
-, fabric_metadata.fwd_typ = FWD_BRIDGING )
+, ( {\ (fwd_type) -> fabric_metadata.fwd_type = fwd_type } )
+, fabric_metadata.fwd_type = FWD_BRIDGING )
 
 if  ordered
   fabric_metadata.skip_forwarding = 0
@@ -103,7 +79,7 @@ if  ordered
 	       , ({ \ (next_id) -> fabric_metadata.mpls_label = 0; fabric_metadata.next_id = next_id })
 	       , skip ) []
 	fabric_metadata.fwd_type = FWD_IPV4_UNICAST ->
-	  apply(mpls
+	  apply(ipv4
 	       , ( hdr.ipv4.dst_addr : lpm )
 	       , ( { \ (next_id) -> fabric_metadata.next_id = next_id }
 	         | { \ () -> skip } )
@@ -120,7 +96,6 @@ apply(acl
        , fabric_metadata.l4_dport : ternary
        , hdr.ethernet.dst_addr : ternary
        , hdr.ethernet.src_addr : ternary
-       , vlan_tag.vlan_id : ternary
        , hdr.eth_type.value : ternary
        , hdr.ipv4.src_addr : ternary
        , hdr.icmp.icmp_type : ternary
@@ -143,11 +118,7 @@ if ordered
                                                    hdr.ethernet.src_addr = smac;
 						   hdr.ethernet.dst_addr = dmac;
 						   standard_metadata.egress_spec = port } )
-            , skip );
-       apply(next_vlan,
-            , (fabric_metadata.next_id : exact)
-            , ( { \ (vlan_id) -> fabric_metadata.vlan_id = vlan_id } )
-	    , skip) []
+            , skip )
     true -> skip
 fi;
 
@@ -182,12 +153,12 @@ if ordered
   true -> skip []
 fi;
 if ordered
-  hdr.mpls.isValid() -> hdr.mpls.ttl := hdr.mpls.ttl -1;
+  hdr.mpls.isValid() -> hdr.mpls.ttl := hdr.mpls.ttl - 1;
                         if ordered
-			  hdr.ipv4.ttl = 0 -> mark_to_drop(standard_metadata) []
+			  hdr.mpls.ttl = 0 -> mark_to_drop(standard_metadata) []
 			  true -> skip
 			fi []
-  hdr.ipv4.isValid() -> hdr.ivp4.ttl := hdr.ipv4.ttl -1;
+  hdr.ipv4.isValid() -> hdr.ivp4.ttl := hdr.ipv4.ttl - 1;
                         if ordered
 			  hdr.ipv4.ttl = 0 -> mark_to_drop(standard_metadata) []
 			  true -> skip

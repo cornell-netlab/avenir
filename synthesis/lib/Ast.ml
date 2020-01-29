@@ -3,7 +3,6 @@ open Util
 
 let enable_smart_constructors = true
 
-       
 type size = int
               
 type match_expr =
@@ -138,7 +137,11 @@ let rec sexp_string_of_expr1 (e : expr1) =
      "Minus(" ^ sexp_string_of_expr1 e ^ ", " ^ sexp_string_of_expr1 e' ^ ")"
 
 
-
+let get_int (v : value1) : int =
+  match v with
+  | Int (x, _) -> x
+  | _ -> failwith ("value not an int: " ^ string_of_value1 v)
+                  
 let rec size_of_value1 (v : value1) : size =
   match v with
   | Int (_, s) -> s
@@ -583,7 +586,7 @@ type cmd =
   | Seq of (cmd * cmd)
   | While of (test * cmd)
   | Select of (select_typ * ((test * cmd) list))
-  | Apply of (string * (string * size) list * ((string list * cmd) list) * cmd)
+  | Apply of (string * (string * size) list * (((string * size) list * cmd) list) * cmd)
 
 let clean_selects_list ss = 
   List.rev ss
@@ -766,7 +769,7 @@ let rec free_of_cmd typ (c:cmd) : (string * size) list =
        ~f:(fun acc (data, a) ->
          acc @ (free_of_cmd typ a
                 |> List.filter ~f:(fun (x,_) ->
-                       List.for_all data ~f:((<>) x)
+                       List.for_all (List.map data ~f:fst) ~f:((<>) x)
                      )
                )
        )
@@ -856,7 +859,7 @@ and holify_cmd holes c : cmd=
   | Apply (name,keys,acts,dflt)
     -> Apply(name, keys, List.map acts ~f:(fun (data, act) ->
                              let holes' = List.filter holes ~f:(fun h ->
-                                              List.for_all data ~f:((<>) h)
+                                              List.for_all (List.map data ~f:fst) ~f:((<>) h)
                                             ) in
                              (data, holify_cmd holes' act)),
              holify_cmd holes dflt)

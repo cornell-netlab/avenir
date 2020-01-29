@@ -134,7 +134,7 @@ let rec apply_inst tag ?cnt:(cnt=0) (inst : instance) (prog : cmd) : (cmd * int)
          ) in
      (mkSelect typ ss, ss_cnt)
   | Apply (tbl, keys, acts, default) ->
-     let actSize = log2(List.length acts) in
+     let actSize = max (log2(List.length acts)) 1 in
      let selects =
        StringMap.find_multi inst tbl
        |> List.fold ~init:[]
@@ -158,10 +158,12 @@ let rec apply_inst tag ?cnt:(cnt=0) (inst : instance) (prog : cmd) : (cmd * int)
           List.mapi acts
             ~f:(fun i (scope, act) -> 
               (List.fold keys ~init:True
-                 ~f:(fun acc (x,sz) -> acc %&% (Var1 (x,sz) %=% Hole1 ("?"^x,sz)))
+                 ~f:(fun acc (x,sz) ->
+                   acc %&% (Var1 (x,sz) %<=% Hole1 ("?"^x^"_hi",sz))
+                   %&% (Var1(x,sz) %>=% Hole1("?"^x^"_lo",sz)))
                %&% (add_row_hole %=% mkVInt (1,1))
                %&% (which_act_hole %=% mkVInt (i,actSize))
-              , holify scope act))
+              , holify (List.map scope ~f:fst) act))
        | `NoHoles -> []
      in
      let dflt_row =
@@ -432,11 +434,11 @@ let rec compute_cand_for_trace line (pinst : instance) t : cmd =
 let apply_hints
       (h_opt : ((action_data * int) StringMap.t -> (action_data * int) StringMap.t list) option)
       m
-      pline pinst : (cmd * (action_data * int) StringMap.t) list =
+      pline pinst : (cmd * (action_data * int) StringMap.t option) list =
   match h_opt with
-  | None -> [apply_inst `WithHoles pinst pline |> fst, StringMap.empty]
+  | None -> [apply_inst `WithHoles pinst pline |> fst, None]
   | Some h ->
-     List.map (h m) ~f:(fun t -> (compute_cand_for_trace pline pinst t, t))
+     List.map (h m) ~f:(fun t -> (compute_cand_for_trace pline pinst t, Some t))
 
 
 let print_instance label linst =
@@ -451,7 +453,7 @@ let print_instance label linst =
               
 
 let get_one_model_edit
-      ?fvs:(_ = [])
+      ?fvs:(fvs = [])
       ~hints (pkt : Packet.t)
       mySolver
       (lline : cmd) (linst : instance) (ledit : edit)
@@ -460,7 +462,7 @@ let get_one_model_edit
   (* print_instance "Logical" (apply_edit linst ledit);
    * print_instance "Physical" pinst; *)
   let time_spent_in_z3, num_calls_to_z3 = (ref Time.Span.zero, ref 0) in
-  let (_,_), trace, actions = trace_eval_inst lline (apply_edit linst ledit) (pkt,None) in
+  let (pkt',_), trace, actions = trace_eval_inst lline (apply_edit linst ledit) (pkt,None) in
   let st = Time.now () in
   (* let phi = Packet.to_test ~fvs pkt' in *)
   let cands = apply_hints hints actions pline pinst in
@@ -469,7 +471,8 @@ let get_one_model_edit
    *         Printf.printf "\n" in *)
   let wp_phys_paths =
     List.filter_map cands ~f:(fun (path, acts) ->
-        let prec = wp path True in
+        Printf.printf "Candidate :\n %s\n%!" (string_of_cmd path);
+        let prec = wp path (Packet.to_test ~fvs pkt')  (*True*)in        
         if prec = False then None else Some(prec, acts))
   in
   let log_wp = wp trace True  in
@@ -477,10 +480,10 @@ let get_one_model_edit
   let model =
     List.find_map wp_phys_paths ~f:(fun (wp_phys, acts) ->
         if wp_phys = False then None else
-          (* let _ = Printf.printf "LOGWP %s\n PHYSWP %s\n%!" (string_of_test log_wp) (string_of_test wp_phys) in *)
-          (* let _ = Printf.printf "Checking %s become %s \n%!"
-           *           (string_of_test wp_phys)
-           *           (substV wp_phys pkt |> string_of_test) in *)
+          let _ = Printf.printf "LOGWP %s\n PHYSWP %s\n%!" (string_of_test log_wp) (string_of_test wp_phys) in
+          let _ = Printf.printf "Checking %s become %s \n%!"
+                    (string_of_test wp_phys)
+                    (substV wp_phys pkt |> string_of_test) in
           (* let (res, time) = check mySolver `Sat (substV wp_phys pkt) in *)
           let (res, time) = check mySolver `Sat (log_wp %<=>% wp_phys) in
           time_spent_in_z3 := Time.Span.(!time_spent_in_z3 + time);
@@ -581,7 +584,7 @@ let symb_wp ?fvs:(fvs=[]) cmd =
   |> symbolic_pkt
   |> wp cmd
   
-let implements _ mySolver (logical : cmd) (linst : instance) (ledit : edit) (real : cmd) (pinst : instance) =
+let implements fvs mySolver (logical : cmd) (linst : instance) (ledit : edit) (real : cmd) (pinst : instance) =
   (* let _ = Printf.printf "IMPLEMENTS on\n%!    ";
    *         List.iter fvs ~f:(fun (x,_) -> Printf.printf " %s" x);
    *         Printf.printf "\n%!" *)
@@ -601,7 +604,7 @@ let implements _ mySolver (logical : cmd) (linst : instance) (ledit : edit) (rea
   (* if log_wp = real_wp then Printf.printf "theyre syntactically equal\n%!";
    * let condition = log_wp %<=>% real_wp in *)
   let st_mk_cond = Time.now () in
-  let condition = equivalent u_log u_rea in
+  let condition = equivalent fvs u_log u_rea in
   let nd_mk_cond = Time.now () in
   let mk_cond_time = Time.diff nd_mk_cond st_mk_cond in
   let model_opt, z3time = check_valid mySolver condition in
@@ -736,11 +739,11 @@ let rec match_minus m ms =
              |> List.sort ~compare
                                         
                                        
-let fixup_edit match_model (action_map : (action_data * size) StringMap.t) phys (pinst : instance) : instance =
-  let mk_new_row tbl_name data act : row list =
+let fixup_edit match_model (action_map : (action_data * size) StringMap.t option) phys (pinst : instance) : instance =
+  let mk_new_row tbl_name data_opt act : row list =
     match get_schema_of_table tbl_name phys with
     | None -> failwith ("Couldnt find keys for table " ^ tbl_name)
-    | Some (ks, _, _) ->
+    | Some (ks, acts, d) ->
        let keys_holes =
          List.fold ks ~init:(Some [])
            ~f:(fun acc (v, sz) ->
@@ -749,7 +752,13 @@ let fixup_edit match_model (action_map : (action_data * size) StringMap.t) phys 
                    fixup_val match_model (Hole1("?"^v^"_hi", sz))
              with
              | None, _,_ -> None
-             | _, Hole1 _,_ | _, _, Hole1 _ -> None
+             | Some ks, Hole1 _, Hole1 _ ->
+                begin match fixup_val match_model (Hole1("?"^v, sz)) with
+                | Hole1 _ -> None
+                | Value1(Int (x, sz)) ->
+                   Some (ks @ [Exact (x,sz)])
+                | _ -> failwith "Model did something weird"
+                end
              | Some ks, Value1(Int(lo,_)), Value1(Int(hi,_)) ->
                 let k = if lo = hi
                         then [Exact (lo, sz)]
@@ -759,17 +768,50 @@ let fixup_edit match_model (action_map : (action_data * size) StringMap.t) phys 
                 Some (ks @ k)
              | _, _,_ -> failwith "got something that wasn't a model"
            ) in
+       let data =
+         match data_opt with
+         | Some ds -> ds
+         | None ->
+            match List.nth acts act with
+            | None -> []
+            | Some (params, _) ->
+               List.fold params ~init:[]
+                 ~f:(fun acc (p,sz) ->
+                   acc @ [(StringMap.find_exn match_model p |> get_int, sz)]
+                 )
+       in
        match keys_holes with
        | None -> []
        | Some ks -> [(ks, data, act)]
   in
-  StringMap.fold ~init:pinst action_map ~f:(fun ~key:tbl_name ~data:(act_data,act) acc ->
-      StringMap.update acc tbl_name
-        ~f:(function
-          | None -> mk_new_row tbl_name act_data act
-          | Some rows -> mk_new_row tbl_name act_data act @ rows
-        )
-    )
+  match action_map with
+  | Some m -> StringMap.fold ~init:pinst m ~f:(fun ~key:tbl_name ~data:(act_data,act) acc ->
+                  StringMap.update acc tbl_name
+                    ~f:(function
+                      | None -> mk_new_row tbl_name (Some act_data) act
+                      | Some rows -> mk_new_row tbl_name (Some act_data) act @ rows
+                    )
+                )
+  | None ->
+     let tables_added_to =
+       StringMap.fold match_model ~init:[]
+       ~f:(fun ~key ~data acc ->
+         if String.is_substring key ~substring:"AddRowTo"
+         then (String.substr_replace_all key ~pattern:"?" ~with_:""
+               |> String.substr_replace_first ~pattern:"AddRowTo" ~with_:"")
+              :: acc
+         else acc 
+       ) in
+     List.fold tables_added_to ~init:pinst
+       ~f:(fun acc tbl_name ->
+         let act = StringMap.find_exn match_model ("?ActIn" ^ tbl_name) |> get_int in
+         StringMap.update acc tbl_name           
+           ~f:(function
+             | None -> mk_new_row tbl_name None act
+             | Some rows -> mk_new_row tbl_name None act @ rows)
+       )
+     
+     
                                                          
 (** solves the inner loop **)
 let solve_concrete
