@@ -54,7 +54,7 @@ let pow (x : int) (y : int) : int =
   float_of_int(x) ** float_of_int(y) |> int_of_float
                                 
 let log2 (x : int) : int =
-  int_of_float(Core.log (float_of_int x) /. Core.log (float_of_int 2))
+  int_of_float(Float.round_up(Core.log (float_of_int x) /. Core.log (float_of_int 2)))
 
 let get_singleton_exn = function
   | [] -> failwith "Cannot get a singleton from an empty list"

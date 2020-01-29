@@ -15,7 +15,7 @@ let rec mkZ3Value (rhoVars : (string * size) list) (v : expr1) ctx (deBruijn : i
   (* let () = Printf.printf "building z3 value for %s\n%!" (string_of_expr1 v) in *)
   let open Z3.Arithmetic in
   let binop op e e'=
-    op ctx [mkZ3Value rhoVars e ctx deBruijn quantified; mkZ3Value rhoVars  e' ctx deBruijn quantified]
+    op ctx (mkZ3Value rhoVars e ctx deBruijn quantified) (mkZ3Value rhoVars  e' ctx deBruijn quantified)
   in
   match v with
   | Value1 (Int (i,sz)) ->  Z3.BitVector.mk_numeral ctx (Printf.sprintf "%d" i) sz 
@@ -28,20 +28,24 @@ let rec mkZ3Value (rhoVars : (string * size) list) (v : expr1) ctx (deBruijn : i
        match StringMap.find deBruijn x with
        | None -> failwith (Printf.sprintf "Could not find value for variable %s " x)
        | Some idx -> (* Printf.printf "%s is BOUND\n%!" x; *)
-          Z3.Quantifier.mk_bound ctx idx (Z3.BitVector.mk_sort ctx sz)
+          if sz <= 0 then failwith ("Size for " ^x^ "is "^ (string_of_int sz) ^" < 0")
+          else
+            Z3.Quantifier.mk_bound ctx idx (Z3.BitVector.mk_sort ctx sz)
      else
        (* (Printf.printf "%s is a constant" x; *)
        if [] = rhoVars then
          ((* Printf.printf "RHOVARS IS EMPTY \n"; *)
+          if sz <= 0 then failwith ("Size for " ^x^ "is "^ (string_of_int sz) ^" < 0")
+          else
            (Z3.BitVector.mk_const_s ctx x sz))
        else Z3.Expr.mk_app ctx
               (Z3.FuncDecl.mk_func_decl_s ctx x
                  (List.map rhoVars ~f:(fun (_,sz) -> Z3.BitVector.mk_sort ctx sz))
                  (Z3.BitVector.mk_sort ctx sz))
               (List.map rhoVars ~f:(fun x -> mkZ3Value rhoVars (Var1 x) ctx deBruijn quantified))
-  | Plus (e,e') -> binop mk_add e e'
-  | Times (e, e') -> binop mk_mul e e'
-  | Minus (e, e') -> binop mk_sub e e'
+  | Plus (e,e') -> binop Z3.BitVector.mk_add e e'
+  | Times (e, e') -> binop Z3.BitVector.mk_mul e e'
+  | Minus (e, e') -> binop Z3.BitVector.mk_sub e e'
 
 let emptyset ctx sz = Z3.Z3Array.mk_const_array ctx (Z3.BitVector.mk_sort ctx sz) (Z3.Boolean.mk_false ctx)
 
@@ -88,8 +92,12 @@ let rec mkZ3Test (rhoVars : (string * size) list) (t : test) ctx deBruijn quanti
   match t with 
   | True -> Z3.Boolean.mk_true ctx
   | False -> Z3.Boolean.mk_false ctx
-  | Eq (left, right) -> Z3.Boolean.mk_eq ctx (z3_value left) (z3_value right)
-  | Lt (left, right) -> Z3.BitVector.mk_ult ctx (z3_value left) (z3_value right)
+  | Eq (left, right) ->
+     (* Printf.printf "%s = %s" (string_of_expr1 left) (string_of_expr1 right); *)
+     Z3.Boolean.mk_eq ctx (z3_value left) (z3_value right)
+  | Lt (left, right) ->
+     (* Printf.printf "%s < %s" (string_of_expr1 left) (string_of_expr right); *)
+     Z3.BitVector.mk_ult ctx (z3_value left) (z3_value right)
   | Member (expr, set) ->
      let z = Z3.Z3Array.mk_select ctx (z3_value2 set) (z3_value expr) in
      let () = Printf.printf "Making Z3 Membership query for \n \t %s \n%!" (string_of_test t) in
@@ -212,7 +220,7 @@ let check _ typ =
   let st = Time.now() in
   let _ = Z3.Solver.push mySolver;
           initSolver typ mySolver context test in
-  (* let _ = Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in *)
+  let _ = Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in
   let response = Z3.Solver.check mySolver [] in
   let dur = Time.(diff (now()) st) in
   (* Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver); *)

@@ -142,6 +142,22 @@ let benchmark : Command.t =
     Bench.run             
 
 
+module ONF = struct
+  let spec = Command.Spec.(empty)
+  
+
+  let run () =
+    Benchmark.basic_onf_ipv4 |> ignore
+end
+    
+
+let onf : Command.t =
+  Command.basic_spec
+    ~summary: "Run the onf benchmark"
+    ONF.spec
+    ONF.run  
+    
+
 module WeakestPrecondition = struct
   let spec = Command.Spec.(
       empty
@@ -172,6 +188,7 @@ let main : Command.t =
     ; ("edit-check", editCheck)
     ; ("edit-synth", editSynth)
     ; ("bench", benchmark)
+    ; ("onf", onf)
     ; ("wp", wp_cmd)]
     
 let () = Command.run main
