@@ -94,8 +94,7 @@ let reorder_benchmark varsize length max_inserts =
   let fvs = range_ex 1 (length + 1)
             |> List.map ~f:(fun i ->
                    [("k_" ^tbl i, 32)
-                   ; (symbolize("k_" ^tbl i), 32)
-                   ; (symbolize("x_" ^tbl i), 32)
+                   ; ("x_" ^tbl i, 32)
                        (* ; ("?ActIn"^tbl i, 8) *)
                  ])
             |> List.join

@@ -472,7 +472,10 @@ let get_one_model_edit
   let wp_phys_paths =
     List.filter_map cands ~f:(fun (path, acts) ->
         Printf.printf "Candidate :\n %s\n%!" (string_of_cmd path);
-        let prec = wp path (Packet.to_test ~fvs pkt')  (*True*)in        
+        let prec = if Option.is_none hints
+                   then wp path (Packet.to_test ~fvs pkt')
+                   else wp path True
+        in        
         if prec = False then None else Some(prec, acts))
   in
   let log_wp = wp trace True  in
