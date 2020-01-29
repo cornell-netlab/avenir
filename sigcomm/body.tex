@@ -1,3 +1,8 @@
+\lstset{language=C}
+\lstset{
+ morekeywords={action,table,control}
+}
+
 \section{Introduction}
 
 \todo[inline]{write short introduction}
@@ -13,103 +18,52 @@
 
 Sketching~\cite{armando-thesis,armando2013sketch} is a program synthesis technology that 
 takes high-level insights about the desired system and automatically infers the details.
-The input to the synthesis procedure is partial program (sketch) that has {\em holes}
+The input to the synthesis procedure is a partial program (sketch) that has {\em holes}
 in place of code fragments.
 The task of the synthesizer is to fill up the holes with the right pieces so that the 
 result program meets the required specification.  
-The algorithm to generate code for the holes in a sketch is counterexample-guided inductive synthesis (CEGIS).
-To describe sketching and CEGIS in the context of our problem we use the running 
-example of Figure~\ref{fig:table-wp}.
+The algorithm to generate code for the holes of a sketch is counterexample-guided inductive synthesis (CEGIS).
+To describe sketching and CEGIS in the context of our problem domain we use the running 
+example of Figure~\ref{fig:running-p4}.
 
-\begin{figure}[h]
-\centering
-\begin{minipage}[t]{.23\textwidth}
-\centering
-\begin{framed}\hspace{-.5em}
-\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,language=C, lineskip = 0em,numbersep=0pt,resetmargins=true, xleftmargin=-1em]
-action _smac(v)
-  {smac = v}
-action _dst(v)
-  {dst = d}
-action _out(v)
-  {out = v}
-table L1 {
-  keys = {src:exact}
-  actions =
-    {_smac; _dst}
-}
-table L2 {
-  keys = {dst:exact}
-  actions = {_out}
-}
-control Ingress {
-  L1.apply();
-  L2.apply()
-}
-\end{lstlisting}
+\input{running-example}
+\input{gcl}
 
-\end{framed}
-\end{minipage}
-\begin{minipage}[t]{.23\textwidth}
-\centering
-\begin{framed}\hspace{-1em}
-\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,language=C, lineskip = 0em,numbersep=0pt,resetmargins=true, xleftmargin=-1em]
-action _smac_out(v1,v2)
-  { smac=v1;out=v2 }
-action _dst_out(v1,v2)
-  { dst=v1;out=v2 }
-action _out(v)
-  { out=v }
-table P {
-  keys = { src:exact
-         ; dst:exact }
-  actions =
-   { _smac_out
-   ; _dst_out
-   ; _out }
-}
-control Ingress {
-  P.apply()
-}
-\end{lstlisting}
+The logical program in Figure~\ref{fig:running-p4}(a) has a pipeline of two match-action 
+tables ({\ttfamily L1} and {\ttfamily L2}).
+The first table {\ttfamily L1} matches on {\ttfamily src} and sets the packet headers
+{\ttfamily smac} and {\ttfamily dst}.
+Table {\ttfamily L2} matches on {\ttfamily dst} and sets {\ttfamily out}.
+The physical program in Figure~\ref{fig:running-p4}(b) has a single unified table {\ttfamily P}
+that matches on {\ttfamily src}, {\ttfamily dst} and sets $\{${\ttfamily smac}, {\ttfamily out}$\}$
+and $\{${\ttfamily dst}, {\ttfamily out}$\}$.
+Figure~\ref{fig:running-p4}(c) shows the set of rules in the logical tables
+(for the sake of simplicity the fields are integer numbers).
+A challenging question is to determine if there exist a set of rules for the physical table 
+so that after installation of such rules the physical and logical network 
+exactly behave the same on every input packet.
+To address this challenge, we first convert the tables with their installed rules into programs
+in guarded command programming language~\cite{dijkstra1975}.
 
-\end{framed}
-\end{minipage}
+Figure~\ref{fig:syntax} shows the syntax of the guarded command language that we use in 
+this paper.
+A single guarded command is of the form $\IF~{b \to e}~\ENDIF$ where $b$ is a Boolean
+condition and $c$ is a command.
 
-\label{fig:table-wp}
-\caption{Logical and physical descriptions}
-\end{figure}
 
 \begin{figure}
-  \begin{minipage}[t]{0.23\textwidth}
-    \begin{framed}
+\begin{tikzpicture}[auto,>=latex']
+    \node [draw] (is) {Inductive Synthesis};
+    \node [draw, right =2cm of is] (verif) {Verification};
+    \node [ellipse,draw, right=1em of is] (f) {Fail};
+    \node [ellipse,draw, right=1em of verif] (o) {Ok};
 
-      \[
-        \begin{array}{l}
-          \IF~\var{src} = 1 \to \var{smac} := 1 \\
-          \phantom{\IF}~\var{src} = 2 \to \var{dst} := 1\\
-          \phantom{\IF}~\var{src} = \var{*} \to \SKIP \\
-          \ENDIF ; \\
-          \IF~\var{dst} = 1 \to \var{out} := 1 \\
-          \phantom{\IF}~\var{dst} = 2 \to \var{out} := 2 \\
-          \phantom{\IF}~\var{dst} = \var{*} \to \SKIP \\
-          \ENDIF
-        \end{array}
-      \]
-    \end{framed}
-  \end{minipage}  \begin{minipage}[t]{0.23\textwidth}
-    \begin{framed}
-      \[
-        \begin{array}{l}
-          \IF~\\
-          \phantom{\IF}~\var{src} = \var{*} \wedge \var{dst} = \var{*}\\
-          \phantom{\IF}~~~\to \SKIP \\
-          \ENDIF 
-        \end{array}
-      \]
-    \end{framed}
-  \end{minipage}
-  \caption{Logical and Physical Encodings}
+    \draw [->] (is) -- (f);
+    \draw [->] (verif) -- (o);
+    \draw [->,bend left=40] (verif) node[below=1em] {Fail} to node{counterexample} (is);
+    \draw [->,bend left=40] (is)  to node{candidate implementation} (verif);
+\end{tikzpicture}
+\caption{CEGIS Loop\label{fig:cegis}}
 \end{figure}
 
 % Example
@@ -223,44 +177,6 @@ Abduction -- when does our loop work?
 \todo[inline]{High level description of the Solution}
 
 \subsection{Syntax}
-
-\begin{figure}
-  \fbox{
-  \begin{minipage}[t]{0.53\columnwidth} 
-  \[
-    \begin{array}{>{\hspace{-.5em}}lcll}
-      c &::=&\\
-        & \mid & \SKIP & \mathit{Skip} \\
-        & \mid & x := e & \mathit{Assign} \\
-        & \mid & t.\apply & \mathit{Table} \\
-        & \mid & c;c & \mathit{Sequence} \\
-        & \mid & \IF~\overline{b \to e}~\ENDIF & \mathit{Select} \\
-      t & ::=  & (s, \overline{f}, \overline{c}, c)  \\
-      s & \in & \multicolumn 2 l {\TableName} \\
-      x & \in & \multicolumn 2 l {\Field \cup \Metadata} \\
-      v & \in & \multicolumn 2 l {\{0,1\}^+ = \BitVector}
-    \end{array}
-  \]
-\end{minipage} \vline \begin{minipage}[t]{0.45\columnwidth}
-  \[
-    \begin{array}{lcll}
-      e & ::= & \\
-        & \mid & v & \mathit{Value} \\
-        &  \mid & x & \mathit{Variable} \\
-        & \mid & e + e & \mathit{Plus}\\
-        & \mid & e - e & \mathit{Minus}\\
-        & \mid & e \mask e & \mathit{Mask}\\
-      b & ::= & \\
-        & \mid & 0 & \mathit{Zero}\\
-        & \mid & b \Rightarrow b  &\mathit{Implies}\\
-        & \mid & e = e &\mathit{Equals} \\
-        & \mid & e < e & \mathit{Less}
-    \end{array}
-  \]
-\end{minipage}}
-\caption{The syntax of packet processing pipelines}
-\label{fig:syntax}
-\end{figure}
 
 Our syntactic representation of packet-processing pipelines can be
 found in Figure~\ref{fig-syntax}. Notice that it is more or less the
