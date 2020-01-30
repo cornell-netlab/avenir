@@ -131,6 +131,28 @@ sections.
 
 \input{cegis}
 
+The inductive synthesizer creates a candidate solution for the given input with the help of sketching.
+A sketch in our problem domain is a guarded command rule with holes in place of some constants.
+For removing the counter-example $\{\mbox{\ttfamily src}=0,\mbox{\ttfamily dst}=0\}$, 
+the user may provide the following sketch to the synthesizer.
+This sketch is is basically assisting the synthesizer by saying that 
+the required rule should match on the guards $\mbox{\ttfamily src}=0\wedge\mbox{\ttfamily dst}=0$
+and the synthesis procedure should find the constants for the holes in the updates of the head of the implication.
+
+\[
+\begin{aligned}
+ &\IF \\
+ &~\mbox{\ttfamily src}=0\wedge\mbox{\ttfamily dst}=0 \to \\
+ &~~~~\mbox{\ttfamily src}=?_0~;~\mbox{\ttfamily out}=?_1~;~\mbox{\ttfamily smac}=?_2~;~\mbox{\ttfamily dst}=?_3 \\
+ &\ENDIF
+\end{aligned}
+\]
+
+Note that in principle the user can also leave holes in place of $0$ in the guard.
+This only makes the space of search for the synthesizer larger.
+We do not require smart sketches from the user in our tool but providing them can 
+make the process more efficient..
+
 % Example
 
 % - cross product
