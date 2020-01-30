@@ -674,7 +674,9 @@ let match_cap m m' =
        []
 
 let off_by_one i j =  max i j - min i j = 1
-  
+
+let match_inter m m' = match_cap m m <> []
+                                            
 let match_cup m m' =
   match m, m' with
   | Exact (i,_), Exact (j,sz) ->
@@ -804,18 +806,26 @@ let mk_new_row match_model phys tbl_name data_opt act : row option =
        | Some ks -> Some (ks, data, act)
                           
 
-let remove_conflicts (ms : match_expr list)  (rows : row list)  =
-  let rows' = List.fold rows ~init:[] ~f:(fun acc ((ms', _,_) as row) ->
-                  if List.fold2_exn ms ms' ~init:false ~f:(fun acc m m' -> acc && match_sub m m')
-                  then rows
-                  else rows @ [row]
-                ) in
-  if rows = rows'
-  then None
-  else Some rows'
+let remove_conflicts keys (ms : match_expr list)  (rows : row list)  =
+  let checker = check (Prover.solver ()) `Sat in
+  let encode_matches =  List.fold2_exn keys ~init:True ~f:(fun acc k m -> acc %&% encode_match k m) in
+  let prop = encode_matches ms %=>%
+               (List.fold rows ~init:False ~f:(fun acc (ms',_,_) -> acc %+% encode_matches ms')) in
+  match fst (checker prop) with
+  | Some _ -> 
+     let rows' = List.fold rows ~init:[] ~f:(fun acc ((ms', _,_) as row) ->
+                     if List.fold2_exn ms ms' ~init:false ~f:(fun acc m m' -> acc && match_inter m m')
+                     then rows
+                     else rows @ [row]
+                   ) in
+     if rows = rows'
+     then None
+     else Some rows'
+  | None -> None
+               
 
-
-let update_consistently match_model phys tbl_name (acc : [`Ok of instance | `Conflict of instance]) act_data act = 
+let update_consistently match_model phys tbl_name (acc : [`Ok of instance | `Conflict of instance]) act_data act =
+  let (keys,_,_) = get_schema_of_table tbl_name phys |> Option.value_exn in
   match acc with
   | `Ok pinst -> begin match StringMap.find pinst tbl_name,
                              mk_new_row match_model phys tbl_name (act_data) act with
@@ -823,7 +833,7 @@ let update_consistently match_model phys tbl_name (acc : [`Ok of instance | `Con
                  | None,Some row ->
                     `Ok (StringMap.set pinst ~key:tbl_name ~data:[row])
                  | Some rows, Some (ks, data,act) ->
-                    begin match remove_conflicts ks rows with
+                    begin match remove_conflicts keys  ks rows with
                     | None -> `Ok (StringMap.set pinst ~key:tbl_name
                                      ~data:((ks,data,act)::rows))
                     | Some rows' ->
@@ -838,7 +848,7 @@ let update_consistently match_model phys tbl_name (acc : [`Ok of instance | `Con
      | None, Some row ->
         `Conflict (StringMap.set pinst ~key:tbl_name ~data:[row])
      | Some rows, Some (ks, data, act) ->
-        begin match remove_conflicts ks rows with
+        begin match remove_conflicts keys ks rows with
         | None -> `Conflict (StringMap.set pinst ~key:tbl_name
                                ~data:((ks,data,act)::rows))
         | Some rows' ->
