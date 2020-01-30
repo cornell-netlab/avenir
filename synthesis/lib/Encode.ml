@@ -419,7 +419,7 @@ and encode_switch_expr prog (ctx : Declaration.t list) (e : Expression.t) : expr
             let block = encode_block prog ctx code in
             begin match act_i with
               | Some (i, _) ->
-                let test = Or(fall_test, Eq(expr, (Value1 (Int(i, -1))))) in
+                let test = Or(fall_test, Eq(expr, (Value1 (Int(i + 1, -1))))) in
                 True, Some (test, block)
               | None -> failwith ("Action not found when encoding switch statement")
             end
@@ -438,16 +438,6 @@ and encode_program (Program(top_decls) as prog : program ) =
   | Some (_, Control c) -> encode_control prog c.locals c.apply
   | Some _ -> failwith "Found a module called MyIngress, but it wasn't a control module"
   
-  
-and encode_match ((_, m) : Table.key) : test =
-  match m.match_kind with
-  | _, "exact" -> encode_expression_to_value m.key %=% Hole1 ("?",-1)
-  | _, "ternary" -> encode_expression_to_value m.key %=% Hole1 ("?",-1) (* TODO: Technically correct, because you can make a ternary match exact... not ideal though*)
-  | _, "lpm" -> encode_expression_to_value m.key %=% Hole1 ("?",-1) (* TODO: Technically correct, because you can make a lpm match exact... not ideal though*)
-  | _, "selector" -> encode_expression_to_value m.key %=% Hole1 ("?",-1) (* TODO: No idea what selector is? *)
-  | info, x -> failwith ("[Unimplemented MatchKind " ^ x ^ "] Cannot handle match kind "
-                   ^ x ^ " at " ^ Petr4.Info.to_string info )
-
 and encode_table prog (ctx : Declaration.t list) (name : P4String.t) (props : Table.property list) : cmd =
   let open Table in
   let p4keys, p4actions, p4customs = List.fold_left props ~init:([], [], [])
@@ -462,7 +452,8 @@ and encode_table prog (ctx : Declaration.t list) (name : P4String.t) (props : Ta
   
   let lookup_and_encode_action i (_,a) =
     let (body, action_data) = lookup_action_exn prog ctx a.name in
-    let set_action_run = Assign(snd name ^ action_run_suffix, Value1(Int(i, -1))) in
+    (* Set up an action run variable so we can use it to figure out which action ran in switch statements *)
+    let set_action_run = Assign(snd name ^ action_run_suffix, Value1(Int(i + 1, -1))) in
     List.map action_data ~f:snd, set_action_run %:% encode_action prog ctx body ~action_data
   in
   let action_cmds = List.mapi p4actions ~f:lookup_and_encode_action in
@@ -476,7 +467,10 @@ and encode_table prog (ctx : Declaration.t list) (name : P4String.t) (props : Ta
                           encode_action prog ctx def_act_body ~action_data
                       | None -> Skip
   in
-  Apply(snd name, str_keys, action_cmds, enc_def_act)
+
+  let init_action_run = Assign(snd name ^ action_run_suffix, Value1(Int(0, -1))) in
+
+  init_action_run %:% Apply(snd name, str_keys, action_cmds, enc_def_act)
 
 let read_lines filename =
   let chan = In_channel.create filename in
