@@ -64,6 +64,17 @@ let to_test ?fvs:(fvs = []) (pkt : t) =
         %&% test
       else ( test ))
 
+
+let test_of_wide ?fvs:(fvs = []) wide =
+  StringMap.fold wide ~init:True
+    ~f:(fun ~key ~data:(lo,hi,sz) test ->
+      if key <> "loc" && List.exists fvs ~f:(fun (x,_) -> key = x) then
+        (if lo = hi
+         then Var1 (key, sz) %=% mkVInt(lo,sz)
+         else (mkVInt(lo, sz) %<=% Var1(key,sz)) %&% (Var1 (key, sz) %<=% mkVInt(hi,sz))
+        ) %&% test
+      else ( test ))    
+   
 let empty = StringMap.empty
 
 let equal (pkt:t) (pkt':t) = StringMap.equal (=) pkt pkt'

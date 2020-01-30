@@ -595,9 +595,10 @@ let bcm_eth_ipv4_tcp =
  *   |> ignore *)
 
 
+let (%>) c c' = ignore c; c'
 
 
-let basic_onf_ipv4 =
+let basic_onf_ipv4 = 
   let logical =
     
     sequence [
@@ -616,13 +617,20 @@ let basic_onf_ipv4 =
         , [ ("ipv4_dst", 32) (*; ("ipv4_src", 32); ("ipv4_proto", 16)*) ]
         , [ ([("port",9)], "out_port"%<-% Var1("port",9))]
         , Skip) in
-  let gas = 5 in
+  let gas = 2 in
   let iter = 1 in
   let p = Prover.solver in
   let fvs = [("ipv4_dst", 32); ("out_port", 32); (*("ipv4_src", 32); ("ipv4_proto", 16)*)] in
-  synthesize_edit  ~gas ~iter ~fvs p 
-    logical
-    physical
-    StringMap.empty
-    StringMap.empty
-    ("next", ([Exact (0,32)], [(1,9)],0))
+  (* synthesize_edit  ~gas ~iter ~fvs p 
+   *   logical
+   *   physical
+   *   StringMap.empty
+   *   StringMap.empty
+   *   ("next", ([Exact (1,32)], [(1,9)],0))
+   * %> *)
+    synthesize_edit ~gas ~iter ~fvs p
+      logical
+      physical
+      StringMap.(set empty ~key:"next" ~data:[[Exact (1,32)], [(1,9)],0])
+      StringMap.(set empty ~key:"l3_fwd" ~data:[])
+      ("ipv4", ( [Between (0,20,32)], [(1,32)],0))

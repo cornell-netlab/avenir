@@ -2,7 +2,7 @@
 
 (library
   (name motley)	
-  (libraries core z3 petr4 ANSITerminal extlib)
+  (libraries core shell z3 petr4 ANSITerminal extlib)
   (virtual_deps menhir)
   (inline_tests)
   (preprocess (pps ppx_jane ppx_inline_test ppx_deriving_yojson))

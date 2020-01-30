@@ -20,12 +20,12 @@ let multiply orlist orlist' =
 let rec nnf t : test =
   match t with
   | Eq(_, _)
-  | Lt(_, _)
+  | Le(_, _)
   | Member(_,_)
   | True
   | False
   | Neg(Eq(_, _))
-  | Neg(Lt(_, _))
+  | Neg(Le(_, _))
   | Neg(Member(_,_))
   | Neg(True)
   | Neg(False) -> t
@@ -53,7 +53,7 @@ let rec dnf t : test list =
   | Iff(a,b) -> dnf (Impl (a,b) %&% Impl(b,a))
   | Member (_,_)
   | Eq _
-  | Lt _ 
+  | Le _ 
   | Neg _ (* will not be And/Or because NNF*)
   | True
   | False  ->  [t']
@@ -107,7 +107,7 @@ let rec substitute ?holes:(holes = false) ex subsMap =
   | Iff  (e, e') -> substitute ~holes e subsMap %<=>% substitute ~holes e' subsMap
   (* Do the work *)
   | Eq (e,e') ->  substituteE e %=% substituteE e'
-  | Lt (e,e') ->  substituteE e %<% substituteE e'
+  | Le (e,e') ->  substituteE e %<=% substituteE e'
   | Member(e,set) -> Member(substituteE e, set)
 
 let substV ?holes:(holes = false) ex substMap =
@@ -116,7 +116,7 @@ let substV ?holes:(holes = false) ex substMap =
 
 let rec exact_only t =
   match t with
-  | Lt _ | Member _ -> false
+  | Le _ | Member _ -> false
   | True | False | Eq _ -> true
   | Neg(a) -> exact_only a
   | And(a,b) | Or(a,b) | Impl(a,b) | Iff(a,b)
@@ -203,7 +203,7 @@ let good_execs fvs c =
     | Impl (a,b) -> binop indexVars       sub a (%=>%)  b
     | Iff  (a,b) -> binop indexVars       sub a (%<=>%) b
     | Eq (e1,e2) -> binop indexVars_expr1 sub e1 (%=%) e2
-    | Lt (e1,e2) -> binop indexVars_expr1 sub e1 (%<%) e2
+    | Le (e1,e2) -> binop indexVars_expr1 sub e1 (%<=%) e2
     | Member _ -> failwith "Member unimplemented"
   in
   let rec passify sub c : ((int * int) StringMap.t * cmd) =
@@ -246,7 +246,7 @@ let good_execs fvs c =
          StringMap.fold sub ~init:Skip
            ~f:(fun ~key:v ~data:(idx,_) acc ->
              let merged_idx,sz = StringMap.find_exn merged_subst v in
-             if merged_idx < idx then
+             if merged_idx > idx then
                Assume (Var1(freshen v sz merged_idx)
                        %=% Var1(freshen v sz idx))
                %:% acc
@@ -256,6 +256,7 @@ let good_execs fvs c =
        let ss' =
          List.filter_map sub_lst ~f:(fun (sub', (t', c')) ->
              let rc = rewriting sub' in
+             Printf.printf "Inserting padding %s" (string_of_cmd rc);
              Some (t', c' %:% rc)
            )
        in
@@ -291,9 +292,9 @@ let good_execs fvs c =
   let init_sub = List.fold fvs ~init:StringMap.empty ~f:(fun sub (v,sz) ->
                      StringMap.set sub ~key:v ~data:(0,sz)
                    ) in
-  (* Printf.printf "active : \n %s \n" (string_of_cmd c); *)
+  Printf.printf "active : \n %s \n" (string_of_cmd c);
   let merged_sub, passive_c = passify init_sub c  in
-  (* Printf.printf "passive : \n %s\n" (string_of_cmd passive_c); *)
+  Printf.printf "passive : \n %s\n" (string_of_cmd passive_c);
   (merged_sub, good_wp passive_c)
 
 
@@ -331,7 +332,7 @@ let rec prepend_test pfx b =
   | True | False -> b
   | Neg b -> !%(prepend_test pfx b)
   | Eq(e1,e2) -> prepend_expr1 pfx e1 %=% prepend_expr1 pfx e2
-  | Lt(e1,e2) -> prepend_expr1 pfx e1 %<% prepend_expr1 pfx e2
+  | Le(e1,e2) -> prepend_expr1 pfx e1 %<=% prepend_expr1 pfx e2
   | And(b1,b2) -> prepend_test pfx b1 %&% prepend_test pfx b2
   | Or(b1,b2) -> prepend_test pfx b1 %+% prepend_test pfx b2
   | Impl(b1,b2) -> prepend_test pfx b1 %=>% prepend_test pfx b2
@@ -369,7 +370,6 @@ let equivalent eq_fvs l p =
   let fvs_p = prefix_list fvs in
   let eq_fvs_p = prefix_list eq_fvs in
   let sub_l, gl = good_execs fvs l in
-  let _ = Printf.printf "Passifying:\n%s" (string_of_cmd p') in
   let sub_p, gp = good_execs fvs_p p' in
   let lin = inits eq_fvs sub_l in
   let pin = inits eq_fvs_p sub_p in
@@ -426,7 +426,7 @@ let rec fill_holes_test t subst =
   | Or   (a, b)   -> binop (%+%)   fill_holes_test  a b
   | Impl (a, b)   -> binop (%=>%)  fill_holes_test  a b
   | Iff  (a, b)   -> binop (%<=>%) fill_holes_test  a b
-  | Lt   (a, b)   -> binop (%<=%)  fill_holes_expr1 a b
+  | Le   (a, b)   -> binop (%<=%)  fill_holes_expr1 a b
   | Eq   (a, b)   -> binop (%=%)   fill_holes_expr1 a b
   | Member (a, s) -> Member(fill_holes_expr1 a subst, s)
 
@@ -462,18 +462,27 @@ let rec fill_holes (c : cmd) subst =
             
 
 
-let rec wp_paths c phi : test list =
+let rec wp_paths c phi : (cmd * test) list =
   match c with
-  | Skip -> [phi]
-  | Seq (firstdo, thendo) ->
-     List.(wp_paths thendo phi >>= wp_paths firstdo)
-  | Assign (field, value) ->
-     [substitute phi (StringMap.singleton field value)]
-  | Assert t -> [t %&% phi]
-  | Assume t -> [t %=>% phi]
+  | Skip -> [(c, phi)]
+  | Seq (c1, c2) ->
+     List.map (wp_paths c2 phi)
+       ~f:(fun (trace2, phi) ->
+         List.map (wp_paths c1 phi)
+           ~f:(fun (trace1, phi') ->
+             (trace1 %:% trace2, phi')
+           ) 
+       ) |> List.join
+       
+  | Assign (field, e) ->
+     let phi' = substitute phi (StringMap.singleton field e) in 
+     Printf.printf "substituting %s |-> %s\n into %s to get %s \n%!" field (string_of_expr1 e) (string_of_test phi') (string_of_test phi');
+     [(c,phi')]
+  | Assert t -> [(c, t %&% phi)]
+  | Assume t -> [(c, t %=>% phi)]
                   
   (* requires at least one guard to be true *)
-  | Select (Total, []) -> [True]
+  | Select (Total, []) -> [(Skip, True)]
   | Select (Total, cmds) ->
      let open List in
      (cmds >>| fun (t,c) -> Assert t %:% c)
@@ -481,7 +490,7 @@ let rec wp_paths c phi : test list =
 
                   
   (* doesn't require at any guard to be true *)
-  | Select (Partial, []) -> [True]
+  | Select (Partial, []) -> [(Skip, True)]
   | Select (Partial, cmds) ->
      let open List in
      (cmds >>| fun (t,c) -> Assume t %:% c)
@@ -489,24 +498,23 @@ let rec wp_paths c phi : test list =
                   
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
-     let open List in
-     (cmds >>| fun (t,c) -> Assume t %:% c)
-     >>= Fun.flip wp_paths phi
-  (* List.fold cmds ~init:(True, False) ~f:(fun (wp_so_far, prev_conds) (cond, act) ->
-   *     guarded_wp (cond %&% !%prev_conds, act) %&% wp_so_far
-   *                                        , prev_conds %+% cond
-   *   )
-   * |> fst *)
+     (* let open List in
+      * (cmds >>| fun (t,c) -> Assume t %:% c)
+      * >>= Fun.flip wp_paths phi *)
+     List.fold cmds ~init:([], False) ~f:(fun (wp_so_far, prev_conds) (cond, act) ->
+         List.fold (wp_paths act phi) ~init:wp_so_far
+           ~f:(fun acc (trace, act_wp) ->
+             acc @[(Assert cond %:% trace, cond %&% !%prev_conds %&% act_wp)]), prev_conds %+% cond)
+     |> fst
 
   | Apply (_, _, acts, dflt) ->
      let open List in
      (dflt :: List.map ~f:(fun (sc, a) -> holify (List.map sc ~f:fst) a) acts) >>= Fun.flip wp_paths phi
   | While _ ->
-     Printf.printf "[WARNING] skipping While loop, because loops must be unrolled\n%!";
-     [phi]
+     failwith "[Error] loops must be unrolled\n%!"
 
 
-
+              
 let bind_action_data vars (scope, cmd) : cmd =
   let holes = List.map scope fst in
   List.fold2_exn holes vars

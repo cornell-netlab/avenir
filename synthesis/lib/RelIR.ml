@@ -189,7 +189,7 @@ let rec satOneRow keys t b  =
   | Impl (a, b) -> not(satOneRow keys t a) || satOneRow keys t b
   | Iff  (a, b) -> satOneRow keys t (a %=>% b) && satOneRow keys t (b %=>% a)
   | Eq (x, y) -> evalRel keys t x = evalRel keys t y
-  | Lt (x, y) -> evalRel keys t x = evalRel keys t y
+  | Le (x, y) -> evalRel keys t x = evalRel keys t y
   | Member _ -> failwith " Error (Unimplemented) :: Membership Evaluation"
                          
                   
@@ -327,7 +327,7 @@ let rec test_to_valuation (t : test) : (string * expr1) list option =
   | Impl _ | Iff _ 
     | Or _ -> failwith "cannot convert a disjunction/implication/iff into a valuation"
   | Neg _ -> failwith "cannot convert a negation into a valuation"
-  | Lt _ -> failwith "cannot convert a < into a valuation"
+  | Le _ -> failwith "cannot convert a <= into a valuation"
   | Member _ -> failwith "membership is deprecated"
 
 let compute_eq_cond (u : (string * expr1) list option) (v : (string * expr1) list option) =
