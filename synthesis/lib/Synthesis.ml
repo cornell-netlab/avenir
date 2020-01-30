@@ -456,13 +456,16 @@ let get_one_model_edit
       ?fvs:(fvs = [])
       ~hints (pkt : Packet.t)
       mySolver
-      (lline : cmd) (linst : instance) (ledit : edit)
+      (lline : cmd) (linst : instance) (ledit_opt : edit option)
       (pline : cmd) pinst
   =
   (* print_instance "Logical" (apply_edit linst ledit);
    * print_instance "Physical" pinst; *)
   let time_spent_in_z3, num_calls_to_z3 = (ref Time.Span.zero, ref 0) in
-  let (pkt',_), wide, trace, actions = trace_eval_inst ~wide:StringMap.empty lline (apply_edit linst ledit) (pkt,None) in
+  let linst' = match ledit_opt with
+    | None -> linst
+    | Some ledit  -> apply_edit linst ledit in
+  let (pkt',_), wide, trace, actions = trace_eval_inst ~wide:StringMap.empty lline linst' (pkt,None) in
   let st = Time.now () in
   (* let phi = Packet.to_test ~fvs pkt' in *)
   let cands = apply_hints hints actions pline pinst in
@@ -750,10 +753,8 @@ let rec match_minus m ms =
              @ match_minus (Between (hi'+1, hi, sz)) ms'
              |> matches_cup
              |> List.sort ~compare
-                                        
-                                       
-let fixup_edit match_model (action_map : (action_data * size) StringMap.t option) phys (pinst : instance) : instance =
-  let mk_new_row tbl_name data_opt act : row list =
+
+let mk_new_row match_model phys tbl_name data_opt act : row option =
     match get_schema_of_table tbl_name phys with
     | None -> failwith ("Couldnt find keys for table " ^ tbl_name)
     | Some (ks, acts, d) ->
@@ -799,57 +800,98 @@ let fixup_edit match_model (action_map : (action_data * size) StringMap.t option
                  )
        in
        match keys_holes with
-       | None -> []
-       | Some ks -> [(ks, data, act)]
-  in
+       | None -> None
+       | Some ks -> Some (ks, data, act)
+                          
+
+let remove_conflicts (ms : match_expr list)  (rows : row list)  =
+  let rows' = List.fold rows ~init:[] ~f:(fun acc ((ms', _,_) as row) ->
+                  if List.fold2_exn ms ms' ~init:false ~f:(fun acc m m' -> acc || match_sub m m')
+                  then rows
+                  else rows @ [row]
+                ) in
+  if rows = rows'
+  then None
+  else Some rows'
+
+
+let update_consistently match_model phys tbl_name (acc : [`Ok of instance | `Conflict of instance]) act_data act = 
+  match acc with
+  | `Ok pinst -> begin match StringMap.find pinst tbl_name,
+                             mk_new_row match_model phys tbl_name (act_data) act with
+                 | _, None -> acc
+                 | None,Some row ->
+                    `Ok (StringMap.set pinst ~key:tbl_name ~data:[row])
+                 | Some rows, Some (ks, data,act) ->
+                    begin match remove_conflicts ks rows with
+                    | None -> `Ok (StringMap.set pinst ~key:tbl_name
+                                     ~data:((ks,data,act)::rows))
+                    | Some rows' ->
+                       `Conflict (StringMap.set pinst ~key:tbl_name
+                                    ~data:((ks,data,act)::rows'))
+                    end
+                 end
+  | `Conflict pinst ->
+     begin match StringMap.find pinst tbl_name,
+                 mk_new_row match_model phys tbl_name (act_data) act with
+     | _, None -> acc
+     | None, Some row ->
+        `Conflict (StringMap.set pinst ~key:tbl_name ~data:[row])
+     | Some rows, Some (ks, data, act) ->
+        begin match remove_conflicts ks rows with
+        | None -> `Conflict (StringMap.set pinst ~key:tbl_name
+                               ~data:((ks,data,act)::rows))
+        | Some rows' ->
+           `Conflict (StringMap.set pinst ~key:tbl_name
+                        ~data:((ks,data,act)::rows'))
+        end
+     end   
+            
+                          
+let fixup_edit match_model (action_map : (action_data * size) StringMap.t option) phys (pinst : instance) (* : instance *) =
   match action_map with
-  | Some m -> StringMap.fold ~init:pinst m ~f:(fun ~key:tbl_name ~data:(act_data,act) acc ->
-                  StringMap.update acc tbl_name
-                    ~f:(function
-                      | None -> mk_new_row tbl_name (Some act_data) act
-                      | Some rows -> mk_new_row tbl_name (Some act_data) act @ rows
-                    )
+  | Some m -> StringMap.fold ~init:(`Ok pinst) m ~f:(fun ~key:tbl_name ~data:(act_data,act) acc ->
+                  update_consistently match_model phys tbl_name acc (Some act_data) act
                 )
-  | None ->
+  | None -> 
      let tables_added_to =
        StringMap.fold match_model ~init:[]
-         ~f:(fun ~key ~data acc ->
-           if String.is_substring key ~substring:"AddRowTo"
-           then (String.substr_replace_all key ~pattern:"?" ~with_:""
-                 |> String.substr_replace_first ~pattern:"AddRowTo" ~with_:"")
-                :: acc
-           else acc 
-         ) in
-     List.fold tables_added_to ~init:pinst
+    ~f:(fun ~key ~data acc ->
+      if String.is_substring key ~substring:"AddRowTo"
+      then (String.substr_replace_all key ~pattern:"?" ~with_:""
+            |> String.substr_replace_first ~pattern:"AddRowTo" ~with_:"")
+           :: acc
+      else acc 
+    ) in
+     List.fold tables_added_to ~init:(`Ok pinst)
        ~f:(fun acc tbl_name ->
          let act = StringMap.find_exn match_model ("?ActIn" ^ tbl_name) |> get_int in
-         StringMap.update acc tbl_name           
-           ~f:(function
-             | None -> mk_new_row tbl_name None act
-             | Some rows -> mk_new_row tbl_name None act @ rows)
-       )
+         update_consistently match_model phys tbl_name acc None act
+      )
      
      
                                                          
 (** solves the inner loop **)
-let solve_concrete
+let rec solve_concrete
       ?fvs:(fvs = [])
       mySolver
       ~hints
       ?packet:(packet=None)
-      (logical : cmd) (linst : instance) (edit : edit)
+      (logical : cmd) (linst : instance) (edit_opt : edit option)
       (phys : cmd) (pinst : instance)
     : (instance * Time.Span.t * int * Time.Span.t) =
   let values = multi_ints_of_cmd logical |> List.map ~f:(fun x -> Int x) in
   let pkt = packet |> Option.value ~default:(Packet.generate fvs ~values) in
-  match get_one_model_edit ~fvs ~hints pkt mySolver logical linst edit phys pinst with
+  match get_one_model_edit ~fvs ~hints pkt mySolver logical linst edit_opt phys pinst with
   | None, z3time, ncalls, _ ->
      Printf.sprintf "Couldnt find a model in %d calls and %f"
        ncalls (Time.Span.to_ms z3time)
      |> failwith
   | Some (model, action_map), z3time, ncalls, wp_time ->
-     let pinst' = fixup_edit model action_map phys pinst in
-     pinst', z3time, ncalls, wp_time
+     match fixup_edit model action_map phys pinst with
+     | `Ok pinst' -> pinst', z3time, ncalls, wp_time
+     | `Conflict pinst' ->
+        solve_concrete ~fvs mySolver ~hints ~packet logical linst None phys pinst' 
   
 let cegis ?fvs:(fvs = []) ~hints ?gas:(gas=1000) ~iter mySolver (logical : cmd) linst (ledit : edit) (real : cmd) pinst =
   let fvs = if fvs = []
@@ -879,7 +921,7 @@ let cegis ?fvs:(fvs = []) ~hints ?gas:(gas=1000) ~iter mySolver (logical : cmd) 
     | `NoAndCE counter ->
        if gas = 0 then failwith "RAN OUT OF GAS" else
          let (pinst', ex_z3_time, ncalls, wpt) =
-           solve_concrete ~fvs ~hints ~packet:(Some counter) mySolver logical linst ledit real pinst in
+           solve_concrete ~fvs ~hints ~packet:(Some counter) mySolver logical linst (Some ledit) real pinst in
          model_time := Time.Span.(!model_time + ex_z3_time);
          model_calls := !model_calls + ncalls;
          wp_time := Time.Span.(!wp_time + wpt);
