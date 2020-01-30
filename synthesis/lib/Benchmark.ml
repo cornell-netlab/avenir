@@ -641,7 +641,7 @@ let running_example _ =
         Apply("src_table"
             , [("src", 2)]
             , [ ["s",2], "smac" %<-% (Var1("s",2))
-              (* ; ["d",2], "dmac" %<-% (Var1("d",2)) *)
+              ; ["d",2], "dmac" %<-% (Var1("d",2))
               ; [], Skip
               ]
             , Skip)
@@ -656,10 +656,10 @@ let running_example _ =
         Apply("src_dst_table"
             , ["src",2; "dst", 2]
             , [["s",2], "smac" %<-% Var1("s",2)
-              (* ; ["d",2], "dmac" %<-% (Var1("d",2)) *)
+              ; ["d",2], "dmac" %<-% (Var1("d",2))
               ; ["o",2], "out" %<-% (Var1("o",2))
               ; ["s",2; "o", 2], ("smac" %<-% Var1("s",2)) %:% ("out" %<-% Var1("o",2))
-              (* ; ["d",2; "p", 2], ("dmac" %<-% Var1("d",2)) %:% ("out" %<-% Var1("p",2)) *)
+              ; ["d",2; "p", 2], ("dmac" %<-% Var1("d",2)) %:% ("out" %<-% Var1("p",2))
               ; [], Skip
               ]
             , Skip)
@@ -669,7 +669,7 @@ let running_example _ =
     logical
     physical
     (StringMap.of_alist_exn [("src_table", [([Exact (0,2)], [1,2], 0)
-                                           ;([Exact (1,2)], [2,2], 0)])
+                                           ;([Exact (1,2)], [2,2], 1)])
                            ; ("dst_table", [([Exact (0,2)], [1,2], 0)])
     ])
     StringMap.empty

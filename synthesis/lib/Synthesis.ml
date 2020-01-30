@@ -806,7 +806,7 @@ let mk_new_row match_model phys tbl_name data_opt act : row option =
 
 let remove_conflicts (ms : match_expr list)  (rows : row list)  =
   let rows' = List.fold rows ~init:[] ~f:(fun acc ((ms', _,_) as row) ->
-                  if List.fold2_exn ms ms' ~init:false ~f:(fun acc m m' -> acc || match_sub m m')
+                  if List.fold2_exn ms ms' ~init:false ~f:(fun acc m m' -> acc && match_sub m m')
                   then rows
                   else rows @ [row]
                 ) in
@@ -891,7 +891,9 @@ let rec solve_concrete
      match fixup_edit model action_map phys pinst with
      | `Ok pinst' -> pinst', z3time, ncalls, wp_time
      | `Conflict pinst' ->
-        solve_concrete ~fvs mySolver ~hints ~packet logical linst None phys pinst' 
+        Printf.printf "BACKTRACKING\n%!";
+        (* failwith "BACKTRACKING" *)
+        pinst', z3time, ncalls, wp_time
   
 let cegis ?fvs:(fvs = []) ~hints ?gas:(gas=1000) ~iter mySolver (logical : cmd) linst (ledit : edit) (real : cmd) pinst =
   let fvs = if fvs = []
