@@ -256,7 +256,6 @@ let good_execs fvs c =
        let ss' =
          List.filter_map sub_lst ~f:(fun (sub', (t', c')) ->
              let rc = rewriting sub' in
-             Printf.printf "Inserting padding %s" (string_of_cmd rc);
              Some (t', c' %:% rc)
            )
        in
@@ -292,9 +291,11 @@ let good_execs fvs c =
   let init_sub = List.fold fvs ~init:StringMap.empty ~f:(fun sub (v,sz) ->
                      StringMap.set sub ~key:v ~data:(0,sz)
                    ) in
-  Printf.printf "active : \n %s \n" (string_of_cmd c);
+  (* Printf.printf "active : \n %s \n" (string_of_cmd c); *)
   let merged_sub, passive_c = passify init_sub c  in
-  Printf.printf "passive : \n %s\n" (string_of_cmd passive_c);
+  (* Printf.printf "passive : \n %s\n" (string_of_cmd passive_c); *)
+  let vc = good_wp passive_c in
+  (* Printf.printf "good_executions:\n %s\n%!" (string_of_test vc); *)
   (merged_sub, good_wp passive_c)
 
 
@@ -389,7 +390,20 @@ let equivalent eq_fvs l p =
    *   (string_of_test gp)
    *   (string_of_test in_eq)
    *   (string_of_test out_eq); *)
-  (gl %&% gp %&% in_eq) %=>% out_eq
+  match StringMap.find sub_l "drop", StringMap.find sub_p "phys_drop" with
+  | Some (i,_), Some (j,_) ->
+     (* let ldrop = Var1(freshen "drop" 1 i) in
+      * let pdrop = Var1(freshen "phys_drop" 1 j) in
+      * let tt = mkVInt(1,1) in
+      * let ff = mkVInt(0,1) in *)
+     (* let cond = ((ldrop %=% tt) %&% (pdrop %=% ff) %&% out_eq)
+      *            %+% ((ldrop %=% ff) %&% (pdrop %=% ff)) in      *)
+     (* Printf.printf "============ DROP VC =========\n%!"; *)
+     (gl %&% gp %&% in_eq) %=>% out_eq
+  | _, _ ->
+     (* Printf.printf "============ NORMAL VC =========\n%!"; *)
+     (gl %&% gp %&% in_eq) %=>% out_eq
+                                                            
 
     
   
@@ -462,13 +476,13 @@ let rec fill_holes (c : cmd) subst =
             
 
 
-let rec wp_paths c phi : (cmd * test) list =
+let rec wp_paths ?no_negations:(no_negations = false) c phi : (cmd * test) list =
   match c with
   | Skip -> [(c, phi)]
   | Seq (c1, c2) ->
-     List.map (wp_paths c2 phi)
+     List.map (wp_paths ~no_negations c2 phi)
        ~f:(fun (trace2, phi) ->
-         List.map (wp_paths c1 phi)
+         List.map (wp_paths ~no_negations c1 phi)
            ~f:(fun (trace1, phi') ->
              (trace1 %:% trace2, phi')
            ) 
@@ -486,7 +500,7 @@ let rec wp_paths c phi : (cmd * test) list =
   | Select (Total, cmds) ->
      let open List in
      (cmds >>| fun (t,c) -> Assert t %:% c)
-     >>= Fun.flip wp_paths phi
+     >>= Fun.flip (wp_paths ~no_negations) phi
 
                   
   (* doesn't require at any guard to be true *)
@@ -494,7 +508,7 @@ let rec wp_paths c phi : (cmd * test) list =
   | Select (Partial, cmds) ->
      let open List in
      (cmds >>| fun (t,c) -> Assume t %:% c)
-     >>= Fun.flip wp_paths phi
+     >>= Fun.flip (wp_paths ~no_negations) phi
                   
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
@@ -502,14 +516,15 @@ let rec wp_paths c phi : (cmd * test) list =
       * (cmds >>| fun (t,c) -> Assume t %:% c)
       * >>= Fun.flip wp_paths phi *)
      List.fold cmds ~init:([], False) ~f:(fun (wp_so_far, prev_conds) (cond, act) ->
-         List.fold (wp_paths act phi) ~init:wp_so_far
+         List.fold (wp_paths ~no_negations act phi) ~init:wp_so_far         
            ~f:(fun acc (trace, act_wp) ->
-             acc @[(Assert cond %:% trace, cond %&% !%prev_conds %&% act_wp)]), prev_conds %+% cond)
+             let misses = if no_negations then True else !%(prev_conds) in
+             acc @[(Assert cond %:% trace, cond %&% misses %&% act_wp)]), prev_conds %+% cond)
      |> fst
 
   | Apply (_, _, acts, dflt) ->
      let open List in
-     (dflt :: List.map ~f:(fun (sc, a) -> holify (List.map sc ~f:fst) a) acts) >>= Fun.flip wp_paths phi
+     (dflt :: List.map ~f:(fun (sc, a) -> holify (List.map sc ~f:fst) a) acts) >>= Fun.flip (wp_paths ~no_negations) phi
   | While _ ->
      failwith "[Error] loops must be unrolled\n%!"
 
@@ -517,7 +532,6 @@ let rec wp_paths c phi : (cmd * test) list =
               
 let bind_action_data vals (scope, cmd) : cmd =
   let holes = List.map scope fst in
-  Printf.printf "Table |holes| = %d, |vars|= %d\n : %s" (List.length holes) (List.length vals) (string_of_cmd cmd);
   List.fold2_exn holes vals
     ~init:StringMap.empty
     ~f:(fun acc x v -> StringMap.set acc ~key:x ~data:(Int v))

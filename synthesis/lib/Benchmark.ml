@@ -68,7 +68,7 @@ let rec generate_n_insertions varsize length n avail_tables maxes =
        (name, row)
        :: generate_n_insertions varsize length (n-1) avail_tables' maxes'
                                   
-let reorder_benchmark varsize length max_inserts =
+let reorder_benchmark varsize length max_inserts widening =
   Random.init 99;
   let logical_pipeline = mk_pipeline varsize length in
   let physical_pipeline = permute logical_pipeline in
@@ -106,7 +106,7 @@ let reorder_benchmark varsize length max_inserts =
        Printf.printf "==== BENCHMARKING INSERTION OF (%s) =====\n%!"
          (string_of_edit edit);
        let (totalt,checkt,checkn, searcht, searchn, wpt,lwpt,pwpt,sizes,pinst')  =
-         synthesize_edit ~gas:5 ~fvs ~hints ~iter:i (Prover.solver ()) log phys linst pinst edit in
+         synthesize_edit ~widening ~gas:5 ~fvs ~hints ~iter:i (Prover.solver ()) log phys linst pinst (Some edit) in
        Printf.printf "=== DONE=================================\n%!";
        (i, totalt, checkt, checkn, searcht, searchn, wpt,lwpt,pwpt, sizes)
        :: run_experiment (i + 1) edits (apply_edit linst edit) pinst'
@@ -456,15 +456,15 @@ let ingress_ipv4_tcp =
     ]
 
 let egress_ipv4_tcp =
-  mkOrdered [
-    (*   (fabric_metadata_is_controller_packet_out %=% cpu_port, Skip)
-     * ; *)
-    (*   (standard_metadata_egress_port %=% cpu_port,
-     *    sequence [
-     *        set_valid hdr_packet_in
-     *      ; hdr_packet_in_ingress_port_str %<-% standard_metadata_egress_port])
-     * ; *)
-      (True,
+  (* mkOrdered [
+   *   (\*   (fabric_metadata_is_controller_packet_out %=% cpu_port, Skip)
+   *    * ; *\)
+   *   (\*   (standard_metadata_egress_port %=% cpu_port,
+   *    *    sequence [
+   *    *        set_valid hdr_packet_in
+   *    *      ; hdr_packet_in_ingress_port_str %<-% standard_metadata_egress_port])
+   *    * ; *\)
+   *     (True, *)
        sequence [
           (*  mkOrdered [
           *       ((fabric_metadata_is_multicast %=% mkVInt(1,1))
@@ -481,8 +481,8 @@ let egress_ipv4_tcp =
              ; (True, Skip)
              ]
          ]
-      )
-    ]
+    (*   )
+     * ] *)
 
            
            
@@ -632,16 +632,16 @@ let basic_onf_ipv4 _ =
       physical
       StringMap.(set empty ~key:"next" ~data:[[Exact (1,32)], [(1,9)],0])
       StringMap.(set empty ~key:"l3_fwd" ~data:[])
-      ("ipv4", ( [Between (0,20,32)], [(1,32)],0))
+      (Some ("ipv4", ( [Between (0,20,32)], [(1,32)],0)))
 
 
-let running_example _ =
+let running_example gas widening =
   let logical =
     sequence [
         Apply("src_table"
             , [("src", 2)]
             , [ ["s",2], "smac" %<-% (Var1("s",2))
-              ; ["d",2], "dmac" %<-% (Var1("d",2))
+              ; ["d",2], "dst" %<-% (Var1("d",2))
               ; [], Skip
               ]
             , Skip)
@@ -656,15 +656,15 @@ let running_example _ =
         Apply("src_dst_table"
             , ["src",2; "dst", 2]
             , [["s",2], "smac" %<-% Var1("s",2)
-              ; ["d",2], "dmac" %<-% (Var1("d",2))
+              ; ["d",2], "dst" %<-% (Var1("d",2))
               ; ["o",2], "out" %<-% (Var1("o",2))
               ; ["s",2; "o", 2], ("smac" %<-% Var1("s",2)) %:% ("out" %<-% Var1("o",2))
-              ; ["d",2; "p", 2], ("dmac" %<-% Var1("d",2)) %:% ("out" %<-% Var1("p",2))
+              ; ["d",2; "p", 2], ("dst" %<-% Var1("d",2)) %:% ("out" %<-% Var1("p",2))
               ; [], Skip
               ]
             , Skip)
   in
-  synthesize_edit ~gas:10 ~iter:1 ~fvs:["src", 2; "dst", 2; "smac", 2; "dmac", 2; "out", 2 ]
+  synthesize_edit ~widening ~gas ~iter:1 ~fvs:["src", 2; "dst", 2; "smac", 2; "dmac", 2; "out", 2 ]
     (Prover.solver ())
     logical
     physical
@@ -673,7 +673,178 @@ let running_example _ =
                            ; ("dst_table", [([Exact (0,2)], [1,2], 0)])
     ])
     StringMap.empty
-    ("dst_table", ([Exact (1,2)], [2,2], 0))
+    (Some ("dst_table", ([Exact (1,2)], [2,2], 0)))
       
                                       
             
+
+
+
+let onf_representative gas widening =
+  let fwd_type_i i  = mkVInt(i, 2) in
+  let fwd_type_v = Var1("fwd_type", 2) in
+  let fwd_bridge = fwd_type_i 0 in
+  let fwd_mpls = fwd_type_i 1 in
+  let fwd_ipv4 = fwd_type_i 2 in
+  let station =
+    Apply("my_station_table"
+        , [("inport", 9); ("dmac", 48); ("eth_type", 16)]
+        , [["sf", 2], ("fwd_type" %<-% Var1("sf", 2))]
+        , "fwd_type" %<-% fwd_bridge)
+  in
+  let bridge =
+    Apply("bridge_table"
+        , [("vlan_id", 12); ("dmac", 48)]
+        , [[("bv",32)], "next_id"%<-% Var1("bv",32)]
+        , Skip)
+  in
+  let mpls =
+    Apply("mpls_table"
+        , [("mpls_label", 20)]
+        , [["mv",32], ("mpls_label"%<-% mkVInt(0,20)) %:% ("next_id"%<-% Var1("mv", 32))]
+        ,Skip)
+  in
+  let ipv4 =
+    Apply("ipv4_dst"
+        , [("ivp4_dst", 32)]
+        , [["iv",32], "next_id" %<-% Var1("iv", 32)]
+        , Skip)
+  in
+  let set_next =
+    mkOrdered [
+        fwd_type_v %=% fwd_ipv4, ipv4
+      ; fwd_type_v %=% fwd_mpls, mpls
+      ; fwd_type_v %=% fwd_bridge, bridge
+      ]
+  in
+  let acl = 
+    Apply ("acl"
+         , ["in_port", 9; "ip_proto", 8;
+            "l4_src", 16; "l4_dst", 16;
+            "dmac", 48 ; "smac", 48;
+            "eth_type", 16; "ipv4_src", 32;
+            "icmp_type", 16; "icmp_code", 16
+           ]
+         , [ ["av", 32], "next_id" %<-% Var1("av",32)
+           ; [], "out_port"%<-% mkVInt(255, 9)
+           ; [], ("drop"%<-% mkVInt(1,1)) %:% ("skip_next" %<-% mkVInt(1,1))
+           ; [], Skip ]
+         , Skip
+      ) in
+  let next =
+    mkOrdered [ Var1("skip_next",1) %=% mkVInt(1,1),
+                Apply("next"
+                    , ["next_id", 32]
+                    , [["nv",9], "out_port" %<-% Var1("nv",9)
+                      ; ["nvv", 9; "nvs", 48; "nvd", 48], sequence [
+                                                              "out_port" %<-% Var1("nvv",9)
+                                                            ; "smac" %<-% Var1("nvs", 48)
+                                                            ; "dmac" %<-% Var1("nvd", 48)]
+                                                                   
+                      ; ["nvvv", 9; "nvvs", 48; "nvvd", 48; "nvvm", 20],
+                        sequence [
+                            "mpls_label" %<-% Var1("nvvm", 20)
+                          ; "out_port" %<-% Var1("nvvv",9)
+                          ; "smac" %<-% Var1("nvvs", 48)
+                          ; "dmac" %<-% Var1("nvvd", 48)
+                      ]]
+                    , Skip)
+              ; True, Skip]
+  in
+  let fabric_egress =
+    sequence [ Skip
+        (* mkOrdered [ Var1("in_port",9) %=% Var1("out_port", 9), "drop"%<-% mkVInt(1,1)
+         *           ; True, Skip ]; *)
+        (* mkordered [
+         *     (fwd_type_v %=% fwd_ipv4) %+% (fwd_type_v %=% fwd_mpls),
+         *     sequence [ "ttl" %<-% Minus(Var1("ttl", 8), mkVInt(1,8))
+         *              ; mkOrdered [Var1("ttl", 8) %=% mkVInt(0,8), "drop" %<-% mkVInt(1,1)
+         *                         ; True, Skip]]
+         *   ; True, Skip
+         *   ] *)
+      ]
+  in
+  let logical = sequence [station; set_next; acl; next; fabric_egress] in
+  let admit =
+    Apply("admit"
+        , ["dmac", 48]
+        , [[], "l3_admit" %<-% mkVInt(1,1)]
+        , "l3_admit" %<-% mkVInt(0,1))
+  in
+  let l2 =
+    Apply("l2"
+        , ["dmac", 48]
+        , [["out_port", 9], "out_port" %<-% Var1("out_port",9)]
+        , Skip) in
+  let l3 =
+    Apply ("l3"
+         , ["dmac", 48; "smac", 48; "ip_proto", 16; "l4_src", 16; "l4_dst", 16; (*"ttl", 8*)]
+         , [["op", 9; "smac", 48; "dmac", 48;],
+            sequence [
+                "out_port" %<-% Var1("op", 9)
+              ; "smac" %<-% Var1("smac", 48)
+              ; "dmac" %<-% Var1("dmac", 48)
+              (* ; "ttl" %<-% Minus(Var1("ttl",8), mkVInt(1,8)) *)
+              ]
+           ; [], Skip
+           ; [], "drop" %<-% mkVInt(1,1)]
+         , Skip )
+  in
+  let l2_or_l3 =
+    mkOrdered[
+        Var1("l3_admit",1) %=% mkVInt(0,1), l3;
+        Var1("l3_admit",1) %=% mkVInt(1,1), l2
+      ] in
+  let punt =
+    Apply("punt"
+        , ["in_port", 9; "out_port", 9; "eth_type", 16
+           ; "ipv4_src", 32; "ip_proto", 16; "icmp_code", 16
+           ; "vlan_id", 12
+          ] (* ip_diffserve vlan[0].vid, vlan[0].pcp, class_id, vrf_id *)
+        , [ [], "out_punt" %<-% Var1("out_port",9)
+          ; [], sequence [
+                    "out_punt" %<-% Var1("out_port", 9)
+                  ; "out_port" %<-% mkVInt(255, 9)
+                  ]
+          ; ["vpt", 9], sequence [
+                            "out_punt" %<-% Var1("out_port", 9)
+                          ; "out_port" %<-% Var1("vpt", 9)
+          ]]
+        , Skip  ) in
+  let physical = sequence [admit; l2_or_l3; punt] in
+  let fvs =
+    [ "in_port", 9
+    ; "out_port", 9
+    ; "dmac", 48
+    ; "smac", 48
+    ; "eth_type", 16
+    ; "mpls_label", 20
+    ; "ipv4_src", 32
+    ; "ipv4_dst", 32
+    ; "ip_proto", 16
+    (* ; "ttl", 8 *)
+    ; "l4_src", 16
+    ; "l4_dst", 16
+    ; "icmp_type", 16
+    ; "icmp_code", 16
+    ; "drop", 1
+    ; "vlan_id", 20
+    ]
+  in
+  let init_metadata =
+    sequence [
+        "in_port" %<-% mkVInt(0,9)
+      ; "out_port" %<-% Var1("in_port", 9)
+      ; "drop" %<-% mkVInt(0,1)
+      ; "skip_next" %<-% mkVInt(0,1)
+      ]
+  in
+  synthesize_edit ~widening ~gas ~iter:1 ~fvs (Prover.solver ())
+    (init_metadata %:% logical)
+    (init_metadata %:% physical)
+    StringMap.empty
+    StringMap.empty
+    None
+    
+    
+    

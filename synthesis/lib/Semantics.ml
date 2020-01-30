@@ -183,7 +183,7 @@ let rec widening_test pkt wide t =
   | _ -> failwith "dont know how to handle that kind of test"
           
 let widening_match pkt wide matches =
-  Printf.printf "WIDENING A MATCH\n";
+  (* Printf.printf "WIDENING A MATCH\n"; *)
   List.fold matches
     ~init:wide
     ~f:(fun acc ((key,_), m)  ->
@@ -257,7 +257,7 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : instance) ~wide(* :(wi
                    then
                      (missed %&% cond, widening_match pkt wide (List.zip_exn keys matches) |> Some, Some (data, action))
                    else
-                     let _ = Printf.printf "%s not in  %s" (Packet.string__packet (fst pkt_loc)) (string_of_test cond)   in
+                     (* let _ = Printf.printf "%s not in  %s" (Packet.string__packet (fst pkt_loc)) (string_of_test cond)   in *)
                      (missed %&% !%(cond), Some wide, None)
                 | (_, _, _) -> rst
               )
@@ -266,14 +266,14 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : instance) ~wide(* :(wi
           | None -> trace_eval_inst ~gas ~wide default inst pkt_loc 
           | Some rules ->
              begin
-               Printf.printf "Widening a match! %s\n" (Packet.test_of_wide wide |> string_of_test);
+               (* Printf.printf "Widening a match! %s\n" (Packet.test_of_wide wide |> string_of_test); *)
                match action_to_execute wide rules with
                | (cond, Some wide, Some (data, aid)) ->
-                  Printf.printf "HIT A RULE\n%!";
+                  (* Printf.printf "HIT A RULE\n%!"; *)
                   let pkt', wide', cmd', trace = trace_eval_inst ~wide (List.nth_exn actions aid |> bind_action_data data) inst pkt_loc in
                   (pkt', wide', Assert cond %:% cmd', StringMap.set ~key:name ~data:(data, aid) trace)
                | (cond, _, _) ->
-                  Printf.printf "Missed everything\n%!";
+                  (* Printf.printf "Missed everything\n%!"; *)
                   let pkt',wide', cmd', trace = trace_eval_inst ~wide default inst pkt_loc in
                   (pkt' , wide', Assert cond %:% cmd', StringMap.set ~key:name ~data:([],List.length actions) trace )
              end

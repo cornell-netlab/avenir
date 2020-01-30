@@ -127,11 +127,12 @@ module Bench = struct
       empty
       +> anon ("varsize" %: int)
       +> anon ("num_tables" %: int)
-      +> anon ("max_inserts" %: int))
+      +> anon ("max_inserts" %: int)
+      +> flag "-w" no_arg ~doc:"perform widening")
    
 
-  let run varsize num_tables max_inserts () =
-    Benchmark.reorder_benchmark varsize num_tables max_inserts
+  let run varsize num_tables max_inserts widening () =
+    Benchmark.reorder_benchmark varsize num_tables max_inserts widening
 end
     
 
@@ -143,11 +144,15 @@ let benchmark : Command.t =
 
 
 module ONF = struct
-  let spec = Command.Spec.(empty)
+  let spec = Command.Spec.(
+      empty
+      +> flag "-gas" (required int) ~doc:"how many cegis iterations?"
+      +> flag "-w" no_arg ~doc:"perform widening" )
   
 
-  let run () =
-    Benchmark.basic_onf_ipv4 () |> ignore
+  let run gas widening () =
+    (* Benchmark.basic_onf_ipv4 () |> ignore *)
+    Benchmark.onf_representative gas widening |> ignore
 end
     
 
@@ -158,11 +163,14 @@ let onf : Command.t =
     ONF.run
 
 module RunningExample = struct
-  let spec = Command.Spec.(empty)
+  let spec = Command.Spec.(
+      empty
+      +> flag "-gas" (required int) ~doc:"how many cegis iterations?"
+      +> flag "-w" no_arg ~doc:"perform widening")
   
 
-  let run () =
-    Benchmark.running_example () |> ignore
+  let run gas widening () =
+    Benchmark.running_example gas widening |> ignore
 end
     
 

@@ -93,7 +93,7 @@ let rec mkZ3Test (rhoVars : (string * size) list) (t : test) ctx deBruijn quanti
   | True -> Z3.Boolean.mk_true ctx
   | False -> Z3.Boolean.mk_false ctx
   | Eq (left, right) ->
-     (* Printf.printf "%s = %s" (string_of_expr1 left) (string_of_expr1 right); *)
+     (* Printf.printf "%s = %s\n%!" (string_of_expr1 left) (string_of_expr1 right); *)
      Z3.Boolean.mk_eq ctx (z3_value left) (z3_value right)
   | Le (left, right) ->
      (* Printf.printf "%s < %s" (string_of_expr1 left) (string_of_expr right); *)
@@ -279,7 +279,7 @@ let check_opt (test : test ) =
       Z3.Optimize.minimize solver e |> ignore
     );
   Core.Out_channel.write_all "query.smt" ~data:(Printf.sprintf "%s\n(get-model)" (Z3.Optimize.to_string solver));
-  Printf.printf "OPTIMAL SOLVER :\n %s \n\n%!" (Z3.Optimize.to_string solver);
+  (* Printf.printf "OPTIMAL SOLVER :\n %s \n\n%!" (Z3.Optimize.to_string solver); *)
   try Shell.run_full "/usr/bin/z3" ["-smt2";"query.smt" ]|> parse_results holes
   with _ -> (Z3.Solver.UNSATISFIABLE, None)
   
@@ -302,7 +302,7 @@ let check _ typ test =
        let st = Time.now() in
        let _ = Z3.Solver.push mySolver;
                initSolver typ mySolver context test in
-       let _ = Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in
+       (* let _ = Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in *)
        let response = Z3.Solver.check mySolver [] in
        let dur = Time.(diff (now()) st) in
        (* Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver); *)
