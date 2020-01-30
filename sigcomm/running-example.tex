@@ -88,29 +88,38 @@ control Ingress {
 \end{figure}
 
 \begin{figure}
-
-\begin{tabular}{c|c}
+\begin{tabular}{c@{\hskip 1.5em}|@{\hskip 1.5em}c}
+\begin{small}
 $
         \begin{array}{l}
-          \IF~\var{src} = 1 \to \var{smac} := 1 \\
+          \IF \\
+          \phantom{\IF}~\var{src} = 1 \to \var{smac} := 1 \\
           \phantom{\IF}~\var{src} = 2 \to \var{dst} := 1\\
           \phantom{\IF}~\var{src} = \var{*} \to \SKIP \\
           \ENDIF ; \\
-          \IF~\var{dst} = 1 \to \var{out} := 1 \\
+          \IF \\
+          \phantom{\IF}~\var{dst} = 1 \to \var{out} := 1 \\
           \phantom{\IF}~\var{dst} = 2 \to \var{out} := 2 \\
           \phantom{\IF}~\var{dst} = \var{*} \to \SKIP \\
           \ENDIF
         \end{array}
 $
+\end{small}
 &
+\begin{small}
 $
         \begin{array}{l}
           \IF~\\
-          \phantom{\IF}~\var{src} = \var{*} \wedge \var{dst} = \var{*}\\
-          \phantom{\IF}~~~\to \SKIP \\
+          \phantom{\IF}~\var{src} = \var{*} \wedge \var{dst} = \var{*}\to \SKIP \\
           \ENDIF 
         \end{array}
 $
+\end{small}
+\\
+(a)
+&
+(b)
 \end{tabular}
-\caption{GCL encoding of logical \& physical programs}
+
+\caption{Gaurded command encoding for (a) logical and (b) physical P4 programs with their current rules\label{fig:encoding}}
 \end{figure}
