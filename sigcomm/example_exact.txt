@@ -1,0 +1,356 @@
+Logical:
+if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+
+Physical:
+if ordered
+	true -> skip []
+fi
+======================= LOOP (1, 100) =======================
+Logical:
+if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+Physical:
+if ordered
+	true -> skip []
+fi
+----------invalid----------------
+ CE = (dst,0#2,out,2#2,phys_dst,0#2,phys_out,2#2,phys_smac,1#2,phys_src,0#2,smac,1#2,src,0#2,)
+==++?+===++?
+======================= LOOP (1, 99) =======================
+Logical:
+if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+Physical:
+if ordered
+	(src#2 = 0#2&&dst#2 = 0#2) -> out := 1#2 []
+	true -> skip []
+fi
+----------invalid----------------
+ CE = (dst,0#2,out,0#2,phys_dst,0#2,phys_out,0#2,phys_smac,2#2,phys_src,0#2,smac,2#2,src,0#2,)
+==++?+===++?
+BACKTRACKING
+======================= LOOP (1, 98) =======================
+Logical:
+if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+Physical:
+if ordered
+	(src#2 = 0#2&&dst#2 = 0#2) -> smac := 1#2; out := 1#2 []
+	true -> skip []
+fi
+----------invalid----------------
+ CE = (dst,3#2,out,0#2,phys_dst,3#2,phys_out,0#2,phys_smac,2#2,phys_src,0#2,smac,2#2,src,0#2,)
+==++?+===++?
+======================= LOOP (1, 97) =======================
+Logical:
+if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+Physical:
+if ordered
+	(src#2 = 0#2&&dst#2 = 0#2) -> smac := 1#2; out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 3#2) -> smac := 1#2 []
+	true -> skip []
+fi
+----------invalid----------------
+ CE = (dst,0#2,out,2#2,phys_dst,0#2,phys_out,2#2,phys_smac,2#2,phys_src,1#2,smac,2#2,src,1#2,)
+==++?+===++?
+======================= LOOP (1, 96) =======================
+Logical:
+if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+Physical:
+if ordered
+	(src#2 = 0#2&&dst#2 = 0#2) -> smac := 1#2; out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 3#2) -> smac := 1#2 []
+	(src#2 = 1#2&&dst#2 = 0#2) -> dst := 2#2 []
+	true -> skip []
+fi
+----------invalid----------------
+ CE = (dst,1#2,out,2#2,phys_dst,1#2,phys_out,2#2,phys_smac,2#2,phys_src,0#2,smac,2#2,src,0#2,)
+==++?+===++?
+======================= LOOP (1, 95) =======================
+Logical:
+if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+Physical:
+if ordered
+	(src#2 = 0#2&&dst#2 = 0#2) -> smac := 1#2; out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 3#2) -> smac := 1#2 []
+	(src#2 = 1#2&&dst#2 = 0#2) -> dst := 2#2 []
+	(src#2 = 0#2&&dst#2 = 1#2) -> smac := 1#2 []
+	true -> skip []
+fi
+----------invalid----------------
+ CE = (dst,1#2,out,1#2,phys_dst,1#2,phys_out,1#2,phys_smac,0#2,phys_src,0#2,smac,0#2,src,0#2,)
+==++?+===++?
+BACKTRACKING
+======================= LOOP (1, 94) =======================
+Logical:
+if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+Physical:
+if ordered
+	(src#2 = 0#2&&dst#2 = 0#2) -> smac := 1#2; out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 3#2) -> smac := 1#2 []
+	(src#2 = 1#2&&dst#2 = 0#2) -> dst := 2#2 []
+	(src#2 = 0#2&&dst#2 = 1#2) -> smac := 1#2; out := 2#2 []
+	true -> skip []
+fi
+----------invalid----------------
+ CE = (dst,1#2,out,2#2,phys_dst,1#2,phys_out,2#2,phys_smac,2#2,phys_src,1#2,smac,2#2,src,1#2,)
+==++?+===++?
+======================= LOOP (1, 93) =======================
+Logical:
+if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+Physical:
+if ordered
+	(src#2 = 0#2&&dst#2 = 0#2) -> smac := 1#2; out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 3#2) -> smac := 1#2 []
+	(src#2 = 1#2&&dst#2 = 0#2) -> dst := 2#2 []
+	(src#2 = 0#2&&dst#2 = 1#2) -> smac := 1#2; out := 2#2 []
+	(src#2 = 1#2&&dst#2 = 1#2) -> dst := 2#2 []
+	true -> skip []
+fi
+----------invalid----------------
+ CE = (dst,0#2,out,2#2,phys_dst,0#2,phys_out,2#2,phys_smac,2#2,phys_src,2#2,smac,2#2,src,2#2,)
+==++?+===++?
+======================= LOOP (1, 92) =======================
+Logical:
+if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+Physical:
+if ordered
+	(src#2 = 0#2&&dst#2 = 0#2) -> smac := 1#2; out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 3#2) -> smac := 1#2 []
+	(src#2 = 1#2&&dst#2 = 0#2) -> dst := 2#2 []
+	(src#2 = 0#2&&dst#2 = 1#2) -> smac := 1#2; out := 2#2 []
+	(src#2 = 1#2&&dst#2 = 1#2) -> dst := 2#2 []
+	(src#2 = 2#2&&dst#2 = 0#2) -> out := 1#2 []
+	true -> skip []
+fi
+----------invalid----------------
+ CE = (dst,2#2,out,2#2,phys_dst,2#2,phys_out,2#2,phys_smac,2#2,phys_src,0#2,smac,2#2,src,0#2,)
+==++?+===++?
+======================= LOOP (1, 91) =======================
+Logical:
+if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+Physical:
+if ordered
+	(src#2 = 0#2&&dst#2 = 0#2) -> smac := 1#2; out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 3#2) -> smac := 1#2 []
+	(src#2 = 1#2&&dst#2 = 0#2) -> dst := 2#2 []
+	(src#2 = 0#2&&dst#2 = 1#2) -> smac := 1#2; out := 2#2 []
+	(src#2 = 1#2&&dst#2 = 1#2) -> dst := 2#2 []
+	(src#2 = 2#2&&dst#2 = 0#2) -> out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 2#2) -> smac := 1#2 []
+	true -> skip []
+fi
+----------invalid----------------
+ CE = (dst,0#2,out,2#2,phys_dst,0#2,phys_out,2#2,phys_smac,2#2,phys_src,3#2,smac,2#2,src,3#2,)
+==++?+===++?
+======================= LOOP (1, 90) =======================
+Logical:
+if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+Physical:
+if ordered
+	(src#2 = 0#2&&dst#2 = 0#2) -> smac := 1#2; out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 3#2) -> smac := 1#2 []
+	(src#2 = 1#2&&dst#2 = 0#2) -> dst := 2#2 []
+	(src#2 = 0#2&&dst#2 = 1#2) -> smac := 1#2; out := 2#2 []
+	(src#2 = 1#2&&dst#2 = 1#2) -> dst := 2#2 []
+	(src#2 = 2#2&&dst#2 = 0#2) -> out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 2#2) -> smac := 1#2 []
+	(src#2 = 3#2&&dst#2 = 0#2) -> out := 1#2 []
+	true -> skip []
+fi
+----------invalid----------------
+ CE = (dst,3#2,out,0#2,phys_dst,3#2,phys_out,0#2,phys_smac,2#2,phys_src,1#2,smac,2#2,src,1#2,)
+==++?+===++?
+======================= LOOP (1, 89) =======================
+Logical:
+if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+Physical:
+if ordered
+	(src#2 = 0#2&&dst#2 = 0#2) -> smac := 1#2; out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 3#2) -> smac := 1#2 []
+	(src#2 = 1#2&&dst#2 = 0#2) -> dst := 2#2 []
+	(src#2 = 0#2&&dst#2 = 1#2) -> smac := 1#2; out := 2#2 []
+	(src#2 = 1#2&&dst#2 = 1#2) -> dst := 2#2 []
+	(src#2 = 2#2&&dst#2 = 0#2) -> out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 2#2) -> smac := 1#2 []
+	(src#2 = 3#2&&dst#2 = 0#2) -> out := 1#2 []
+	(src#2 = 1#2&&dst#2 = 3#2) -> dst := 2#2 []
+	true -> skip []
+fi
+----------invalid----------------
+ CE = (dst,1#2,out,1#2,phys_dst,1#2,phys_out,1#2,phys_smac,2#2,phys_src,3#2,smac,2#2,src,3#2,)
+==++?+===++?
+======================= LOOP (1, 88) =======================
+Logical:
+if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+Physical:
+if ordered
+	(src#2 = 0#2&&dst#2 = 0#2) -> smac := 1#2; out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 3#2) -> smac := 1#2 []
+	(src#2 = 1#2&&dst#2 = 0#2) -> dst := 2#2 []
+	(src#2 = 0#2&&dst#2 = 1#2) -> smac := 1#2; out := 2#2 []
+	(src#2 = 1#2&&dst#2 = 1#2) -> dst := 2#2 []
+	(src#2 = 2#2&&dst#2 = 0#2) -> out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 2#2) -> smac := 1#2 []
+	(src#2 = 3#2&&dst#2 = 0#2) -> out := 1#2 []
+	(src#2 = 1#2&&dst#2 = 3#2) -> dst := 2#2 []
+	(src#2 = 3#2&&dst#2 = 1#2) -> out := 2#2 []
+	true -> skip []
+fi
+----------invalid----------------
+ CE = (dst,1#2,out,1#2,phys_dst,1#2,phys_out,1#2,phys_smac,2#2,phys_src,2#2,smac,2#2,src,2#2,)
+==++?+===++?
+======================= LOOP (1, 87) =======================
+Logical:
+if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+Physical:
+if ordered
+	(src#2 = 0#2&&dst#2 = 0#2) -> smac := 1#2; out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 3#2) -> smac := 1#2 []
+	(src#2 = 1#2&&dst#2 = 0#2) -> dst := 2#2 []
+	(src#2 = 0#2&&dst#2 = 1#2) -> smac := 1#2; out := 2#2 []
+	(src#2 = 1#2&&dst#2 = 1#2) -> dst := 2#2 []
+	(src#2 = 2#2&&dst#2 = 0#2) -> out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 2#2) -> smac := 1#2 []
+	(src#2 = 3#2&&dst#2 = 0#2) -> out := 1#2 []
+	(src#2 = 1#2&&dst#2 = 3#2) -> dst := 2#2 []
+	(src#2 = 3#2&&dst#2 = 1#2) -> out := 2#2 []
+	(src#2 = 2#2&&dst#2 = 1#2) -> out := 2#2 []
+	true -> skip []
+fi
+++++++++++valid+++++++++++++
+==++?+===++?
+
+Synthesized Program:
+if ordered
+	(src#2 = 0#2&&dst#2 = 0#2) -> smac := 1#2; out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 3#2) -> smac := 1#2 []
+	(src#2 = 1#2&&dst#2 = 0#2) -> dst := 2#2 []
+	(src#2 = 0#2&&dst#2 = 1#2) -> smac := 1#2; out := 2#2 []
+	(src#2 = 1#2&&dst#2 = 1#2) -> dst := 2#2 []
+	(src#2 = 2#2&&dst#2 = 0#2) -> out := 1#2 []
+	(src#2 = 0#2&&dst#2 = 2#2) -> smac := 1#2 []
+	(src#2 = 3#2&&dst#2 = 0#2) -> out := 1#2 []
+	(src#2 = 1#2&&dst#2 = 3#2) -> dst := 2#2 []
+	(src#2 = 3#2&&dst#2 = 1#2) -> out := 2#2 []
+	(src#2 = 2#2&&dst#2 = 1#2) -> out := 2#2 []
+	true -> skip []
+fi
+
