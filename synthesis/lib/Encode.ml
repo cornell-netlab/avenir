@@ -62,7 +62,7 @@ let rec dispatch_list ((info,expr) : Expression.t) : P4String.t list =
   match expr with
   | E.Name s -> [s]
   | E.ExpressionMember {expr; name} -> dispatch_list expr @ [name]
-  | E.FunctionCall {func; type_args=[]; args=[]} -> dispatch_list func
+  | E.FunctionCall {func; type_args=[];_} -> dispatch_list func
   | _ ->  ctor_name_expression (info,expr) |> type_error
 
 let string_of_memberlist =
@@ -208,6 +208,18 @@ let lookup_exn (Program(top_decls) : program) (ctx : Declaration.t list) (ident 
     end
   | Some d -> d
 
+let lookup_string (Program(top_decls) : program) (ctx : Declaration.t list) (ident : string) : Declaration.t option =
+  let find name =
+    let module D = Declaration in 
+    List.find ~f:(fun d -> snd (D.name d) = name) in
+  match find ident ctx with
+  | None -> find ident (get_decls top_decls)
+  | Some d -> Some d
+
+let lookup_string_exn (prog : program) (ctx : Declaration.t list) (ident : string) : Declaration.t =
+  match lookup_string prog ctx ident with
+    | Some d -> d
+    | None -> failwith ("[Error: UseBeforeDef] Couldnt find " ^ ident)
             
 let lookup_action_exn prog ctx action_name =
   let open Declaration in
@@ -215,8 +227,14 @@ let lookup_action_exn prog ctx action_name =
   | _, Action a -> (a.body, List.map ~f:(fun (_,p) -> Parameter.(p.variable)) a.params)
   | _ -> failwith ("[TypeError] Expecting \""^ snd action_name ^ "\" to be an action, "
                    ^ "but it resolved to something else at " ^ Petr4.Info.to_string (fst action_name))
-          
 
+
+let lookup_string_action_exn prog ctx action_name =
+  let open Declaration in
+  match lookup_string_exn prog ctx action_name with
+  | _, Action a -> (a.body, List.map ~f:(fun (_,p) -> Parameter.(p.variable)) a.params)
+  | _ -> failwith ("[TypeError] Expecting \""^ action_name ^ "\" to be an action")
+                      
 let rec dispatch prog ctx members =
   match members with
   | [] -> failwith "[RuntimeException] Tried to Dispatch an empty list of names"
@@ -401,7 +419,7 @@ and encode_switch_expr prog (ctx : Declaration.t list) (e : Expression.t) : expr
             let block = encode_block prog ctx code in
             begin match act_i with
               | Some (i, _) ->
-                let test = And(fall_test, Eq(expr, (Value1 (Int(i, -1))))) in
+                let test = Or(fall_test, Eq(expr, (Value1 (Int(i, -1))))) in
                 True, Some (test, block)
               | None -> failwith ("Action not found when encoding switch statement")
             end
@@ -432,22 +450,33 @@ and encode_match ((_, m) : Table.key) : test =
 
 and encode_table prog (ctx : Declaration.t list) (name : P4String.t) (props : Table.property list) : cmd =
   let open Table in
-  let p4keys, p4actions = List.fold_left props ~init:([],[])
-      ~f:(fun (acc_keys, acc_actions) prop ->
+  let p4keys, p4actions, p4customs = List.fold_left props ~init:([], [], [])
+      ~f:(fun (acc_keys, acc_actions, acc_customs) prop ->
           match snd prop with
-          | Key {keys} -> (acc_keys @ keys, acc_actions)
-          | Actions {actions} -> (acc_keys, acc_actions @ actions)
-          | _ -> (acc_keys, acc_actions)
+          | Key {keys} -> (acc_keys @ keys, acc_actions, acc_customs)
+          | Actions {actions} -> (acc_keys, acc_actions @ actions, acc_customs)
+          | Custom {name;value;_} -> (acc_keys, acc_actions, (name, value) :: acc_customs)
+          | _ -> (acc_keys, acc_actions, acc_customs)
          ) in
+  let str_keys = List.map p4keys ~f:(fun k -> (string_of_memberlist (dispatch_list (snd k).key), -1)) in
+  
   let lookup_and_encode_action i (_,a) =
     let (body, action_data) = lookup_action_exn prog ctx a.name in
     let set_action_run = Assign(snd name ^ action_run_suffix, Value1(Int(i, -1))) in
-    set_action_run %:% encode_action prog ctx body ~action_data
+    List.map action_data ~f:snd, set_action_run %:% encode_action prog ctx body ~action_data
   in
   let action_cmds = List.mapi p4actions ~f:lookup_and_encode_action in
-  let key_test = concatMap p4keys ~f:(encode_match) ~c:(%&%) ~init:(Some True)in
-  (List.map action_cmds ~f:(fun act -> key_test, act) ) @ [(True, Skip)]
-  |> mkSelect Ordered
+
+  let def_act = List.find_map p4customs
+        ~f:(fun (n, e) -> if snd n = "default_action" then Some e else None) in
+  let enc_def_act = match def_act with
+                      | Some da ->
+                        let da_name = string_of_memberlist (dispatch_list da) in
+                        let (def_act_body, action_data) = lookup_string_action_exn prog ctx da_name in
+                          encode_action prog ctx def_act_body ~action_data
+                      | None -> Skip
+  in
+  Apply(snd name, str_keys, action_cmds, enc_def_act)
 
 let read_lines filename =
   let chan = In_channel.create filename in
