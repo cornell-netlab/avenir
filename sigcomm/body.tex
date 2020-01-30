@@ -107,24 +107,51 @@ of the both programs with respect to a general packet with fresh symbolic fields
 Only if the two conditions are equal for any values of the variables we 
 conclude that the programs are equivalent.
 The verifier consults a theorem prover to check the equivalence of the these two universally quantified formulae.
-In the case of the programs in Figure~\ref{fig:encoding} since they are not equivalent, 
-the verification engine will return the values ... as one possible counter-example.
+Since the programs in Figure~\ref{fig:encoding} are not equivalent, 
+the verification engine will return a counter-example packet to show that the 
+programs behave differently.
+For example, a counter-example is $\{\mbox{\ttfamily src}=0,\mbox{\ttfamily dst}=0\}$.
+When inserted into the logical program, the matched actions will update the header values to 
+$\{\mbox{\ttfamily out}=1,\mbox{smac}=1\}$.
+In the physical program the header values stay the same since there is no rule in the table.
 
+Verification is one of the main modules in the CEGIS algorithm.
+The other main module is the inductive synthesizer as Figure~\ref{fig:cegis} shows.
+When verification fails and the verifier produces a concrete counter-example,
+it passes the counter-example to the inductive synthesis module.
+The task of the inductive synthesizer is to create a candidate solution 
+(in this case an instantiation of the physical program)
+that works correctly for the given counter-example.
+The main idea in CEGIS is to make several iterations on verification and 
+inductive synthesis until a valid solution is produced.
+CEGIS is guaranteed to stop and return a solution in a finite domain but 
+it may take several iterations.
+We will describe some of the heuristics to reduce the number of iterations in the later
+sections.
 
-\begin{figure}
-\begin{tikzpicture}[auto,>=latex']
-    \node [draw] (is) {Inductive Synthesis};
-    \node [draw, right =2cm of is] (verif) {Verification};
-    \node [ellipse,draw, right=1em of is] (f) {Fail};
-    \node [ellipse,draw, right=1em of verif] (o) {Ok};
+\input{cegis}
 
-    \draw [->] (is) -- (f);
-    \draw [->] (verif) -- (o);
-    \draw [->,bend left=40] (verif) node[below=1em] {Fail} to node{counterexample} (is);
-    \draw [->,bend left=40] (is)  to node{candidate implementation} (verif);
-\end{tikzpicture}
-\caption{CEGIS Loop\label{fig:cegis}}
-\end{figure}
+The inductive synthesizer creates a candidate solution for the given input with the help of sketching.
+A sketch in our problem domain is a guarded command rule with holes in place of some constants.
+For removing the counter-example $\{\mbox{\ttfamily src}=0,\mbox{\ttfamily dst}=0\}$, 
+the user may provide the following sketch to the synthesizer.
+This sketch is is basically assisting the synthesizer by saying that 
+the required rule should match on the guards $\mbox{\ttfamily src}=0\wedge\mbox{\ttfamily dst}=0$
+and the synthesis procedure should find the constants for the holes in the updates of the head of the implication.
+
+\[
+\begin{aligned}
+ &\IF \\
+ &~\mbox{\ttfamily src}=0\wedge\mbox{\ttfamily dst}=0 \to \\
+ &~~~~\mbox{\ttfamily src}=?_0~;~\mbox{\ttfamily out}=?_1~;~\mbox{\ttfamily smac}=?_2~;~\mbox{\ttfamily dst}=?_3 \\
+ &\ENDIF
+\end{aligned}
+\]
+
+Note that in principle the user can also leave holes in place of $0$ in the guard.
+This only makes the space of search for the synthesizer larger.
+We do not require smart sketches from the user in our tool but providing them can 
+make the process more efficient..
 
 % Example
 

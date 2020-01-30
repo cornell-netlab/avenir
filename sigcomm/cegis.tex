@@ -1,0 +1,14 @@
+\begin{figure}
+\begin{tikzpicture}[auto,>=latex']
+    \node [draw] (is) {Inductive Synthesis};
+    \node [draw, right =2cm of is] (verif) {Verification};
+    \node [ellipse,draw, right=1em of is] (f) {Fail};
+    \node [ellipse,draw, right=1em of verif] (o) {Ok};
+
+    \draw [->] (is) -- (f);
+    \draw [->] (verif) -- (o);
+    \draw [->,bend left=40] (verif) node[below=1em] {Fail} to node{counterexample} (is);
+    \draw [->,bend left=40] (is)  to node{candidate implementation} (verif);
+\end{tikzpicture}
+\caption{CEGIS Loop\label{fig:cegis}}
+\end{figure}
