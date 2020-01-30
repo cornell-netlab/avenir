@@ -1,6 +1,6 @@
 Logical:
 if ordered
-	src#2 = 1#2 -> dmac := 2#2 []
+	src#2 = 1#2 -> dst := 2#2 []
 	src#2 = 0#2 -> smac := 1#2 []
 	true -> skip []
 fi; if ordered
@@ -14,35 +14,27 @@ if ordered
 	true -> skip []
 fi
 ======================= LOOP (1, 10) =======================
-----------invalid----------------
- CE = (dmac,2#2,dst,2#2,out,0#2,phys_dmac,1#2,phys_dst,2#2,phys_out,0#2,phys_smac,1#2,phys_src,1#2,smac,1#2,src,1#2,)
----
-Extracting ?AddRowTosrc_dst_table |-> 1 from model 
-Extracting ?ActInsrc_dst_table |-> 1 from model 
-Extracting ?dst_lo |-> 2 from model 
-Extracting ?src_lo |-> 1 from model 
-Extracting ?dst_hi |-> 3 from model 
-Extracting d |-> 2 from model 
-Extracting ?src_hi |-> 1 from model 
-======================= LOOP (1, 9) =======================
-logical : 
+Logical : 
  if ordered
-	src#2 = 1#2 -> dmac := 2#2 []
+	src#2 = 1#2 -> dst := 2#2 []
 	src#2 = 0#2 -> smac := 1#2 []
 	true -> skip []
 fi; if ordered
 	dst#2 = 0#2 -> out := 1#2 []
 	dst#2 = 1#2 -> out := 2#2 []
 	true -> skip []
-fi 
+fi
 Physical : 
-if ordered
-  	((phys_src#2 = 1#2&&2#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_dmac := 2#2 []
+ if ordered
+	true -> skip []
+fi 
+Inserting padding skippassive : 
+ if ordered
 	true -> skip []
 fi
----
- CE = (dmac,0#2,dst,0#2,out,1#2,phys_dmac,0#2,phys_dst,0#2,phys_out,3#2,phys_smac,1#2,phys_src,0#2,smac,1#2,src,0#2,)
----
+----------invalid----------------
+ CE = (dst,0#2,out,1#2,phys_dst,0#2,phys_out,2#2,phys_smac,1#2,phys_src,0#2,smac,1#2,src,0#2,)
+==++?+===++?
 Extracting ?AddRowTosrc_dst_table |-> 1 from model 
 Extracting ?ActInsrc_dst_table |-> 3 from model 
 Extracting s |-> 1 from model 
@@ -51,27 +43,53 @@ Extracting ?dst_hi |-> 0 from model
 Extracting ?src_lo |-> 0 from model 
 Extracting o |-> 1 from model 
 Extracting ?src_hi |-> 0 from model 
-
-======================= LOOP (1, 8) =======================
+Params for act 3 : s o
+======================= LOOP (1, 9) =======================
 Logical : 
  if ordered
-	src#2 = 1#2 -> dmac := 2#2 []
+	src#2 = 1#2 -> dst := 2#2 []
 	src#2 = 0#2 -> smac := 1#2 []
 	true -> skip []
 fi; if ordered
 	dst#2 = 0#2 -> out := 1#2 []
 	dst#2 = 1#2 -> out := 2#2 []
 	true -> skip []
-fi 
-Physical : 
+fi
+Physical: 
  if ordered
-	((phys_src#2 = 1#2&&2#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_dmac := 2#2 []
 	(phys_src#2 = 0#2&&phys_dst#2 = 0#2) -> phys_smac := 1#2; phys_out := 1#2 []
 	true -> skip []
 fi 
 ----------invalid----------------
- CE = (dmac,0#2,dst,0#2,out,1#2,phys_dmac,0#2,phys_dst,0#2,phys_out,0#2,phys_smac,0#2,phys_src,2#2,smac,0#2,src,2#2,)
----
+ CE = (dst,3#2,out,0#2,phys_dst,3#2,phys_out,0#2,phys_smac,2#2,phys_src,0#2,smac,1#2,src,0#2,)
+==++?+===++?
+Extracting ?AddRowTosrc_dst_table |-> 1 from model 
+Extracting ?ActInsrc_dst_table |-> 0 from model 
+Extracting s |-> 1 from model 
+Extracting ?dst_lo |-> 2 from model 
+Extracting ?src_lo |-> 0 from model 
+Extracting ?dst_hi |-> 3 from model 
+Extracting ?src_hi |-> 0 from model 
+
+======================= LOOP (1, 8) =======================
+Logical : 
+ if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+Physical: 
+ if ordered
+	(phys_src#2 = 0#2&&phys_dst#2 = 0#2) -> phys_smac := 1#2; phys_out := 1#2 []
+	((phys_src#2 = 0#2&&2#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_smac := 1#2 []
+	true -> skip []
+fi 
+----------invalid----------------
+ CE = (dst,0#2,out,1#2,phys_dst,0#2,phys_out,0#2,phys_smac,0#2,phys_src,2#2,smac,0#2,src,2#2,)
 Extracting ?AddRowTosrc_dst_table |-> 1 from model 
 Extracting ?ActInsrc_dst_table |-> 2 from model 
 Extracting o |-> 1 from model 
@@ -82,7 +100,7 @@ Extracting ?src_hi |-> 3 from model
 ======================= LOOP (1, 7) =======================
 Logical : 
  if ordered
-	src#2 = 1#2 -> dmac := 2#2 []
+	src#2 = 1#2 -> dst := 2#2 []
 	src#2 = 0#2 -> smac := 1#2 []
 	true -> skip []
 fi; if ordered
@@ -90,17 +108,47 @@ fi; if ordered
 	dst#2 = 1#2 -> out := 2#2 []
 	true -> skip []
 fi
-Physical: 
+Physical : 
  if ordered
-	((phys_src#2 = 1#2&&2#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_dmac := 2#2 []
 	(phys_src#2 = 0#2&&phys_dst#2 = 0#2) -> phys_smac := 1#2; phys_out := 1#2 []
+	((phys_src#2 = 0#2&&2#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_smac := 1#2 []
 	((2#2 <= phys_src#2&&phys_src#2 <= 3#2)&&phys_dst#2 = 0#2) -> phys_out := 1#2 []
 	true -> skip []
 fi 
-
 ----------invalid----------------
- CE = (dmac,0#2,dst,1#2,out,2#2,phys_dmac,0#2,phys_dst,1#2,phys_out,2#2,phys_smac,3#2,phys_src,0#2,smac,1#2,src,0#2,)
----
+ CE = (dst,2#2,out,0#2,phys_dst,3#2,phys_out,0#2,phys_smac,0#2,phys_src,1#2,smac,0#2,src,1#2,)
+
+
+Extracting ?AddRowTosrc_dst_table |-> 1 from model 
+Extracting ?ActInsrc_dst_table |-> 1 from model 
+Extracting ?dst_lo |-> 0 from model 
+Extracting ?dst_hi |-> 3 from model 
+Extracting ?src_lo |-> 1 from model 
+Extracting d |-> 2 from model 
+Extracting ?src_hi |-> 1 from model 
+
+======================= LOOP (1, 6) =======================
+Logical : 
+ if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+Physical : 
+ if ordered
+	(phys_src#2 = 0#2&&phys_dst#2 = 0#2) -> phys_smac := 1#2; phys_out := 1#2 []
+	((phys_src#2 = 0#2&&2#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_smac := 1#2 []
+	((2#2 <= phys_src#2&&phys_src#2 <= 3#2)&&phys_dst#2 = 0#2) -> phys_out := 1#2 []
+	((phys_src#2 = 1#2&&0#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_dst := 2#2 []
+	true -> skip []
+fi
+----------invalid----------------
+ CE = (dst,1#2,out,2#2,phys_dst,1#2,phys_out,3#2,phys_smac,1#2,phys_src,0#2,smac,1#2,src,0#2,)
+
 Extracting ?AddRowTosrc_dst_table |-> 1 from model 
 Extracting ?ActInsrc_dst_table |-> 3 from model 
 Extracting s |-> 1 from model 
@@ -110,70 +158,10 @@ Extracting ?src_lo |-> 0 from model
 Extracting o |-> 2 from model 
 Extracting ?src_hi |-> 0 from model 
 
-======================= LOOP (1, 6) =======================
-Logical : 
- if ordered
-	src#2 = 1#2 -> dmac := 2#2 []
-	src#2 = 0#2 -> smac := 1#2 []
-	true -> skip []
-fi; if ordered
-	dst#2 = 0#2 -> out := 1#2 []
-	dst#2 = 1#2 -> out := 2#2 []
-	true -> skip []
-fi
-Physical : 
- if ordered
-	((phys_src#2 = 1#2&&2#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_dmac := 2#2 []
-	(phys_src#2 = 0#2&&phys_dst#2 = 0#2) -> phys_smac := 1#2; phys_out := 1#2 []
-	((2#2 <= phys_src#2&&phys_src#2 <= 3#2)&&phys_dst#2 = 0#2) -> phys_out := 1#2 []
-	(phys_src#2 = 0#2&&phys_dst#2 = 1#2) -> phys_smac := 1#2; phys_out := 2#2 []
-	true -> skip []
-fi
-----------invalid----------------
- CE = (dmac,0#2,dst,2#2,out,0#2,phys_dmac,0#2,phys_dst,2#2,phys_out,0#2,phys_smac,3#2,phys_src,0#2,smac,1#2,src,0#2,)
----
-Extracting ?AddRowTosrc_dst_table |-> 1 from model 
-Extracting ?ActInsrc_dst_table |-> 0 from model 
-Extracting s |-> 1 from model 
-Extracting ?dst_lo |-> 2 from model 
-Extracting ?src_lo |-> 0 from model 
-Extracting ?dst_hi |-> 3 from model 
-Extracting ?src_hi |-> 0 from model 
-
 ======================= LOOP (1, 5) =======================
 Logical : 
  if ordered
-	src#2 = 1#2 -> dmac := 2#2 []
-	src#2 = 0#2 -> smac := 1#2 []
-	true -> skip []
-fi; if ordered
-	dst#2 = 0#2 -> out := 1#2 []
-	dst#2 = 1#2 -> out := 2#2 []
-	true -> skip []
-fi
-Physical : 
- if ordered
-	((phys_src#2 = 1#2&&2#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_dmac := 2#2 []
-	(phys_src#2 = 0#2&&phys_dst#2 = 0#2) -> phys_smac := 1#2; phys_out := 1#2 []
-	((2#2 <= phys_src#2&&phys_src#2 <= 3#2)&&phys_dst#2 = 0#2) -> phys_out := 1#2 []
-	(phys_src#2 = 0#2&&phys_dst#2 = 1#2) -> phys_smac := 1#2; phys_out := 2#2 []
-	((phys_src#2 = 0#2&&2#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_smac := 1#2 []
-	true -> skip []
-fi 
-----------invalid----------------
- CE = (dmac,2#2,dst,0#2,out,1#2,phys_dmac,2#2,phys_dst,0#2,phys_out,0#2,phys_smac,0#2,phys_src,1#2,smac,0#2,src,1#2,)
-Extracting ?AddRowTosrc_dst_table |-> 1 from model 
-Extracting ?ActInsrc_dst_table |-> 4 from model 
-Extracting p |-> 1 from model 
-Extracting ?dst_lo |-> 0 from model 
-Extracting ?dst_hi |-> 0 from model 
-Extracting ?src_lo |-> 1 from model 
-Extracting d |-> 2 from model 
-Extracting ?src_hi |-> 1 from model 
-======================= LOOP (1, 4) =======================
-Logical : 
- if ordered
-	src#2 = 1#2 -> dmac := 2#2 []
+	src#2 = 1#2 -> dst := 2#2 []
 	src#2 = 0#2 -> smac := 1#2 []
 	true -> skip []
 fi; if ordered
@@ -183,51 +171,18 @@ fi; if ordered
 fi
 Physical: 
  if ordered
-	((phys_src#2 = 1#2&&2#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_dmac := 2#2 []
 	(phys_src#2 = 0#2&&phys_dst#2 = 0#2) -> phys_smac := 1#2; phys_out := 1#2 []
-	((2#2 <= phys_src#2&&phys_src#2 <= 3#2)&&phys_dst#2 = 0#2) -> phys_out := 1#2 []
-	(phys_src#2 = 0#2&&phys_dst#2 = 1#2) -> phys_smac := 1#2; phys_out := 2#2 []
 	((phys_src#2 = 0#2&&2#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_smac := 1#2 []
-	(phys_src#2 = 1#2&&phys_dst#2 = 0#2) -> phys_dmac := 2#2; phys_out := 1#2 []
+	((2#2 <= phys_src#2&&phys_src#2 <= 3#2)&&phys_dst#2 = 0#2) -> phys_out := 1#2 []
+	((phys_src#2 = 1#2&&0#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_dst := 2#2 []
+	(phys_src#2 = 0#2&&phys_dst#2 = 1#2) -> phys_smac := 1#2; phys_out := 2#2 []
 	true -> skip []
 fi 
 ----------invalid----------------
- CE = (dmac,2#2,dst,1#2,out,2#2,phys_dmac,2#2,phys_dst,1#2,phys_out,0#2,phys_smac,0#2,phys_src,1#2,smac,0#2,src,1#2,)
-
-Extracting ?AddRowTosrc_dst_table |-> 1 from model 
-Extracting ?ActInsrc_dst_table |-> 4 from model 
-Extracting p |-> 2 from model 
-Extracting ?dst_lo |-> 1 from model 
-Extracting ?dst_hi |-> 1 from model 
-Extracting ?src_lo |-> 1 from model 
-Extracting d |-> 2 from model 
-Extracting ?src_hi |-> 1 from model 
-
-======================= LOOP (1, 3) =======================
-Logical : 
- if ordered
-	src#2 = 1#2 -> dmac := 2#2 []
-	src#2 = 0#2 -> smac := 1#2 []
-	true -> skip []
-fi; if ordered
-	dst#2 = 0#2 -> out := 1#2 []
-	dst#2 = 1#2 -> out := 2#2 []
-	true -> skip []
-fi
-Physical: 
- if ordered
-	((phys_src#2 = 1#2&&2#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_dmac := 2#2 []
-	(phys_src#2 = 0#2&&phys_dst#2 = 0#2) -> phys_smac := 1#2; phys_out := 1#2 []
-	((2#2 <= phys_src#2&&phys_src#2 <= 3#2)&&phys_dst#2 = 0#2) -> phys_out := 1#2 []
-	(phys_src#2 = 0#2&&phys_dst#2 = 1#2) -> phys_smac := 1#2; phys_out := 2#2 []
-	((phys_src#2 = 0#2&&2#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_smac := 1#2 []
-	(phys_src#2 = 1#2&&phys_dst#2 = 0#2) -> phys_dmac := 2#2; phys_out := 1#2 []
-	(phys_src#2 = 1#2&&phys_dst#2 = 1#2) -> phys_dmac := 2#2; phys_out := 2#2 []
-	true -> skip []
-fi 
-----------invalid----------------
- CE = (dmac,0#2,dst,1#2,out,2#2,phys_dmac,0#2,phys_dst,1#2,phys_out,0#2,phys_smac,0#2,phys_src,2#2,smac,0#2,src,2#2,)
+ CE = (dst,1#2,out,2#2,phys_dst,1#2,phys_out,0#2,phys_smac,0#2,phys_src,2#2,smac,0#2,src,2#2,)
 ==++?+===++?
+
+
 Extracting ?AddRowTosrc_dst_table |-> 1 from model 
 Extracting ?ActInsrc_dst_table |-> 2 from model 
 Extracting o |-> 2 from model 
@@ -236,10 +191,10 @@ Extracting ?src_lo |-> 2 from model
 Extracting ?dst_hi |-> 1 from model 
 Extracting ?src_hi |-> 3 from model 
 
-======================= LOOP (1, 2) =======================
+======================= LOOP (1, 4) =======================
 Logical : 
  if ordered
-	src#2 = 1#2 -> dmac := 2#2 []
+	src#2 = 1#2 -> dst := 2#2 []
 	src#2 = 0#2 -> smac := 1#2 []
 	true -> skip []
 fi; if ordered
@@ -249,27 +204,23 @@ fi; if ordered
 fi
 Physical: 
  if ordered
-	((phys_src#2 = 1#2&&2#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_dmac := 2#2 []
 	(phys_src#2 = 0#2&&phys_dst#2 = 0#2) -> phys_smac := 1#2; phys_out := 1#2 []
-	((2#2 <= phys_src#2&&phys_src#2 <= 3#2)&&phys_dst#2 = 0#2) -> phys_out := 1#2 []
-	(phys_src#2 = 0#2&&phys_dst#2 = 1#2) -> phys_smac := 1#2; phys_out := 2#2 []
 	((phys_src#2 = 0#2&&2#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_smac := 1#2 []
-	(phys_src#2 = 1#2&&phys_dst#2 = 0#2) -> phys_dmac := 2#2; phys_out := 1#2 []
-	(phys_src#2 = 1#2&&phys_dst#2 = 1#2) -> phys_dmac := 2#2; phys_out := 2#2 []
+	((2#2 <= phys_src#2&&phys_src#2 <= 3#2)&&phys_dst#2 = 0#2) -> phys_out := 1#2 []
+	((phys_src#2 = 1#2&&0#2 <= phys_dst#2)&&phys_dst#2 <= 3#2) -> phys_dst := 2#2 []
+	(phys_src#2 = 0#2&&phys_dst#2 = 1#2) -> phys_smac := 1#2; phys_out := 2#2 []
 	((2#2 <= phys_src#2&&phys_src#2 <= 3#2)&&phys_dst#2 = 1#2) -> phys_out := 2#2 []
 	true -> skip []
 fi 
 ++++++++++valid+++++++++++++
-
+==++?+===++?
 Synthesized Program:
 if ordered
-	((src#2 = 1#2&&2#2 <= dst#2)&&dst#2 <= 3#2) -> dmac := 2#2 []
 	(src#2 = 0#2&&dst#2 = 0#2) -> smac := 1#2; out := 1#2 []
-	((2#2 <= src#2&&src#2 <= 3#2)&&dst#2 = 0#2) -> out := 1#2 []
-	(src#2 = 0#2&&dst#2 = 1#2) -> smac := 1#2; out := 2#2 []
 	((src#2 = 0#2&&2#2 <= dst#2)&&dst#2 <= 3#2) -> smac := 1#2 []
-	(src#2 = 1#2&&dst#2 = 0#2) -> dmac := 2#2; out := 1#2 []
-	(src#2 = 1#2&&dst#2 = 1#2) -> dmac := 2#2; out := 2#2 []
+	((2#2 <= src#2&&src#2 <= 3#2)&&dst#2 = 0#2) -> out := 1#2 []
+	((src#2 = 1#2&&0#2 <= dst#2)&&dst#2 <= 3#2) -> dst := 2#2 []
+	(src#2 = 0#2&&dst#2 = 1#2) -> smac := 1#2; out := 2#2 []
 	((2#2 <= src#2&&src#2 <= 3#2)&&dst#2 = 1#2) -> out := 2#2 []
 	true -> skip []
 fi
