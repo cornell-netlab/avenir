@@ -470,33 +470,33 @@ let get_one_model_edit
    *         List.iter cands ~f:(fun (c,_) -> Printf.printf "\n%s\n%!" (string_of_cmd c));
    *         Printf.printf "\n" in *)
   let _ = Printf.printf "WIDEST post condition: %s \n%!" (Packet.test_of_wide ~fvs wide |> string_of_test) in
-  let log_wp = wp trace (Packet.test_of_wide ~fvs wide) in
+  let log_wp = wp trace True in
   let wp_phys_paths =
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
+        Printf.printf "Candidate:\n%s \n" (string_of_cmd path);
         let precs = if Option.is_none hints
-                    then wp_paths path (Packet.test_of_wide ~fvs wide) |> List.map ~f:(snd)
-                                  (*Packet.to_test ~fvs pkt'*)
-                        (* |> List.map ~f:(fun (trace, _) ->
-                         *        let wide_test = Packet.test_of_wide ~fvs wide in
-                         *        let wpt = wp trace wide_test in
-                         *        Printf.printf "wide packet:\n %s \n%!" (string_of_test wide_test);
-                         *        Printf.printf "Candidate :\n %s\n%!" (string_of_cmd trace);
-                         *        Printf.printf "WP:\n %s\n%!" (string_of_test wpt);
-                         *        wpt) *)
-                   else [wp path True]
+                    then
+                      (* [wp path (Packet.to_test ~fvs pkt')] *)
+                      wp_paths path (Packet.test_of_wide ~fvs wide) (* |> List.map ~f:(snd) *)
+                                                                     (* Packet.to_test ~fvs pkt' *)
+                      |> List.map ~f:(fun (trace, _) ->
+                             let wide_test = Packet.test_of_wide ~fvs wide in
+                             let wpt = wp trace wide_test in
+                             Printf.printf "wide packet:\n %s \n%!" (string_of_test wide_test);
+                             Printf.printf "Candidate :\n %s\n%!" (string_of_cmd trace);
+                             Printf.printf "WP:\n %s\n%!" (string_of_test wpt);
+                             wpt)
+                    else [wp path True]
         in
         acc @ List.map precs ~f:(inj_l acts))
-        (* if prec = False then None else Some(prec, acts)) *)
+              (* if prec = False then None else Some(prec, acts)) *)
   in
   let _ = Printf.printf "The logical trace is: %s \n%!" (string_of_cmd trace) in
   let wp_time = Time.diff (Time.now ()) st in
   let model =
     List.find_map wp_phys_paths ~f:(fun (wp_phys, acts) ->
         if wp_phys = False then None else
-          let _ = Printf.printf "LOGWP %s\n PHYSWP %s\n%!" (string_of_test log_wp) (string_of_test wp_phys) in
-          let _ = Printf.printf "Checking %s become %s \n%!"
-                    (string_of_test wp_phys)
-                    (substV wp_phys pkt |> string_of_test) in
+          let _ = Printf.printf "LOGWP %s\n => PHYSWP %s\n%!" (string_of_test log_wp) (string_of_test wp_phys) in
           (* let (res, time) = check mySolver `Sat (substV wp_phys pkt) in *)
           let (res, time) = check mySolver `MinSat (log_wp %=>% wp_phys) in
           time_spent_in_z3 := Time.Span.(!time_spent_in_z3 + time);
@@ -788,10 +788,13 @@ let fixup_edit match_model (action_map : (action_data * size) StringMap.t option
             match List.nth acts act with
             | None -> []
             | Some (params, _) ->
+               Printf.printf "Params for act %d :%s\n%!" act
+                 (List.fold params ~init:"" ~f:(fun acc (p,_) -> Printf.sprintf "%s %s" acc p));
                List.fold params ~init:[]
                  ~f:(fun acc (p,sz) ->
                    match StringMap.find match_model p with
-                   | None -> failwith ("Couldn't find " ^ p)
+                   | None ->
+                      failwith ("Couldn't find " ^ p)
                    | Some v -> acc @ [(get_int v, sz)]
                  )
        in

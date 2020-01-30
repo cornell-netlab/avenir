@@ -598,9 +598,8 @@ let bcm_eth_ipv4_tcp =
 let (%>) c c' = ignore c; c'
 
 
-let basic_onf_ipv4 = 
+let basic_onf_ipv4 _ = 
   let logical =
-    
     sequence [
         "class_id" %<-% mkVInt(0,32)
       ; Apply("ipv4",
@@ -634,3 +633,47 @@ let basic_onf_ipv4 =
       StringMap.(set empty ~key:"next" ~data:[[Exact (1,32)], [(1,9)],0])
       StringMap.(set empty ~key:"l3_fwd" ~data:[])
       ("ipv4", ( [Between (0,20,32)], [(1,32)],0))
+
+
+let running_example _ =
+  let logical =
+    sequence [
+        Apply("src_table"
+            , [("src", 2)]
+            , [ ["s",2], "smac" %<-% (Var1("s",2))
+              (* ; ["d",2], "dmac" %<-% (Var1("d",2)) *)
+              ; [], Skip
+              ]
+            , Skip)
+      ; Apply("dst_table"
+            , [("dst",2)]
+            , [ ["p",2], "out" %<-% (Var1("p",2))
+              ; [], Skip
+              ]
+            ,Skip)
+      ] in
+  let physical =
+        Apply("src_dst_table"
+            , ["src",2; "dst", 2]
+            , [["s",2], "smac" %<-% Var1("s",2)
+              (* ; ["d",2], "dmac" %<-% (Var1("d",2)) *)
+              ; ["o",2], "out" %<-% (Var1("o",2))
+              ; ["s",2; "o", 2], ("smac" %<-% Var1("s",2)) %:% ("out" %<-% Var1("o",2))
+              (* ; ["d",2; "p", 2], ("dmac" %<-% Var1("d",2)) %:% ("out" %<-% Var1("p",2)) *)
+              ; [], Skip
+              ]
+            , Skip)
+  in
+  synthesize_edit ~gas:10 ~iter:1 ~fvs:["src", 2; "dst", 2; "smac", 2; "dmac", 2; "out", 2 ]
+    (Prover.solver ())
+    logical
+    physical
+    (StringMap.of_alist_exn [("src_table", [([Exact (0,2)], [1,2], 0)
+                                           ;([Exact (1,2)], [2,2], 0)])
+                           ; ("dst_table", [([Exact (0,2)], [1,2], 0)])
+    ])
+    StringMap.empty
+    ("dst_table", ([Exact (1,2)], [2,2], 0))
+      
+                                      
+            

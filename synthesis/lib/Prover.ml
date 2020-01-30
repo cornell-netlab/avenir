@@ -218,22 +218,33 @@ let parse_results holes results =
     match String.substr_index results ~pattern:"(model" with
     | None -> (Z3.Solver.SATISFIABLE, None)
     | Some i ->
-       let model_str = String.drop_prefix results i in
-       let model_lines = String.split_lines model_str in
-       let model = List.fold holes ~init:StringMap.empty
-                     ~f:(fun acc (hole,_) ->
-                       match List.findi model_lines ~f:(fun _ line ->
-                                 String.is_substring line ~substring:hole
-                               ) with
-                       | None -> acc
-                       | Some (i,_) ->
-                          match List.nth  model_lines (i+1) with
-                          | None -> acc
-                          | Some str ->
-                             let (v,sz) = String.lstrip str |> String.rstrip ~drop:((=) ')') |> parse_int in
-                             Printf.printf "Extracting %s |-> %d from model \n%!" hole v;
-                             StringMap.set acc hole (Int(v,sz))
-                     ) in
+       let model_str = String.drop_prefix results i in       
+       let model_lines = String.split_lines model_str in       
+       (* let model = List.fold holes ~init:StringMap.empty
+        *               ~f:(fun acc (hole,_) ->
+        *                 match List.findi model_lines ~f:(fun _ line ->
+        *                           String.is_substring line ~substring:hole
+        *                         ) with
+        *                 | None -> acc
+        *                 | Some (i,_) ->
+        *                    match List.nth  model_lines (i+1) with
+        *                    | None -> acc
+        *                    | Some str ->
+        *                       let (v,sz) = String.lstrip str |> String.rstrip ~drop:((=) ')') |> parse_int in
+        *                       Printf.printf "Extracting %s |-> %d from model \n%!" hole v;
+        *                       StringMap.set acc hole (Int(v,sz))
+        *               ) in *)
+       let model = List.foldi model_lines ~init:StringMap.empty
+                     ~f:(fun i acc_model line ->
+                       if String.is_substring ~substring:"define-fun" line
+                       then let key = List.nth_exn (String.lstrip line |> String.split ~on:' ') 1 in
+                            match List.nth  model_lines (i+1) with
+                            | None -> acc_model
+                            | Some str ->
+                               let (v,sz) = String.lstrip str |> String.rstrip ~drop:((=) ')') |> parse_int in
+                               Printf.printf "Extracting %s |-> %d from model \n%!" key v; 
+                               StringMap.set acc_model key (Int(v,sz))
+                       else acc_model) in
        (Z3.Solver.SATISFIABLE, Some model)
   else (Z3.Solver.UNSATISFIABLE, None)                 
          
@@ -268,8 +279,9 @@ let check_opt (test : test ) =
       Z3.Optimize.minimize solver e |> ignore
     );
   Core.Out_channel.write_all "query.smt" ~data:(Printf.sprintf "%s\n(get-model)" (Z3.Optimize.to_string solver));
-  let query = Shell.run_full "/usr/bin/z3" ["-smt2";"query.smt"] in
-  parse_results holes query
+  Printf.printf "OPTIMAL SOLVER :\n %s \n\n%!" (Z3.Optimize.to_string solver);
+  try Shell.run_full "/usr/bin/z3" ["-smt2";"query.smt" ]|> parse_results holes
+  with _ -> (Z3.Solver.UNSATISFIABLE, None)
   
             
 

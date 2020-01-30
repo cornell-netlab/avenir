@@ -249,16 +249,16 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : instance) ~wide(* :(wi
             List.fold rows ~init:(True,None,None)
               ~f:(fun rst (matches, data, action) ->
                 match rst  with
-                | ((*missed*) _, _, None) -> 
+                | (missed, _, None) -> 
                    let cond = List.fold2_exn keys matches ~init:True ~f:(fun acc k m ->
                                   acc %&% encode_match k m
                                 ) in
                    if check_test cond pkt_loc
                    then
-                     ((*missed %&%*) cond, widening_match pkt wide (List.zip_exn keys matches) |> Some, Some (data, action))
+                     (missed %&% cond, widening_match pkt wide (List.zip_exn keys matches) |> Some, Some (data, action))
                    else
                      let _ = Printf.printf "%s not in  %s" (Packet.string__packet (fst pkt_loc)) (string_of_test cond)   in
-                     ((*missed %&% !%(cond)*) True, Some wide, None)
+                     (missed %&% !%(cond), Some wide, None)
                 | (_, _, _) -> rst
               )
           in

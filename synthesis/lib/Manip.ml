@@ -476,7 +476,7 @@ let rec wp_paths c phi : (cmd * test) list =
        
   | Assign (field, e) ->
      let phi' = substitute phi (StringMap.singleton field e) in 
-     Printf.printf "substituting %s |-> %s\n into %s to get %s \n%!" field (string_of_expr1 e) (string_of_test phi') (string_of_test phi');
+     (* Printf.printf "substituting %s |-> %s\n into %s to get %s \n%!" field (string_of_expr1 e) (string_of_test phi') (string_of_test phi'); *)
      [(c,phi')]
   | Assert t -> [(c, t %&% phi)]
   | Assume t -> [(c, t %=>% phi)]
@@ -515,9 +515,10 @@ let rec wp_paths c phi : (cmd * test) list =
 
 
               
-let bind_action_data vars (scope, cmd) : cmd =
+let bind_action_data vals (scope, cmd) : cmd =
   let holes = List.map scope fst in
-  List.fold2_exn holes vars
+  Printf.printf "Table |holes| = %d, |vars|= %d\n : %s" (List.length holes) (List.length vals) (string_of_cmd cmd);
+  List.fold2_exn holes vals
     ~init:StringMap.empty
     ~f:(fun acc x v -> StringMap.set acc ~key:x ~data:(Int v))
   |> fill_holes (holify holes cmd) 
