@@ -142,7 +142,7 @@ let rec encode_expression_to_test (e: Expression.t) : test =
   | E.False -> False
   | E.Int _ -> type_error "an integer"
   | E.String (_,s) -> type_error ("a string \"" ^ s ^ "\"")
-  | E.Name (_,s) -> Eq(Var1(s, -1), Value1(Int(1, -1))) (* This must be a boolean value *)
+  | E.Name (_,s) -> Eq(Var1(s, -1), mkVInt(1, -1)) (* This must be a boolean value *)
   | E.TopLevel (_,s) -> type_error ("a TopLevel " ^ s)
   | E.ArrayAccess _ -> type_error ("an array access")
   | E.BitStringAccess _ -> type_error ("a bitstring access")
@@ -183,7 +183,7 @@ let rec encode_expression_to_test (e: Expression.t) : test =
      begin match List.last members with
      | None -> unimplemented "Function Call with nothing to dispatch"
      | Some (_,"isValid") ->
-        Var1 (validity_bit members, -1) %=% Value1(Int (1, -1))
+        Var1 (validity_bit members, 1) %=% Value1(Int (1, 1))
      | Some _ -> unimplemented ("FunctionCall for members " ^ string_of_memberlist members)
      end
   | E.FunctionCall _ ->
@@ -192,7 +192,7 @@ let rec encode_expression_to_test (e: Expression.t) : test =
     let members = dispatch_list expr in
      begin match name with
      | (_,"hit") ->
-        Var1 (hit_bit members, -1) %=% Value1(Int (1, -1))
+        Var1 (hit_bit members, 1) %=% mkVInt(1, 1)
      | _ -> unimplemented ("ExpressionMember for members " ^ string_of_memberlist members)
      end
   | _ -> unimplemented (ctor_name_expression e)
@@ -347,7 +347,7 @@ and assign_param (param_arg : Parameter.t * Argument.t) =
         | Some (_, Out) -> []
         | Some (_, InOut) ->
           let n = dispatch_list value in
-          [Assign(validity_bit_no_removal [param.variable], Var1(validity_bit_no_removal n, -1)); val_assgn]
+          [Assign(validity_bit_no_removal [param.variable], Var1(validity_bit_no_removal n, 1)); val_assgn]
       end
     | _ -> failwith "Unhandled argument"
 
@@ -366,7 +366,7 @@ and return_args (param_arg : Parameter.t * Argument.t) =
         | Some (_, InOut) ->
           let n = dispatch_list value in
           let val_assgn = Assign (string_of_memberlist n, Var1(snd param.variable, -1)) in
-          [Assign(validity_bit_no_removal n, Var1(validity_bit_no_removal [param.variable], -1)); val_assgn]
+          [Assign(validity_bit_no_removal n, Var1(validity_bit_no_removal [param.variable], 1)); val_assgn]
       end
     | _ -> failwith "Unhandled argument"
 
@@ -419,7 +419,7 @@ and encode_switch_expr prog (ctx : Declaration.t list) (e : Expression.t) : expr
             let block = encode_block prog ctx code in
             begin match act_i with
               | Some (i, _) ->
-                let test = Or(fall_test, Eq(expr, (Value1 (Int(i + 1, -1))))) in
+                let test = Or(fall_test, Eq(expr, mkVInt(i + 1, -1))) in
                 True, Some (test, block)
               | None -> failwith ("Action not found when encoding switch statement")
             end
@@ -453,7 +453,7 @@ and encode_table prog (ctx : Declaration.t list) (name : P4String.t) (props : Ta
   let lookup_and_encode_action i (_,a) =
     let (body, action_data) = lookup_action_exn prog ctx a.name in
     (* Set up an action run variable so we can use it to figure out which action ran in switch statements *)
-    let set_action_run = Assign(snd name ^ action_run_suffix, Value1(Int(i + 1, -1))) in
+    let set_action_run = Assign(snd name ^ action_run_suffix, mkVInt(i + 1, 1)) in
     List.map action_data ~f:(fun (_, ad) -> ad, -1), set_action_run %:% encode_action prog ctx body ~action_data
   in
   let action_cmds = List.mapi p4actions ~f:lookup_and_encode_action in
@@ -468,7 +468,7 @@ and encode_table prog (ctx : Declaration.t list) (name : P4String.t) (props : Ta
                       | None -> Skip
   in
 
-  let init_action_run = Assign(snd name ^ action_run_suffix, Value1(Int(0, -1))) in
+  let init_action_run = Assign(snd name ^ action_run_suffix, mkVInt(0, -1)) in
 
   init_action_run %:% Apply(snd name, str_keys, action_cmds, enc_def_act)
 
