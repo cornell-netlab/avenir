@@ -45,7 +45,11 @@ let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   | Impl(a, b) -> check_test (!%(a) %+% b) pkt_loc
   | Iff (a, b) -> check_test ((!%(a) %+% b) %&% (!%b %+% a)) pkt_loc
   | Eq (e,e') -> binope (equal_values1) e e'
-  | Lt (e,e') -> binope (lt_values1) e e'
+  | Le (e,e') ->
+     begin match eval_expr1 pkt_loc e, eval_expr1 pkt_loc e' with
+     | Int (v,_), Int(v',_) -> v <= v'
+     | _, _ -> failwith "tuples not supported"
+     end
   | Member (e, set) -> member pkt_loc e set
 
 
@@ -113,32 +117,114 @@ let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packe
 let encode_match k m =
   match m with 
   | Exact (x,sz) -> (Var1 k %=% mkVInt(x,sz))
-  | Between (lo, hi,sz) -> (Var1 k %>=% mkVInt(lo,sz)) %&% (Var1 k %<=% mkVInt(hi,sz))
+  | Between (lo, hi,sz) -> (mkVInt(lo,sz) %<=% Var1 k) %&% (Var1 k %<=% mkVInt(hi,sz))
                                  
 
-let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : instance) (pkt_loc : Packet.located)
-        : (Packet.located * cmd * ((int * size) list * int) StringMap.t) =
+let rec wide_eval wide (e : expr1) =
+  match e with
+  | Value1(Int(x,sz)) -> (x,x,sz)
+  | Value1 _ | Tuple _ -> failwith "Tuples deprecated"
+  | Var1(x, sz) ->
+     begin match StringMap.find wide x with
+     | None -> failwith ("USE BEFORE DEF " ^ x)
+     | Some (lo,hi, sz) -> (lo,hi,sz)
+     end
+  | Hole1 _ -> failwith "dont know how to eval holes"
+  | Plus(x,y) -> let (lox,hix, szx) = wide_eval wide x in
+                 let (loy, hiy, _) = wide_eval wide y in
+                 (lox + loy, hix+hiy, szx)
+  | Times(x,y) -> let (lox, hix, szx) = wide_eval wide x in
+                  let (loy, hiy, _) = wide_eval wide y in
+                  (lox * loy, hix * hiy, szx)
+  | Minus(x,y) -> let (lox, hix, szx) = wide_eval wide x in
+                  let (loy, hiy, _) = wide_eval wide y in
+                  (lox - hiy, hix - loy, szx)
+
+                                                   
+let widening_assignment (wide : (int*int*size) StringMap.t) f e : (int * int * size) StringMap.t =
+  StringMap.set wide ~key:f ~data:(wide_eval wide e)
+
+let rec widening_test pkt wide t =
+  match t with
+  | True -> wide
+  | False -> StringMap.empty
+  | And(b1,b2) -> widening_test pkt (widening_test pkt wide b1) b2
+  | Or (b1,b2) ->
+     begin match check_test b1 (pkt, None), check_test b2 (pkt,None) with
+     | true, true -> widening_test pkt (widening_test pkt wide b1) b2
+     | true, false -> widening_test pkt wide b1
+     | false, true -> widening_test pkt wide b2
+     | false, false -> failwith "shouldn't be executing a test that fails"
+     end
+  | Impl(b1,b2) ->
+     begin match check_test b1 (pkt, None), check_test b2 (pkt,None) with
+     | true, true -> widening_test pkt (widening_test pkt wide b1) b2
+     | true, false -> failwith "shouldn't be executing a test that fails"
+     | false, _ -> widening_test pkt wide b2
+     end
+  | Iff (b1,b2) -> failwith "IDK HOW TO widen iff"
+  | Eq(Var1(v,sz), e) | Eq(e,Var1(v,sz)) ->
+     if check_test t (pkt,None)
+     then
+       let (lo,hi,sz) = wide_eval wide e in
+       Printf.printf "adding %s = [%d,%d]" v lo hi;
+       StringMap.set wide ~key:v ~data:(lo,hi,sz)
+     else failwith "shouldn't be executing a test that fails"
+  | Le(Var1(v,sz), e) | Le(e,Var1(v,sz)) ->
+     if check_test t (pkt,None)
+     then
+       let (lo, hi, sz) = wide_eval wide e in
+       Printf.printf "adding %s <= [%d,%d]" v lo hi;
+       StringMap.update wide v ~f:(function
+           | None -> (lo, hi, sz)
+           | Some (lo', hi', sz)
+             ->  (min lo lo', min hi hi', sz))
+     else failwith "shouldn't be executing a test that fails"
+  | _ -> failwith "dont know how to handle that kind of test"
+          
+let widening_match pkt wide matches =
+  Printf.printf "WIDENING A MATCH\n";
+  List.fold matches
+    ~init:wide
+    ~f:(fun acc ((key,_), m)  ->
+      match m with 
+      | Exact (v, sz) ->
+         StringMap.set acc ~key ~data:(v,v,sz)
+      | Between (lo, hi, sz) ->
+         StringMap.update acc key
+           ~f:(function
+             | None -> (lo, hi, sz)
+             | Some (lo',hi', sz) ->
+                (max lo lo', min hi hi', sz)
+           )
+    )
+                                                             
+let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : instance) ~wide(* :(wide = StringMap.empty) *) (pkt_loc : Packet.located)
+        : (Packet.located * (int * int * int) StringMap.t * cmd * ((int * size) list * int) StringMap.t) =
   let (pkt, loc_opt) = pkt_loc in
   if gas = 0
   then (failwith "========OUT OF EVAL GAS============\n")
   else match cmd with
        | Skip ->
-          (pkt_loc, cmd, StringMap.empty)
+          (pkt_loc, wide, cmd, StringMap.empty)
        | Assign (f, e) ->
-          ((Packet.set_field_of_expr1 pkt f e, loc_opt), cmd, StringMap.empty)
+          ((Packet.set_field_of_expr1 pkt f e, loc_opt),
+           widening_assignment wide f e,
+           cmd, StringMap.empty)
        | Assert t ->
           (* failwith "Asserts are deprecated" *)
           if check_test t pkt_loc then
-            (pkt_loc, cmd, StringMap.empty)
+            (pkt_loc, widening_test pkt wide t, cmd, StringMap.empty)
           else
             failwith ("AssertionFailure: " ^ string_of_test t ^ "was false")
-       | Assume _ ->
+       | Assume t ->
           (* failwith "Raw assumes are deprecated" *)
-          (pkt_loc, cmd, StringMap.empty)
+          (pkt_loc, widening_test pkt wide t, cmd, StringMap.empty)
        | Seq (firstdo, thendo) ->
-          let pkt_loc', cmd', trace' = trace_eval_inst ~gas firstdo inst pkt_loc in
-          let pkt_loc'', cmd'', trace'' = trace_eval_inst ~gas thendo inst pkt_loc' in
+          let pkt_loc', wide, cmd', trace' = trace_eval_inst ~gas ~wide firstdo inst pkt_loc in
+          let pkt_loc'', wide'', cmd'', trace'' = trace_eval_inst ~gas ~wide thendo inst pkt_loc' in
           (pkt_loc''
+          , wide''
           , cmd' %:% cmd''
           , StringMap.merge trace' trace'' ~f:(fun ~key:_ -> function
                 | `Left v -> Some v
@@ -156,34 +242,40 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : instance) (pkt_loc : P
                (True, Skip, List.length selects)
           in
           let (_, a, _) = find_match pkt_loc selects ~default in
-          trace_eval_inst ~gas a inst pkt_loc
+          trace_eval_inst ~gas ~wide a inst pkt_loc
 
        | Apply (name, keys, actions, default) ->
-          let action_to_execute (rows : row list ) =
-            List.fold rows ~init:(True,None)
+          let action_to_execute wide (rows : row list ) =
+            List.fold rows ~init:(True,None,None)
               ~f:(fun rst (matches, data, action) ->
                 match rst  with
-                | ((*missed*) _, None) -> 
+                | (missed, _, None) -> 
                    let cond = List.fold2_exn keys matches ~init:True ~f:(fun acc k m ->
                                   acc %&% encode_match k m
                                 ) in
                    if check_test cond pkt_loc
-                   then ((*missed %&%*) cond, Some (data, action))
-                   else ((*missed %&% !%(cond)*) True, None)
-                | (_, _) -> rst
+                   then
+                     (missed %&% cond, widening_match pkt wide (List.zip_exn keys matches) |> Some, Some (data, action))
+                   else
+                     let _ = Printf.printf "%s not in  %s" (Packet.string__packet (fst pkt_loc)) (string_of_test cond)   in
+                     (missed %&% !%(cond), Some wide, None)
+                | (_, _, _) -> rst
               )
           in
           begin match StringMap.find inst name with
-          | None -> trace_eval_inst default inst pkt_loc 
+          | None -> trace_eval_inst ~gas ~wide default inst pkt_loc 
           | Some rules ->
              begin
-               match action_to_execute rules with
-               | (cond, None) ->
-                  let pkt',cmd', trace = trace_eval_inst default inst pkt_loc in
-                  (pkt' , Assert cond %:% cmd', StringMap.set ~key:name ~data:([],List.length actions) trace )
-               | (cond, Some (data, aid)) ->
-                  let pkt', cmd', trace = trace_eval_inst (List.nth_exn actions aid |> bind_action_data data) inst pkt_loc in
-                  (pkt', Assert cond %:% cmd', StringMap.set ~key:name ~data:(data, aid) trace)
+               Printf.printf "Widening a match! %s\n" (Packet.test_of_wide wide |> string_of_test);
+               match action_to_execute wide rules with
+               | (cond, Some wide, Some (data, aid)) ->
+                  Printf.printf "HIT A RULE\n%!";
+                  let pkt', wide', cmd', trace = trace_eval_inst ~wide (List.nth_exn actions aid |> bind_action_data data) inst pkt_loc in
+                  (pkt', wide', Assert cond %:% cmd', StringMap.set ~key:name ~data:(data, aid) trace)
+               | (cond, _, _) ->
+                  Printf.printf "Missed everything\n%!";
+                  let pkt',wide', cmd', trace = trace_eval_inst ~wide default inst pkt_loc in
+                  (pkt' , wide', Assert cond %:% cmd', StringMap.set ~key:name ~data:([],List.length actions) trace )
              end
           end
        | While ( _ , _ ) ->

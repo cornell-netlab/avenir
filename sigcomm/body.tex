@@ -1,3 +1,8 @@
+\lstset{language=C}
+\lstset{
+ morekeywords={action,table,control}
+}
+
 \section{Introduction}
 
 \todo[inline]{write short introduction}
@@ -13,104 +18,172 @@
 
 Sketching~\cite{armando-thesis,armando2013sketch} is a program synthesis technology that 
 takes high-level insights about the desired system and automatically infers the details.
-The input to the synthesis procedure is partial program (sketch) that has {\em holes}
+The input to the synthesis procedure is a partial program (sketch) that has {\em holes}
 in place of code fragments.
 The task of the synthesizer is to fill up the holes with the right pieces so that the 
 result program meets the required specification.  
-The algorithm to generate code for the holes in a sketch is counterexample-guided inductive synthesis (CEGIS).
-To describe sketching and CEGIS in the context of our problem we use the running 
-example of Figure~\ref{fig:table-wp}.
+The algorithm to generate code for the holes of a sketch is counterexample-guided inductive synthesis (CEGIS).
+To describe sketching and CEGIS in the context of our problem domain we use the running 
+example of Figure~\ref{fig:running-p4}.
 
-\begin{figure}[h]
-\centering
-\begin{minipage}[t]{.23\textwidth}
-\centering
-\begin{framed}\hspace{-.5em}
-\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,language=C, lineskip = 0em,numbersep=0pt,resetmargins=true, xleftmargin=-1em]
-action _smac(v)
-  {smac = v}
-action _dst(v)
-  {dst = d}
-action _out(v)
-  {out = v}
-table L1 {
-  keys = {src:exact}
-  actions =
-    {_smac; _dst}
-}
-table L2 {
-  keys = {dst:exact}
-  actions = {_out}
-}
-control Ingress {
-  L1.apply();
-  L2.apply()
-}
-\end{lstlisting}
+\input{running-example}
+\input{gcl}
 
-\end{framed}
-\end{minipage}
-\begin{minipage}[t]{.23\textwidth}
-\centering
-\begin{framed}\hspace{-1em}
-\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,language=C, lineskip = 0em,numbersep=0pt,resetmargins=true, xleftmargin=-1em]
-action _smac_out(v1,v2)
-  { smac=v1;out=v2 }
-action _dst_out(v1,v2)
-  { dst=v1;out=v2 }
-action _out(v)
-  { out=v }
-table P {
-  keys = { src:exact
-         ; dst:exact }
-  actions =
-   { _smac_out
-   ; _dst_out
-   ; _out }
-}
-control Ingress {
-  P.apply()
-}
-\end{lstlisting}
+The logical program in Figure~\ref{fig:running-p4}(a) has a pipeline of two match-action 
+tables ({\ttfamily L1} and {\ttfamily L2}).
+The first table {\ttfamily L1} matches on {\ttfamily src} and sets the packet headers
+{\ttfamily smac} and {\ttfamily dst}.
+Table {\ttfamily L2} matches on {\ttfamily dst} and sets {\ttfamily out}.
+The physical program in Figure~\ref{fig:running-p4}(b) has a single unified table {\ttfamily P}
+that matches on {\ttfamily src}, {\ttfamily dst} and sets $\{${\ttfamily smac}, {\ttfamily out}$\}$
+and $\{${\ttfamily dst}, {\ttfamily out}$\}$.
+Figure~\ref{fig:running-p4}(c) shows the set of rules in the logical tables
+(for the sake of simplicity the fields are integer numbers).
+A challenging question is to determine if there exist a set of rules for the physical table 
+so that after installation of such rules the physical and logical network 
+behave exactly the same on every input packet.
+To address this challenge, we first convert the tables with their installed rules into programs
+in guarded command programming language~\cite{dijkstra1975}.
 
-\end{framed}
-\end{minipage}
+Figure~\ref{fig:syntax} shows the syntax of the Guarded Command Language (GCL) 
+that we use in this paper.
+A single guarded command rule is of the form $\IF~{b \to e}~\ENDIF$ where $b$ is a Boolean
+condition and $c$ is a command.
+There can be multiple guarded commands inside an $\IF$.
+When there are more than a single guard equivalent to {\it true},
+we pick the first guard and execute its corresponding command 
+(note that this interpretation is different from the classical semantics where 
+a satisfying guard is picked randomly).
+Figure~\ref{fig:encoding} shows the encoding of the logical and physical programs into 
+guarded commands.
+Assuming that {\ttfamily src}, {\ttfamily dst}, {\ttfamily smac} and {\ttfamily out}
+are variables in the program, each guarded command is responsible for a single row 
+of the table.
+Note that the physical table does not have any rule so its guarded command does not 
+change any variable.
 
-\label{fig:table-wp}
-\caption{Logical and physical descriptions}
-\end{figure}
+We may wonder if the logical and physical programs of Figure~\ref{fig:encoding}
+are already equivalent for any incoming packet so there is no need to insert any extra rules.
+Formal verification, an important constituent of any synthesis procedure, answers such equivalence queries.
+A synthesizer uses formal verification to decide if the current candidate solution is equivalent 
+to what the user actually wants.
+In the case that the synthesized program is not the right solution, verification stops with a counter-example to show
+the reason for unequivalence.
+To use formal verification, we need a formal way to represent the semantics of the GCL programs.
+In this paper we use the axiomatic semantics~\cite{hoare1969} which uses logic to give meaning to a program.
 
-\begin{figure}
-  \begin{minipage}[t]{0.23\textwidth}
-    \begin{framed}
+The basic idea in the axiomatic approach is to use pre- and post-conditions to show the 
+meaning of a command $c$.
+If the pre-condition $P$ is met, executing the command $c$ ensures that the post-condition $Q$ holds.
+In the Hoare triple notation, this is shown as: $\{P\}~c~\{Q\}$.
+We often formulate axiomatic semantics using predicate transformation: given a pre-condition (or post-condition)
+transform the condition through the program to find the post-condition (or pre-condition).
+For example, let's take the first rule of the table {\ttfamily L1} in the logical table.
+If we consider the most general condition on the variable {\ttfamily smac} after the
+execution of the rule ($x$ is a fresh variable), what is correct the pre-condition on the variables?
 
-      \[
-        \begin{array}{l}
-          \IF~\var{src} = 1 \to \var{smac} := 1 \\
-          \phantom{\IF}~\var{src} = 2 \to \var{dst} := 1\\
-          \phantom{\IF}~\var{src} = \var{*} \to \SKIP \\
-          \ENDIF ; \\
-          \IF~\var{dst} = 1 \to \var{out} := 1 \\
-          \phantom{\IF}~\var{dst} = 2 \to \var{out} := 2 \\
-          \phantom{\IF}~\var{dst} = \var{*} \to \SKIP \\
-          \ENDIF
-        \end{array}
-      \]
-    \end{framed}
-  \end{minipage}  \begin{minipage}[t]{0.23\textwidth}
-    \begin{framed}
-      \[
-        \begin{array}{l}
-          \IF~\\
-          \phantom{\IF}~\var{src} = \var{*} \wedge \var{dst} = \var{*}\\
-          \phantom{\IF}~~~\to \SKIP \\
-          \ENDIF 
-        \end{array}
-      \]
-    \end{framed}
-  \end{minipage}
-  \caption{Logical and Physical Encodings}
-\end{figure}
+\begin{center}
+$
+\{?\} ~~ \IF~{\mbox{\ttfamily src} = 1 \to \mbox{\ttfamily smac} := 1}~\ENDIF ~~ \{\mbox{\ttfamily smac} = x\}
+$ 
+\end{center}
+
+
+In general, there can be many valid pre-conditions for this Hoare triple.
+One valid pre-condition can be $\mbox{\ttfamily src} = 2$ which is a packet that
+does not take the rule (since {\ttfamily src}$\neq1$) 
+so it does not put any restrictions on the general post-condition $\mbox{\ttfamily smac} = x$.
+However, such a pre-condition is not general enough and shows only a specific case.
+In describing semantics we are normally looking for the most general (or weakest)
+pre-conditions for a command. 
+In this example, the weakest pre-condition is $\mbox{\ttfamily src}=1\rightarrow x = 1$
+which basically says that {\ttfamily src} can get any value but when it is equal to 1
+then the value of $x$ must be equal to $1$ as well (since the rule is taken).
+For computation of weakest pre-conditions we use a set of deductive rules.
+Figure~\ref{fig:table-wp} shows the weakest pre-condition rules for GCL.
+To show that the programs in Figure~\ref{fig:encoding} are equivalent or not,
+the formal verifier computes the weakest-preconditions (using the given rules) 
+of the both programs with respect to a general packet with fresh symbolic fields.
+Only if the two conditions are equal for any values of the variables we 
+conclude that the programs are equivalent.
+The verifier consults a theorem prover to check the equivalence of the these two universally quantified formulae.
+Since the programs in Figure~\ref{fig:encoding} are not equivalent, 
+the verification engine will return a counter-example packet to show that the 
+programs behave differently.
+For example, a counter-example is $\{\mbox{\ttfamily src}=0,\mbox{\ttfamily dst}=0\}$.
+When inserted into the logical program, the matched actions will update the header values to 
+$\{\mbox{\ttfamily out}=1,\mbox{smac}=1\}$.
+In the physical program the header values stay the same since there is no rule in the table.
+
+Verification is one of the main modules in the CEGIS algorithm.
+The other one is the inductive synthesizer module as Figure~\ref{fig:cegis} shows.
+When verification fails and the verifier produces a concrete counter-example,
+it passes the counter-example to the inductive synthesis module.
+Inductive synthesizer creates a candidate solution 
+(in this case an instantiation of the physical program)
+that works correctly for the given counter-example.
+The main idea in CEGIS is to make several iterations on verification and 
+inductive synthesis until a valid solution is produced.
+CEGIS is guaranteed to stop and return a solution in a finite domain but 
+it may take several iterations.
+We will describe some of our heuristics to reduce the number of iterations 
+in the later sections.
+
+\input{cegis}
+
+Synthesizer creates a candidate solution for the given input with the help of sketching.
+A sketch in our problem domain is a guarded command with holes in place of some constants.
+For removing the counter-example $\{\mbox{\ttfamily src}=0,\mbox{\ttfamily dst}=0\}$, 
+the user may provide the following sketch to the synthesizer.
+This sketch is assisting the synthesis procedure by saying that 
+the required rule should match on the guards $\mbox{\ttfamily src}=0\wedge\mbox{\ttfamily dst}=0$
+and the the holes $?_0$, $?_1$, $?_2$ and $?_3$ in the the head of the implication 
+are unknown.
+
+\[
+\begin{aligned}
+ &\IF \\
+ &~\mbox{\ttfamily src}=0\wedge\mbox{\ttfamily dst}=0 \to \\
+ &~~~~\mbox{\ttfamily src}=?_0~;~\mbox{\ttfamily out}=?_1~;~\mbox{\ttfamily smac}=?_2~;~\mbox{\ttfamily dst}=?_3 \\
+ &\ENDIF
+\end{aligned}
+\]
+
+Note that in principle the user can also leave holes in place of $0$ in the guard.
+This only makes the space of search for the synthesizer larger.
+We do not require smart sketches from the user in our tool but providing them can 
+make the process more efficient.
+
+
+To find the correct constants for the holes, we again compute the weakest pre-condition
+of a packet with respect to the given sketch.
+This time we do not consider a general packet with fresh header values.
+The goal here is to find values for the holes in a way that the behavior of 
+the physical network includes the given example.
+Synthesizer computes weakest-precondition for the specific packet that 
+the verifier passes to it (in this case 
+\{\mbox{\ttfamily src$=0$},\mbox{\ttfamily dst$=0$},\mbox{\ttfamily out$=1$},\mbox{\ttfamily smac$=1$}\}).
+The holes in the {\it wp} computation are converted to existentially quantified variables.
+After computing the weakest pre-condition, the synthesizer again consults a theorem prover.
+If theorem prover determines that the formula is unsatisfiable, 
+then the synthesizer announces that synthesis is impossible and the CEGIS loop stops.
+Otherwise, if the formula is satisfiable, theorem prover provides a model for the formula.
+Model assigns constant values to the existentially quantified variables.
+In the case of the sketch above, the holes $?_1$ and $?_2$ get the value $1$ and the theorem prover
+do not give any values for $?_0$ and $?_3$  (they are irrelevant for this example packet).
+
+The basic procedure above can be very time-consuming since it takes a monolithic approach 
+(i.e. models every rule from every table).
+When there are multiple rules in the table,
+the {\it wp} formula will contain a disjunction that grows with the number of rules.
+This can lead to exponential blow-up when the physical network contains 
+a pipeline of tables.
+To address this issue, we use compact verification condition generation~\cite{flanagan2001}, 
+slicing (Section ??), path abstraction (Section ??) and widening 
+when there are ranges in the problem (Section ??).
+Each of these techniques can drastically reduce the required time 
+to solve benchmarks.
+
 
 % Example
 
@@ -223,44 +296,6 @@ Abduction -- when does our loop work?
 \todo[inline]{High level description of the Solution}
 
 \subsection{Syntax}
-
-\begin{figure}
-  \fbox{
-  \begin{minipage}[t]{0.53\columnwidth} 
-  \[
-    \begin{array}{>{\hspace{-.5em}}lcll}
-      c &::=&\\
-        & \mid & \SKIP & \mathit{Skip} \\
-        & \mid & x := e & \mathit{Assign} \\
-        & \mid & t.\apply & \mathit{Table} \\
-        & \mid & c;c & \mathit{Sequence} \\
-        & \mid & \IF~\overline{b \to e}~\ENDIF & \mathit{Select} \\
-      t & ::=  & (s, \overline{f}, \overline{c}, c)  \\
-      s & \in & \multicolumn 2 l {\TableName} \\
-      x & \in & \multicolumn 2 l {\Field \cup \Metadata} \\
-      v & \in & \multicolumn 2 l {\{0,1\}^+ = \BitVector}
-    \end{array}
-  \]
-\end{minipage} \vline \begin{minipage}[t]{0.45\columnwidth}
-  \[
-    \begin{array}{lcll}
-      e & ::= & \\
-        & \mid & v & \mathit{Value} \\
-        &  \mid & x & \mathit{Variable} \\
-        & \mid & e + e & \mathit{Plus}\\
-        & \mid & e - e & \mathit{Minus}\\
-        & \mid & e \mask e & \mathit{Mask}\\
-      b & ::= & \\
-        & \mid & 0 & \mathit{Zero}\\
-        & \mid & b \Rightarrow b  &\mathit{Implies}\\
-        & \mid & e = e &\mathit{Equals} \\
-        & \mid & e < e & \mathit{Less}
-    \end{array}
-  \]
-\end{minipage}}
-\caption{The syntax of packet processing pipelines}
-\label{fig:syntax}
-\end{figure}
 
 Our syntactic representation of packet-processing pipelines can be
 found in Figure~\ref{fig-syntax}. Notice that it is more or less the

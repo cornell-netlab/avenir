@@ -93,14 +93,14 @@ test :
 | e = expr; NEQ; ee = expr
   { Ast.Neg(Ast.Eq (e, ee)) }
 | e = expr; LESS; ee = expr
-  { Ast.Lt (e, ee) }
+  { Ast.(e %<% ee) }
 | e = expr; GREATER; ee = expr
-  { Ast.Lt (ee, e) }
+  { Ast.(e %>% ee) }
 | e = expr; GEQ; ee = expr
-  { Ast.Or(Ast.Lt(ee, e), Ast.Eq(ee, e)) }
+  { Ast.(e %>=% ee) }
 | e = expr; LEQ; ee = expr
-  { Ast.Or(Ast.Lt(e, ee), Ast.Eq(e, ee)) }
+  { Ast.(e %<=% ee) }
 | LPAREN; t = test; RPAREN
   { t }
 | t = test; IMPLIES; tt = test
-  { Ast.(Or(Neg(t), tt)) }
+  { Ast.(t %=>% tt) }

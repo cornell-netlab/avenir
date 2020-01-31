@@ -2,7 +2,7 @@ open Core
 open Util
 
 let enable_smart_constructors = true
-       
+
 type size = int
               
 type match_expr =
@@ -137,7 +137,11 @@ let rec sexp_string_of_expr1 (e : expr1) =
      "Minus(" ^ sexp_string_of_expr1 e ^ ", " ^ sexp_string_of_expr1 e' ^ ")"
 
 
-
+let get_int (v : value1) : int =
+  match v with
+  | Int (x, _) -> x
+  | _ -> failwith ("value not an int: " ^ string_of_value1 v)
+                  
 let rec size_of_value1 (v : value1) : size =
   match v with
   | Int (_, s) -> s
@@ -270,22 +274,22 @@ let equal_values1 (v : value1) (v' : value1) : bool =
   | Int _ , VTuple _ | VTuple _, Int _ -> false
   | VTuple vs, VTuple vs' -> List.equal (=) vs vs'
   
-let rec lt_values1 (v : value1) (v' : value1) : bool =
+let rec le_values1 (v : value1) (v' : value1) : bool =
   match v, v' with
   | Int x, Int x' -> x < x'
   | Int _, VTuple _ | VTuple _, Int _ -> failwith "Incomparable, tuple and int"
   | VTuple vs, VTuple vs' ->  List.compare (fun v v' ->
                                   if equal_values1 v v' then
                                     0
-                                  else if lt_values1 v v' then
+                                  else if le_values1 v v' then
                                     -1
                                   else
-                                    1) vs vs' < 0
+                                    1) vs vs' <= 0
                   
 type test =
   | True | False
   | Eq of (expr1 * expr1)
-  | Lt of (expr1 * expr1)
+  | Le of (expr1 * expr1)
   | Member of (expr1 * expr2)
   | And of (test * test)
   | Or of (test * test)
@@ -377,20 +381,20 @@ let rec mkEq (e : expr1) (e':expr1) =
        else Eq (e', e)
 
 
-let mkLt (e : expr1) (e' : expr1) : test =
-  if not enable_smart_constructors then Lt(e,e') else
+let mkLe (e : expr1) (e' : expr1) : test =
+  if not enable_smart_constructors then Le(e,e') else
   match e, e' with
     | Value1(Int first), Value1(Int second) -> 
-       if first < second then True else False
-    | _, _ -> Lt(e, e')
+       if first <= second then True else False
+    | _, _ -> Le(e, e')
             
 let (%=%) = mkEq
 let (%<>%) v v' = Neg(v %=% v') 
 
-let (%<%) = mkLt
-let (%>%) e e' = e' %<% e                
-let (%<=%) e e' = !%(e %>% e')
-let (%>=%) e e' = !%(e %<% e')
+let (%<=%) = mkLe
+let (%>=%) e e' = e' %<=% e
+let (%<%) e e' = (e %<=% e') %&% (e %<>% e')
+let (%>%) e e' = (e %>=% e') %&% (e %<>% e')
 
 let rec mkMember el set =
   match set with
@@ -423,14 +427,14 @@ let rec string_of_test t =
   | True -> "true"
   | False -> "false"
   | Eq (left, right) -> string_of_expr1 left ^ " = " ^ string_of_expr1 right
-  | Lt (left, right) -> string_of_expr1 left ^ " < " ^ string_of_expr1 right
+  | Le (left, right) -> string_of_expr1 left ^ " <= " ^ string_of_expr1 right
   | Member (expr, set) -> string_of_expr1 expr ^ " in " ^ string_of_expr2 set
   | Impl (assum, conseq) -> "(" ^ string_of_test assum ^ " ==> " ^ string_of_test conseq ^ ")\n"
   | Iff (left, right) -> "(" ^ string_of_test left ^ " <==> " ^ string_of_test right ^ ")\n"
   | Or (left, right) -> "(" ^ string_of_test left ^ "\n || " ^ string_of_test right ^ ")"
   | And (left, right) -> "(" ^ string_of_test left ^ "&&" ^ string_of_test right ^ ")"
-  | Neg (Lt(left, right)) ->
-     Printf.sprintf "(%s <= %s)" (string_of_expr1 right) (string_of_expr1 left)
+  | Neg (Le(left, right)) ->
+     Printf.sprintf "(%s < %s)" (string_of_expr1 right) (string_of_expr1 left)
   | Neg t ->
      "~(" ^ string_of_test t ^ ")"
 
@@ -441,7 +445,7 @@ let rec sexp_string_of_test t =
   | True -> "True"
   | False -> "False"
   | Eq  (left, right) -> binop "Eq" left right sexp_string_of_expr1
-  | Lt  (left, right) -> binop "Lt" left right sexp_string_of_expr1
+  | Le  (left, right) -> binop "Le" left right sexp_string_of_expr1
   | Member (expr, set) -> "Member(" ^ string_of_expr1 expr ^ "," ^ string_of_expr2 set ^ ")"
   | Impl (assum, conseq) -> binop "Impl" assum conseq sexp_string_of_test
   | Iff (left, right) -> binop "Iff" left right sexp_string_of_test
@@ -453,7 +457,7 @@ let rec num_nodes_in_test t =
   match t with
   | True | False -> 1
   | Eq (left, right) -> num_nodes_in_expr1 left + num_nodes_in_expr1 right + 1
-  | Lt (left, right) -> num_nodes_in_expr1 left + num_nodes_in_expr1 right + 1
+  | Le (left, right) -> num_nodes_in_expr1 left + num_nodes_in_expr1 right + 1
   | Member _ -> failwith "Membership not supported"
   | Iff (left, right) | Or (left, right) | And(left, right) | Impl(left, right)
     -> num_nodes_in_test left + 1 + num_nodes_in_test right
@@ -504,7 +508,7 @@ let rec free_of_test typ test : (string * size) list =
   | Neg t ->
      free_of_test typ t
   | Member (el, set) -> free_of_expr1 typ el @ free_of_expr2 typ set
-  | Eq (e, e') | Lt (e, e') ->
+  | Eq (e, e') | Le (e, e') ->
      free_of_expr1 typ e @ free_of_expr1 typ e'
   end
   |> dedup
@@ -556,7 +560,7 @@ let rec multi_ints_of_test test : (int * size) list =
        multi_ints_of_test t
     | Member (expr, set) ->
        multi_ints_of_expr1 expr @ multi_ints_of_expr2 set
-    | Eq (e, e') | Lt (e, e') ->
+    | Eq (e, e') | Le (e, e') ->
        multi_ints_of_expr1 e @ multi_ints_of_expr1 e'
   end
 
@@ -582,7 +586,7 @@ type cmd =
   | Seq of (cmd * cmd)
   | While of (test * cmd)
   | Select of (select_typ * ((test * cmd) list))
-  | Apply of (string * (string * size) list * ((string list * cmd) list) * cmd)
+  | Apply of (string * (string * size) list * (((string * size) list * cmd) list) * cmd)
 
 let clean_selects_list ss = 
   List.rev ss
@@ -765,7 +769,7 @@ let rec free_of_cmd typ (c:cmd) : (string * size) list =
        ~f:(fun acc (data, a) ->
          acc @ (free_of_cmd typ a
                 |> List.filter ~f:(fun (x,_) ->
-                       List.for_all data ~f:((<>) x)
+                       List.for_all (List.map data ~f:fst) ~f:((<>) x)
                      )
                )
        )
@@ -832,7 +836,7 @@ and holify_test holes b : test =
   match b with
   | True | False -> b
   | Eq (e, e') -> holify_expr1 holes  e %=% holify_expr1 holes  e'
-  | Lt (e, e') -> holify_expr1 holes  e %<% holify_expr1 holes  e'
+  | Le (e, e') -> holify_expr1 holes  e %<=% holify_expr1 holes  e'
   | Member (expr, set) -> mkMember (holify_expr1 holes expr) (holify_expr2 holes set)
   | And (b, b') -> holify_test holes b %&% holify_test holes b'
   | Or (b, b')  -> holify_test holes b %+% holify_test holes b'
@@ -855,7 +859,7 @@ and holify_cmd holes c : cmd=
   | Apply (name,keys,acts,dflt)
     -> Apply(name, keys, List.map acts ~f:(fun (data, act) ->
                              let holes' = List.filter holes ~f:(fun h ->
-                                              List.for_all data ~f:((<>) h)
+                                              List.for_all (List.map data ~f:fst) ~f:((<>) h)
                                             ) in
                              (data, holify_cmd holes' act)),
              holify_cmd holes dflt)

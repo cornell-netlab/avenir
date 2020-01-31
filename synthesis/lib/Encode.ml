@@ -454,7 +454,7 @@ and encode_table prog (ctx : Declaration.t list) (name : P4String.t) (props : Ta
     let (body, action_data) = lookup_action_exn prog ctx a.name in
     (* Set up an action run variable so we can use it to figure out which action ran in switch statements *)
     let set_action_run = Assign(snd name ^ action_run_suffix, Value1(Int(i + 1, -1))) in
-    List.map action_data ~f:snd, set_action_run %:% encode_action prog ctx body ~action_data
+    List.map action_data ~f:(fun (_, ad) -> ad, -1), set_action_run %:% encode_action prog ctx body ~action_data
   in
   let action_cmds = List.mapi p4actions ~f:lookup_and_encode_action in
 

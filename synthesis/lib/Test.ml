@@ -38,7 +38,7 @@ let rec generate_random_test size =
   | 0 -> True
   | 1 -> False
   | 2 -> Eq (generate_random_expr1 5, generate_random_expr1 5)
-  | 3 -> Lt (generate_random_expr1 6, generate_random_expr1 7)
+  | 3 -> Le (generate_random_expr1 6, generate_random_expr1 7)
   | 4 -> And (generate_random_test size', generate_random_test size')
   | 5 -> Or (generate_random_test size', generate_random_test size')
   | 6 -> Neg (generate_random_test size')

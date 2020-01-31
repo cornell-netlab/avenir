@@ -1,0 +1,37 @@
+\begin{figure}
+  \fbox{
+  \begin{minipage}[t]{0.53\columnwidth} 
+  \[
+    \begin{array}{>{\hspace{-.5em}}lcll}
+      c &::=&\\
+        & \mid & \SKIP & \mathit{Skip} \\
+        & \mid & x := e & \mathit{Assign} \\
+        & \mid & t.\apply & \mathit{Table} \\
+        & \mid & c;c & \mathit{Sequence} \\
+        & \mid & \IF~\overline{b \to e}~\ENDIF & \mathit{Select} \\
+      t & ::=  & (s, \overline{f}, \overline{c}, c)  \\
+      s & \in & \multicolumn 2 l {\TableName} \\
+      x & \in & \multicolumn 2 l {\Field \cup \Metadata} \\
+      v & \in & \multicolumn 2 l {\{0,1\}^+ = \BitVector}
+    \end{array}
+  \]
+\end{minipage} \vline \begin{minipage}[t]{0.45\columnwidth}
+  \[
+    \begin{array}{lcll}
+      e & ::= & \\
+        & \mid & v & \mathit{Value} \\
+        &  \mid & x & \mathit{Variable} \\
+        & \mid & e + e & \mathit{Plus}\\
+        & \mid & e - e & \mathit{Minus}\\
+        & \mid & e \mask e & \mathit{Mask}\\
+      b & ::= & \\
+        & \mid & 0 & \mathit{Zero}\\
+        & \mid & b \Rightarrow b  &\mathit{Implies}\\
+        & \mid & e = e &\mathit{Equals} \\
+        & \mid & e < e & \mathit{Less}
+    \end{array}
+  \]
+\end{minipage}}
+\caption{The syntax of packet processing pipelines}
+\label{fig:syntax}
+\end{figure}

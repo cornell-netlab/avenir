@@ -1,0 +1,125 @@
+\begin{figure}
+\centering
+\begin{minipage}[t]{.23\textwidth}
+\centering
+\begin{framed}\hspace{-.5em}
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize, lineskip = 0em,numbersep=0pt,resetmargins=true, xleftmargin=-1em]
+action _smac(v){smac=v}
+action _dst(v){dst=d}
+action _out(v){out=v}
+table L1 {
+  keys = {src:exact}
+  actions =
+    {_smac; _dst}
+}
+table L2 {
+  keys = {dst:exact}
+  actions = {_out}
+}
+control Ingress {
+  L1.apply();
+  L2.apply()
+}
+\end{lstlisting}
+\end{framed}
+(a)
+\end{minipage}
+\begin{minipage}[t]{.23\textwidth}
+\centering
+\begin{framed}\hspace{-1em}
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize, lineskip = 0em,numbersep=0pt,resetmargins=true, xleftmargin=-1em]
+action _smac_out(v1,v2)
+  { smac=v1;out=v2 }
+action _dst_out(v1,v2)
+  { dst=v1;out=v2 }
+action _out(v) {out=v}
+table P {
+  keys = { src:exact
+         ; dst:exact }
+  actions =
+   { _smac_out
+   ; _dst_out
+   ; _out }
+}
+control Ingress {
+  P.apply()
+}
+\end{lstlisting}
+\end{framed}
+(b)
+\end{minipage}
+
+\begin{ttfamily}
+\begin{footnotesize}
+\setlength{\columnsep}{0pt}
+\begin{multicols}{3}
+\begin{tabular}{c|c}
+ {\ttfamily src} & action \\\hline
+       1         & smac := 1 \\
+       2         & dst := 1 \\
+       *         & no-op
+\end{tabular}
+
+\columnbreak
+
+\begin{tabular}{c|c}
+ {\ttfamily dst} & action \\\hline
+       1         & out := 1 \\
+       2         & out := 2 \\
+       *         & no-op
+\end{tabular}
+
+\columnbreak
+
+\begin{tabular}{c|c|c}
+ {\ttfamily src} & {\ttfamily dst} & action \\\hline
+                 &                 &        \\
+                 &                 &        \\
+\end{tabular}
+\end{multicols}
+\end{footnotesize}
+\end{ttfamily}
+
+\vspace*{-4pt}
+\centering (c)
+
+
+\caption{P4 programs of (a) logical and (b) physical packet processors, (c) current installed rules\label{fig:running-p4}}
+\end{figure}
+
+\begin{figure}
+\begin{tabular}{c@{\hskip 1.5em}|@{\hskip 1.5em}c}
+\begin{small}
+$
+        \begin{array}{l}
+          \IF \\
+          \phantom{\IF}~\var{src} = 1 \to \var{smac} := 1 \\
+          \phantom{\IF}~\var{src} = 2 \to \var{dst} := 1\\
+          \phantom{\IF}~\var{src} = \var{*} \to \SKIP \\
+          \ENDIF ; \\
+          \IF \\
+          \phantom{\IF}~\var{dst} = 1 \to \var{out} := 1 \\
+          \phantom{\IF}~\var{dst} = 2 \to \var{out} := 2 \\
+          \phantom{\IF}~\var{dst} = \var{*} \to \SKIP \\
+          \ENDIF
+        \end{array}
+$
+\end{small}
+&
+\begin{small}
+$
+        \begin{array}{l}
+          \IF~\\
+          \phantom{\IF}~\var{src} = \var{*} \wedge \var{dst} = \var{*}\to \SKIP \\
+          \ENDIF 
+        \end{array}
+$
+\end{small}
+\\
+(a)
+&
+(b)
+\end{tabular}
+
+\caption{Gaurded command encoding for (a) logical and (b) physical P4 programs with their current rules\label{fig:encoding}}
+\end{figure}
