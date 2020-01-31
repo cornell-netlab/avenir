@@ -122,8 +122,11 @@ let rec exact_only t =
   | And(a,b) | Or(a,b) | Impl(a,b) | Iff(a,b)
     -> exact_only a && exact_only b
 
-let regularize cond misses =
-  cond %&% !%misses
+let regularize ~no_negations cond misses =
+  if no_negations then 
+    cond
+  else
+    cond %&% !%misses
   (* if exact_only cond
    * then if cond = True
    *      then !%misses
@@ -132,12 +135,12 @@ let regularize cond misses =
          
                 
 (* computes weakest pre-condition of condition phi w.r.t command c *)
-let rec wp c phi =
-  let guarded_wp (cond, act) = cond %=>% wp act phi in
+let rec wp ?no_negations:(no_negations = false) c phi =
+  let guarded_wp (cond, act) = cond %=>% wp ~no_negations act phi in
   match c with
   | Skip -> phi
   | Seq (firstdo, thendo) ->
-    wp firstdo (wp thendo phi)
+    wp ~no_negations firstdo (wp ~no_negations thendo phi)
   | Assign (field, value) ->
      substitute phi (StringMap.singleton field value)
   | Assert t -> t %&% phi
@@ -157,15 +160,15 @@ let rec wp c phi =
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
      List.fold cmds ~init:(True, False) ~f:(fun (wp_so_far, misses) (cond, act) ->
-         let guard = regularize cond misses in
-        ((guard %=>% wp act phi) %&% wp_so_far
+         let guard = regularize ~no_negations cond misses in
+        ((guard %=>% wp ~no_negations act phi) %&% wp_so_far
         , cond %+% misses )
       )
     |> fst
 
   | Apply (_, _, acts, dflt)
-    -> concatMap acts ~f:(fun (scope, a) -> wp (holify (List.map scope ~f:fst) a) phi) ~c:(mkAnd) ~init:(Some True)
-      %&% wp dflt phi
+    -> concatMap acts ~f:(fun (scope, a) -> wp ~no_negations (holify (List.map scope ~f:fst) a) phi) ~c:(mkAnd) ~init:(Some True)
+      %&% wp ~no_negations dflt phi
   | While _ ->
     Printf.printf "[WARNING] skipping While loop, because loops must be unrolled\n%!";
     phi
@@ -294,7 +297,7 @@ let good_execs fvs c =
   (* Printf.printf "active : \n %s \n" (string_of_cmd c); *)
   let merged_sub, passive_c = passify init_sub c  in
   (* Printf.printf "passive : \n %s\n" (string_of_cmd passive_c); *)
-  let vc = good_wp passive_c in
+  (* let vc = good_wp passive_c in *)
   (* Printf.printf "good_executions:\n %s\n%!" (string_of_test vc); *)
   (merged_sub, good_wp passive_c)
 
@@ -392,16 +395,16 @@ let equivalent eq_fvs l p =
    *   (string_of_test out_eq); *)
   match StringMap.find sub_l "drop", StringMap.find sub_p "phys_drop" with
   | Some (i,_), Some (j,_) ->
-     (* let ldrop = Var1(freshen "drop" 1 i) in
-      * let pdrop = Var1(freshen "phys_drop" 1 j) in
-      * let tt = mkVInt(1,1) in
-      * let ff = mkVInt(0,1) in *)
-     (* let cond = ((ldrop %=% tt) %&% (pdrop %=% ff) %&% out_eq)
-      *            %+% ((ldrop %=% ff) %&% (pdrop %=% ff)) in      *)
-     (* Printf.printf "============ DROP VC =========\n%!"; *)
-     (gl %&% gp %&% in_eq) %=>% out_eq
+     let ldrop = Var1(freshen "drop" 1 i) in
+     let pdrop = Var1(freshen "phys_drop" 1 j) in
+     let tt = mkVInt(1,1) in
+     let ff = mkVInt(0,1) in
+     let cond = ((ldrop %=% ff) %&% (pdrop %=% ff) %&% out_eq)
+                %+% ((ldrop %=% tt) %&% (pdrop %=% tt)) in
+     Printf.printf "============ DROP VC =========\n%!";
+     (gl %&% gp %&% in_eq) %=>% cond
   | _, _ ->
-     (* Printf.printf "============ NORMAL VC =========\n%!"; *)
+     Printf.printf "============ NORMAL VC =========\n%!";
      (gl %&% gp %&% in_eq) %=>% out_eq
                                                             
 

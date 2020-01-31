@@ -7,103 +7,6 @@ open Manip
 open Util
        
 
-(* let rec widen_matches (ts : match_expr list) (hs : match_expr list) : match_expr list option =
- *     match ts, hs with
- *     | [], [] -> Some []
- *     | _, [] | [],_ -> failwith "different lengths!"
- *     | t::ts, h::hs ->
- *        let rec_cons m = Option.(widen_matches ts hs >>| mkCons m) in
- *        match t, h with
- *        | Exact (i,sz), Exact (j,_) ->
- *           if i = j
- *           then Exact (i,sz) |> rec_cons
- *           else if i = j + 1 || j = i + 1
- *           then Between (min i j, max i j, sz) |> rec_cons
- *           else None
- *        | Exact(i,sz), Between (lo, hi, _)
- *          | Between (lo, hi, _), Exact(i,sz)
- *          -> if i >= lo-1 && i <= hi + 1
- *             then Between (min i lo, max i hi, sz) |> rec_cons
- *             else None
- *        | Between(lo,hi,sz), Between (lo', hi', _)
- *          -> if hi >= lo' - 1 && lo <= hi' + 1
- *             then Between (min lo lo', max hi hi', sz) |> rec_cons
- *             else None
- * 
- * (\*ASSUMES ROWS ARE DISJOINT*\)                   
- * let rec insert_minimally (rows : row list) (row : row) : row list =
- *   match rows with
- *   | [] -> [row]
- *   | (m,a)::rows' ->
- *      let (m', a') = row in
- *      if a' = a
- *      then match widen_matches m m' with
- *               | None -> (m,a) :: insert_minimally rows' row
- *               | Some m'' -> (m'',a) :: rows'
- *      else (m,a) :: insert_minimally rows' row
- * 
- * 
- *                                     
- * 
- * let rec make_disjoint_matches novel exists : match_expr list list=
- *   match exists, novel with
- *   | [], [] -> [[]]
- *   | [], _ | _, [] -> failwith "Error different numbers of matches in existing and novel tables!"
- *   | (ex::exs), (nv::nvs)
- *     ->
- *      let cons_rec c = List.(make_disjoint_matches exs nvs >>| mkCons c) in
- *      match ex, nv with
- *      |  Exact (i,_), Exact (j, _) ->
- *          if i = j
- *          then []
- *          else cons_rec nv
- *      | Between (lo, hi, sz), Exact(j,_) ->
- *         if lo = hi
- *         then make_disjoint_matches (Exact (lo, sz)::exs) novel
- *         else if j >= lo && j <= hi
- *         then []
- *         else cons_rec nv
- *      | Exact (i, sz), Between (lo, hi, _) ->
- *         if lo = hi then
- *           make_disjoint_matches exists (Exact (lo, sz)::nvs)
- *         else if i < lo || i > hi
- *         then cons_rec nv
- *         else cons_rec (Between (lo, i-1, sz)) @ cons_rec (Between (lo, i + 1, sz))
- *      | Between(lo,hi,sz), Between(lo',hi',sz') ->
- *         if lo = hi
- *         then make_disjoint_matches (Exact (lo, sz)::exs) novel
- *         else if lo' = hi'
- *         then make_disjoint_matches exists (Exact (lo', sz')::exs)
- *         else if hi < lo' || hi' < lo
- *         then cons_rec nv
- *         else if hi' <= hi && lo' <= lo (\*nv covered by ex*\)
- *         then []
- *         else if hi <= hi' && lo >= lo' (\*ex subinterval of nv*\)
- *         then cons_rec (Between(lo',lo-1,sz))
- *              @ cons_rec (Between (hi+1, hi, sz))
- *         else if hi <= hi' && lo <= lo'
- *         then cons_rec (Between (hi+1, hi, sz))
- *         else cons_rec (Between (lo', lo+1, sz))
- *                        
- *                         
- * let make_disjoint_rows (novel : row) (exists : row) : row list =
- *   let (ex_mtchs, _) = exists in
- *   let (nv_mtchs, nv_act) = novel in
- *   let new_rows = List.(make_disjoint_matches nv_mtchs ex_mtchs
- *                        >>| inj_l nv_act) in
- *   (\* List.iter new_rows ~f:(fun row -> Printf.printf "  %s\n%!" (string_of_row row)); *\)
- *   new_rows
- *   
- * 
- * let disjoint_insertions (rows : row list) (new_row : row) =
- *   if rows = []
- *   then [new_row]
- *   else 
- *     List.(rows >>= make_disjoint_rows new_row) *)
-            
-(* let insert_optimally rows new_row =
- *   let inserts = disjoint_insertions rows new_row in
- *   rows @ inserts *)
                                     
 
 let encode_holes encode_tag x sz =
@@ -532,18 +435,18 @@ let get_one_model_edit_no_widening
   let st = Time.now () in
   (* let phi = Packet.to_test ~fvs pkt' in *)
   let cands = apply_hints `Exact hints actions pline pinst in
-  let _ = Printf.printf "Candidate programs:\n%!";
-          List.iter cands ~f:(fun (c,_) -> Printf.printf "\n%s\n%!" (string_of_cmd c));
-          Printf.printf "\n" in
+  (* let _ = Printf.printf "Candidate programs:\n%!";
+   *         List.iter cands ~f:(fun (c,_) -> Printf.printf "\n%s\n%!" (string_of_cmd c));
+   *         Printf.printf "\n" in *)
   let wp_phys_paths =
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
         Printf.printf "Candidate:\n%s \n" (string_of_cmd path);
         let precs = if Option.is_none hints
                     then
-                      wp_paths ~no_negations:true path (Packet.to_test ~fvs pkt')
+                      wp_paths path ~no_negations:true (Packet.to_test ~fvs pkt')
                       |> List.filter_map ~f:(fun (trace, wp) ->
                              if wp = False then None else begin
-                                 Printf.printf "pkt': %s\n" (Packet.string__packet pkt');
+                                 Printf.printf "pkt': %s\n" (pkt' |> Packet.to_test ~fvs |> string_of_test);
                                  Printf.printf "trace: %s\n" (string_of_cmd trace);
                                  Printf.printf "WP: %s\n\n" (string_of_test wp);
                                  Some wp
@@ -556,7 +459,7 @@ let get_one_model_edit_no_widening
   let model =
     List.find_map wp_phys_paths ~f:(fun (wp_phys, acts) ->
         if wp_phys = False then None else
-          let condition =  (Packet.to_test ~fvs pkt %=>% wp_phys ) in
+          let condition =  (Packet.to_test ~fvs pkt %=>% wp_phys) in
           let _ = Printf.printf "\nsubstituting:\n%s\ninto\n%s\nto get\n%s\n\n%!"                    
                     (Packet.string__packet pkt)
                     (string_of_test (wp_phys))

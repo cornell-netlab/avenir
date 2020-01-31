@@ -202,7 +202,26 @@ let wp_cmd : Command.t =
     ~summary:"Convert P4 programs into their GCL-While interpretation"
     WeakestPrecondition.spec
     WeakestPrecondition.run
-  
+
+
+module OFBench = struct
+  let spec = Command.Spec.(
+      empty
+      +> anon ("file" %: string)
+      +> flag "-w" no_arg ~doc:"do widening"
+      +> flag "-gas" (optional int) ~doc:"how many cegis iterations?")
+
+  let run classbench_file widening gas () =
+    Benchmark.of_to_pipe1 widening gas classbench_file () |> ignore
+end
+    
+
+let of_bench : Command.t =
+  Command.basic_spec
+    ~summary:"benchmarks against of tables"
+    OFBench.spec
+    OFBench.run
+    
 let main : Command.t =
   Command.group
     ~summary:"Invokes the specified Motley Command"
@@ -212,6 +231,7 @@ let main : Command.t =
     ; ("edit-synth", editSynth)
     ; ("bench", benchmark)
     ; ("onf", onf)
+    ; ("of", of_bench)
     ; ("ex", running_example)
     ; ("wp", wp_cmd)]
     

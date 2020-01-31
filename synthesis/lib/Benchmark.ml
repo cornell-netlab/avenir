@@ -5,7 +5,45 @@ open Util
 open Packet
 
 module IntMap = Map.Make(Int)
-  
+
+
+
+
+let measure ~widening ~gas ~fvs ~hints ~log ~phys initial_linst initial_pinst insertions  = 
+  let rec run_experiment i seq linst pinst =
+    match seq with
+    | [] -> []
+    | edit::edits ->
+       Printf.printf "==== BENCHMARKING INSERTION OF (%s) =====\n%!"
+         (string_of_edit edit);
+       let (totalt,checkt,checkn, searcht, searchn, wpt,lwpt,pwpt,sizes,pinst')  =
+         synthesize_edit ~widening ~gas ~fvs ~hints ~iter:i (Prover.solver ()) log phys linst pinst (Some edit) in
+       Printf.printf "=== DONE=================================\n%!";
+       (i, totalt, checkt, checkn, searcht, searchn, wpt,lwpt,pwpt, sizes)
+       :: run_experiment (i + 1) edits (apply_edit linst edit) pinst' in
+
+  let data = run_experiment 0 insertions initial_linst initial_pinst in
+  let mean ds = List.fold ds ~init:0 ~f:((+)) / List.length ds in
+  let max_l ds = List.fold ds ~init:0 ~f:(max) in
+  let min_l ds = List.fold ds ~init:(max_l ds) ~f:(min) in
+  Printf.printf "size,time,check_time,num_z3_calls_check,model_search_z3_time,num_z3_calls_model_search,search_wp_time,check_log_wp_time,check_phys_wp_time,mean_tree_size,max_tree_size,min_tree_size\n";
+  List.iter data ~f:(fun (i,t,c,cn,s,sn,wpt,lwpt, pwpt,sizes) ->
+      Printf.printf "%d,%f,%f,%d,%f,%d,%f,%f,%f,%d,%d,%d\n"
+        i (Time.Span.to_ms t)
+        (Time.Span.to_ms c) cn
+        (Time.Span.to_ms s) sn
+        (Time.Span.to_ms wpt)
+        (Time.Span.to_ms lwpt)
+        (Time.Span.to_ms pwpt)
+        (mean sizes)
+        (max_l sizes)
+        (min_l sizes)
+    )
+
+
+
+
+                        
                         
 let permute l =
   List.map l ~f:(inj_r (Random.int (List.length l)))
@@ -99,36 +137,14 @@ let reorder_benchmark varsize length max_inserts widening =
                  ])
             |> List.join
   in
-  let rec run_experiment i seq linst pinst =
-    match seq with
-    | [] -> []
-    | edit::edits ->
-       Printf.printf "==== BENCHMARKING INSERTION OF (%s) =====\n%!"
-         (string_of_edit edit);
-       let (totalt,checkt,checkn, searcht, searchn, wpt,lwpt,pwpt,sizes,pinst')  =
-         synthesize_edit ~widening ~gas:5 ~fvs ~hints ~iter:i (Prover.solver ()) log phys linst pinst (Some edit) in
-       Printf.printf "=== DONE=================================\n%!";
-       (i, totalt, checkt, checkn, searcht, searchn, wpt,lwpt,pwpt, sizes)
-       :: run_experiment (i + 1) edits (apply_edit linst edit) pinst'
-  in
-  let data = run_experiment 0 insertion_sequence linst pinst in
-  let mean ds = List.fold ds ~init:0 ~f:((+)) / List.length ds in
-  let max_l ds = List.fold ds ~init:0 ~f:(max) in
-  let min_l ds = List.fold ds ~init:(max_l ds) ~f:(min) in
-  Printf.printf "size,time,check_time,num_z3_calls_check,model_search_z3_time,num_z3_calls_model_search,search_wp_time,check_log_wp_time,check_phys_wp_time,mean_tree_size,max_tree_size,min_tree_size\n";
-  List.iter data ~f:(fun (i,t,c,cn,s,sn,wpt,lwpt, pwpt,sizes) ->
-      Printf.printf "%d,%f,%f,%d,%f,%d,%f,%f,%f,%d,%d,%d\n"
-        i (Time.Span.to_ms t)
-        (Time.Span.to_ms c) cn
-        (Time.Span.to_ms s) sn
-        (Time.Span.to_ms wpt)
-        (Time.Span.to_ms lwpt)
-        (Time.Span.to_ms pwpt)
-        (mean sizes)
-        (max_l sizes)
-        (min_l sizes)
-    )
+  let gas = 1000  in
+  measure ~widening ~gas ~fvs ~hints ~log ~phys
+    linst pinst insertion_sequence
 
+
+
+
+  
             
 (** ONF BENCHMARK **)
    
@@ -635,6 +651,16 @@ let basic_onf_ipv4 _ =
       (Some ("ipv4", ( [Between (0,20,32)], [(1,32)],0)))
 
 
+
+let parse_rule_to_update line =
+  let columns = String.split line in columns 
+
+      
+let get_classbench_data n =
+  let rules = Shell.run_lines "/home/ericthewry/Downloads/classbench-ng/classbench" ["v4";"/home/ericthewry/Downloads/classbench-ng/vendor/parameter_files/fw1_seed";Printf.sprintf "--count=%d" n] in
+  List.map rules ~f:parse_rule_to_update 
+      
+
 let running_example gas widening =
   let logical =
     sequence [
@@ -753,15 +779,15 @@ let onf_representative gas widening =
   in
   let fabric_egress =
     sequence [ Skip
-        (* mkOrdered [ Var1("in_port",9) %=% Var1("out_port", 9), "drop"%<-% mkVInt(1,1)
-         *           ; True, Skip ]; *)
-        (* mkordered [
-         *     (fwd_type_v %=% fwd_ipv4) %+% (fwd_type_v %=% fwd_mpls),
-         *     sequence [ "ttl" %<-% Minus(Var1("ttl", 8), mkVInt(1,8))
-         *              ; mkOrdered [Var1("ttl", 8) %=% mkVInt(0,8), "drop" %<-% mkVInt(1,1)
-         *                         ; True, Skip]]
-         *   ; True, Skip
-         *   ] *)
+               (* mkOrdered [ Var1("in_port",9) %=% Var1("out_port", 9), "drop"%<-% mkVInt(1,1)
+                *           ; True, Skip ]; *)
+               (* mkordered [
+                *     (fwd_type_v %=% fwd_ipv4) %+% (fwd_type_v %=% fwd_mpls),
+                *     sequence [ "ttl" %<-% Minus(Var1("ttl", 8), mkVInt(1,8))
+                *              ; mkOrdered [Var1("ttl", 8) %=% mkVInt(0,8), "drop" %<-% mkVInt(1,1)
+                *                         ; True, Skip]]
+                *   ; True, Skip
+                *   ] *)
       ]
   in
   let logical = sequence [station; set_next; acl; next; fabric_egress] in
@@ -784,7 +810,7 @@ let onf_representative gas widening =
                 "out_port" %<-% Var1("op", 9)
               ; "smac" %<-% Var1("smac", 48)
               ; "dmac" %<-% Var1("dmac", 48)
-              (* ; "ttl" %<-% Minus(Var1("ttl",8), mkVInt(1,8)) *)
+                                (* ; "ttl" %<-% Minus(Var1("ttl",8), mkVInt(1,8)) *)
               ]
            ; [], Skip
            ; [], "drop" %<-% mkVInt(1,1)]
@@ -833,8 +859,7 @@ let onf_representative gas widening =
   in
   let init_metadata =
     sequence [
-        "in_port" %<-% mkVInt(0,9)
-      ; "out_port" %<-% Var1("in_port", 9)
+        "out_port" %<-% Var1("in_port", 9)
       ; "drop" %<-% mkVInt(0,1)
       ; "skip_next" %<-% mkVInt(0,1)
       ]
@@ -842,9 +867,121 @@ let onf_representative gas widening =
   synthesize_edit ~widening ~gas ~iter:1 ~fvs (Prover.solver ())
     (init_metadata %:% logical)
     (init_metadata %:% physical)
+    (StringMap.of_alist_exn
+       [ ("my_station_table", [ ([Between(0,pow 2 9,9); Between(0,pow 2 48,48); Between(0, pow 2 16, 16)], [2, 2], 0 ) ])
+       ; ("ipv4_dst", [([Exact(1, 32)], [1,32], 0)])
+    ])
     StringMap.empty
-    StringMap.empty
-    None
+    (Some ("next", ([Exact(1,32)], [1,9], 0)))
     
+
+let rec to_int (bytes : int list) =
+  match bytes with
+  | [] -> 0
+  | x::xs -> Int.shift_left x (8 * List.length xs) + to_int xs
+
+
+let parse_ip_mask str =
+  let addr, mask =
+    String.substr_replace_all str ~pattern:"@" ~with_:""
+    |> String.rsplit2_exn ~on:'/' in
+  let addr_ints =
+    String.split addr ~on:'.'
+    |> List.map ~f:(fun i -> int_of_string i)
+  in
+  let mask_idx =
+    let f_idx = float_of_string(mask) /. 4.0 in
+    if Float.round_up f_idx = Float.round_down f_idx then
+      int_of_float f_idx
+    else failwith ("unknown mask " ^ mask)
+  in
+  let lo, hi = List.foldi addr_ints ~init:([],[])
+                 ~f:(fun i (lo, hi) char ->
+                   if i < mask_idx then
+                     (lo @ [char], hi @ [char])
+                   else
+                     (lo @ [0], hi @ [255])) in
+  let lo_int = to_int lo in
+  let hi_int = to_int hi in
+  if lo_int = hi_int then
+    Exact(lo_int, 32)
+  else
+    Between(lo_int, hi_int, 32)
+  
     
+let parse_port_range str =
+  let lo,hi = String.lsplit2_exn str ~on:':' in
+  let _ = Printf.printf "(%s:%s)\n%!" lo hi in
+  let lo_int = String.strip lo |> int_of_string in
+  let hi_int = String.strip hi |> int_of_string in
+  if lo = hi
+  then Exact(lo_int, 9)
+  else Between(lo_int, hi_int, 9)
+
+let parse_proto str =
+  let proto,_ = String.lsplit2_exn str ~on:'/' in
+  Exact(int_of_string proto, 8)
+              
+let parse_classbench fp =
+  In_channel.read_lines fp
+  |> List.fold ~init:[]
+       ~f:(fun rows line ->
+         let vars = String.split line ~on:'\t' in
+         let ip_src_match = List.nth_exn vars 0 |> parse_ip_mask in
+         let ip_dst_match = List.nth_exn vars 1 |> parse_ip_mask in
+         let src_port_match = List.nth_exn vars 2 |> parse_port_range in
+         let dst_port_match = List.nth_exn vars 3 |> parse_port_range  in
+         let proto = List.nth_exn vars 4 |> parse_proto in
+         rows @ [(ip_src_match, ip_dst_match, src_port_match, dst_port_match, proto)])
+
+let generate_edits cb_rules =
+  let drop_table = List.fold (pow 2 9 |> range_ex 0) ~init:IntMap.empty
+                     ~f:(fun acc port -> IntMap.set acc ~key:port ~data:(Random.int 1)) in
+  List.fold cb_rules ~init:[]
+    ~f:(fun acc (_, ip_dst, _,_,_) ->
+      let in_port = Random.int (pow 2 9) in
+      let out_port = Random.int (pow 2 9) in
+      match IntMap.find drop_table in_port with
+      | None -> failwith (Printf.sprintf "couldn'f find port %d in drop table" in_port)
+      | Some x ->
+         if x = 0 then
+           acc @ [("of", ([ip_dst; Exact(in_port, 9)],[out_port, 9], 1))]
+         else
+           acc @ [("of", ([ip_dst; Exact(in_port,9)],[], 0))]
+    )
     
+let of_to_pipe1 widening gas fp () =
+  let gas = match gas with None -> 1000 | Some g -> g in
+  let init_no_drop = "drop" %<-% mkVInt(0,1) in
+  let of_table =
+    sequence [
+        init_no_drop
+      ; Apply("of"
+            , [ "ipv4_dst", 32
+              ; "in_port", 9]
+            , [[], "drop" %<-% mkVInt(1,1)
+              ; ["p",9], "out_port" %<-% Var1("p", 9)]
+            , Skip)
+      ] in
+  let pipe =
+    sequence [
+        init_no_drop
+      ; Apply("ingress"
+            , ["in_port",9]
+            , [[], "drop" %<-% mkVInt(1,1)]
+            , Skip)
+      ; Apply("ipv4_fwd"
+            , ["ipv4_dst", 32]
+            , [["p",9], "out_port" %<-% Var1("p", 9)
+              ; [], "drop" %<-% mkVInt(1,1)
+              ]
+            , Skip)
+      ] in
+  let fvs = [ "ipv4_dst", 32
+            ; "in_port", 9
+            ; "out_port", 9
+            ; "drop", 1
+            ] in
+  let logical_insertions = parse_classbench fp |> generate_edits in
+  measure ~widening ~gas ~fvs ~hints:None ~log:of_table ~phys:pipe
+    StringMap.empty StringMap.empty logical_insertions

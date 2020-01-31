@@ -306,7 +306,14 @@ let check _ typ test =
        let response = Z3.Solver.check mySolver [] in
        let dur = Time.(diff (now()) st) in
        (* Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver); *)
-       let model = if response = SATISFIABLE then Option.(Z3.Solver.get_model mySolver >>| mkMotleyModel) else None in
+       let model =
+         if response = SATISFIABLE
+         then match Z3.Solver.get_model mySolver with
+              | None -> None
+              | Some m ->
+                 Printf.printf "SAT: %s \n%!" (Z3.Model.to_string m);
+                 Some (mkMotleyModel m)
+         else None in
        response, model , dur in
      match response, model, dur  with  
      | UNSATISFIABLE, _, _ ->
