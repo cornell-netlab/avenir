@@ -871,3 +871,4 @@ and holify_cmd holes c : cmd=
 (** replace all vars in cmd that are also in holes with holes having the same name*)
 let holify holes c =  holify_cmd holes c
         
+let sequence = List.reduce_exn ~f:(%:%)

@@ -788,11 +788,14 @@ let mk_new_row match_model phys tbl_name data_opt act : row option =
        | Some ks -> Some (ks, data, act)
                           
 
+let encode_matches keys matches =
+  List.fold2_exn keys matches ~init:True ~f:(fun acc k m -> acc %&% encode_match k m) 
+      
+                         
 let remove_conflicts keys (ms : match_expr list)  (rows : row list)  =
   let checker = check (Prover.solver ()) `Sat in
-  let encode_matches =  List.fold2_exn keys ~init:True ~f:(fun acc k m -> acc %&% encode_match k m) in
-  let prop = encode_matches ms %=>%
-               (List.fold rows ~init:False ~f:(fun acc (ms',_,_) -> acc %+% encode_matches ms')) in
+  let prop = encode_matches keys ms %=>%
+               (List.fold rows ~init:False ~f:(fun acc (ms',_,_) -> acc %+% encode_matches keys ms')) in
   match fst (checker prop) with
   | Some _ -> 
      let rows' =

@@ -150,7 +150,6 @@ let reorder_benchmark varsize length max_inserts widening =
             
 (** ONF BENCHMARK **)
    
-let sequence = List.reduce_exn ~f:(%:%)
 let set_valid s = (s ^ ".valid") %<-% mkVInt(1,1)
 let set_invalid s = (s ^ ".valid") %<-% mkVInt(0,1)
 let is_valid s = Var1(s^".valid",1) %=% mkVInt(1,1)

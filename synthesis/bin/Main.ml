@@ -7,6 +7,7 @@ module Synthesis = Motley.Synthesis
 module Encode = Motley.Encode
 module Manip = Motley.Manip
 module Benchmark = Motley.Benchmark
+module CheckAndSet = Motley.CheckAndSet
 
 
 let parse_file (filename : string) : Ast.cmd =
@@ -221,6 +222,17 @@ let of_bench : Command.t =
     ~summary:"benchmarks against of tables"
     OFBench.spec
     OFBench.run
+
+module Meta = struct
+  let spec = Command.Spec.(empty)
+  let run = CheckAndSet.run
+end
+                
+let meta : Command.t =
+  Command.basic_spec
+    ~summary:"run CheckAndSet test"
+    Meta.spec
+    Meta.run
     
 let main : Command.t =
   Command.group
@@ -233,6 +245,7 @@ let main : Command.t =
     ; ("onf", onf)
     ; ("of", of_bench)
     ; ("ex", running_example)
+    ; ("meta", meta)
     ; ("wp", wp_cmd)]
     
 let () = Command.run main
