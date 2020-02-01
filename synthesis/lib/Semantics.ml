@@ -96,7 +96,7 @@ let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packe
               | Ordered ->
                Printf.printf "[EVAL (%d)] Skipping selection, no match for %s\n"
                  (gas)
-                 (string_of_test (Packet.to_test pkt));
+                 (Packet.string__packet pkt);
                (True, Skip, List.length selects)
           in
           let (t, a, _) = find_match pkt_loc selects ~default in
@@ -169,7 +169,8 @@ let rec widening_test pkt wide t =
        let (lo,hi,sz) = wide_eval wide e in
        Printf.printf "adding %s = [%d,%d]" v lo hi;
        StringMap.set wide ~key:v ~data:(lo,hi,sz)
-     else failwith "shouldn't be executing a test that fails"
+     else let vlu = get_int (StringMap.find_exn pkt v) in
+          StringMap.set wide v (vlu, vlu, sz)
   | Le(Var1(v,sz), e) | Le(e,Var1(v,sz)) ->
      if check_test t (pkt,None)
      then
@@ -179,7 +180,8 @@ let rec widening_test pkt wide t =
            | None -> (lo, hi, sz)
            | Some (lo', hi', sz)
              ->  (min lo lo', min hi hi', sz))
-     else failwith "shouldn't be executing a test that fails"
+     else let vlu = get_int (StringMap.find_exn pkt v) in
+          StringMap.set wide v (vlu, vlu, sz)
   | _ -> failwith "dont know how to handle that kind of test"
           
 let widening_match pkt wide matches =
@@ -211,18 +213,18 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : instance) ~wide(* :(wi
           ((Packet.set_field_of_expr1 pkt f e, loc_opt),
            widening_assignment wide f e,
            cmd, StringMap.empty)
-       | Assert t ->
+       | Assert t
           (* failwith "Asserts are deprecated" *)
-          if check_test t pkt_loc then
-            (pkt_loc, widening_test pkt wide t, cmd, StringMap.empty)
-          else
-            failwith ("AssertionFailure: " ^ string_of_test t ^ "was false")
+          (* if check_test t pkt_loc then
+           *   (pkt_loc, widening_test pkt wide t, cmd, StringMap.empty)
+           * else
+           *   failwith ("AssertionFailure: " ^ string_of_test t ^ "was false") *)
        | Assume t ->
           (* failwith "Raw assumes are deprecated" *)
           (pkt_loc, widening_test pkt wide t, cmd, StringMap.empty)
        | Seq (firstdo, thendo) ->
-          let pkt_loc', wide, cmd', trace' = trace_eval_inst ~gas ~wide firstdo inst pkt_loc in
-          let pkt_loc'', wide'', cmd'', trace'' = trace_eval_inst ~gas ~wide thendo inst pkt_loc' in
+          let pkt_loc', wide', cmd', trace' = trace_eval_inst ~gas ~wide firstdo inst pkt_loc in
+          let pkt_loc'', wide'', cmd'', trace'' = trace_eval_inst ~gas ~wide:wide' thendo inst pkt_loc' in
           (pkt_loc''
           , wide''
           , cmd' %:% cmd''
@@ -238,7 +240,7 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : instance) ~wide(* :(wi
               | Ordered ->
                Printf.printf "[EVAL (%d)] Skipping selection, no match for %s\n"
                  (gas)
-                 (string_of_test (Packet.to_test pkt));
+                 (Packet.string__packet pkt);
                (True, Skip, List.length selects)
           in
           let (_, a, _) = find_match pkt_loc selects ~default in

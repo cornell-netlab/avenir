@@ -13,6 +13,9 @@ let string_of_match m =
   match m with 
   | Exact (i,s) -> Printf.sprintf "%d#%d" i s
   | Between (lo,hi,s) -> Printf.sprintf "[%d,%d]#%d" lo hi s
+
+let string_of_matches : match_expr list -> string =
+  List.fold ~init:"" ~f:(fun acc m -> Printf.sprintf "%s %s" acc (string_of_match m))
                                        
 
 type action_data = (int * size) list

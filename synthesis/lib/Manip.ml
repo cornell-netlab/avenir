@@ -84,7 +84,10 @@ let rec substitute ?holes:(holes = false) ex subsMap =
   let subst = get_val subsMap in
   let rec substituteE e =
     match e with
-    | Var1 (field,_) -> subst field e
+    | Var1 (field,_) ->
+       let replacement = subst field e in
+       (* Printf.printf "substituting %s for %s;\n%!" field (string_of_expr1 e); *)
+       replacement
     | Hole1 (field,_) ->
        if holes then
          let e' = subst field e in
@@ -111,7 +114,9 @@ let rec substitute ?holes:(holes = false) ex subsMap =
   | Member(e,set) -> Member(substituteE e, set)
 
 let substV ?holes:(holes = false) ex substMap =
-  StringMap.map substMap ~f:(fun v -> Value1 v)
+  StringMap.fold substMap ~init:StringMap.empty ~f:(fun ~key ~data acc ->
+      Printf.printf "  [%s -> %s ]\n" key (string_of_value1 data);
+      StringMap.set acc ~key ~data:(Value1 data))
   |> substitute ~holes ex
 
 let rec exact_only t =
@@ -123,10 +128,14 @@ let rec exact_only t =
     -> exact_only a && exact_only b
 
 let regularize ~no_negations cond misses =
-  if no_negations then 
-    cond
+  if no_negations then
+    if cond = True then
+      cond %&% !%(misses)
+    else
+      cond
   else
     cond %&% !%misses
+
   (* if exact_only cond
    * then if cond = True
    *      then !%misses
@@ -142,6 +151,7 @@ let rec wp ?no_negations:(no_negations = false) c phi =
   | Seq (firstdo, thendo) ->
     wp ~no_negations firstdo (wp ~no_negations thendo phi)
   | Assign (field, value) ->
+     Printf.printf "replacing %s with %s in %s \n" field (string_of_expr1 value) (string_of_test phi);
      substitute phi (StringMap.singleton field value)
   | Assert t -> t %&% phi
   | Assume t -> t %=>% phi
@@ -161,14 +171,20 @@ let rec wp ?no_negations:(no_negations = false) c phi =
   | Select (Ordered, cmds) ->
      List.fold cmds ~init:(True, False) ~f:(fun (wp_so_far, misses) (cond, act) ->
          let guard = regularize ~no_negations cond misses in
-        ((guard %=>% wp ~no_negations act phi) %&% wp_so_far
+         let act_wp = wp ~no_negations act phi in 
+         Printf.printf "Combining guard: %s  action: %s and accumulation %s\n%!==%s\n%!"
+           (string_of_test guard) (string_of_test act_wp) (string_of_test wp_so_far)
+           ((guard %=>% act_wp) %&% wp_so_far |> string_of_test);
+        ((guard %=>% act_wp) %&% wp_so_far
         , cond %+% misses )
       )
     |> fst
 
   | Apply (_, _, acts, dflt)
-    -> concatMap acts ~f:(fun (scope, a) -> wp ~no_negations (holify (List.map scope ~f:fst) a) phi) ~c:(mkAnd) ~init:(Some True)
-      %&% wp ~no_negations dflt phi
+    -> failwith "wp of while is no good"
+  (* concatMap acts ~f:(fun (scope, a) ->
+       *      wp ~no_negations (holify (List.map scope ~f:fst) a) phi) ~c:(mkAnd) ~init:(Some True)
+       * %&% wp ~no_negations dflt phi *)
   | While _ ->
     Printf.printf "[WARNING] skipping While loop, because loops must be unrolled\n%!";
     phi
@@ -291,6 +307,28 @@ let good_execs fvs c =
     | While _ -> failwith "While Loops Deprecated"
     | Apply _ -> failwith "Tables should be applied at this stage"
   in
+  let rec bad_wp c =
+    match c with
+    | Skip -> False
+    | Assume _ -> False
+    | Assert t -> !%t
+    | Seq(c1,c2) -> bad_wp c1 %+% (good_wp c1 %&% bad_wp c2)
+    | Select (Total, _) -> failwith "totality eludes me "
+    | Select (Partial, ss) ->
+       List.fold ss ~init:(True)
+         ~f:(fun acc (t,c) -> acc %+% (t %&% bad_wp (c)))
+    | Select(Ordered,  ss) ->
+       List.fold ss ~init:(False,False)
+         ~f:(fun (cond, misses) (t,c) ->
+           (cond %+% (
+              t %&% !%(misses) %&% bad_wp c
+            )
+           , t %+% misses))
+       |> fst         
+    | Assign _ -> failwith "ERROR: PROGRAM NOT IN PASSIVE FORM! Assignments should have been removed"
+    | While _ -> failwith "While Loops Deprecated"
+    | Apply _ -> failwith "Tables should be applied at this stage"
+  in
   let init_sub = List.fold fvs ~init:StringMap.empty ~f:(fun sub (v,sz) ->
                      StringMap.set sub ~key:v ~data:(0,sz)
                    ) in
@@ -299,7 +337,7 @@ let good_execs fvs c =
   (* Printf.printf "passive : \n %s\n" (string_of_cmd passive_c); *)
   (* let vc = good_wp passive_c in *)
   (* Printf.printf "good_executions:\n %s\n%!" (string_of_test vc); *)
-  (merged_sub, good_wp passive_c)
+  (merged_sub, good_wp passive_c, bad_wp passive_c)
 
 
 let inits fvs sub =
@@ -373,8 +411,8 @@ let equivalent eq_fvs l p =
   let prefix_list =  List.map ~f:(fun (x,sz) -> (phys_prefix ^ x, sz)) in
   let fvs_p = prefix_list fvs in
   let eq_fvs_p = prefix_list eq_fvs in
-  let sub_l, gl = good_execs fvs l in
-  let sub_p, gp = good_execs fvs_p p' in
+  let sub_l, gl, bl = good_execs fvs l in
+  let sub_p, gp, bp = good_execs fvs_p p' in
   let lin = inits eq_fvs sub_l in
   let pin = inits eq_fvs_p sub_p in
   let lout = finals eq_fvs sub_l in
@@ -393,21 +431,20 @@ let equivalent eq_fvs l p =
    *   (string_of_test gp)
    *   (string_of_test in_eq)
    *   (string_of_test out_eq); *)
-  match StringMap.find sub_l "drop", StringMap.find sub_p "phys_drop" with
-  | Some (i,_), Some (j,_) ->
-     let ldrop = Var1(freshen "drop" 1 i) in
-     let pdrop = Var1(freshen "phys_drop" 1 j) in
-     let tt = mkVInt(1,1) in
-     let ff = mkVInt(0,1) in
-     let cond = ((ldrop %=% ff) %&% (pdrop %=% ff) %&% out_eq)
-                %+% ((ldrop %=% tt) %&% (pdrop %=% tt)) in
-     Printf.printf "============ DROP VC =========\n%!";
-     (gl %&% gp %&% in_eq) %=>% cond
-  | _, _ ->
-     Printf.printf "============ NORMAL VC =========\n%!";
-     (gl %&% gp %&% in_eq) %=>% out_eq
-                                                            
-
+  (* match StringMap.find sub_l "drop", StringMap.find sub_p "phys_drop" with
+   * | Some (i,_), Some (j,_) ->
+   *    (\* let ldrop = Var1(freshen "drop" 1 i) in
+   *     * let pdrop = Var1(freshen "phys_drop" 1 j) in
+   *     * let tt = mkVInt(1,1) in
+   *     * let ff = mkVInt(0,1) in
+   *     * let cond = ((ldrop %=% ff) %&% (pdrop %=% ff) %&% out_eq)
+   *     *            %+% ((ldrop %=% tt) %&% (pdrop %=% tt)) in *\)
+   *    (\* Printf.printf "============ DROP VC =========\n%!"; *\)
+   *    (gl %&% gp %&% (!%bl) %&% (!%bl) %&% in_eq) %=>% out_eq
+   * | _, _ -> *)
+     (* Printf.printf "============ NORMAL VC =========\n%!"; *)
+  ((gl %&% gp %&% (!%bl) %&% (!%bp) %&% in_eq) %=>% out_eq)
+  %&% (bl %<=>% bp)
     
   
 
@@ -479,7 +516,7 @@ let rec fill_holes (c : cmd) subst =
             
 
 
-let rec wp_paths ?no_negations:(no_negations = false) c phi : (cmd * test) list =
+let rec wp_paths ~no_negations c phi : (cmd * test) list =
   match c with
   | Skip -> [(c, phi)]
   | Seq (c1, c2) ->
@@ -492,7 +529,7 @@ let rec wp_paths ?no_negations:(no_negations = false) c phi : (cmd * test) list 
        ) |> List.join
        
   | Assign (field, e) ->
-     let phi' = substitute phi (StringMap.singleton field e) in 
+     let phi' = substitute phi (StringMap.singleton field e) in
      (* Printf.printf "substituting %s |-> %s\n into %s to get %s \n%!" field (string_of_expr1 e) (string_of_test phi') (string_of_test phi'); *)
      [(c,phi')]
   | Assert t -> [(c, t %&% phi)]
@@ -522,7 +559,7 @@ let rec wp_paths ?no_negations:(no_negations = false) c phi : (cmd * test) list 
          List.fold (wp_paths ~no_negations act phi) ~init:wp_so_far         
            ~f:(fun acc (trace, act_wp) ->
              let misses = if no_negations then True else !%(prev_conds) in
-             acc @[(Assert cond %:% trace, cond %&% misses %&% act_wp)]), prev_conds %+% cond)
+             acc @[(Assert (cond %&% misses) %:% trace, cond %&% misses %&% act_wp)]), prev_conds %+% cond)
      |> fst
 
   | Apply (_, _, acts, dflt) ->

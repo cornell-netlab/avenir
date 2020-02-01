@@ -14,13 +14,13 @@ let measure ~widening ~gas ~fvs ~hints ~log ~phys initial_linst initial_pinst in
     match seq with
     | [] -> []
     | edit::edits ->
-       Printf.printf "==== BENCHMARKING INSERTION OF (%s) =====\n%!"
-         (string_of_edit edit);
+       (* Printf.printf "==== BENCHMARKING INSERTION OF (%s) =====\n%!"
+        *   (string_of_edit edit); *)
        let (totalt,checkt,checkn, searcht, searchn, wpt,lwpt,pwpt,sizes,pinst')  =
-         synthesize_edit ~widening ~gas ~fvs ~hints ~iter:i (Prover.solver ()) log phys linst pinst (Some edit) in
+         synthesize_edit_batch ~widening ~gas ~fvs ~hints ~iter:i (Prover.solver ()) log phys linst pinst edit in
        Printf.printf "=== DONE=================================\n%!";
        (i, totalt, checkt, checkn, searcht, searchn, wpt,lwpt,pwpt, sizes)
-       :: run_experiment (i + 1) edits (apply_edit linst edit) pinst' in
+       :: run_experiment (i + 1) edits (apply_edits linst edit) pinst' in
 
   let data = run_experiment 0 insertions initial_linst initial_pinst in
   let mean ds = List.fold ds ~init:0 ~f:((+)) / List.length ds in
@@ -126,8 +126,10 @@ let reorder_benchmark varsize length max_inserts widening =
   (* let hints = None in *)
   let log = to_cmd logical_pipeline in
   let phys = to_cmd physical_pipeline in
-  let insertion_sequence = 
+  let insertion_sequence =
     generate_n_insertions varsize length max_inserts (range_ex 1 (length +1)) StringMap.empty
+    |> List.(map ~f:return)
+
   in
   let fvs = range_ex 1 (length + 1)
             |> List.map ~f:(fun i ->
@@ -643,12 +645,12 @@ let basic_onf_ipv4 _ =
    *   StringMap.empty
    *   ("next", ([Exact (1,32)], [(1,9)],0))
    * %> *)
-    synthesize_edit ~gas ~iter ~fvs p
+    synthesize_edit_batch ~gas ~iter ~fvs p
       logical
       physical
       StringMap.(set empty ~key:"next" ~data:[[Exact (1,32)], [(1,9)],0])
       StringMap.(set empty ~key:"l3_fwd" ~data:[])
-      (Some ("ipv4", ( [Between (0,20,32)], [(1,32)],0)))
+      [("ipv4", ( [Between (0,20,32)], [(1,32)],0))]
 
 
 
@@ -690,7 +692,7 @@ let running_example gas widening =
               ]
             , Skip)
   in
-  synthesize_edit ~widening ~gas ~iter:1 ~fvs:["src", 2; "dst", 2; "smac", 2; "dmac", 2; "out", 2 ]
+  synthesize_edit_batch ~widening ~gas ~iter:1 ~fvs:["src", 2; "dst", 2; "smac", 2; "dmac", 2; "out", 2 ]
     (Prover.solver ())
     logical
     physical
@@ -699,7 +701,7 @@ let running_example gas widening =
                            ; ("dst_table", [([Exact (0,2)], [1,2], 0)])
     ])
     StringMap.empty
-    (Some ("dst_table", ([Exact (1,2)], [2,2], 0)))
+    [("dst_table", ([Exact (1,2)], [2,2], 0))]
       
                                       
             
@@ -864,7 +866,7 @@ let onf_representative gas widening =
       ; "skip_next" %<-% mkVInt(0,1)
       ]
   in
-  synthesize_edit ~widening ~gas ~iter:1 ~fvs (Prover.solver ())
+  synthesize_edit_batch ~widening ~gas ~iter:1 ~fvs (Prover.solver ())
     (init_metadata %:% logical)
     (init_metadata %:% physical)
     (StringMap.of_alist_exn
@@ -872,8 +874,12 @@ let onf_representative gas widening =
        ; ("ipv4_dst", [([Exact(1, 32)], [1,32], 0)])
     ])
     StringMap.empty
-    (Some ("next", ([Exact(1,32)], [1,9], 0)))
-    
+    [("next", ([Exact(1,32)], [1,9], 0))]
+
+
+
+
+(**** BEGIN CLASSBENCH ***)
 
 let rec to_int (bytes : int list) =
   match bytes with
@@ -936,52 +942,79 @@ let parse_classbench fp =
 
 let generate_edits cb_rules =
   let drop_table = List.fold (pow 2 9 |> range_ex 0) ~init:IntMap.empty
-                     ~f:(fun acc port -> IntMap.set acc ~key:port ~data:(Random.int 1)) in
+                     ~f:(fun acc port -> IntMap.set acc ~key:port ~data:(Random.int 2)) in
   List.fold cb_rules ~init:[]
     ~f:(fun acc (_, ip_dst, _,_,_) ->
-      let in_port = Random.int (pow 2 9) in
       let out_port = Random.int (pow 2 9) in
-      match IntMap.find drop_table in_port with
-      | None -> failwith (Printf.sprintf "couldn'f find port %d in drop table" in_port)
-      | Some x ->
-         if x = 0 then
-           acc @ [("of", ([ip_dst; Exact(in_port, 9)],[out_port, 9], 1))]
-         else
-           acc @ [("of", ([ip_dst; Exact(in_port,9)],[], 0))]
+      acc @ [
+          IntMap.fold drop_table ~init:[]
+            ~f:(fun ~key ~data acc ->
+                acc @ [("of", ([ip_dst; Exact(key, 9)], [out_port, 9], data))]
+            )
+        ]
     )
+
+let generate_pipe1_edits cb_rules =
+  let drop_table = List.fold (pow 2 9 |> range_ex 0) ~init:IntMap.empty
+                     ~f:(fun acc port -> IntMap.set acc ~key:port ~data:(Random.int 2)) in
+  let ip_table =
+    List.fold cb_rules ~init:[]
+    ~f:(fun acc (_, ip_dst, _,_,_) ->
+      let out_port = Random.int (pow 2 9) in
+      acc
+      @ (if Random.int 2 = 0
+          then []
+          else let pt = Random.int (pow 2 9) in
+               [["ingress", ([Exact(pt,9)], [], IntMap.find_exn drop_table pt)]]
+        )
+      @ [[("ipv4_fwd", ([ip_dst], [out_port, 9], 0))]]
+    )
+  in
+  ip_table
     
 let of_to_pipe1 widening gas fp () =
   let gas = match gas with None -> 1000 | Some g -> g in
-  let init_no_drop = "drop" %<-% mkVInt(0,1) in
+  let init_no_drop = sequence ["drop" %<-% mkVInt(0,1); "out_port" %<-% mkVInt(0,9)]  in
+  let drop = Skip in (* Assert (Var1("drop", 1) %=% mkVInt(0,1)) (\* mkOrdered [
+                      * *     Var1("drop",1) %=% mkVInt(1,1) , Assume False
+                      * *   ; True,Skip
+                      * *   ]  *\)in *)
   let of_table =
     sequence [
         init_no_drop
       ; Apply("of"
             , [ "ipv4_dst", 32
               ; "in_port", 9]
-            , [[], "drop" %<-% mkVInt(1,1)
-              ; ["p",9], "out_port" %<-% Var1("p", 9)]
-            , Skip)
+            , [["pp",9], sequence ["out_port" %<-% Var1("pp", 9);"drop" %<-% mkVInt(0,1)]
+              ; ["p",9], sequence [ "out_port" %<-% Var1("p", 9); "drop" %<-% mkVInt(1,1)]]
+            , sequence ["out_port" %<-% mkVInt(0, 9); "drop" %<-% mkVInt(0,1)])
+      ; drop
       ] in
   let pipe =
     sequence [
         init_no_drop
       ; Apply("ingress"
             , ["in_port",9]
-            , [[], "drop" %<-% mkVInt(1,1)]
-            , Skip)
+            , [ [], "drop" %<-% mkVInt(1,1)
+              ; [], "drop" %<-% mkVInt(0,1)
+              ]
+            , "drop" %<-% mkVInt(0,1))
       ; Apply("ipv4_fwd"
             , ["ipv4_dst", 32]
-            , [["p",9], "out_port" %<-% Var1("p", 9)
-              ; [], "drop" %<-% mkVInt(1,1)
+            , [["op",9], "out_port" %<-% Var1("op", 9)
               ]
-            , Skip)
+            , "out_port" %<-% mkVInt(0,9))
+      ; drop
       ] in
   let fvs = [ "ipv4_dst", 32
             ; "in_port", 9
             ; "out_port", 9
             ; "drop", 1
             ] in
-  let logical_insertions = parse_classbench fp |> generate_edits in
-  measure ~widening ~gas ~fvs ~hints:None ~log:of_table ~phys:pipe
-    StringMap.empty StringMap.empty logical_insertions
+  let of_insertions = parse_classbench fp |> generate_edits in
+  let pipe_insertions = parse_classbench fp |> generate_pipe1_edits in
+  measure ~widening ~gas ~fvs ~hints:None ~log:pipe ~phys:of_table
+    StringMap.empty StringMap.empty pipe_insertions
+
+
+    

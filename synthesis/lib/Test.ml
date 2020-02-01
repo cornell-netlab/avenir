@@ -581,7 +581,7 @@ let%test _ =
   let edit = ("log", ([Exact (2,2)], [], 2)) in
   let phys_inst =
     StringMap.of_alist_exn [] in
-  ignore(synthesize_edit ~widening:false ~fvs:[("dst",2); ("out",2); ("x", 2)]  (Prover.solver ()) log_line phys_line log_inst phys_inst (Some edit));
+  ignore(synthesize_edit_batch ~widening:false ~fvs:[("dst",2); ("out",2); ("x", 2)]  (Prover.solver ()) log_line phys_line log_inst phys_inst [edit]);
   true
 
 (* let%test _ =
