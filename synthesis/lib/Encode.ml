@@ -77,6 +77,10 @@ let validity_bit members =
 let hit_bit members =
   string_of_memberlist members ^ "_hit()"
 
+let return_bit i =
+  "return" ^ string_of_int i
+
+
 let action_run_suffix = "_action_run()"
 
 let action_run_field members =
@@ -234,8 +238,12 @@ let lookup_string_action_exn prog ctx action_name =
   match lookup_string_exn prog ctx action_name with
   | _, Action a -> (a.body, List.map ~f:(fun (_,p) -> Parameter.(p.variable)) a.params)
   | _ -> failwith ("[TypeError] Expecting \""^ action_name ^ "\" to be an action")
-                      
-let rec dispatch prog ctx members =
+
+let get_return_value =
+  let return_val = ref 0 in
+  fun () -> return_val := !return_val + 1; !return_val
+                     
+let rec dispatch prog ctx rv members =
   match members with
   | [] -> failwith "[RuntimeException] Tried to Dispatch an empty list of names"
   | [(_,"mark_to_drop")] -> `Motley ("drop" %<-% mkVInt(1,1))
@@ -246,7 +254,7 @@ let rec dispatch prog ctx members =
 
   | [member] ->
     let act, xs = lookup_action_exn prog ctx member in
-      `Motley (encode_action ~action_data:xs prog ctx act)
+      `Motley (encode_action ~action_data:xs prog ctx rv act)
   | member :: members' ->
     let open Declaration in
     match lookup_exn prog ctx member with
@@ -258,7 +266,9 @@ let rec dispatch prog ctx members =
     | (_, Instantiation _) as inst -> `Petr4 inst
     | x -> failwith ("unimplemented" ^ Sexp.to_string (sexp_of_t x))
 
-and encode_statement prog (ctx : Declaration.t list) ((info, stmt) : Statement.t) : cmd =
+(* Returns a cmd and a bool.  False means that the command does not flip the returns bit, True means the
+cmd may or may not flip the returns bit. *)
+and encode_statement prog (ctx : Declaration.t list) (rv : int) ((info, stmt) : Statement.t) : cmd * bool =
   let open Statement in
   let unimplemented name =
     failwith ("[Unimplemented Statement " ^ name ^"] at " ^ Petr4.Info.to_string info)
@@ -267,40 +277,44 @@ and encode_statement prog (ctx : Declaration.t list) ((info, stmt) : Statement.t
   | MethodCall {func; type_args=_; args } ->
     let dispList = dispatch_list func in 
     (* unimplemented (concatMap dispList ~f:(fun x -> snd x) ~c:(fun x y -> x ^ "." ^ y) ^ "()") *)
-    begin match dispatch prog ctx dispList with
-    | `Petr4 (_,Declaration.Table t) -> encode_table prog ctx t.name t.properties
+    begin match dispatch prog ctx rv dispList with
+    | `Petr4 (_,Declaration.Table t) -> encode_table prog ctx rv t.name t.properties, true
     | `Petr4 (_,Declaration.Instantiation {typ;_}) ->
-      dispatch_direct_app prog typ args
-    | `Motley c -> c
+      dispatch_direct_app prog typ args, false
+    | `Motley c -> c, true
     | _ -> failwith "unimplemented, only know how to resolve table dispatches"
     end
   | Assignment {lhs=lhs; rhs=rhs} ->
     begin match encode_expression_to_value lhs with
-      | Var1 (f,_) -> f %<-% encode_expression_to_value rhs
+      | Var1 (f,_) -> f %<-% encode_expression_to_value rhs, false
       | _ -> failwith ("[TypeError] lhs of assignment must be a field, at " ^ Petr4.Info.to_string info)
     end
   | DirectApplication {typ; args} ->
-    dispatch_direct_app prog typ args
+    dispatch_direct_app prog typ args, false
     (* unimplemented ("DirectApplication" ^ Sexp.to_string ([%sexp_of: Statement.pre_t] stmt)) *)
   | Conditional {cond; tru; fls} ->
-    let fls_case = match fls with
-      | None -> []
-      | Some fls -> [ !%(encode_expression_to_test cond), encode_statement prog ctx fls ]
+    let fls_case, fls_b = match fls with
+      | None -> [], false
+      | Some fls ->
+        let stmt, b1 = encode_statement prog ctx rv fls in
+        [ !%(encode_expression_to_test cond), stmt ], b1
     in
-    [ encode_expression_to_test cond, encode_statement prog ctx tru] @ fls_case
-    |> mkSelect Partial
+    let expr_to_test = encode_expression_to_test cond in
+    let tr_stmt, tr_b = encode_statement prog ctx rv tru in
+    mkSelect Partial ([ expr_to_test, tr_stmt] @ fls_case), fls_b || tr_b
   | BlockStatement {block} ->
-    encode_block prog ctx block
+    encode_block prog ctx rv block, true
   | Exit ->
-    Assert False (* TODO :: is this right? *)
+    Assert False, false
   | EmptyStatement ->
-    Skip
+    Skip, false
   | Return {expr} ->
     (match expr with
-      | None -> Assume False (* TODO: We ignore the rest of the control.  Is this a correct way to do that?  Worried we might ignore too much*)
+      | None ->
+        Assign(return_bit rv, mkVInt(1, 1)), true
       | _ -> unimplemented "Return")
   | Switch {expr; cases} ->
-    mkOrdered (encode_switch prog ctx expr cases) 
+    mkOrdered (encode_switch prog ctx expr rv cases), true
   | DeclarationStatement _ ->
     unimplemented "DeclarationStatement"
 
@@ -320,13 +334,15 @@ and dispatch_control (Program(top_decls) as prog : program) (ident : P4String.t)
   | Some (_, Control c) ->
     (match List.zip (c.params) args with
       | Ok param_args ->
+        let rv = get_return_value () in
+        let assign_rv = Assign(return_bit rv, mkVInt(1, 1)) in
         let b = List.concat_map param_args ~f:assign_param in
         let r = List.concat_map param_args ~f:return_args in
-        let added_b = List.fold b ~init:(encode_control prog c.locals c.apply)
+        let added_b = List.fold b ~init:(encode_control prog c.locals rv c.apply)
                       ~f:(fun assgn prog -> prog %:% assgn ) in
         let added_r = List.fold r ~init:(added_b)
                       ~f:(fun assgn prog -> assgn %:% prog ) in
-        added_r
+        assign_rv %:% added_r
       | Unequal_lengths -> failwith "Parameters and arguments don't match")
   | Some (_, ExternFunction _) -> Skip
   | Some _ -> failwith ("Found a module called " ^ snd ident ^ ", but it wasn't a control module")
@@ -370,23 +386,29 @@ and return_args (param_arg : Parameter.t * Argument.t) =
       end
     | _ -> failwith "Unhandled argument"
 
-and encode_block : program -> Declaration.t list ->  Block.t -> cmd =
+and encode_block : program -> Declaration.t list -> int -> Block.t -> cmd =
   encode_action ~action_data:[]
-    
+
 (** Takes a block representing an action and the action_data variables, replacing them with controller holes *)
-and encode_action prog (ctx : Declaration.t list) ( (_,act) : Block.t ) ~action_data : cmd =
+and encode_action prog (ctx : Declaration.t list) (rv:int) ( (_,act) : Block.t ) ~action_data : cmd =
  let open Block in
-  List.fold act.statements ~init:Skip
-    ~f:(fun rst stmt -> rst %:% encode_statement prog ctx stmt)
+  List.fold act.statements ~init:(Skip, false)
+    ~f:(fun (rst, in_b) stmt ->
+          let tstmt, ret_b = encode_statement prog ctx rv stmt in
+          let tstmt2 = if in_b
+                          then mkPartial [mkEq (Var1(return_bit rv, 1)) (mkVInt(0, 1)), tstmt]
+                          else tstmt in
+          (rst %:% tstmt2, ret_b))
+  |> fst
   |> holify (List.map ~f:snd action_data)
 
-and encode_control prog (ctx : Declaration.t list) ( body : Block.t ) =
-  encode_block prog ctx body
+and encode_control prog (ctx : Declaration.t list) (rv:int) ( body : Block.t ) =
+  encode_block prog ctx rv body
 
 
-and encode_switch prog (ctx : Declaration.t list) (expr : Expression.t) ( cases : Statement.switch_case list) : (test * cmd) list =
+and encode_switch prog (ctx : Declaration.t list) (expr : Expression.t) (rv : int) ( cases : Statement.switch_case list) : (test * cmd) list =
   let e, acs = encode_switch_expr prog ctx expr in
-  (List.fold_map cases ~f:(encode_switch_case prog ctx e acs) ~init:True)
+  (List.fold_map cases ~f:(encode_switch_case prog ctx e acs rv) ~init:True)
   |> snd |> List.filter_map ~f:(fun x -> x)
 
 
@@ -407,7 +429,7 @@ and encode_switch_expr prog (ctx : Declaration.t list) (e : Expression.t) : expr
 
 
  and encode_switch_case prog (ctx : Declaration.t list) (expr : expr1)
-                      (ts : Table.action_ref list) (fall_test : test)
+                      (ts : Table.action_ref list) (rv : int) (fall_test : test)
                       (case : Statement.switch_case) : test * ((test * cmd) option) =
     let open Statement in
     match snd case with
@@ -416,7 +438,7 @@ and encode_switch_expr prog (ctx : Declaration.t list) (e : Expression.t) : expr
           | Default -> failwith "Default in switch"
           | Name lbl_name ->
             let act_i = List.findi ts ~f:(fun _ a -> (snd (snd a).name) = snd lbl_name) in
-            let block = encode_block prog ctx code in
+            let block = encode_block prog ctx rv code in
             begin match act_i with
               | Some (i, _) ->
                 let test = Or(fall_test, Eq(expr, mkVInt(i + 1, -1))) in
@@ -435,10 +457,13 @@ and encode_program (Program(top_decls) as prog : program ) =
   let open Declaration in
   match List.find (get_decls top_decls) ~f:(fun d -> snd (Declaration.name d) = "MyIngress") with
   | None -> failwith "Could not find control module MyIngress"
-  | Some (_, Control c) -> encode_control prog c.locals c.apply
+  | Some (_, Control c) ->
+    let rv = get_return_value () in
+    let assign_rv = Assign(return_bit rv, mkVInt(1, 1)) in
+    assign_rv %:% encode_control prog c.locals rv c.apply
   | Some _ -> failwith "Found a module called MyIngress, but it wasn't a control module"
   
-and encode_table prog (ctx : Declaration.t list) (name : P4String.t) (props : Table.property list) : cmd =
+and encode_table prog (ctx : Declaration.t list) (rv : int) (name : P4String.t) (props : Table.property list) : cmd =
   let open Table in
   let p4keys, p4actions, p4customs = List.fold_left props ~init:([], [], [])
       ~f:(fun (acc_keys, acc_actions, acc_customs) prop ->
@@ -454,7 +479,7 @@ and encode_table prog (ctx : Declaration.t list) (name : P4String.t) (props : Ta
     let (body, action_data) = lookup_action_exn prog ctx a.name in
     (* Set up an action run variable so we can use it to figure out which action ran in switch statements *)
     let set_action_run = Assign(snd name ^ action_run_suffix, mkVInt(i + 1, 1)) in
-    List.map action_data ~f:(fun (_, ad) -> ad, -1), set_action_run %:% encode_action prog ctx body ~action_data
+    List.map action_data ~f:(fun (_, ad) -> ad, -1), set_action_run %:% encode_action prog ctx rv body ~action_data
   in
   let action_cmds = List.mapi p4actions ~f:lookup_and_encode_action in
 
@@ -464,7 +489,7 @@ and encode_table prog (ctx : Declaration.t list) (name : P4String.t) (props : Ta
                       | Some da ->
                         let da_name = string_of_memberlist (dispatch_list da) in
                         let (def_act_body, action_data) = lookup_string_action_exn prog ctx da_name in
-                          encode_action prog ctx def_act_body ~action_data
+                          encode_action prog ctx rv def_act_body ~action_data
                       | None -> Skip
   in
 
