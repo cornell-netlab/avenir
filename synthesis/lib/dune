@@ -5,6 +5,6 @@
   (libraries core shell z3 petr4 ANSITerminal extlib)
   (virtual_deps menhir)
   (inline_tests)
-  (preprocess (pps ppx_jane ppx_inline_test ppx_deriving_yojson))
+  (preprocess (pps ppx_jane ppx_inline_test ppx_deriving_yojson ppx_deriving.std open))
   (ocamlc_flags -custom -cclib -lstdc++)
   (ocamlopt_flags -cclib -lstdc++))

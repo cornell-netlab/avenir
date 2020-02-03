@@ -443,8 +443,8 @@ let equivalent eq_fvs l p =
    *    (gl %&% gp %&% (!%bl) %&% (!%bl) %&% in_eq) %=>% out_eq
    * | _, _ -> *)
      (* Printf.printf "============ NORMAL VC =========\n%!"; *)
-  ((gl %&% gp %&% (!%bl) %&% (!%bp) %&% in_eq) %=>% out_eq)
-  %&% (bl %<=>% bp)
+  ((gl %&% gp (*%&% (!%bl) %&% (!%bp)*) %&% in_eq) %=>% out_eq)
+  (* %&% (bl %<=>% bp) *)
     
   
 

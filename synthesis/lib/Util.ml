@@ -83,3 +83,25 @@ let rec range_ex lo hi =
 
 let inj_l x y = (y, x)
 let inj_r x y = (x, y)                  
+
+
+(*===========================================================================*)
+(* Graphviz                                                                  *)
+(*===========================================================================*)
+
+let compile_dot ?(format="pdf") ?(engine="dot") ?(title=engine) data : string =
+  let output_file = Filename.temp_file (title ^ "_") ("." ^ format) in
+  let to_dot = Unix.open_process_out (sprintf "dot -T%s -o %s" format output_file) in
+  Out_channel.output_string to_dot data;
+  Out_channel.close to_dot;
+  ignore (Unix.close_process_out to_dot);
+  output_file
+
+(* let show_dot ?format ?title ?engine data : unit =
+ *   compile_dot ?format ?title ?engine data
+ *   |> Open.in_default_app
+ *   |> ignore
+ * 
+ * let show_dot_file ?format ?title ?engine file : unit =
+ *   In_channel.read_all file
+ *   |> show_dot ?format ?title ?engine                   *)

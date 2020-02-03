@@ -119,10 +119,13 @@ let un_SSA (pkt : t) : t =
     ~f:(fun ~key ~data acc_pkt ->
       match String.rsplit2 key ~on:'$' with
       | None ->
-         StringMap.set acc_pkt ~key ~data
+         Printf.printf "Setting %s\n" key;
+         StringMap.set acc_pkt ~key:(key) ~data
       | Some (key', i) ->
          if int_of_string i = 0
-         then StringMap.set acc_pkt ~key:key' ~data
+         then
+           (Printf.printf "Setting %s\n" key';
+           StringMap.set acc_pkt ~key:(key') ~data)
          else acc_pkt
     )
                  
