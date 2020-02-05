@@ -112,7 +112,7 @@ let satFD r dom rng : bool=
   let rows = List.zip_exn r.keys r.actions in
   does_induce_function (proj rows dom) (proj rows rng)
   
-let eval_acts_rel (fields : string list) (values_acts : (key_match list * action_seq) list) =
+let eval_acts_rel (fields : string list) (values_acts : (key_match list * action_seq) list) : Packet.t list =
   List.map values_acts
     ~f:(fun (values, acts) ->
       let _ = Printf.printf "%d actions \n%!" (List.length acts) in

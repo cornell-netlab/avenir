@@ -4,6 +4,7 @@ open Util
 open Manip
 open Synthesis
 open Prover
+open Tables
 
 let rec map_holes_expr e ~f =
   let binop op e1 e2 = op (map_holes_expr e1 ~f) (map_holes_expr e2 ~f) in
@@ -112,7 +113,7 @@ let project keys idxs ms =
       | None ->
          begin match List.nth keys k with
          | Some (_, sz) ->
-            acc @ [Between(0,pow 2 sz,sz)]
+            acc @ [Match.Between(0,pow 2 sz,sz)]
          | None -> Printf.sprintf "couldn't find %d in list of length %d" k (List.length keys)
                    |> failwith
          end
@@ -122,9 +123,9 @@ let project keys idxs ms =
 let project_classifier table keys table_keys rows =
   let projection = common_indices keys table_keys in
   List.mapi rows ~f:(fun i (matches,_,_) ->
-      Printf.printf "Projecting matches %s\n%!" (string_of_matches matches);
+      Printf.printf "Projecting matches %s\n%!" (Match.list_to_string matches);
       project keys projection matches
-      |> encode_matches keys
+      |> Match.list_to_test keys
       (* |> mkAnd (Hole1(Printf.sprintf "?keep_%d_%s" i table,1) %=% mkVInt(1,1)) *)
     )
   (* |> List.map ~f:(fun t ->
@@ -161,7 +162,7 @@ let populate_action_table name keys actions holes : cmd =
            
 
 
-let rec instrument_entries (table_keys : (string * int) list) (rows:row list) (action_table : string)
+let rec instrument_entries (table_keys : (string * int) list) (rows : Row.t list) (action_table : string)
           (pipeline : cmd) (holes : int StringMap.t) : cmd * (int StringMap.t)   =
   match pipeline with
   | Skip -> (Skip, holes)
@@ -187,7 +188,7 @@ let rec instrument_entries (table_keys : (string * int) list) (rows:row list) (a
                     ~f:(fun (ss,holes) test ->
                       Printf.printf "freshening entry %s -> %s\n%!" (string_of_test test) (string_of_cmd act);
                       let act', holes' = holify (data>>|fst) act
-                                         |> Fun.flip freshen_holes holes in
+                                         |> flip freshen_holes holes in
                       (ss @ [test, act'], holes'))
             ) in
        let default', holes' = freshen_holes default holes in 
@@ -253,7 +254,7 @@ let populate one_big_table fvs physical_pipeline physical_check_name logical_row
        sequence [
            "drop"%<-%mkVInt(0,1);
            "outport"%<-%mkVInt(0,9);
-           (apply_inst `NoHoles `Exact log_inst one_big_table |> fst) ]
+           (Instance.apply `NoHoles `Exact log_inst one_big_table |> fst) ]
      in
      begin match check (Prover.solver()) `Sat (equivalent fvs phys_instrumented log_populated) with
      | None, d ->

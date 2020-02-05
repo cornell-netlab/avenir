@@ -2,6 +2,7 @@ open Core
 open Ast
 open Util
 open Manip
+open Tables
 
 let rec eval_expr1 (pkt_loc : Packet.located) ( e : expr1 ) : value1 =
   let binop op e e' = op (eval_expr1 pkt_loc e) (eval_expr1 pkt_loc e') in
@@ -61,64 +62,6 @@ let rec find_match ?idx:(idx = 0) pkt_loc ss ~default:default =
        (cond, action, idx)
      else
        (find_match ~idx:(idx+1) pkt_loc rest ~default)
-
-let rec trace_eval ?gas:(gas=10) (cmd : cmd) (pkt_loc : Packet.located) : (Packet.located * cmd) option =
-  (* Printf.printf "\n###TRACE EVAL\nPROGRAM:\n%s\n\tPACKET: %s\n\tLOCATION: %s\n%!"
-   *   (string_of_cmd cmd)
-   *   (Packet.string_of_packet (fst pkt_loc))
-   *   (match snd pkt_loc with
-   *    | None -> "None"
-   *    | Some l -> string_of_int l); *)
-  let (pkt, loc_opt) = pkt_loc in
-  if gas = 0
-  then (Printf.printf "========OUT OF EVAL GAS============\n"; None)
-  else match cmd with
-       | Skip ->
-          Some (pkt_loc, Skip)
-       | Assign (f, e) ->
-          Some ((Packet.set_field_of_expr1 pkt f e, loc_opt), Assign (f, e))
-       | Assert (t) ->
-          if check_test t pkt_loc then
-            Some (pkt_loc, Assert t)
-          else
-            failwith ("AssertionFailure: " ^ string_of_test t ^ "was false")
-       | Assume b ->
-          Some (pkt_loc, Assume b)
-       | Seq (firstdo, thendo) ->
-          let open Option in
-          trace_eval ~gas firstdo pkt_loc >>= fun (pkt_loc', trace') ->
-          trace_eval ~gas thendo pkt_loc' >>= fun (pkt_loc'', trace'') ->
-          Some (pkt_loc'', trace' %:% trace'')
-       | Select (styp, selects) ->
-          let default _ = match styp with
-            | Total   -> failwith "SelectionError: Could not find match in [if total]"
-            | Partial
-              | Ordered ->
-               Printf.printf "[EVAL (%d)] Skipping selection, no match for %s\n"
-                 (gas)
-                 (Packet.string__packet pkt);
-               (True, Skip, List.length selects)
-          in
-          let (t, a, _) = find_match pkt_loc selects ~default in
-          let open Option in 
-          trace_eval ~gas a pkt_loc
-          >>| fun (pkt_loc',  c) ->
-          (pkt_loc', Assume t %:% a %:% c)
-
-       | While ( _ , _ ) ->
-          failwith "Cannot process while loops"
-          (* if check_test cond pkt_loc then
-           *   trace_eval ~gas:(gas-1) (Seq(body,cmd)) pkt_loc
-           * else 
-           *   Some (pkt_loc, []) *)
-       | Apply _ -> failwith "Cannot Evaluate table -- need configuration"
-
-
-let encode_match k m =
-  match m with 
-  | Exact (x,sz) -> (Var1 k %=% mkVInt(x,sz))
-  | Between (lo, hi,sz) -> (mkVInt(lo,sz) %<=% Var1 k) %&% (Var1 k %<=% mkVInt(hi,sz))
-                                 
 
 let rec wide_eval wide (e : expr1) =
   match e with
@@ -189,6 +132,7 @@ let widening_match pkt wide matches =
   List.fold matches
     ~init:wide
     ~f:(fun acc ((key,_), m)  ->
+      let open Match in
       match m with 
       | Exact (v, sz) ->
          StringMap.set acc ~key ~data:(v,v,sz)
@@ -200,8 +144,24 @@ let widening_match pkt wide matches =
                 (max lo lo', min hi hi', sz)
            )
     )
+
+let action_to_execute pkt wide keys (rows : Row.t list ) =
+  List.fold rows ~init:(True,None,None)
+    ~f:(fun rst (matches, data, action) ->
+      match rst  with
+      | (missed, _, None) -> 
+         let cond = Match.list_to_test keys matches in
+         if check_test cond pkt
+         then
+           (missed %&% cond, widening_match pkt wide (List.zip_exn keys matches) |> Some, Some (data, action))
+         else
+           (* let _ = Printf.printf "%s not in  %s" (Packet.string__packet (fst pkt_loc)) (string_of_test cond)   in *)
+           (missed %&% !%(cond), Some wide, None)
+      | (_, _, _) -> rst
+    )
+    
                                                              
-let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : instance) ~wide(* :(wide = StringMap.empty) *) (pkt_loc : Packet.located)
+let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(wide = StringMap.empty) *) (pkt_loc : Packet.located)
         : (Packet.located * (int * int * int) StringMap.t * cmd * ((int * size) list * int) StringMap.t) =
   let (pkt, loc_opt) = pkt_loc in
   if gas = 0
@@ -214,12 +174,12 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : instance) ~wide(* :(wi
            widening_assignment wide f e,
            cmd, StringMap.empty)
        | Assert t
-          (* failwith "Asserts are deprecated" *)
-          (* if check_test t pkt_loc then
-           *   (pkt_loc, widening_test pkt wide t, cmd, StringMap.empty)
-           * else
-           *   failwith ("AssertionFailure: " ^ string_of_test t ^ "was false") *)
-       | Assume t ->
+         (* failwith "Asserts are deprecated" *)
+         (* if check_test t pkt_loc then
+          *   (pkt_loc, widening_test pkt wide t, cmd, StringMap.empty)
+          * else
+          *   failwith ("AssertionFailure: " ^ string_of_test t ^ "was false") *)
+         | Assume t ->
           (* failwith "Raw assumes are deprecated" *)
           (pkt_loc, widening_test pkt wide t, cmd, StringMap.empty)
        | Seq (firstdo, thendo) ->
@@ -247,29 +207,13 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : instance) ~wide(* :(wi
           trace_eval_inst ~gas ~wide a inst pkt_loc
 
        | Apply (name, keys, actions, default) ->
-          let action_to_execute wide (rows : row list ) =
-            List.fold rows ~init:(True,None,None)
-              ~f:(fun rst (matches, data, action) ->
-                match rst  with
-                | (missed, _, None) -> 
-                   let cond = List.fold2_exn keys matches ~init:True ~f:(fun acc k m ->
-                                  acc %&% encode_match k m
-                                ) in
-                   if check_test cond pkt_loc
-                   then
-                     (missed %&% cond, widening_match pkt wide (List.zip_exn keys matches) |> Some, Some (data, action))
-                   else
-                     (* let _ = Printf.printf "%s not in  %s" (Packet.string__packet (fst pkt_loc)) (string_of_test cond)   in *)
-                     (missed %&% !%(cond), Some wide, None)
-                | (_, _, _) -> rst
-              )
-          in
+
           begin match StringMap.find inst name with
           | None -> trace_eval_inst ~gas ~wide default inst pkt_loc 
           | Some rules ->
              begin
                (* Printf.printf "Widening a match! %s\n" (Packet.test_of_wide wide |> string_of_test); *)
-               match action_to_execute wide rules with
+               match action_to_execute pkt_loc wide keys rules with
                | (cond, Some wide, Some (data, aid)) ->
                   (* Printf.printf "HIT A RULE\n%!"; *)
                   let pkt', wide', cmd', trace = trace_eval_inst ~wide (List.nth_exn actions aid |> bind_action_data data) inst pkt_loc in
@@ -282,25 +226,14 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : instance) ~wide(* :(wi
           end
        | While ( _ , _ ) ->
           failwith "Cannot process while loops"
-          (* if check_test cond pkt_loc then
-           *   trace_eval ~gas:(gas-1) (Seq(body,cmd)) pkt_loc
-           * else 
-           *   Some (pkt_loc, []) *)
+                   (* if check_test cond pkt_loc then
+                    *   trace_eval ~gas:(gas-1) (Seq(body,cmd)) pkt_loc
+                    * else 
+                    *   Some (pkt_loc, []) *)
 
 
 
-
-
-
-
-
-
-
-
-
-
-                             
+                 
 let eval_act (act : cmd) (pkt : Packet.t) : Packet.t =
-  match trace_eval act (pkt, None) with
-  | None -> failwith "Ran out of gas -- but it's an action!?"
-  | Some ((pkt, _), _) -> pkt
+  match trace_eval_inst act Instance.empty ~wide:StringMap.empty (pkt, None) with
+  | ((pkt, _), _ ,_ ,_) -> pkt

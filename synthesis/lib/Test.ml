@@ -1,10 +1,11 @@
 open Core
 open Ast
 open Manip
- open Packet
+open Packet
 open Semantics
 open Synthesis
 open Prover
+open Tables
 
 let parse s = Parser.main Lexer.tokens (Lexing.from_string s)
 
@@ -377,9 +378,8 @@ let test_trace p_string expected_trace =
   let p = parse p_string in
   let pkt = Packet.(set_field empty "pkt" (mkInt (100,8))) in
   let loc = Some 0 in
-  match trace_eval p (pkt, loc) with
-  | None -> false
-  | Some (_, tr) -> tr = expected_trace
+  match trace_eval_inst p Instance.empty ~wide:StringMap.empty (pkt, loc) with
+  | _, tr,_ ,_ -> tr = expected_trace
   
 
 (* let%test _ = test_trace
@@ -578,7 +578,7 @@ let%test _ =
   let log_inst =
     StringMap.of_alist_exn [ ]
   in
-  let edit = ("log", ([Exact (2,2)], [], 2)) in
+  let edit = ("log", ([Match.Exact (2,2)], [], 2)) in
   let phys_inst =
     StringMap.of_alist_exn [] in
   ignore(synthesize_edit_batch ~widening:false ~fvs:[("dst",2); ("out",2); ("x", 2)]  (Prover.solver ()) log_line phys_line log_inst phys_inst [edit]);

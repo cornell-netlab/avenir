@@ -4,35 +4,8 @@ open Util
 let enable_smart_constructors = true
 
 type size = int
-              
-type match_expr =
-  | Exact of int * size
-  | Between of int * int * size 
 
-let string_of_match m =
-  match m with 
-  | Exact (i,s) -> Printf.sprintf "%d#%d" i s
-  | Between (lo,hi,s) -> Printf.sprintf "[%d,%d]#%d" lo hi s
-
-let string_of_matches : match_expr list -> string =
-  List.fold ~init:"" ~f:(fun acc m -> Printf.sprintf "%s %s" acc (string_of_match m))
-                                       
-
-type action_data = (int * size) list
-type row = match_expr list * action_data * int
-let string_of_row (mtchs, ad, actid) =
-  Printf.sprintf "%s   ---(%s)---> %d"
-    (List.fold mtchs ~init:"" ~f:(fun acc m -> Printf.sprintf "%s, %s" acc (string_of_match m)))
-    (List.fold ad ~init:"" ~f:(fun acc (d,_) -> Printf.sprintf "%s, %d" acc d))
-    actid
-
-type instance = row list StringMap.t
-
-type edit = string * row
-let string_of_edit (nm,(row) : edit) =
-  Printf.sprintf "%s <++ %s" nm (string_of_row row)
-
-                 
+       
 type value1 =
   | Int of (int * size)
   | VTuple of (value1 list)
@@ -872,3 +845,23 @@ and holify_cmd holes c : cmd=
 let holify holes c =  holify_cmd holes c
         
 let sequence = List.reduce_exn ~f:(%:%)
+
+
+let rec get_schema_of_table name phys =
+  match phys with
+  | Skip 
+    | Assume _
+    | Assert _
+    | Assign _
+    -> None
+  | Seq (c1, c2) ->
+     begin match get_schema_of_table name c1 with
+     | None -> get_schema_of_table name c2
+     | Some ks -> Some ks
+     end
+  | Select (_, cs) ->
+     List.find_map cs ~f:(fun (_, c) -> get_schema_of_table name c)
+  | Apply(name', ks, acts, def)
+    -> if name = name' then Some (ks,acts,def) else None
+  | While (_, c) -> get_schema_of_table name c
+                 

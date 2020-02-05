@@ -56,25 +56,18 @@ let rec init_field_to_value_in (values : value1 list) pkt (f, sz) =
      else
        init_field_to_value_in (List.filter values ~f:(fun x -> x <> vi)) pkt (f, sz)
 
-let to_test ?fvs:(fvs = []) ~random_fill (pkt : t) =
-  (* Printf.printf "Testifying %s\n%!" (string__packet pkt); *)
-
+let to_test ?fvs:(fvs = []) ?random_fill:(random_fill=false) (pkt : t) =
   List.fold fvs ~init:True
     ~f:(fun acc (x,sz) ->
-      match StringMap.find pkt x with
-      | None -> if random_fill then
-                  acc %&% (Var1(x,sz) %=% mkVInt(Random.int (pow 2 sz),sz))
-                else
-                  acc
-      | Some v -> Var1(x, sz) %=% Value1(v))
-                  
-  
-  (* StringMap.fold pkt ~init:True
-   *   ~f:(fun ~key ~data test ->
-   *     if key <> "loc" && List.exists fvs ~f:(fun (x,_) -> key = x)then
-   *       Var1 (key,size_of_value1 data) %=% Value1 data
-   *       %&% test
-   *     else ( test )) *)
+      acc %&% (
+          match StringMap.find pkt x with
+          | None ->
+             if random_fill then
+               Var1(x,sz) %=% mkVInt(Random.int (pow 2 sz),sz)
+             else                  
+               True
+          | Some v ->
+             Var1(x, sz) %=% Value1(v)))
 
 
 let test_of_wide ?fvs:(fvs = []) wide =

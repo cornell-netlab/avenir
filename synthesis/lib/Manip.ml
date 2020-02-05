@@ -540,7 +540,7 @@ let rec wp_paths ~no_negations c phi : (cmd * test) list =
   | Select (Total, cmds) ->
      let open List in
      (cmds >>| fun (t,c) -> Assert t %:% c)
-     >>= Fun.flip (wp_paths ~no_negations) phi
+     >>= flip (wp_paths ~no_negations) phi
 
                   
   (* doesn't require at any guard to be true *)
@@ -548,7 +548,7 @@ let rec wp_paths ~no_negations c phi : (cmd * test) list =
   | Select (Partial, cmds) ->
      let open List in
      (cmds >>| fun (t,c) -> Assume t %:% c)
-     >>= Fun.flip (wp_paths ~no_negations) phi
+     >>= flip (wp_paths ~no_negations) phi
                   
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
@@ -564,15 +564,89 @@ let rec wp_paths ~no_negations c phi : (cmd * test) list =
 
   | Apply (_, _, acts, dflt) ->
      let open List in
-     (dflt :: List.map ~f:(fun (sc, a) -> holify (List.map sc ~f:fst) a) acts) >>= Fun.flip (wp_paths ~no_negations) phi
+     (dflt :: List.map ~f:(fun (sc, a) -> holify (List.map sc ~f:fst) a) acts) >>= flip (wp_paths ~no_negations) phi
   | While _ ->
      failwith "[Error] loops must be unrolled\n%!"
 
-
-              
 let bind_action_data vals (scope, cmd) : cmd =
   let holes = List.map scope fst in
   List.fold2_exn holes vals
     ~init:StringMap.empty
     ~f:(fun acc x v -> StringMap.set acc ~key:x ~data:(Int v))
   |> fill_holes (holify holes cmd) 
+
+
+let rec fixup_val (model : value1 StringMap.t) (e : expr1)  : expr1 =
+  (* let _ = Printf.printf "FIXUP\n%!" in *)
+  let binop op e e' = op (fixup_val model e) (fixup_val model e') in
+  match e with
+  | Value1 _ | Var1 _ -> e
+  | Hole1 (h,sz) -> 
+     begin match StringMap.find model h with
+     | None -> e
+     | Some v -> let sz' = size_of_value1 v in
+                 let strv = string_of_value1 v in
+                 (if sz <> sz' then
+                    (Printf.printf "[Warning] replacing %s#%d with %s, \
+                                    but the sizes may be different, \
+                                    taking the size of %s to be ground \
+                                    truth\n%!" h sz strv strv));
+                 Value1 v
+     end
+  | Plus  (e, e') -> binop mkPlus  e e'
+  | Times (e, e') -> binop mkTimes e e'
+  | Minus (e, e') -> binop mkMinus e e'
+  | Tuple es -> List.map es ~f:(fixup_val model) |> mkTuple
+
+let rec fixup_val2 (model : value1 StringMap.t) (set : expr2) : expr2 =
+  match set with
+  | Value2 _ | Var2 _ -> set
+  | Hole2 _ -> failwith "Second-order holes not supported"
+  | Single e -> Single (fixup_val model e)
+  | Union (s,s') -> mkUnion (fixup_val2 model s) (fixup_val2 model s')
+
+let rec fixup_test (model : value1 StringMap.t) (t : test) : test =
+  let binop ctor call left right = ctor (call left) (call right) in 
+  match t with
+  | True | False -> t
+  | Neg p -> mkNeg (fixup_test model p)
+  | And  (p, q) -> binop (%&%)   (fixup_test model) p q
+  | Or   (p, q) -> binop (%+%)   (fixup_test model) p q
+  | Impl (p, q) -> binop (%=>%)  (fixup_test model) p q
+  | Iff  (p, q) -> binop (%<=>%) (fixup_test model) p q
+  | Eq (v, w) -> binop (%=%)  (fixup_val model) v w
+  | Le (v, w) -> binop (%<=%) (fixup_val model) v w
+  | Member(v,set) -> mkMember (fixup_val model v) (fixup_val2 model set)
+
+let rec fixup_selects (model : value1 StringMap.t) (es : (test * cmd) list) =
+  match es with
+  | [] -> []
+  | (cond, act)::es' ->
+    let cond' = fixup_test model cond in
+    let act' = fixup act model in
+    (* Printf.printf "  [fixup] replacing %s with %s\n%!"
+     *   (string_of_test cond) (string_of_test cond');
+     * Printf.printf "  [fixup] replacing %s with %s\n%!" *)
+      (* (string_of_cmd act) (string_of_cmd act'); *)
+    (cond', act') :: (
+      if cond = cond' && act = act' then
+        fixup_selects model es'
+      else
+        (cond, act) :: fixup_selects model es'
+    )    
+and fixup (real:cmd) (model : value1 StringMap.t) : cmd =
+  (* Printf.printf "FIXUP WITH MODEL: %s\n%!\n" (string_of_map model); *)
+  match real with
+  | Skip -> Skip
+  | Assign (f, v) -> Assign(f, fixup_val model v)
+  | Assert t -> Assert (fixup_test model t)
+  | Assume t -> Assume (fixup_test model t)
+  | Seq (p, q) -> Seq (fixup p model, fixup q model)
+  | While (cond, body) -> While (fixup_test model cond, fixup body model)
+  | Select (styp,cmds) -> fixup_selects model cmds |> mkSelect styp
+  | Apply (name, keys, acts, dflt)
+    -> Apply (name
+            , keys
+            , List.map acts ~f:(fun (data, a) -> (data, fixup a model))
+            , fixup dflt model)
+       

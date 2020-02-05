@@ -84,6 +84,9 @@ let rec range_ex lo hi =
 let inj_l x y = (y, x)
 let inj_r x y = (x, y)                  
 
+let flip f x y = f y x
+
+let off_by_one i j =  max i j - min i j = 1                   
 
 (*===========================================================================*)
 (* Graphviz                                                                  *)

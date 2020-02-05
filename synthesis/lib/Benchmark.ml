@@ -3,6 +3,7 @@ open Ast
 open Synthesis
 open Util
 open Packet
+open Tables
 
 module IntMap = Map.Make(Int)
 
@@ -20,7 +21,7 @@ let measure ~widening ~gas ~fvs ~hints ~log ~phys initial_linst initial_pinst in
          synthesize_edit_batch ~widening ~gas ~fvs ~hints ~iter:i (Prover.solver ()) log phys linst pinst edit in
        Printf.printf "=== DONE=================================\n%!";
        (i, totalt, checkt, checkn, searcht, searchn, wpt,lwpt,pwpt, sizes)
-       :: run_experiment (i + 1) edits (apply_edits linst edit) pinst' in
+       :: run_experiment (i + 1) edits (Instance.update_list linst edit) pinst' in
 
   let data = run_experiment 0 insertions initial_linst initial_pinst in
   let mean ds = List.fold ds ~init:0 ~f:((+)) / List.length ds in
@@ -83,14 +84,14 @@ let rec generate_n_insertions varsize length n avail_tables maxes =
         else
           let (max', mtch) =
             if Random.int 6 < 1 then
-              (max_i + 1, Exact (max_i, varsize))
+              (max_i + 1, Match.Exact (max_i, varsize))
             else
               let lo = max_i in
               let hi = min (lo + Random.int 3) (pow 2 varsize - 1) in
               if lo = hi then
-                (hi + 1, Exact (hi, varsize))
+                (hi + 1, Match.Exact (hi, varsize))
               else
-                (hi + 1, Between (lo, hi, varsize))
+                (hi + 1, Match.Between (lo, hi, varsize))
           in
           let maxes' = StringMap.set maxes ~key:(tbl i) ~data:max' in
           let act_data = (Random.int (pow 2 varsize),varsize) in
@@ -133,8 +134,8 @@ let reorder_benchmark varsize length max_inserts widening =
   in
   let fvs = range_ex 1 (length + 1)
             |> List.map ~f:(fun i ->
-                   [("k_" ^tbl i, 32)
-                   ; ("x_" ^tbl i, 32)
+                   [("k_" ^tbl i, varsize)
+                   ; ("x_" ^tbl i, varsize)
                        (* ; ("?ActIn"^tbl i, 8) *)
                  ])
             |> List.join
@@ -647,7 +648,7 @@ let basic_onf_ipv4 _ =
     synthesize_edit_batch ~gas ~iter ~fvs p
       logical
       physical
-      StringMap.(set empty ~key:"next" ~data:[[Exact (1,32)], [(1,9)],0])
+      StringMap.(set empty ~key:"next" ~data:[[Match.Exact (1,32)], [(1,9)],0])
       StringMap.(set empty ~key:"l3_fwd" ~data:[])
       [("ipv4", ( [Between (0,20,32)], [(1,32)],0))]
 
@@ -695,9 +696,9 @@ let running_example gas widening =
     (Prover.solver ())
     logical
     physical
-    (StringMap.of_alist_exn [("src_table", [([Exact (0,2)], [1,2], 0)
-                                           ;([Exact (1,2)], [2,2], 1)])
-                           ; ("dst_table", [([Exact (0,2)], [1,2], 0)])
+    (StringMap.of_alist_exn [("src_table", [([Match.Exact (0,2)], [1,2], 0)
+                                           ;([Match.Exact (1,2)], [2,2], 1)])
+                           ; ("dst_table", [([Match.Exact (0,2)], [1,2], 0)])
     ])
     StringMap.empty
     [("dst_table", ([Exact (1,2)], [2,2], 0))]
@@ -869,11 +870,11 @@ let onf_representative gas widening =
     (init_metadata %:% logical)
     (init_metadata %:% physical)
     (StringMap.of_alist_exn
-       [ ("my_station_table", [ ([Between(0,pow 2 9,9); Between(0,pow 2 48,48); Between(0, pow 2 16, 16)], [2, 2], 0 ) ])
-       ; ("ipv4_dst", [([Exact(1, 32)], [1,32], 0)])
+       [ ("my_station_table", [ ([Match.Between(0,pow 2 9,9); Match.Between(0,pow 2 48,48); Match.Between(0, pow 2 16, 16)], [2, 2], 0 ) ])
+       ; ("ipv4_dst", [([Match.Exact(1, 32)], [1,32], 0)])
     ])
     StringMap.empty
-    [("next", ([Exact(1,32)], [1,9], 0))]
+    [("next", ([Match.Exact(1,32)], [1,9], 0))]
 
 
 
@@ -909,9 +910,9 @@ let parse_ip_mask str =
   let lo_int = to_int lo in
   let hi_int = to_int hi in
   if lo_int = hi_int then
-    Exact(lo_int, 32)
+    Match.Exact(lo_int, 32)
   else
-    Between(lo_int, hi_int, 32)
+    Match.Between(lo_int, hi_int, 32)
   
     
 let parse_port_range str =
@@ -920,12 +921,12 @@ let parse_port_range str =
   let lo_int = String.strip lo |> int_of_string in
   let hi_int = String.strip hi |> int_of_string in
   if lo = hi
-  then Exact(lo_int, 9)
-  else Between(lo_int, hi_int, 9)
+  then Match.Exact(lo_int, 9)
+  else Match.Between(lo_int, hi_int, 9)
 
 let parse_proto str =
   let proto,_ = String.lsplit2_exn str ~on:'/' in
-  Exact(int_of_string proto, 8)
+  Match.Exact(int_of_string proto, 8)
               
 let parse_classbench fp =
   In_channel.read_lines fp
@@ -948,7 +949,7 @@ let generate_edits cb_rules =
       acc @ [
           IntMap.fold drop_table ~init:[]
             ~f:(fun ~key ~data acc ->
-                acc @ [("of", ([ip_dst; Exact(key, 9)], [out_port, 9], data))]
+                acc @ [("of", ([ip_dst; Match.Exact(key, 9)], [out_port, 9], data))]
             )
         ]
     )
@@ -964,7 +965,7 @@ let generate_pipe1_edits cb_rules =
       @ (if Random.int 2 = 0
           then []
           else let pt = Random.int (pow 2 9) in
-               [["ingress", ([Exact(pt,9)], [], IntMap.find_exn drop_table pt)]]
+               [["ingress", ([Match.Exact(pt,9)], [], IntMap.find_exn drop_table pt)]]
         )
       @ [[("ipv4_fwd", ([ip_dst], [out_port, 9], 0))]]
     )
@@ -1010,7 +1011,7 @@ let of_to_pipe1 widening gas fp () =
             ; "out_port", 9
             ; "drop", 1
             ] in
-  let of_insertions = parse_classbench fp |> generate_edits in
+  (* let of_insertions = parse_classbench fp |> generate_edits in *)
   let pipe_insertions = parse_classbench fp |> generate_pipe1_edits in
   measure ~widening ~gas ~fvs ~hints:None ~log:pipe ~phys:of_table
     StringMap.empty StringMap.empty pipe_insertions
