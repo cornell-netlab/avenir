@@ -130,8 +130,7 @@ let extract (pkts : Packet.t list) (fields : string list) : key_match list list 
     ~f:(fun pkt ->
       List.map fields
         ~f:(fun f -> match Packet.get_val pkt f with
-                     | Ast.Int (f,_) -> Int f
-                     | _ -> failwith "Cannot Handle Tuples"))
+                     | Ast.Int (f,_) -> Int f))
     
 (* Precondition: act_ids must only be actions, and in_ids and out_ids
    must only be field indices *)
@@ -151,10 +150,10 @@ let satSemFD (r : instance) (t : schema) (act_ids : size list) (in_ids : size li
   does_induce_function dom rng 
   
                        
-let rec evalRel (r : key_match list) (t : schema) (e : expr1) =   
+let rec evalRel (r : key_match list) (t : schema) (e : expr) =   
   match e with
-  | Value1 v -> v
-  | Var1 (name, sz) ->
+  | Value v -> v
+  | Var (name, sz) ->
      begin match List.findi t.keys ~f:(fun _ (name', _, _) -> name = name') with
      | None -> failwith "Error could not evaluate column name"
      | Some (i, _) -> match List.nth_exn r i with
@@ -164,17 +163,14 @@ let rec evalRel (r : key_match list) (t : schema) (e : expr1) =
   | Plus (e,e') ->
      begin match evalRel r t e, evalRel r t e' with
      | Int (x, sz), Int (y,_) -> Int (x + y, sz)
-     | _, _ -> failwith "Dont know how to eval tuples"
      end
   | Times (e, e') ->
      begin match evalRel r t e, evalRel r t e' with
      | Int (x, sz), Int (y,_) -> Int (x * y, sz)
-     | _, _ -> failwith "Dont know how to eval tuples"
      end
   | Minus (e, e') ->
      begin match evalRel r t e, evalRel r t e' with
      | Int (x, sz), Int (y,_) -> Int (x - y, sz)
-     | _, _ -> failwith "Dont know how to eval tuples"
      end
   | _ -> failwith "IDK how to use tuples"
 
@@ -190,7 +186,6 @@ let rec satOneRow keys t b  =
   | Iff  (a, b) -> satOneRow keys t (a %=>% b) && satOneRow keys t (b %=>% a)
   | Eq (x, y) -> evalRel keys t x = evalRel keys t y
   | Le (x, y) -> evalRel keys t x = evalRel keys t y
-  | Member _ -> failwith " Error (Unimplemented) :: Membership Evaluation"
                          
                   
 let satisfies (r : instance) (t : schema) : bool =
@@ -299,7 +294,7 @@ let combine_valuations u v =
        ~f:(fun acc_opt grp -> liftO2 mkCons (reduce_group grp) acc_opt)
   >>| List.unordered_append (sym_diff u v)
        
-let rec test_to_valuation (t : test) : (string * expr1) list option =
+let rec test_to_valuation (t : test) : (string * expr) list option =
   match t with
   | True -> Some []
   | False -> None
@@ -310,7 +305,7 @@ let rec test_to_valuation (t : test) : (string * expr1) list option =
      combine_valuations avals bvals
   | Eq (e1, e2) ->
      begin match e1,e2 with
-     | Var1(x,_), Var1(y,_) ->
+     | Var(x,_), Var(y,_) ->
         if is_symbolic x
         then if is_symbolic y then (failwith (Printf.sprintf "ERROR: SymbEq %s = %s" x y))
              else Some [(x,e2)]
@@ -318,24 +313,23 @@ let rec test_to_valuation (t : test) : (string * expr1) list option =
         else failwith (Printf.sprintf "Don't know how to handle %s = %s \
                                       since one side is not a symbolic variable" x y)
                        
-     | e,Var1 (x,_) | Var1 (x,_), e -> Some [(x, e)]
+     | e,Var (x,_) | Var (x,_), e -> Some [(x, e)]
      | _ -> failwith (Printf.sprintf "Don't know how to handle %s = %s \
                                       since one side is not a variable"
-                        (string_of_expr1 e1)
-                        (string_of_expr1 e2))
+                        (string_of_expr e1)
+                        (string_of_expr e2))
      end
   | Impl _ | Iff _ 
     | Or _ -> failwith "cannot convert a disjunction/implication/iff into a valuation"
   | Neg _ -> failwith "cannot convert a negation into a valuation"
   | Le _ -> failwith "cannot convert a <= into a valuation"
-  | Member _ -> failwith "membership is deprecated"
 
-let compute_eq_cond (u : (string * expr1) list option) (v : (string * expr1) list option) =
+let compute_eq_cond (u : (string * expr) list option) (v : (string * expr) list option) =
   match (u, v) with
   | Some u, Some v  ->
      let d = List.fold (sym_diff u v) ~init:True
                ~f:(fun acc (x,e) ->
-                 acc %&% (Var1 (unsymbolize x,2) %=% e)) in
+                 acc %&% (Var (unsymbolize x,2) %=% e)) in
      let m = group_by_keys u v in
      List.fold m ~init:d
        ~f:(fun cond grp ->
@@ -366,12 +360,12 @@ let cmd_equalable bound_vars (a1 : action) (a2 : action) : test option =
   let _ = printf "wp1 = %s \n wp2 = %s\n%!" (string_of_test wp1) (string_of_test wp2) in
   let _ =
     Printf.printf "v1 = [\n%!";
-    List.iter v1 ~f:(fun (x,e) -> Printf.printf "   %s |-> %s ,\n%!" x (string_of_expr1 e));
+    List.iter v1 ~f:(fun (x,e) -> Printf.printf "   %s |-> %s ,\n%!" x (string_of_expr e));
     Printf.printf "]\n%!"
   in
   let _ =
     Printf.printf "v2 = [\n%!";
-    List.iter v2 ~f:(fun (x,e) -> Printf.printf "%s |-> %s ,\n%!" x (string_of_expr1 e));
+    List.iter v2 ~f:(fun (x,e) -> Printf.printf "%s |-> %s ,\n%!" x (string_of_expr e));
     Printf.printf "]\n%!"
   in
   let condition = compute_eq_cond (test_to_valuation wp1) (test_to_valuation wp2) in
@@ -414,9 +408,9 @@ let match_test (tbl : schema) (matches : key_match list) =
   List.fold2_exn tbl.keys matches ~init:True
     ~f:(fun acc (k, _, _)  m ->
       match m with
-      | Int i -> (Var1 (k, 2) %=% mkVInt (i,2)) %&% acc
-      | Range {lo; hi} -> (Var1 (k, 2) %>=% mkVInt (lo, 2)) %&%
-                            (Var1 (k, 2) %<=% mkVInt (hi, 2)) %&%
+      | Int i -> (Var (k, 2) %=% mkVInt (i,2)) %&% acc
+      | Range {lo; hi} -> (Var (k, 2) %>=% mkVInt (lo, 2)) %&%
+                            (Var (k, 2) %<=% mkVInt (hi, 2)) %&%
                               acc)
     
 
@@ -507,7 +501,7 @@ let dominating_vars (act_seq : action_set list) (keys : (string * size * size) l
   let rec delta (act : action) (var, lo, hi) =
     match act with
     | Assign (x, e) -> if x = var
-                       then (free_of_expr1 `Var e)
+                       then (free_of_expr `Var e)
                             |> List.map ~f:(fun (v,_) -> (v,2, 2))
                        else [(var, lo, hi)]
     | Seq (c1, c2) ->
@@ -612,10 +606,10 @@ let rec qc ~reps ~size f ~table =
  *               ("y", 0, 3)               
  *              ];
  *       actions = [
- *           ["op" %<-% Value1 (Int (1,2));
- *            "op" %<-% Value1 (Int (0,2))
+ *           ["op" %<-% Value (Int (1,2));
+ *            "op" %<-% Value (Int (0,2))
  *           ];
- *           ["op" %<-% Value1 (Int (1,2));
+ *           ["op" %<-% Value (Int (1,2));
  *            Assume True]
  *         ];
  *       constraints = [FD ([0], [2]); FD ([1], [3]); FD([0;1],[2;3])]
@@ -626,11 +620,11 @@ let rec qc ~reps ~size f ~table =
  *               ("y", 0, 2)               
  *              ];
  *       actions = [
- *           ["op" %<-% Value1 (Int (1,2));
- *            "op" %<-% Value1 (Int (0,2))
+ *           ["op" %<-% Value (Int (1,2));
+ *            "op" %<-% Value (Int (0,2))
  *           ];
- *           ["op" %<-% Value1 (Int (1,2));
- *            "op" %<-% Value1 (Int (0,2))]
+ *           ["op" %<-% Value (Int (1,2));
+ *            "op" %<-% Value (Int (0,2))]
  *         ];
  *       constraints = [FD([0;1],[2;3])]
  *      } 
@@ -643,10 +637,10 @@ let rec qc ~reps ~size f ~table =
  *          [Int 1; Int 1]
  *         ];
  *       actions =
- *         [ ["op" %<-% Value1 (Int (0,2)); Assume True];
- *           ["op" %<-% Value1 (Int (0,2)); Assume True];
- *           ["op" %<-% Value1 (Int (1,2)); Assume True];
- *           ["op" %<-% Value1 (Int (1,2)); Assume True]
+ *         [ ["op" %<-% Value (Int (0,2)); Assume True];
+ *           ["op" %<-% Value (Int (0,2)); Assume True];
+ *           ["op" %<-% Value (Int (1,2)); Assume True];
+ *           ["op" %<-% Value (Int (1,2)); Assume True]
  *         ]
  *     } in
  *   one_table_synth log_schema phys_schema log_rel
@@ -657,10 +651,10 @@ let rec qc ~reps ~size f ~table =
  *               ("y", 0, 3)               
  *              ];
  *       actions = [
- *           ["op" %<-% Value1 (Int (1,2));
- *            "op" %<-% Value1 (Int (0,2))
+ *           ["op" %<-% Value (Int (1,2));
+ *            "op" %<-% Value (Int (0,2))
  *           ];
- *           ["op" %<-% Value1 (Int (1,2));
+ *           ["op" %<-% Value (Int (1,2));
  *            Assume True]
  *         ];
  *       constraints = [FD ([0], [2]); FD ([1], [3]); FD([0;1],[2;3])]
@@ -671,11 +665,11 @@ let rec qc ~reps ~size f ~table =
  *               ("y", 0, 2)               
  *              ];
  *       actions = [
- *           ["op" %<-% Value1 (Int (1,2));
- *            "op" %<-% Value1 (Int (0,2))
+ *           ["op" %<-% Value (Int (1,2));
+ *            "op" %<-% Value (Int (0,2))
  *           ];
- *           ["op" %<-% Value1 (Int (1,2));
- *            "op" %<-% Value1 (Int (0,2))]
+ *           ["op" %<-% Value (Int (1,2));
+ *            "op" %<-% Value (Int (0,2))]
  *         ];
  *       constraints = [FD([0;1],[2;3])]
  *     } 
@@ -688,10 +682,10 @@ let rec qc ~reps ~size f ~table =
  *          [Int 1; Int 1]
  *         ];
  *       actions =
- *         [ ["op" %<-% Value1 (Int (0,2)); "op" %<-% Value1 (Int (0,2))];
- *           ["op" %<-% Value1 (Int (0,2)); "op" %<-% Value1 (Int (0,2))];
- *           ["op" %<-% Value1 (Int (1,2)); "op" %<-% Value1 (Int (1,2))];
- *           ["op" %<-% Value1 (Int (1,2)); "op" %<-% Value1 (Int (1,2))]
+ *         [ ["op" %<-% Value (Int (0,2)); "op" %<-% Value (Int (0,2))];
+ *           ["op" %<-% Value (Int (0,2)); "op" %<-% Value (Int (0,2))];
+ *           ["op" %<-% Value (Int (1,2)); "op" %<-% Value (Int (1,2))];
+ *           ["op" %<-% Value (Int (1,2)); "op" %<-% Value (Int (1,2))]
  *         ]
  *     } in
  *   one_table_synth log_schema phys_schema log_rel
@@ -703,14 +697,14 @@ let rec qc ~reps ~size f ~table =
  *               ("x0", 0, 2)               
  *              ];
  *       actions = [
- *           ["x1" %<-% Value1 (Int (1,2));
- *            "x1" %<-% Var1 ("x0", 2);
+ *           ["x1" %<-% Value (Int (1,2));
+ *            "x1" %<-% Var ("x0", 2);
  *            Assume True
  *           ];
- *           ["dst" %<-% Value1 (Int (1,2));
- *            "dst" %<-% Value1 (Int (2,2));
- *            "dst" %<-% Value1 (Int (3,2));
- *            "dst" %<-% Value1 (Int (4,2));
+ *           ["dst" %<-% Value (Int (1,2));
+ *            "dst" %<-% Value (Int (2,2));
+ *            "dst" %<-% Value (Int (3,2));
+ *            "dst" %<-% Value (Int (4,2));
  *            Assume True
  *           ]
  *         ];
@@ -724,19 +718,19 @@ let rec qc ~reps ~size f ~table =
  *               ("x0", 0, 2)               
  *              ];
  *       actions =
- *         [["x1" %<-% Value1 (Int (1,2));
- *           "x1" %<-% Var1 ("x0", 2);
- *           "dst" %<-% Value1 (Int (1,2));
- *           "dst" %<-% Value1 (Int (2,2));
- *           "dst" %<-% Value1 (Int (3,2));
- *           "dst" %<-% Value1 (Int (4,2))
+ *         [["x1" %<-% Value (Int (1,2));
+ *           "x1" %<-% Var ("x0", 2);
+ *           "dst" %<-% Value (Int (1,2));
+ *           "dst" %<-% Value (Int (2,2));
+ *           "dst" %<-% Value (Int (3,2));
+ *           "dst" %<-% Value (Int (4,2))
  *          ];
- *          ["x1" %<-% Value1 (Int (1,2));
- *           "x1" %<-% Var1 ("x0", 2);
- *           "dst" %<-% Value1 (Int (1,2));
- *           "dst" %<-% Value1 (Int (2,2));
- *           "dst" %<-% Value1 (Int (3,2));
- *           "dst" %<-% Value1 (Int (4,2))
+ *          ["x1" %<-% Value (Int (1,2));
+ *           "x1" %<-% Var ("x0", 2);
+ *           "dst" %<-% Value (Int (1,2));
+ *           "dst" %<-% Value (Int (2,2));
+ *           "dst" %<-% Value (Int (3,2));
+ *           "dst" %<-% Value (Int (4,2))
  *         ]];
  *       constraints = [FD([0;1],[2;3])]
  *     } 
@@ -749,10 +743,10 @@ let rec qc ~reps ~size f ~table =
  *           [Int 1; Int 1]
  *         ];
  *       actions =
- *         [ ["dst" %<-% Value1 (Int (1,2)); "x1" %<-% Value1 (Int (1,2))];
- *           ["dst" %<-% Value1 (Int (1,2)); "x1" %<-% Value1 (Int (1,2))];
- *           ["dst" %<-% Value1 (Int (2,2)); "x1" %<-% Var1 ("x0",2)];
- *           ["dst" %<-% Value1 (Int (1,2)); "x1" %<-% Var1 ("x0",2)]
+ *         [ ["dst" %<-% Value (Int (1,2)); "x1" %<-% Value (Int (1,2))];
+ *           ["dst" %<-% Value (Int (1,2)); "x1" %<-% Value (Int (1,2))];
+ *           ["dst" %<-% Value (Int (2,2)); "x1" %<-% Var ("x0",2)];
+ *           ["dst" %<-% Value (Int (1,2)); "x1" %<-% Var ("x0",2)]
  *         ];
  *     } in
  *   one_table_synth log_schema phys_schema log_rel
@@ -766,12 +760,12 @@ let rec qc ~reps ~size f ~table =
  *               ("y", 0, 2)               
  *              ];
  *       actions = [
- *           [ "x1" %<-% Var1 ("y", 2);
+ *           [ "x1" %<-% Var ("y", 2);
  *           ];
- *           ["dst" %<-% Value1 (Int (1,2));
- *            "dst" %<-% Value1 (Int (2,2));
- *            "dst" %<-% Value1 (Int (3,2));
- *            "dst" %<-% Value1 (Int (4,2));
+ *           ["dst" %<-% Value (Int (1,2));
+ *            "dst" %<-% Value (Int (2,2));
+ *            "dst" %<-% Value (Int (3,2));
+ *            "dst" %<-% Value (Int (4,2));
  *           ]
  *         ];
  *       constraints = [FD ([0], [2]);
@@ -788,10 +782,10 @@ let rec qc ~reps ~size f ~table =
  *             "x1" %<-% mkVInt (1,2)
  *          ];
  *          [
- *            "dst" %<-% Value1 (Int (1,2));
- *            "dst" %<-% Value1 (Int (2,2));
- *            "dst" %<-% Value1 (Int (3,2));
- *            "dst" %<-% Value1 (Int (4,2))
+ *            "dst" %<-% Value (Int (1,2));
+ *            "dst" %<-% Value (Int (2,2));
+ *            "dst" %<-% Value (Int (3,2));
+ *            "dst" %<-% Value (Int (4,2))
  *          ]
  *         ];
  *       constraints = [FD([0;1],[2;3])]

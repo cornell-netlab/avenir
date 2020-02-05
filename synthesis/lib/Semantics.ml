@@ -4,39 +4,20 @@ open Util
 open Manip
 open Tables
 
-let rec eval_expr1 (pkt_loc : Packet.located) ( e : expr1 ) : value1 =
-  let binop op e e' = op (eval_expr1 pkt_loc e) (eval_expr1 pkt_loc e') in
+let rec eval_expr (pkt_loc : Packet.located) ( e : expr ) : value =
+  let binop op e e' = op (eval_expr pkt_loc e) (eval_expr pkt_loc e') in
   match e with
-  | Value1 v -> v
-  | Var1 (v,_) -> Packet.get_val (fst pkt_loc) v
-  | Hole1 (h,_) -> Packet.get_val (fst pkt_loc) h
+  | Value v -> v
+  | Var (v,_) -> Packet.get_val (fst pkt_loc) v
+  | Hole (h,_) -> Packet.get_val (fst pkt_loc) h
   | Plus  (e, e') -> binop add_values1 e e'
   | Times (e, e') -> binop multiply_values1 e e'
   | Minus (e, e') -> binop subtract_values1 e e'
-  | Tuple es -> List.map es ~f:(eval_expr1 pkt_loc) |> VTuple
 
-
-let rec eval_expr2 (pkt_loc : Packet.located) ( e : expr2 ) : value2 =
-  match e with
-  | Value2 v -> v
-  | Var2 (s,_) -> failwith ("Cannot evaluate (symbolic) second-order variable " ^ s)
-  | Hole2 (s,_) -> failwith("Cannot evaluate (symbolic) second-order hole " ^ s)
-  | Single e -> eval_expr1 pkt_loc e  |> VSingle
-  | Union (set, set') -> VUnion(eval_expr2 pkt_loc set, eval_expr2 pkt_loc set')
-  
-
-let rec memberVal (elem : value1) (set : value2) : bool =
-  match set with
-  | Empty -> false
-  | VSingle v -> elem = v
-  | VUnion (setl, setr) -> memberVal elem setl || memberVal elem setr
-                       
-let member (pkt_loc : Packet.located) (e : expr1) (set : expr2) : bool =
-  memberVal (eval_expr1 pkt_loc e) (eval_expr2 pkt_loc set)
                    
 let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   let binopt op a b = op (check_test a pkt_loc) (check_test b pkt_loc) in
-  let binope op e e' = op (eval_expr1 pkt_loc e) (eval_expr1 pkt_loc e') in
+  let binope op e e' = op (eval_expr pkt_loc e) (eval_expr pkt_loc e') in
   match cond with
   | True -> true
   | False -> false
@@ -47,12 +28,9 @@ let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   | Iff (a, b) -> check_test ((!%(a) %+% b) %&% (!%b %+% a)) pkt_loc
   | Eq (e,e') -> binope (equal_values1) e e'
   | Le (e,e') ->
-     begin match eval_expr1 pkt_loc e, eval_expr1 pkt_loc e' with
+     begin match eval_expr pkt_loc e, eval_expr pkt_loc e' with
      | Int (v,_), Int(v',_) -> v <= v'
-     | _, _ -> failwith "tuples not supported"
      end
-  | Member (e, set) -> member pkt_loc e set
-
 
 let rec find_match ?idx:(idx = 0) pkt_loc ss ~default:default =
   match ss with 
@@ -63,16 +41,15 @@ let rec find_match ?idx:(idx = 0) pkt_loc ss ~default:default =
      else
        (find_match ~idx:(idx+1) pkt_loc rest ~default)
 
-let rec wide_eval wide (e : expr1) =
+let rec wide_eval wide (e : expr) =
   match e with
-  | Value1(Int(x,sz)) -> (x,x,sz)
-  | Value1 _ | Tuple _ -> failwith "Tuples deprecated"
-  | Var1(x, sz) ->
+  | Value(Int(x,sz)) -> (x,x,sz)
+  | Var(x, sz) ->
      begin match StringMap.find wide x with
      | None -> failwith ("USE BEFORE DEF " ^ x)
      | Some (lo,hi, sz) -> (lo,hi,sz)
      end
-  | Hole1 _ -> failwith "dont know how to eval holes"
+  | Hole _ -> failwith "dont know how to eval holes"
   | Plus(x,y) -> let (lox,hix, szx) = wide_eval wide x in
                  let (loy, hiy, _) = wide_eval wide y in
                  (lox + loy, hix+hiy, szx)
@@ -106,7 +83,7 @@ let rec widening_test pkt wide t =
      | false, _ -> widening_test pkt wide b2
      end
   | Iff (b1,b2) -> failwith "IDK HOW TO widen iff"
-  | Eq(Var1(v,sz), e) | Eq(e,Var1(v,sz)) ->
+  | Eq(Var(v,sz), e) | Eq(e,Var(v,sz)) ->
      if check_test t (pkt,None)
      then
        let (lo,hi,sz) = wide_eval wide e in
@@ -114,7 +91,7 @@ let rec widening_test pkt wide t =
        StringMap.set wide ~key:v ~data:(lo,hi,sz)
      else let vlu = get_int (StringMap.find_exn pkt v) in
           StringMap.set wide v (vlu, vlu, sz)
-  | Le(Var1(v,sz), e) | Le(e,Var1(v,sz)) ->
+  | Le(Var(v,sz), e) | Le(e,Var(v,sz)) ->
      if check_test t (pkt,None)
      then
        let (lo, hi, sz) = wide_eval wide e in
@@ -170,7 +147,7 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
        | Skip ->
           (pkt_loc, wide, cmd, StringMap.empty)
        | Assign (f, e) ->
-          ((Packet.set_field_of_expr1 pkt f e, loc_opt),
+          ((Packet.set_field_of_expr pkt f e, loc_opt),
            widening_assignment wide f e,
            cmd, StringMap.empty)
        | Assert t

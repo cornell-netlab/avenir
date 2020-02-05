@@ -67,7 +67,7 @@ let rec dispatch_list ((info,expr) : Expression.t) : P4String.t list =
 let string_of_memberlist =
   concatMap ~f:(snd) ~c:(fun x y -> x ^ "." ^ y) 
    
-let rec encode_expression_to_value (e : Expression.t) : expr1 =
+let rec encode_expression_to_value (e : Expression.t) : expr =
   let module E= Expression in
   let unimplemented name =
     failwith ("[Unimplemented Expression->Value Encoding for " ^ name ^"] at " ^ Petr4.Info.to_string (fst e))
@@ -81,9 +81,9 @@ let rec encode_expression_to_value (e : Expression.t) : expr1 =
   match snd e with
   | E.True -> type_error "True"
   | E.False -> type_error "False"
-  | E.Int (_,i) -> Value1 (Int (Bigint.to_int_exn i.value, -1))
-  | E.Name (_,s) -> Var1 (s,-1)
-  | E.ExpressionMember _ -> Var1 (dispatch_list e |> string_of_memberlist, -1)
+  | E.Int (_,i) -> Value (Int (Bigint.to_int_exn i.value, -1))
+  | E.Name (_,s) -> Var (s,-1)
+  | E.ExpressionMember _ -> Var (dispatch_list e |> string_of_memberlist, -1)
   | E.BinaryOp {op;args=(e, e')} ->
      begin match snd op with
      | Plus -> binop mkPlus e e'
@@ -160,7 +160,7 @@ let rec encode_expression_to_test (e: Expression.t) : test =
      begin match List.last members with
      | None -> unimplemented "Function Call with nothing to dispatch"
      | Some (_,"isValid") ->
-        Var1 (string_of_memberlist members ^ "()", -1) %=% Value1(Int (1, 1) )
+        Var (string_of_memberlist members ^ "()", -1) %=% Value(Int (1, 1) )
      | Some _ -> unimplemented ("FunctionCall for members " ^ string_of_memberlist members)
      end
   | E.FunctionCall _ ->
@@ -220,7 +220,7 @@ let rec encode_statement prog (ctx : Declaration.t list) ((info, stmt) : Stateme
     end
   | Assignment {lhs=lhs; rhs=rhs} ->
     begin match encode_expression_to_value lhs with
-      | Var1 (f,_) -> f %<-% encode_expression_to_value rhs
+      | Var (f,_) -> f %<-% encode_expression_to_value rhs
       | _ -> failwith ("[TypeError] lhs of assignment must be a field, at " ^ Petr4.Info.to_string info)
     end
   | DirectApplication _ ->
@@ -268,7 +268,7 @@ and encode_program (Program(top_decls) as prog : program ) =
   
 and encode_match ((_, m) : Table.key) : test =
   match m.match_kind with
-  | _, "exact" -> encode_expression_to_value m.key %=% Hole1 ("?",-1)
+  | _, "exact" -> encode_expression_to_value m.key %=% Hole ("?",-1)
   | info, x -> failwith ("[Unimplemented MatchKind " ^ x ^ "] Cannot handle match kind "
                    ^ x ^ " at " ^ Petr4.Info.to_string info )
 

@@ -9,21 +9,17 @@ open Util
 
     
 let string_of_map m =
-  StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value1 v) ^ ") " ^ acc)) m ~init:""
+  StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value v) ^ ") " ^ acc)) m ~init:""
    
-let rec mkZ3Value (rhoVars : (string * size) list) (v : expr1) ctx (deBruijn : int StringMap.t) (quantified : (string * size) list) : Z3.Expr.expr =
-  (* let () = Printf.printf "building z3 value for %s\n%!" (string_of_expr1 v) in *)
+let rec mkZ3Value (rhoVars : (string * size) list) (v : expr) ctx (deBruijn : int StringMap.t) (quantified : (string * size) list) : Z3.Expr.expr =
+  (* let () = Printf.printf "building z3 value for %s\n%!" (string_of_expr v) in *)
   let open Z3.Arithmetic in
   let binop op e e'=
     op ctx (mkZ3Value rhoVars e ctx deBruijn quantified) (mkZ3Value rhoVars  e' ctx deBruijn quantified)
   in
   match v with
-  | Value1 (Int (i,sz)) ->  Z3.BitVector.mk_numeral ctx (Printf.sprintf "%d" i) sz 
-  | Value1 (VTuple vs ) ->
-     concatMap vs ~c:(Z3.BitVector.mk_concat ctx) ~f:(fun e -> mkZ3Value rhoVars (Value1 e) ctx deBruijn quantified)
-  | Tuple es ->
-     concatMap es ~c:(Z3.BitVector.mk_concat ctx) ~f:(fun e -> mkZ3Value rhoVars e ctx deBruijn quantified)
-  | Hole1 (x,sz) | Var1 (x,sz) ->     
+  | Value (Int (i,sz)) ->  Z3.BitVector.mk_numeral ctx (Printf.sprintf "%d" i) sz 
+  | Hole (x,sz) | Var (x,sz) ->     
      if List.exists quantified ~f:(fun (x', _) -> x = x') then
        match StringMap.find deBruijn x with
        | None -> failwith (Printf.sprintf "Could not find value for variable %s " x)
@@ -42,68 +38,27 @@ let rec mkZ3Value (rhoVars : (string * size) list) (v : expr1) ctx (deBruijn : i
               (Z3.FuncDecl.mk_func_decl_s ctx x
                  (List.map rhoVars ~f:(fun (_,sz) -> Z3.BitVector.mk_sort ctx sz))
                  (Z3.BitVector.mk_sort ctx sz))
-              (List.map rhoVars ~f:(fun x -> mkZ3Value rhoVars (Var1 x) ctx deBruijn quantified))
+              (List.map rhoVars ~f:(fun x -> mkZ3Value rhoVars (Var x) ctx deBruijn quantified))
   | Plus (e,e') -> binop Z3.BitVector.mk_add e e'
   | Times (e, e') -> binop Z3.BitVector.mk_mul e e'
   | Minus (e, e') -> binop Z3.BitVector.mk_sub e e'
 
 let emptyset ctx sz = Z3.Z3Array.mk_const_array ctx (Z3.BitVector.mk_sort ctx sz) (Z3.Boolean.mk_false ctx)
-
-let rec value2_to_list (set : value2) : value1 list =
-  match set with
-  | Empty -> []
-  | VSingle v -> [v]
-  | VUnion (setL,setR) -> value2_to_list setL @ value2_to_list setR
                  
-let rec mkZ3Value2 rhoVars set ctx (deBruijn : int StringMap.t) quantified : Z3.Expr.expr =
-  let arraySort sz = (Z3.Z3Array.mk_sort ctx
-                        (Z3.BitVector.mk_sort ctx sz)
-                        (Z3.Boolean.mk_sort ctx)) in
-  let () = Printf.printf "Making Array Sort %s\n %!" (Z3.Sort.to_string (arraySort 4)) in
-  match set with
-  | Value2 (vSet) -> List.fold (value2_to_list vSet) ~init:(emptyset ctx (size_of_value2 vSet))
-                       ~f:(fun acc v -> Z3.Z3Array.mk_store ctx acc (mkZ3Value rhoVars (Value1 v) ctx deBruijn quantified) (Z3.Boolean.mk_true ctx))
-                       
-  | Var2 (x,sz) | Hole2 (x,sz) ->
-     if List.exists ~f:(fun (x',_) -> x = x') quantified then
-       begin match StringMap.find deBruijn x with
-       | None -> let () =
-                   Printf.printf "DE_BRUIJN (%d elements):\n%!" (StringMap.length deBruijn);
-                   StringMap.iteri deBruijn ~f:(fun ~key ~data ->
-                       Printf.printf "\t %s -> %d\n%!" key data) in
-                 Printf.sprintf ("unbound second-order variable %s") x |> failwith
-       | Some x' ->
-          Z3.Quantifier.mk_bound ctx x' (arraySort sz)
-       end
-     else
-       Z3.Z3Array.mk_const_s ctx x (Z3.BitVector.mk_sort ctx sz) (Z3.Boolean.mk_sort ctx)
-  | Single e ->
-     Z3.Z3Array.mk_store ctx (emptyset ctx (size_of_expr1 e)) (mkZ3Value rhoVars e ctx deBruijn quantified) (Z3.Boolean.mk_true ctx)
-  | Union (s,s') -> Z3.Z3Array.mk_map ctx
-                      (Z3.Expr.get_func_decl (Z3.Boolean.mk_and ctx []))
-                      [ mkZ3Value2 rhoVars s ctx deBruijn quantified
-                      ; mkZ3Value2 rhoVars s' ctx deBruijn quantified]
                       
 let rec mkZ3Test (rhoVars : (string * size) list) (t : test) ctx deBruijn quantified =
   (* let () = Printf.printf "Building z3 test for %s \n %!" (string_of_test t) in *)
-  let z3_value (v : expr1) = mkZ3Value rhoVars v ctx deBruijn quantified in
-  let z3_value2 (set : expr2) = mkZ3Value2 rhoVars set ctx deBruijn quantified in 
+  let z3_value (v : expr) = mkZ3Value rhoVars v ctx deBruijn quantified in
   let z3_test t = mkZ3Test rhoVars t ctx deBruijn quantified in 
   match t with 
   | True -> Z3.Boolean.mk_true ctx
   | False -> Z3.Boolean.mk_false ctx
   | Eq (left, right) ->
-     (* Printf.printf "%s = %s\n%!" (string_of_expr1 left) (string_of_expr1 right); *)
+     (* Printf.printf "%s = %s\n%!" (string_of_expr left) (string_of_expr right); *)
      Z3.Boolean.mk_eq ctx (z3_value left) (z3_value right)
   | Le (left, right) ->
-     (* Printf.printf "%s < %s" (string_of_expr1 left) (string_of_expr right); *)
-     Z3.BitVector.mk_ule ctx (z3_value left) (z3_value right)
-  | Member (expr, set) ->
-     let z = Z3.Z3Array.mk_select ctx (z3_value2 set) (z3_value expr) in
-     let () = Printf.printf "Making Z3 Membership query for \n \t %s \n%!" (string_of_test t) in
-     let () = Printf.printf "Produce \n \t %s \n %!" (Z3.Expr.to_string z) in
-     z
-                          
+     (* Printf.printf "%s < %s" (string_of_expr left) (string_of_expr right); *)
+     Z3.BitVector.mk_ule ctx (z3_value left) (z3_value right)                          
   | Or (left, right) -> Z3.Boolean.mk_or ctx   [(z3_test left); (z3_test right)]
   | And (left, right) -> Z3.Boolean.mk_and ctx [(z3_test left); (z3_test right)]
   | Impl (left, right) -> Z3.Boolean.mk_implies ctx (z3_test left) (z3_test right)
@@ -195,7 +150,7 @@ let mkMotleyExpr expr =
 *) 
 let mkMotleyModel model = 
   let consts = Z3.Model.get_const_decls model in
-  let name_vals: (string * value1) list = (List.map
+  let name_vals: (string * value) list = (List.map
     ~f:(fun func_decl ->
       let name = (Z3.Symbol.get_string (Z3.FuncDecl.get_name func_decl)) in
       let value = Z3.Model.get_const_interp model func_decl in
@@ -266,7 +221,7 @@ let check_opt (test : test ) =
               then
                 let lovar = String.rev lo |> String.substr_replace_first ~pattern:"ol_" ~with_:"" |> String.rev in
                 if hivar = lovar
-                then acc @ [mkZ3Value [] (Minus(Hole1(hi,sz), Hole1(lo,sz))) context StringMap.empty []]
+                then acc @ [mkZ3Value [] (Minus(Hole(hi,sz), Hole(lo,sz))) context StringMap.empty []]
                 else acc'
               else acc'
             )

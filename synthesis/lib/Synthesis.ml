@@ -27,7 +27,7 @@ let complete_inner ~falsify (cmd : cmd) =
       if falsify
       then False
       else let i = random_int_nin (List.map ~f:fst domain) in
-           comp x (Value1 (Int (i,sz)))
+           comp x (Value (Int (i,sz)))
     in
     match t with
     | True | False -> t
@@ -36,20 +36,19 @@ let complete_inner ~falsify (cmd : cmd) =
     | Or (a, b) -> complete_aux_test ~falsify a %+% complete_aux_test ~falsify b
     | Impl (a, b) -> complete_aux_test ~falsify a %=>% complete_aux_test ~falsify b
     | Iff (a, b) -> complete_aux_test ~falsify a %<=>% complete_aux_test ~falsify b
-    | Eq (Hole1 (_,sz), x) | Eq (x, Hole1 (_,sz)) -> hole_replace x sz (%=%)
-    | Le (Hole1 (_,sz), x) | Le (x, Hole1 (_,sz)) -> hole_replace x sz (%<=%)
+    | Eq (Hole (_,sz), x) | Eq (x, Hole (_,sz)) -> hole_replace x sz (%=%)
+    | Le (Hole (_,sz), x) | Le (x, Hole (_,sz)) -> hole_replace x sz (%<=%)
     | Eq _ | Le _ -> t
-    | Member _ -> failwith "What do?"
   and complete_aux ~falsify cmd =
     match cmd with
     | Skip -> cmd
     | Assign (f, v) ->
       begin
         match v with
-        | Hole1 _ ->
+        | Hole _ ->
            let i = random_int_nin (List.map ~f:fst domain) in
            let sz = int_of_float (2. ** float_of_int i) in
-           f %<-% Value1 (Int (i,sz))
+           f %<-% Value (Int (i,sz))
         | _ -> cmd
       end
     | Assert b -> Assert (complete_aux_test ~falsify b)
@@ -131,7 +130,7 @@ let print_instance label linst =
   StringMap.iteri linst ~f:(fun ~key ~data ->
       Printf.printf "%s -> \n" key;
       List.iter data ~f:(fun (keys,action) ->
-          List.iter keys ~f:(fun k -> Printf.printf ",%s" (string_of_expr1 k));
+          List.iter keys ~f:(fun k -> Printf.printf ",%s" (string_of_expr k));
           Printf.printf "  ---> %d \n%!" action)
       )
 
@@ -266,7 +265,7 @@ let symbolic_pkt fvs =
          || String.substr_index var ~pattern:("NEW") |> Option.is_some
       then acc_test
       else
-        Var1 (var,sz) %=% Var1 (symbolize var, sz)
+        Var (var,sz) %=% Var (symbolize var, sz)
         %&% acc_test)
 
 let symb_wp ?fvs:(fvs=[]) cmd =

@@ -9,12 +9,11 @@ open Tables
 let rec map_holes_expr e ~f =
   let binop op e1 e2 = op (map_holes_expr e1 ~f) (map_holes_expr e2 ~f) in
   match e with
-  | Value1 _ | Var1 _ -> e
-  | Hole1(h,sz) -> Hole1 (f h, sz)
+  | Value _ | Var _ -> e
+  | Hole(h,sz) -> Hole (f h, sz)
   | Plus (e1,e2) -> binop (fun e1' e2' -> Plus (e1',e2')) e1 e2
   | Minus(e1,e2) -> binop (fun e1' e2' -> Minus (e1',e2')) e1 e2
   | Times(e1,e2) -> binop (fun e1' e2' -> Times (e1',e2')) e1 e2
-  | Tuple _ -> failwith "tuples are deprecated"
 
 let rec map_holes_test b ~f =
   let binope op e1 e2 = op (map_holes_expr e1 ~f) (map_holes_expr e2 ~f) in
@@ -28,7 +27,6 @@ let rec map_holes_test b ~f =
   | Impl(e1,e2) -> binopb (%=>%) e1 e2
   | Iff (e1,e2) -> binopb (%<=>%) e1 e2
   | Neg(e) -> !%(map_holes_test b ~f)
-  | Member _ -> failwith "membership is deprecated"
   
 
 let rec map_holes c ~f =
@@ -47,7 +45,7 @@ let rec map_holes c ~f =
 let rec freshen_holes_expr e holes_so_far =
   let freshen_hole h sz i =
     Printf.printf "replacing %s with %s\n%!" h (freshen h sz i |> fst);
-    Hole1(freshen h sz i), StringMap.set holes_so_far ~key:h ~data:(i + 1)
+    Hole(freshen h sz i), StringMap.set holes_so_far ~key:h ~data:(i + 1)
   in
   let binop op e1 e2 =
     let (e1', holes_so_far') = freshen_holes_expr e1 holes_so_far in
@@ -55,8 +53,8 @@ let rec freshen_holes_expr e holes_so_far =
     (op e1' e2', holes_so_far'')
   in
   match e with
-  | Value1 _ | Var1 _ -> (e, holes_so_far)
-  | Hole1 (h,sz) ->
+  | Value _ | Var _ -> (e, holes_so_far)
+  | Hole (h,sz) ->
      begin match StringMap.find holes_so_far h with
      | Some i -> freshen_hole h sz i
      | None -> freshen_hole h sz 0
@@ -64,7 +62,6 @@ let rec freshen_holes_expr e holes_so_far =
   | Plus(e1,e2) -> binop (fun e e' -> Plus(e,e')) e1 e2
   | Minus(e1,e2) -> binop (fun e e' -> Minus(e,e')) e1 e2
   | Times(e1,e2) -> binop (fun e e' -> Times(e,e')) e1 e2                                                  
-  | Tuple _ -> failwith "tuples are deprecated"
 
               
 let rec freshen_holes c holes_so_far =
@@ -126,7 +123,7 @@ let project_classifier table keys table_keys rows =
       Printf.printf "Projecting matches %s\n%!" (Match.list_to_string matches);
       project keys projection matches
       |> Match.list_to_test keys
-      (* |> mkAnd (Hole1(Printf.sprintf "?keep_%d_%s" i table,1) %=% mkVInt(1,1)) *)
+      (* |> mkAnd (Hole(Printf.sprintf "?keep_%d_%s" i table,1) %=% mkVInt(1,1)) *)
     )
   (* |> List.map ~f:(fun t ->
    *        Printf.printf "Match %s\n%!" (string_of_test t);
@@ -139,7 +136,7 @@ let instrumented_action_for_hole (h,_) actions =
   List.(mapi actions ~f:(fun i (data, act)->
             let act''= holify (data >>| fst) act
                        |> map_holes ~f:(fun hole -> Printf.sprintf "%s_%s" hole h) in
-            Hole1("?act_for_path_"^h, act_size) %=% mkVInt(i,act_size),
+            Hole("?act_for_path_"^h, act_size) %=% mkVInt(i,act_size),
             act''
   ))
   |> mkOrdered    
@@ -152,7 +149,7 @@ let populate_action_table name keys actions holes : cmd =
        ~f:(fun ~key:base_hole ~data:max_idx acc ->
          acc @ List.init max_idx ~f:(fun idx ->
                    let hole, _ =  freshen (base_hole ^ "__") sz idx in
-                   (Var1(k,sz) %=% Hole1(hole, sz),
+                   (Var(k,sz) %=% Hole(hole, sz),
                     instrumented_action_for_hole (hole,sz) actions
                    )
                  )
@@ -199,23 +196,22 @@ let rec apply_model_expr m e =
     op (apply_model_expr m e1) (apply_model_expr m e2)
   in
   match e with
-  | Value1 _ | Var1 _ -> e
-  | Hole1(x, sz) ->
+  | Value _ | Var _ -> e
+  | Hole(x, sz) ->
      begin match StringMap.find m x with
      | None -> Printf.sprintf "Model is incomplete, no value for %s" x |> failwith
-     | Some v -> Value1(v)
+     | Some v -> Value(v)
      end
   | Plus(e1,e2) -> binop (fun e1 e2 -> Plus(e1,e2)) e1 e2
   | Minus(e1,e2) -> binop (fun e1 e2 -> Minus(e1,e2)) e1 e2
   | Times(e1,e2) -> binop (fun e1 e2 -> Times(e1,e2)) e1 e2
-  | Tuple _ -> failwith "tuples deprecated"
 
 
 let rec apply_model_test m t : test =
   let binopb (op : test -> test -> test) b1 b2 : test =
     op (apply_model_test m b1) (apply_model_test m b2)
   in
-  let binope (op : expr1 -> expr1 -> test) e1 e2 : test =
+  let binope (op : expr -> expr -> test) e1 e2 : test =
     op (apply_model_expr m e1) (apply_model_expr m e2)
   in
   match t with
@@ -227,7 +223,6 @@ let rec apply_model_test m t : test =
   | Impl(b1,b2) -> binopb (%=>%) b1 b2
   | Iff(b1,b2) -> binopb (%<=>%) b1 b2
   | Neg(b) -> !%(apply_model_test m b)
-  | Member _ -> failwith "membership is borked"
 
 let rec apply_model m cmd =
   match cmd with
@@ -278,16 +273,16 @@ let test_population _ =
   populate
     (Apply("megatable", 
            ["inport",9; "ipv4", 32],
-           [ ["o",9], "outport" %<-% Var1("o", 9)
+           [ ["o",9], "outport" %<-% Var("o", 9)
            ; [], "drop"%<-% mkVInt(1,1)
            ],
            Skip))
     (["inport",9; "ipv4", 32; "outport",9; "drop",1])
     (sequence [
          "drop"%<-%mkVInt(0,1); "outport"%<-%mkVInt(0,9); "next"%<-%mkVInt(0,32)
-       ; Apply("ingress", ["inport", 9], [["n", 32], "next"%<-%Var1("n",32)], "next"%<-%Hole1("n",32))
-       ; Apply("l3_fwd", ["ipv4", 32], [["n",32], "next" %<-% Var1("n",32)], "next"%<-%Hole1("n",32))
-       ; Apply("next", ["next",32], [["o",9], sequence["outport"%<-% Var1("o", 9)]
+       ; Apply("ingress", ["inport", 9], [["n", 32], "next"%<-%Var("n",32)], "next"%<-%Hole("n",32))
+       ; Apply("l3_fwd", ["ipv4", 32], [["n",32], "next" %<-% Var("n",32)], "next"%<-%Hole("n",32))
+       ; Apply("next", ["next",32], [["o",9], sequence["outport"%<-% Var("o", 9)]
                                  ;[], Skip], Skip)
     ])
     "next"
@@ -307,9 +302,9 @@ let test_population _ =
  *     ]
  *     "next"
  *     (sequence [
- *          Apply("ingress", ["inport", 9], [["n", 32], "next"%<-%Var1("n",32)], Skip)
- *        ; Apply("l3_fwd", ["ipv4", 32], [["n",32], "next" %<-% Var1("n",32)],Skip)
- *        ; Apply("next", ["next",32], [["o",9], sequence["outport"%<-% Var1("o", 32); "drop" %<-% mkVInt(0,1)]
+ *          Apply("ingress", ["inport", 9], [["n", 32], "next"%<-%Var("n",32)], Skip)
+ *        ; Apply("l3_fwd", ["ipv4", 32], [["n",32], "next" %<-% Var("n",32)],Skip)
+ *        ; Apply("next", ["next",32], [["o",9], sequence["outport"%<-% Var("o", 32); "drop" %<-% mkVInt(0,1)]
  * (\*;[], "drop"%<-% mkVInt(1,1)*\)], Skip)
  *     ])
  *     StringMap.empty

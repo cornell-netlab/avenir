@@ -63,19 +63,14 @@ select :
 | t = test; CASE; c = command; BRACKETS; s = select
   { (t, c) :: s }
 
-tuple :
-| e = expr; COMMA; e1 = expr { [e; e1] }
-| e = expr; COMMA; t = tuple { e :: t  }
-  
 expr :
-| i = INT; POUND; size = INT { Ast.(Value1 (Int (i,size))) }
-| x = ID; POUND; size = INT  { Ast.Var1 (x, size) }
+| i = INT; POUND; size = INT { Ast.(Value (Int (i,size))) }
+| x = ID; POUND; size = INT  { Ast.Var (x, size) }
 | e = expr; PLUS; e1 = expr { Ast.(mkPlus e e1) }
 | e = expr; MINUS; e1 = expr { Ast.(mkPlus e e1) }
 | e = expr; TIMES; e1 = expr { Ast.(mkTimes e e1) }
-| LPAREN; t = tuple; RPAREN { Ast.(mkTuple t) }
 | LPAREN; e = expr; RPAREN { e }
-| QUESTION; x = ID; POUND; size = INT { Ast.Hole1 (x, size) }
+| QUESTION; x = ID; POUND; size = INT { Ast.Hole (x, size) }
 
 test :
 | TRUE
