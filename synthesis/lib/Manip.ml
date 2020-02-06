@@ -146,7 +146,7 @@ let rec wp ?no_negations:(no_negations = false) c phi =
   | Seq (firstdo, thendo) ->
     wp ~no_negations firstdo (wp ~no_negations thendo phi)
   | Assign (field, value) ->
-     Printf.printf "replacing %s with %s in %s \n" field (string_of_expr value) (string_of_test phi);
+     (* Printf.printf "replacing %s with %s in %s \n" field (string_of_expr value) (string_of_test phi); *)
      substitute phi (StringMap.singleton field value)
   | Assert t -> t %&% phi
   | Assume t -> t %=>% phi
@@ -167,9 +167,9 @@ let rec wp ?no_negations:(no_negations = false) c phi =
      List.fold cmds ~init:(True, False) ~f:(fun (wp_so_far, misses) (cond, act) ->
          let guard = regularize ~no_negations cond misses in
          let act_wp = wp ~no_negations act phi in 
-         Printf.printf "Combining guard: %s  action: %s and accumulation %s\n%!==%s\n%!"
-           (string_of_test guard) (string_of_test act_wp) (string_of_test wp_so_far)
-           ((guard %=>% act_wp) %&% wp_so_far |> string_of_test);
+         (* Printf.printf "Combining guard: %s  action: %s and accumulation %s\n%!==%s\n%!"
+          *   (string_of_test guard) (string_of_test act_wp) (string_of_test wp_so_far)
+          *   ((guard %=>% act_wp) %&% wp_so_far |> string_of_test); *)
         ((guard %=>% act_wp) %&% wp_so_far
         , cond %+% misses )
       )

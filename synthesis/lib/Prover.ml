@@ -260,7 +260,7 @@ let check _ typ test =
        (* let _ = Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in *)
        let response = Z3.Solver.check mySolver [] in
        let dur = Time.(diff (now()) st) in
-       let _ = Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver) in
+       (* let _ = Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver) in *)
        let model =
          if response = SATISFIABLE
          then match Z3.Solver.get_model mySolver with

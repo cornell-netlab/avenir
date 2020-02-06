@@ -584,6 +584,7 @@ let%test _ =
   ignore(synthesize_edit_batch ~widening:false ~fvs:[("dst",2); ("out",2); ("x", 2)]  (Prover.solver ()) log_line phys_line log_inst phys_inst [edit]);
   true
 
+    
 (* let%test _ =
  *   let log_line =
  *     Apply("log"
@@ -608,3 +609,42 @@ let%test _ =
  *       [("phys", [ [mkVInt (0,2)], 0])] in
  *   let edit = ("log", ([mkVInt (1,2)], 1)) in
  *   ignore (synthesize_edit log_line phys_line log_inst phys_inst edit); true *)
+
+
+
+let%test _ =
+  (*
+if ordered
+	src#2 = 1#2 -> dst := 2#2 []
+	src#2 = 0#2 -> smac := 1#2 []
+	true -> skip []
+fi; if ordered
+	dst#2 = 0#2 -> out := 1#2 []
+	dst#2 = 1#2 -> out := 2#2 []
+	true -> skip []
+fi
+
+   *)
+  let dst_is x = Var("dst", 2) %=% mkVInt(x,2) in
+  let src_is x = Var("src", 2) %=% mkVInt(x,2) in
+  let logical =
+    mkOrdered [
+        src_is 1, "dst" %<-% mkVInt(2,2);
+        src_is 0, "smac" %<-% mkVInt(1,2);
+        True, Skip
+      ]
+    %:%
+      mkOrdered [
+          dst_is 0, "out" %<-% mkVInt(1,2);
+          dst_is 1, "out" %<-% mkVInt(2,2);
+          True, Skip ]
+  in
+  let physical =
+    mkOrdered [
+       src_is 0 %&% dst_is 0, sequence["dst"%<-% mkVInt(1,2); "out" %<-% mkVInt(1,2)];
+        Var("src",2) %=% mkVInt(1,2) %&% (Var("dst",1) %=% mkVInt(0,2)), "dst" %<-% mkVInt(0,2)
+      ]
+  in
+  true 
+  
+  

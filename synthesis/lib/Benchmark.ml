@@ -130,7 +130,6 @@ let reorder_benchmark varsize length max_inserts widening =
   let insertion_sequence =
     generate_n_insertions varsize length max_inserts (range_ex 1 (length +1)) StringMap.empty
     |> List.(map ~f:return)
-
   in
   let fvs = range_ex 1 (length + 1)
             |> List.map ~f:(fun i ->
@@ -141,7 +140,7 @@ let reorder_benchmark varsize length max_inserts widening =
             |> List.join
   in
   let gas = 1000  in
-  measure ~widening ~gas ~fvs ~hints ~log ~phys
+  measure ~widening ~gas ~fvs ~hints:None ~log ~phys
     linst pinst insertion_sequence
 
 

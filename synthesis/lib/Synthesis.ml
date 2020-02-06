@@ -148,28 +148,23 @@ let get_one_model_edit
   let time_spent_in_z3, num_calls_to_z3 = (ref Time.Span.zero, ref 0) in
   let (pkt',_), wide, trace, actions = trace_eval_inst ~wide:StringMap.empty lline (Instance.update_list linst ledits) (pkt,None) in
   let st = Time.now () in
-  (* let phi = Packet.to_test ~fvs pkt' in *)
   let cands = CandidateMap.apply_hints `Range hints actions pline pinst in
-  (* let _ = Printf.printf "Candidate programs:\n%!";
-   *         List.iter cands ~f:(fun (c,_) -> Printf.printf "\n%s\n%!" (string_of_cmd c));
-   *         Printf.printf "\n" in *)
-  let _ = Printf.printf "WIDEST post condition: %s \n%!" (Packet.test_of_wide ~fvs wide |> string_of_test) in
   let log_wp = wp trace True in
   let wp_phys_paths =
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
         Printf.printf "Candidate:\n%s \n" (string_of_cmd path);
         let precs = if Option.is_none hints
                     then
-                      (* [wp path (Packet.to_test ~fvs pkt')] *)
-                      wp_paths ~no_negations:true path (Packet.test_of_wide ~fvs wide) (* |> List.map ~f:(snd) *)
-                                                                     (* Packet.to_test ~fvs pkt' *)
-                      |> List.map ~f:(fun (trace, _) ->
-                             let wide_test = Packet.test_of_wide ~fvs wide in
-                             let wpt = wp trace wide_test in
-                             Printf.printf "wide packet:\n %s \n%!" (string_of_test wide_test);
-                             Printf.printf "Candidate :\n %s\n%!" (string_of_cmd trace);
-                             Printf.printf "WP:\n %s\n%!" (string_of_test wpt);
-                             wpt)
+                      [wp path (Packet.to_test ~fvs pkt')]
+                      (* wp_paths ~no_negations:true path (Packet.test_of_wide ~fvs wide) (\* |> List.map ~f:(snd) *\)
+                       *                                                (\* Packet.to_test ~fvs pkt' *\)
+                       * |> List.map ~f:(fun (trace, _) ->
+                       *        let wide_test = Packet.test_of_wide ~fvs wide in
+                       *        let wpt = wp trace wide_test in
+                       *        Printf.printf "wide packet:\n %s \n%!" (string_of_test wide_test);
+                       *        Printf.printf "Candidate :\n %s\n%!" (string_of_cmd trace);
+                       *        Printf.printf "WP:\n %s\n%!" (string_of_test wpt);
+                       *        wpt) *)
                     else [wp path True]
         in
         acc @ List.map precs ~f:(inj_l acts))
@@ -206,28 +201,15 @@ let get_one_model_edit_no_widening
   (* print_instance "Logical" (apply_edit linst ledit);
    * print_instance "Physical" pinst; *)
   let time_spent_in_z3, num_calls_to_z3 = (ref Time.Span.zero, ref 0) in
-  let (pkt',_), _, _, actions = trace_eval_inst ~wide:StringMap.empty lline (Instance.update_list linst ledits) (pkt,None) in
+  let (pkt',_), _, _, actions = trace_eval_inst ~wide:StringMap.empty lline
+                                  (Instance.update_list linst ledits) (pkt,None) in
   let st = Time.now () in
-  (* let phi = Packet.to_test ~fvs pkt' in *)
   let cands = CandidateMap.apply_hints `Exact hints actions pline pinst in
-  (* let _ = Printf.printf "Candidate programs:\n%!";
-   *         List.iter cands ~f:(fun (c,_) -> Printf.printf "\n%s\n%!" (string_of_cmd c));
-   *         Printf.printf "\n" in *)
   let wp_phys_paths =
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
-        Printf.printf "Candidate:\n%s \n" (string_of_cmd path);
         let precs = if Option.is_none hints
                     then
-                      (* [wp path ~no_negations:false (Packet.to_test ~fvs pkt')] *)
-                      let _ = Printf.printf "out packet = %s\n%!" (Packet.string__packet pkt') in
-                      [wp path (Packet.to_test ~fvs ~random_fill:true pkt')]
-                      |> List.filter_map ~f:(fun (wp) ->
-                             if wp = False then None else begin
-                                 Printf.printf "pkt': %s\n" (pkt' |> Packet.to_test ~random_fill:true ~fvs |> string_of_test);
-                                 (* Printf.printf "trace: %s\n" (string_of_cmd path); *)
-                                 Printf.printf "WP: %s\n\n" (string_of_test wp);
-                                 Some wp
-                               end)
+                      [wp path (Packet.to_test ~fvs pkt')]
                     else [wp path True]
         in
         acc @ List.map precs ~f:(inj_l acts))
@@ -238,9 +220,9 @@ let get_one_model_edit_no_widening
         if wp_phys = False then
           None
         else
-          let condition =  (Packet.to_test ~fvs ~random_fill:true pkt %=>% wp_phys) in
+          let condition =  (Packet.to_test ~fvs ~random_fill:false pkt %=>% wp_phys) in
           let _ = Printf.printf "\nsubstituting:\n%s\ninto\n%s\nto get\n%s\n\n%!"                    
-                    (Packet.string__packet pkt)
+                    (Packet.to_test ~fvs ~random_fill:false pkt |> string_of_test)
                     (string_of_test (wp_phys))
                     (string_of_test condition)
           in
