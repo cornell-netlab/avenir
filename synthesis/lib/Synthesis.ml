@@ -221,14 +221,13 @@ let get_one_model_edit_no_widening
           None
         else
           let condition =  (Packet.to_test ~fvs ~random_fill:false pkt %=>% wp_phys) in
-          let _ = Printf.printf "\nsubstituting:\n%s\ninto\n%s\nto get\n%s\n\n%!"                    
-                    (Packet.to_test ~fvs ~random_fill:false pkt |> string_of_test)
-                    (string_of_test (wp_phys))
-                    (string_of_test condition)
-          in
+          (* let _ = Printf.printf "\nsubstituting:\n%s\ninto\n%s\nto get\n%s\n\n%!"                    
+           *           (Packet.to_test ~fvs ~random_fill:false pkt |> string_of_test)
+           *           (string_of_test (wp_phys))
+           *           (string_of_test condition)
+           * in *)
           if holes_of_test condition = [] then None else
             let (res, time) = check mySolver `Sat condition in
-            (* let (res, time) = check mySolver `MinSat (substV wp_phys pkt) in *)
             time_spent_in_z3 := Time.Span.(!time_spent_in_z3 + time);
             num_calls_to_z3 := !num_calls_to_z3 + 1;
             match res with
@@ -343,9 +342,11 @@ let cegis ~widening ?fvs:(fvs = []) ~hints ?gas:(gas=1000) ~iter mySolver (logic
        Some pinst
     | `NoAndCE counter ->
        if gas = 0 then failwith "RAN OUT OF GAS" else
-         let (pinst', ex_z3_time, ncalls, wpt) =
+         let st = Time.now() in
+         let (pinst', _, ncalls, wpt) =
            solve_concrete ~widening ~fvs ~hints ~packet:(Some counter) mySolver logical linst ledits real pinst in
-         model_time := Time.Span.(!model_time + ex_z3_time);
+         let dur = Time.diff (Time.now()) st in
+         model_time := Time.Span.(!model_time + dur);
          model_calls := !model_calls + ncalls;
          wp_time := Time.Span.(!wp_time + wpt);
          if StringMap.equal (=) pinst pinst'
