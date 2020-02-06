@@ -203,7 +203,7 @@ module Row = struct
                            
                          
   let remove_conflicts keys (ms : Match.t list)  (rows : t list)  =
-    let checker = Prover.check (Prover.solver ()) `Sat in
+    let checker = Prover.check `Sat in
     let prop = Match.list_to_test keys ms %=>%
                  (List.fold rows ~init:False ~f:(fun acc (ms',_,_) -> acc %+% Match.list_to_test keys ms')) in
     match fst (checker prop) with
@@ -243,8 +243,11 @@ module Instance = struct
     | [] -> inst
     | (e::es) -> update_list (update inst e) es
 
-  let delete_hole i tbl = Hole(Printf.sprintf "?DeleteRow%dIn%s" i tbl, 1)
-    
+
+  let size : t -> int =
+    StringMap.fold ~init:0 ~f:(fun ~key:_ ~data -> (+) (List.length data))
+                             
+  let delete_hole i tbl = Hole(Printf.sprintf "?DeleteRow%dIn%s" i tbl, 1)    
 
   let rec apply tag encode_tag ?cnt:(cnt=0) (inst : t) (prog : cmd) : (cmd * int) =
     match prog with
@@ -362,7 +365,8 @@ module Instance = struct
         
       )
 
-  let fixup_edit match_model (action_map : (Row.action_data * size) StringMap.t option) (phys : cmd) (pinst : t) (* : instance *) =
+  let fixup_edit match_model (action_map : (Row.action_data * size) StringMap.t option) (phys : cmd) (pinst : t) : [`Ok of t | `Conflict of t] =
+    let st = Time.now () in
     match action_map with
     | Some m -> StringMap.fold ~init:(`Ok pinst) m ~f:(fun ~key:tbl_name ~data:(act_data,act) ->
                     update_consistently match_model phys tbl_name (Some act_data) act)
@@ -377,11 +381,14 @@ module Instance = struct
              else acc 
            ) in
        let pinst' = remove_deleted_rows match_model pinst in
-       List.fold tables_added_to ~init:(`Ok pinst')
+       let out = List.fold tables_added_to ~init:(`Ok pinst')
          ~f:(fun inst tbl_name ->
            let act = StringMap.find_exn match_model ("?ActIn" ^ tbl_name) |> get_int in
            update_consistently match_model phys tbl_name None act inst
          )
+       in
+       Printf.printf "Took %fms to update model\n" (Time.diff (Time.now()) st |> Time.Span.to_ms);
+       out
          
          
 end

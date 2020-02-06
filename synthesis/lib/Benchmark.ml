@@ -8,44 +8,25 @@ open Tables
 module IntMap = Map.Make(Int)
 
 
-
-
-let measure ~widening ~gas ~fvs ~hints ~log ~phys initial_linst initial_pinst insertions  = 
-  let rec run_experiment i seq linst pinst =
-    match seq with
-    | [] -> []
+let rec run_experiment iter seq params problem =
+  match seq with
+  | [] -> []
     | edit::edits ->
        (* Printf.printf "==== BENCHMARKING INSERTION OF (%s) =====\n%!"
         *   (string_of_edit edit); *)
-       let (totalt,checkt,checkn, searcht, searchn, wpt,lwpt,pwpt,sizes,pinst')  =
-         synthesize_edit_batch ~widening ~gas ~fvs ~hints ~iter:i (Prover.solver ()) log phys linst pinst edit in
-       Printf.printf "=== DONE=================================\n%!";
-       (i, totalt, checkt, checkn, searcht, searchn, wpt,lwpt,pwpt, sizes)
-       :: run_experiment (i + 1) edits (Instance.update_list linst edit) pinst' in
-
-  let data = run_experiment 0 insertions initial_linst initial_pinst in
-  let mean ds = List.fold ds ~init:0 ~f:((+)) / List.length ds in
-  let max_l ds = List.fold ds ~init:0 ~f:(max) in
-  let min_l ds = List.fold ds ~init:(max_l ds) ~f:(min) in
-  Printf.printf "size,time,check_time,num_z3_calls_check,model_search_z3_time,num_z3_calls_model_search,search_wp_time,check_log_wp_time,check_phys_wp_time,mean_tree_size,max_tree_size,min_tree_size\n";
-  List.iter data ~f:(fun (i,t,c,cn,s,sn,wpt,lwpt, pwpt,sizes) ->
-      Printf.printf "%d,%f,%f,%d,%f,%d,%f,%f,%f,%d,%d,%d\n"
-        i (Time.Span.to_ms t)
-        (Time.Span.to_ms c) cn
-        (Time.Span.to_ms s) sn
-        (Time.Span.to_ms wpt)
-        (Time.Span.to_ms lwpt)
-        (Time.Span.to_ms pwpt)
-        (mean sizes)
-        (max_l sizes)
-        (min_l sizes)
-    )
-
-
-
-
+       let data = ProfData.zero () in
+       let problem_inner = Problem.({problem with edits = edit}) in
+       let pinst'  = synthesize ~iter params data problem_inner  in
+       !data :: run_experiment (iter + 1) edits
+                  params
+                  Problem.({problem with log_inst = (Instance.update_list problem.log_inst edit);
+                                         phys_inst = pinst'})
                         
-                        
+let measure params problem insertions =
+  run_experiment 0 insertions params problem
+  |> ProfData.to_csv
+  |> Printf.printf "%s"
+                                            
 let permute l =
   List.map l ~f:(inj_r (Random.int (List.length l)))
   |> List.sort ~compare:(fun (i, _) (j,_) -> compare i j)
@@ -112,19 +93,10 @@ let reorder_benchmark varsize length max_inserts widening =
   let logical_pipeline = mk_pipeline varsize length in
   let physical_pipeline = permute logical_pipeline in
   let mk_empty_inst acc (name,_,_,_) = Map.set acc ~key:name ~data:[]  in
-  let linst = List.fold logical_pipeline ~init:StringMap.empty ~f:mk_empty_inst in
-  let pinst = List.fold logical_pipeline ~init:StringMap.empty ~f:mk_empty_inst in
+  let log_inst = List.fold logical_pipeline ~init:StringMap.empty ~f:mk_empty_inst in
+  let phys_inst = List.fold logical_pipeline ~init:StringMap.empty ~f:mk_empty_inst in
   let to_cmd line =  List.((line >>| fun t -> Apply t)
                            |> reduce_exn ~f:(%:%)) in
-  (* let hints = Some(fun vMap -> (\*[vMap]*\)
-   *                 [List.fold ~init:vMap (range_ex 1 (length + 8))
-   *                   ~f:(fun acc i ->
-   *                     StringMap.set acc ~key:("?AddRowTo" ^ tbl i)
-   *                       ~data:(mkVInt(1,1))
-   *                 )]
-   *               ) in *)
-  let hints = Some (List.return) in
-  (* let hints = None in *)
   let log = to_cmd logical_pipeline in
   let phys = to_cmd physical_pipeline in
   let insertion_sequence =
@@ -139,9 +111,20 @@ let reorder_benchmark varsize length max_inserts widening =
                  ])
             |> List.join
   in
-  let gas = 1000  in
-  measure ~widening ~gas ~fvs ~hints:None ~log ~phys
-    linst pinst insertion_sequence
+  let params =
+    Parameters.(
+      { widening;
+        gas = 1000;
+        hints = Some (List.return)
+    }) in
+  let problem =
+    let open Problem in
+    { log; phys; fvs;
+      log_inst; phys_inst;
+      edits = []                                
+
+    } in
+  measure params problem insertion_sequence
 
 
 
@@ -616,7 +599,7 @@ let (%>) c c' = ignore c; c'
 
 
 let basic_onf_ipv4 _ = 
-  let logical =
+  let log =
     sequence [
         "class_id" %<-% mkVInt(0,32)
       ; Apply("ipv4",
@@ -628,14 +611,12 @@ let basic_onf_ipv4 _ =
               [([("port",9)], "out_port"%<-% Var("port",9))],
               Skip)
       ] in
-  let physical =
+  let phys =
     Apply("l3_fwd"
         , [ ("ipv4_dst", 32) (*; ("ipv4_src", 32); ("ipv4_proto", 16)*) ]
         , [ ([("port",9)], "out_port"%<-% Var("port",9))]
         , Skip) in
-  let gas = 2 in
   let iter = 1 in
-  let p = Prover.solver in
   let fvs = [("ipv4_dst", 32); ("out_port", 32); (*("ipv4_src", 32); ("ipv4_proto", 16)*)] in
   (* synthesize_edit  ~gas ~iter ~fvs p 
    *   logical
@@ -644,13 +625,24 @@ let basic_onf_ipv4 _ =
    *   StringMap.empty
    *   ("next", ([Exact (1,32)], [(1,9)],0))
    * %> *)
-    synthesize_edit_batch ~gas ~iter ~fvs p
-      logical
-      physical
-      StringMap.(set empty ~key:"next" ~data:[[Match.Exact (1,32)], [(1,9)],0])
-      StringMap.(set empty ~key:"l3_fwd" ~data:[])
-      [("ipv4", ( [Between (0,20,32)], [(1,32)],0))]
-
+  let params =
+    Parameters.(
+      { widening = false;
+        gas = 2;
+        hints = None
+    })in
+  let problem =
+    let open Problem in
+    { log; phys; fvs;
+      log_inst = StringMap.(set empty ~key:"next" ~data:[[Match.Exact (1,32)], [(1,9)],0]);
+      phys_inst = StringMap.(set empty ~key:"l3_fwd" ~data:[]);
+      edits = [("ipv4", ( [Between (0,20,32)], [(1,32)],0))]    
+    }
+  in
+  synthesize ~iter
+    params
+    (ProfData.zero ())
+    problem
 
 
 let parse_rule_to_update line =
@@ -663,7 +655,7 @@ let get_classbench_data n =
       
 
 let running_example gas widening =
-  let logical =
+  let log =
     sequence [
         Apply("src_table"
             , [("src", 2)]
@@ -679,10 +671,10 @@ let running_example gas widening =
               ]
             ,Skip)
       ] in
-  let physical =
+  let phys =
         Apply("src_dst_table"
             , ["src",2; "dst", 2]
-            , [["s",2], "smac" %<-% Var("s",2)
+            , [ ["s",2], "smac" %<-% Var("s",2)
               ; ["d",2], "dst" %<-% (Var("d",2))
               ; ["o",2], "out" %<-% (Var("o",2))
               ; ["s",2; "o", 2], ("smac" %<-% Var("s",2)) %:% ("out" %<-% Var("o",2))
@@ -691,16 +683,22 @@ let running_example gas widening =
               ]
             , Skip)
   in
-  synthesize_edit_batch ~widening ~gas ~iter:1 ~fvs:["src", 2; "dst", 2; "smac", 2; "dmac", 2; "out", 2 ]
-    (Prover.solver ())
-    logical
-    physical
-    (StringMap.of_alist_exn [("src_table", [([Match.Exact (0,2)], [1,2], 0)
-                                           ;([Match.Exact (1,2)], [2,2], 1)])
-                           ; ("dst_table", [([Match.Exact (0,2)], [1,2], 0)])
-    ])
-    StringMap.empty
-    [("dst_table", ([Exact (1,2)], [2,2], 0))]
+  let params = Parameters.({widening; gas; hints = None}) in
+  let problem  =
+    let open Problem in
+    {log; phys;
+     log_inst = StringMap.of_alist_exn [("src_table", [([Match.Exact (0,2)], [1,2], 0)
+                                                      ;([Match.Exact (1,2)], [2,2], 1)])
+                                      ; ("dst_table", [([Match.Exact (0,2)], [1,2], 0)])];
+     phys_inst = StringMap.empty;
+     edits = [("dst_table", ([Exact (1,2)], [2,2], 0))];
+     fvs = ["src", 2; "dst", 2; "smac", 2; "dmac", 2; "out", 2 ]
+    }
+  in
+  synthesize ~iter:1
+    params
+    (ProfData.zero ())
+    problem
       
                                       
             
@@ -865,15 +863,24 @@ let onf_representative gas widening =
       ; "skip_next" %<-% mkVInt(0,1)
       ]
   in
-  synthesize_edit_batch ~widening ~gas ~iter:1 ~fvs (Prover.solver ())
-    (init_metadata %:% logical)
-    (init_metadata %:% physical)
-    (StringMap.of_alist_exn
-       [ ("my_station_table", [ ([Match.Between(0,pow 2 9,9); Match.Between(0,pow 2 48,48); Match.Between(0, pow 2 16, 16)], [2, 2], 0 ) ])
-       ; ("ipv4_dst", [([Match.Exact(1, 32)], [1,32], 0)])
-    ])
-    StringMap.empty
-    [("next", ([Match.Exact(1,32)], [1,9], 0))]
+  let params = Parameters.({widening; gas; hints = None}) in
+  let problem =
+    let open Problem in
+    {log  = init_metadata %:% logical;
+     phys = init_metadata %:% physical;
+     log_inst = StringMap.of_alist_exn
+                  [ ("my_station_table", [ ([Match.Between(0,pow 2 9,9); Match.Between(0,pow 2 48,48); Match.Between(0, pow 2 16, 16)], [2, 2], 0 ) ])
+                  ; ("ipv4_dst", [([Match.Exact(1, 32)], [1,32], 0)])
+                  ];
+     phys_inst = Instance.empty;
+     edits = [("next", ([Match.Exact(1,32)], [1,9], 0))];
+     fvs
+    }
+  in
+  synthesize ~iter:1
+    params
+    (ProfData.zero ())
+    problem
 
 
 
@@ -974,10 +981,7 @@ let generate_pipe1_edits cb_rules =
 let of_to_pipe1 widening gas fp () =
   let gas = match gas with None -> 1000 | Some g -> g in
   let init_no_drop = sequence ["drop" %<-% mkVInt(0,1); "out_port" %<-% mkVInt(0,9)]  in
-  let drop = Skip in (* Assert (Var("drop", 1) %=% mkVInt(0,1)) (\* mkOrdered [
-                      * *     Var("drop",1) %=% mkVInt(1,1) , Assume False
-                      * *   ; True,Skip
-                      * *   ]  *\)in *)
+  let drop = Skip in 
   let of_table =
     sequence [
         init_no_drop
@@ -1012,8 +1016,9 @@ let of_to_pipe1 widening gas fp () =
             ] in
   (* let of_insertions = parse_classbench fp |> generate_edits in *)
   let pipe_insertions = parse_classbench fp |> generate_pipe1_edits in
-  measure ~widening ~gas ~fvs ~hints:None ~log:pipe ~phys:of_table
-    StringMap.empty StringMap.empty pipe_insertions
-
-
-    
+  let params = Parameters.({widening; gas; hints = None}) in
+  let problem = Problem.({log = pipe; phys = of_table;
+                          log_inst = StringMap.empty; phys_inst = StringMap.empty;
+                          edits = [];
+                          fvs}) in
+  measure params problem pipe_insertions

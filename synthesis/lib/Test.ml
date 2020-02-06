@@ -430,8 +430,8 @@ let%test _ =
 let%test _ =
   let t = (!%( (Var ("x",8) %=% mkVInt (5,8)) %+% ((Var ("x",8) %=% mkVInt (3,8)) %&% (Var ("z",8) %=% mkVInt (6,8))))
            %+% !%( (Var ("x",8) %=% Hole ("hole0",8)) %+% (Var ("y",8) %=% Hole ("hole1",8)))) in
-  let (r,_) = check (Prover.solver ()) `Sat t in
-  let (r',_) = check (Prover.solver ()) `Sat t in
+  let (r,_) = check `Sat t in
+  let (r',_) = check `Sat t in
   r = None (* i.e. is unsat *)
   && r = r'
            
@@ -549,7 +549,7 @@ let%test _ = (* Test deBruijn Indices*)
 
 
 let%test _ =
-  let log_line =
+  let log =
     Apply("log"
         , [("dst", 2)]
         , [[],"x" %<-% mkVInt (0,2) %:% ("out" %<-% mkVInt (0,2));
@@ -558,7 +558,7 @@ let%test _ =
            [],"x" %<-% mkVInt (3,2) %:% ("out" %<-% mkVInt (3,2))]
         , "x" %<-% mkVInt (0,2) %:% ("out" %<-% mkVInt (0,2)))
   in
-  let phys_line =
+  let phys =
     Apply("phys1"
         , [("dst",2)]
         , [[],"x" %<-% mkVInt (0,2);
@@ -578,10 +578,15 @@ let%test _ =
   let log_inst =
     StringMap.of_alist_exn [ ]
   in
-  let edit = ("log", ([Match.Exact (2,2)], [], 2)) in
+  let edits = [("log", ([Match.Exact (2,2)], [], 2))] in
   let phys_inst =
     StringMap.of_alist_exn [] in
-  ignore(synthesize_edit_batch ~widening:false ~fvs:[("dst",2); ("out",2); ("x", 2)]  (Prover.solver ()) log_line phys_line log_inst phys_inst [edit]);
+  ignore(synthesize
+           ~iter:1
+           Parameters.({widening=false; gas=1000; hints = None})
+           (ProfData.zero ())
+           Problem.({fvs=[("dst",2); ("out",2); ("x", 2)];
+                     log; phys; log_inst; phys_inst; edits}));
   true
 
     

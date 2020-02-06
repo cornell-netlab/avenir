@@ -244,7 +244,7 @@ let check_opt (test : test ) =
 (*
  Checks SMT query. Returns either None (UNSAT) or SAT (model map) 
 *)
-let check _ typ test =
+let check typ test =
   (* let mySolver = solver () in *)
   let response,model, dur = match typ with
     | `MinSat -> let r, m = check_opt test in r, m,  Time.Span.zero
@@ -295,7 +295,7 @@ let check _ typ test =
            (None, dur)
 
 (* Checks SMT Query for validity. Returns None (VALID) or Some model (Counter Example) *)          
-let check_valid mySolver test = check mySolver `Valid test
+let check_valid test = check `Valid test
 
 let rec all_agree (vs :  (string * size) list) =
   match vs with

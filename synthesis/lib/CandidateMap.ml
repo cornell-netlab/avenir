@@ -4,7 +4,7 @@ open Ast
 open Manip
 open Tables
               
-
+type trace = (Row.action_data * int) StringMap.t
 
 
 let rec compute_cand_for_trace (tag : [`Exact | `Range]) (line: cmd) (pinst : Instance.t) t : cmd =
@@ -46,7 +46,7 @@ let rec compute_cand_for_trace (tag : [`Exact | `Range]) (line: cmd) (pinst : In
                                      
 let apply_hints
       typ
-      (h_opt : ((Row.action_data * int) StringMap.t -> (Row.action_data * int) StringMap.t list) option)
+      (h_opt : (trace -> trace list) option)
       m
       pline pinst : (cmd * (Row.action_data * int) StringMap.t option) list =
   match h_opt with

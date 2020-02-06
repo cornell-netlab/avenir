@@ -137,25 +137,24 @@ let print_instance label linst =
               
 
 let get_one_model_edit
-      ?fvs:(fvs = [])
-      ~hints (pkt : Packet.t)
-      mySolver
-      (lline : cmd) (linst : Instance.t) (ledits : Edit.t list)
-      (pline : cmd) pinst
+      (pkt : Packet.t)
+      (data : ProfData.t ref)
+      (params : Parameters.t)
+      (problem : Problem.t)
   =
   (* print_instance "Logical" (apply_edit linst ledit);
    * print_instance "Physical" pinst; *)
-  let time_spent_in_z3, num_calls_to_z3 = (ref Time.Span.zero, ref 0) in
-  let (pkt',_), wide, trace, actions = trace_eval_inst ~wide:StringMap.empty lline (Instance.update_list linst ledits) (pkt,None) in
+  let linst_edited = Instance.update_list problem.log_inst problem.edits in
+  let (pkt',_), wide, trace, actions = trace_eval_inst ~wide:StringMap.empty problem.log linst_edited (pkt,None) in
   let st = Time.now () in
-  let cands = CandidateMap.apply_hints `Range hints actions pline pinst in
+  let cands = CandidateMap.apply_hints `Range params.hints actions problem.phys problem.phys_inst in
   let log_wp = wp trace True in
   let wp_phys_paths =
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
         Printf.printf "Candidate:\n%s \n" (string_of_cmd path);
-        let precs = if Option.is_none hints
+        let precs = if Option.is_none params.hints
                     then
-                      [wp path (Packet.to_test ~fvs pkt')]
+                      [wp path (Packet.to_test ~fvs:problem.fvs pkt')]
                       (* wp_paths ~no_negations:true path (Packet.test_of_wide ~fvs wide) (\* |> List.map ~f:(snd) *\)
                        *                                                (\* Packet.to_test ~fvs pkt' *\)
                        * |> List.map ~f:(fun (trace, _) ->
@@ -176,40 +175,40 @@ let get_one_model_edit
     List.find_map wp_phys_paths ~f:(fun (wp_phys, acts) ->
         if wp_phys = False then None else
           let _ = Printf.printf "LOGWP %s\n => PHYSWP %s\n%!" (string_of_test log_wp) (string_of_test wp_phys) in
-          (* let (res, time) = check mySolver `Sat (substV wp_phys pkt) in *)
           if holes_of_test wp_phys = [] then
             (Printf.printf "no holes, so skipping\n%!";
             None)
           else
-            let (res, time) = check mySolver `MinSat (log_wp %=>% wp_phys) in
-            time_spent_in_z3 := Time.Span.(!time_spent_in_z3 + time);
-            num_calls_to_z3 := !num_calls_to_z3 + 1;
-          match res with
-          | None -> None
-          | Some model -> Some (model, acts)
+            let (res, time) = check `MinSat (log_wp %=>% wp_phys) in
+            data := {!data with
+                      model_z3_time = Time.Span.(!data.model_z3_time + time);
+                      model_z3_calls = !data.model_z3_calls + 1};
+            match res with
+            | None -> None
+            | Some model -> Some (model, acts)
       )
   in
-  (model, !time_spent_in_z3, !num_calls_to_z3, wp_time)
+  data := {!data with search_wp_time = Time.Span.(!data.search_wp_time + wp_time)};
+  model
 
 let get_one_model_edit_no_widening
-      ?fvs:(fvs = [])
-      ~hints (pkt : Packet.t)
-      mySolver
-      (lline : cmd) (linst : Instance.t) (ledits : Edit.t list)
-      (pline : cmd) pinst
+      (pkt : Packet.t)
+      (data : ProfData.t ref)
+      (params : Parameters.t)
+      (problem : Problem.t)
   =
   (* print_instance "Logical" (apply_edit linst ledit);
    * print_instance "Physical" pinst; *)
-  let time_spent_in_z3, num_calls_to_z3 = (ref Time.Span.zero, ref 0) in
-  let (pkt',_), _, _, actions = trace_eval_inst ~wide:StringMap.empty lline
-                                  (Instance.update_list linst ledits) (pkt,None) in
+  let linst_edited =  Instance.update_list problem.log_inst problem.edits in
+  let (pkt',_), _, _, actions = trace_eval_inst ~wide:StringMap.empty
+                                  problem.log linst_edited (pkt,None) in
   let st = Time.now () in
-  let cands = CandidateMap.apply_hints `Exact hints actions pline pinst in
+  let cands = CandidateMap.apply_hints `Exact params.hints actions problem.phys problem.phys_inst in
   let wp_phys_paths =
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
-        let precs = if Option.is_none hints
+        let precs = if Option.is_none params.hints
                     then
-                      [wp path (Packet.to_test ~fvs pkt')]
+                      [wp path (Packet.to_test ~fvs:problem.fvs pkt')]
                     else [wp path True]
         in
         acc @ List.map precs ~f:(inj_l acts))
@@ -220,22 +219,21 @@ let get_one_model_edit_no_widening
         if wp_phys = False then
           None
         else
-          let condition =  (Packet.to_test ~fvs ~random_fill:false pkt %=>% wp_phys) in
-          (* let _ = Printf.printf "\nsubstituting:\n%s\ninto\n%s\nto get\n%s\n\n%!"                    
-           *           (Packet.to_test ~fvs ~random_fill:false pkt |> string_of_test)
-           *           (string_of_test (wp_phys))
-           *           (string_of_test condition)
-           * in *)
+          let condition = (Packet.to_test ~fvs:problem.fvs ~random_fill:false pkt %=>% wp_phys) in
+          Printf.printf "Checking %s  => %s\n%!" (Packet.to_test ~fvs:problem.fvs ~random_fill:false pkt |> string_of_test) (string_of_test wp_phys);
           if holes_of_test condition = [] then None else
-            let (res, time) = check mySolver `Sat condition in
-            time_spent_in_z3 := Time.Span.(!time_spent_in_z3 + time);
-            num_calls_to_z3 := !num_calls_to_z3 + 1;
+            let (res, time) = check `Sat condition in
+            data := {!data with
+                      model_z3_time = Time.Span.(!data.model_z3_time + time);
+                      model_z3_calls = !data.model_z3_calls + 1
+              };
             match res with
             | None -> Printf.printf "no model\n%!";None
             | Some model -> Some (model, acts)
       )
   in
-  (model, !time_spent_in_z3, !num_calls_to_z3, wp_time)
+  data := {!data with search_wp_time = Time.Span.(!data.search_wp_time + wp_time)};
+  model
     
   
 
@@ -254,31 +252,18 @@ let symb_wp ?fvs:(fvs=[]) cmd =
   |> symbolic_pkt
   |> wp cmd
   
-let implements fvs mySolver (logical : cmd) (linst : Instance.t) (ledits : Edit.t list) (real : cmd) (pinst : Instance.t) =
+let implements (data : ProfData.t ref) (problem : Problem.t) =
   (* let _ = Printf.printf "IMPLEMENTS on\n%!    ";
    *         List.iter fvs ~f:(fun (x,_) -> Printf.printf " %s" x);
    *         Printf.printf "\n%!" *)
   (* in *)
-  let u_log,_ = logical |> Instance.apply `NoHoles `Exact (Instance.update_list linst ledits)  in
-  let u_rea,_ = real |> Instance.apply `NoHoles `Exact pinst in
-  let _ = Printf.printf "Logical:\n%s\nPhysical:\n%s\n%!" (string_of_cmd u_log) (string_of_cmd u_rea) in  
-  (* let st_log = Time.now () in
-   * let log_wp  = symb_wp u_log ~fvs in
-   * let log_time = Time.(diff (now()) st_log) in
-   * let st_real = Time.now () in
-   * let real_wp = symb_wp u_rea ~fvs in
-   * let real_time = Time.(diff (now()) st_real) in *)
-  (* Printf.printf "\n==== Checking Implementation =====\n%!\nLOGICAL \
-   *                SPEC:\n%s\n\nREAL SPEC: \n%s\n\n%!"
-   *   (string_of_test log_wp)
-   *   (string_of_test real_wp); *)
-  (* if log_wp = real_wp then Printf.printf "theyre syntactically equal\n%!";
-   * let condition = log_wp %<=>% real_wp in *)
+  let u_log,_ = problem.log |> Instance.apply `NoHoles `Exact (Instance.update_list problem.log_inst problem.edits)  in
+  let u_rea,_ = problem.phys |> Instance.apply `NoHoles `Exact problem.phys_inst in
   let st_mk_cond = Time.now () in
-  let condition = equivalent fvs u_log u_rea in
+  let condition = equivalent problem.fvs u_log u_rea in
   let nd_mk_cond = Time.now () in
   let mk_cond_time = Time.diff nd_mk_cond st_mk_cond in
-  let model_opt, z3time = check_valid mySolver condition in
+  let model_opt, z3time = check_valid condition in
   let pkt_opt = match model_opt with
     | None  -> Printf.printf "++++++++++valid+++++++++++++\n%!";
                `Yes
@@ -286,109 +271,66 @@ let implements fvs mySolver (logical : cmd) (linst : Instance.t) (ledits : Edit.
        let pce = Packet.from_CE x |> Packet.un_SSA in
        Printf.printf "----------invalid----------------\n%! CE = %s\n%!" (Packet.string__packet pce)
      ; `NoAndCE pce
-  in pkt_opt, z3time, mk_cond_time, mk_cond_time, num_nodes_in_test condition
+  in
+  data := {!data with
+            eq_time = Time.Span.(!data.eq_time + z3time);
+            make_vc_time = Time.Span.(!data.eq_time + mk_cond_time);
+            tree_sizes = num_nodes_in_test condition :: !data.tree_sizes
+          };
+  pkt_opt
 
                                                          
 (** solves the inner loop **)
 let rec solve_concrete
-          ?fvs:(fvs = [])
-          ~widening
-          mySolver
-          ~hints
           ?packet:(packet=None)
-          (logical : cmd) (linst : Instance.t) (edits : Edit.t list)
-          (phys : cmd) (pinst : Instance.t)
-        : (Instance.t * Time.Span.t * int * Time.Span.t) =
-  let values = multi_ints_of_cmd logical |> List.map ~f:(fun x -> Int x) in
-  let pkt = packet |> Option.value ~default:(Packet.generate fvs ~values) in
-  let model_finder = if widening then get_one_model_edit else get_one_model_edit_no_widening in
-  match model_finder ~fvs ~hints pkt mySolver logical linst edits phys pinst with
-  | None, z3time, ncalls, _ ->
-     Printf.sprintf "Couldnt find a model in %d calls and %f"
-       ncalls (Time.Span.to_ms z3time)
-     |> failwith
-  | Some (model, action_map), z3time, ncalls, wp_time ->
-     match Instance.fixup_edit model action_map phys pinst with
-     | `Ok pinst' -> pinst', z3time, ncalls, wp_time
+          (data : ProfData.t ref)
+          (params : Parameters.t)
+          (problem : Problem.t)
+        : (Instance.t) =
+  let values = multi_ints_of_cmd problem.log |> List.map ~f:(fun x -> Int x) in
+  let pkt = packet |> Option.value ~default:(Packet.generate problem.fvs ~values) in
+  let model_finder = if params.widening then get_one_model_edit else get_one_model_edit_no_widening in
+  match model_finder pkt data params problem with
+  | None -> Printf.sprintf "Couldnt find a model" |> failwith
+  | Some (model, action_map) ->
+     match Instance.fixup_edit model action_map problem.phys problem.phys_inst with
+     | `Ok pinst' -> pinst'
      | `Conflict pinst' ->
         Printf.printf "BACKTRACKING\n%!";
         (* failwith "BACKTRACKING" *)
-        pinst', z3time, ncalls, wp_time
+        pinst'
   
-let cegis ~widening ?fvs:(fvs = []) ~hints ?gas:(gas=1000) ~iter mySolver (logical : cmd) linst (ledits : Edit.t list) (real : cmd) pinst =
-  let fvs = if fvs = []
-            then ((* Printf.printf "Computing the FVS!\n%!"; *)
-              free_vars_of_cmd logical @ free_vars_of_cmd real)
-            else fvs in
-  let implements_time = ref Time.Span.zero in
-  let implements_calls = ref 0 in
-  let model_time = ref Time.Span.zero in
-  let model_calls = ref 0 in
-  let wp_time = ref Time.Span.zero in
-  let log_wp_time = ref Time.Span.zero in
-  let phys_wp_time = ref Time.Span.zero in
-  let tree_sizes = ref [] in
-  let rec loop gas pinst =
-    Printf.printf "======================= LOOP (%d, %d) =======================\n%!" (iter) (gas);
-    let (res, z3time, log_time, phys_time, treesize) =
-      implements fvs mySolver logical linst ledits real pinst in
-    implements_time := Time.Span.(!implements_time + z3time);
-    implements_calls := !implements_calls + 1;
-    log_wp_time := Time.Span.(!log_wp_time + log_time);
-    phys_wp_time := Time.Span.(!phys_wp_time + phys_time);
-    tree_sizes := treesize :: !tree_sizes;
+let cegis ~iter (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
+  let rec loop (params : Parameters.t) (problem : Problem.t) =
+    Printf.printf "======================= LOOP (%d, %d) =======================\n%!%s\n%!" (iter) (params.gas) (Problem.to_string problem);
+    let res = implements data problem in
     match Printf.printf "==++?+===++?\n%!"; res with
     | `Yes ->
-       Some pinst
+       Some problem.phys_inst
     | `NoAndCE counter ->
-       if gas = 0 then failwith "RAN OUT OF GAS" else
+       if params.gas = 0 then failwith "RAN OUT OF GAS" else
          let st = Time.now() in
-         let (pinst', _, ncalls, wpt) =
-           solve_concrete ~widening ~fvs ~hints ~packet:(Some counter) mySolver logical linst ledits real pinst in
+         let pinst' = solve_concrete ~packet:(Some counter) data params problem in
          let dur = Time.diff (Time.now()) st in
-         model_time := Time.Span.(!model_time + dur);
-         model_calls := !model_calls + ncalls;
-         wp_time := Time.Span.(!wp_time + wpt);
-         if StringMap.equal (=) pinst pinst'
+         data := {!data with model_search_time = Time.Span.(!data.model_search_time + dur) };
+         if StringMap.equal (=) problem.phys_inst pinst'
          then failwith ("Could not make progress on edits ")
-                                                                       
-         else loop (gas-1) pinst'
+         else loop
+                {params with gas = params.gas-1}
+                {problem with phys_inst = pinst'}
   in
-  let pinst' = loop gas pinst in
-  (* Printf.printf "total z3 time to synthesize %s + %s = %s\n%!"
-   *   (Time.Span.to_string !implements_time)
-   *   (Time.Span.to_string !model_time)
-   *   (Time.Span.(to_string (!implements_time + !model_time))); *)
-  (pinst', !implements_time, !implements_calls, !model_time, !model_calls, !wp_time, !log_wp_time, !phys_wp_time, !tree_sizes)
+  let pinst' = loop params problem in
+  pinst'
     
-let synthesize ~widening ?fvs:(fvs=[]) ~iter ?hints:(hints = None) ?gas:(gas = 1000)
-      mySolver
-      logical linst (ledits : Edit.t list) phys pinst =
+let synthesize ~iter (params : Parameters.t) (data : ProfData.t ref)  (problem : Problem.t) =
   let start = Time.now () in
-  let (pinst', checktime, checkcalls, searchtime, searchcalls, wpt, lwpt, pwpt, tree_sizes) =
-    cegis ~widening ~fvs ~hints ~gas ~iter mySolver logical linst ledits phys pinst in
+  let pinst' = cegis ~iter params data problem in
   let pinst_out = Option.value ~default:(StringMap.empty) pinst' (*|> complete*) in
   let stop = Time.now() in
   Printf.printf "\nSynthesized Program:\n%s\n\n%!"
-    (Instance.apply `NoHoles `Exact pinst_out phys |> fst |> string_of_cmd);
-  (Time.diff stop start, checktime, checkcalls, searchtime, searchcalls, wpt, lwpt, pwpt, tree_sizes, pinst_out)
-
-
-
-   
-let synthesize_edit_batch ?fvs:(fvs=[]) ?hints:(hints=None)
-      ?gas:(gas=1000)
-      ?iter:(iter = 0)
-      ~widening
-      mySolver
-      (log_pipeline : cmd) (phys_pipeline : cmd)
-      (linst : Instance.t)
-      (pinst : Instance.t)
-      (ledits : Edit.t list) =
-  Printf.printf "Logical:\n%s\n\nPhysical:\n%s\n"
-    (string_of_cmd (Instance.apply `NoHoles `Exact (Instance.update_list linst ledits) log_pipeline |> fst))
-    (string_of_cmd (Instance.apply `NoHoles `Exact pinst phys_pipeline |> fst));
-
-  synthesize ~widening ~fvs ~gas ~hints ~iter mySolver (log_pipeline) linst ledits
-    (phys_pipeline) pinst
-    
+    (Instance.apply `NoHoles `Exact pinst_out problem.phys |> fst |> string_of_cmd);
+  data := {!data with
+            log_inst_size = List.length problem.edits + (Instance.size problem.log_inst);
+            phys_inst_size = Instance.size problem.phys_inst;
+            time = Time.diff stop start};
+  pinst_out
