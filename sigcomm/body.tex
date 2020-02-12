@@ -559,10 +559,88 @@ $(\overline{\mathit{?f}}, \mathit{?Act}_s)$.
 \begin{itemize}
 \item Get models using paths
 \item Candidate map
-\item generalizing counter examples for range queries
+\item Generalizing counter examples for range queries
+\item Program Slicing
 \item caching rule templates
 \item Linear-size VCs
 \end{itemize}
+
+\subsubsection{Path Abstraction}
+\label{sec:path-abstraction}
+When a packet enters a switch, it will ``see'' exactly one sequence of
+assignments. That is, absent cloning and multicast, each packet will
+take either the true or false branch of each if statement, and hit
+exactly one rule in a table. We call this sequence of assignments (and
+the guards required to execute them) a \emph{trace}
+$\sigma(\tau) \in \Cmd$. A trace is defined formally in
+Figure~\ref{fig:traces}.
+
+However, in our CEGIS loop, we compute the weakest precondition of the
+hole-ified physical program with respect to the \emph{full
+  program}. This includes the paths that execute completely different
+funcitonality or are unreachable by the input packet. However, we know
+that the counter-example input packet $\pkt_0$ will take exactly one
+path through both the logical and physical programs, so we can instead
+search through the paths through the hole-ified physical program for
+paths that could possibly implement the path that $\pkt_0$ took
+through the logical program, i.e. the weakest precondition of the
+output counterexample packet $\pkt_1$ is not equivalent to $\FALSE$.
+
+With physical-path weakest precondition $\phi$ of $\pkt_1$ in hand we
+ask Z3 for a model satisfying
+$\forall x_i. x_1 = \pkt.x_1 \wedge \ldots x_n = \pkt.x_n \Rightarrow
+\pkt_1$, which corresponds to either 0 or 1 edits to the physical
+program.
+
+\subsubsection{Precomputed Candidate Map}
+\label{sec:candidate-map}
+An observation made in the NetCore~\cite{} work is that the greatest
+difficulty in compiling networking programs to switches is in
+compiling the classifier that is used to determine which actions
+should be executed; the action languages are simple enough that this
+check is often syntactic or nearly-so.
+
+We find that we can reduce the search space (either by shrinking the
+full program, or by reducing the size of the set of paths described in
+Section~\ref{sec:path-abstraction}) by precomputing the set of
+physical action-traces that could possibly implement any given action
+trace in the logical program.
+
+To do this, we first compute (via cross-product) the set of possible
+logical action traces $\Tr(log)$, by simply iterating through all
+choices of the actions in the tables, including the default action. In
+order to capture action data, we simply replace bound variables with
+fresh holes. Then we do the same for the physical program $phys$ to
+create $\Tr(phys)$.
+
+Now, we need to consider when an action trace can be implemented in
+terms of another. Without action data, this reduces to equivalence of
+straight-line programs. However, in their presence, we need to abduce
+constraints on the action data that can be used. If this abduced
+condition is equivalent to unsat (which check via Z3) we simply do not
+include that action-trace as a canidate for the logical action-trace.
+
+We bundle these observations into a map
+$\alpha : \Tr(log) \to 2^{\Test \times \Tr(phys)}$ such that
+$(\phi, \sigma_p) \in \alpha(\sigma_l)$ whenever $\phi$ implies that
+$\sigma_p = \sigma_l$. Now, once we enter the inductive synthesis
+phase, and observe a counterexample, we can symbolically execute the
+input-packet counterexample $\pkt_0$ through the logical program and
+observe corresponding action-trace $\sigma_l$. Now, when we're trying
+to find a model, the path-based abstraction of
+Section~\ref{sec:path-abstraction} lets us simply skip over the
+logical traces that do not contain a sequence in $\alpha(\sigma_l)$ as
+a subsequence. We expect this optimization to be effective since, in
+the common case, $|\alpha(\sigma_l)|$ is close to 1, whereas the
+number of paths through a switch program may number in the tens of
+thousands.
+
+
+\subsection{Automatic Widening}
+
+
+\subsection{Program Slicing}
+
 
 \subsection{Abduction}
 \begin{itemize}
