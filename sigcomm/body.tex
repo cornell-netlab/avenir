@@ -567,12 +567,12 @@ $(\overline{\mathit{?f}}, \mathit{?Act}_s)$.
 
 \subsubsection{Path Abstraction}
 \label{sec:path-abstraction}
-When a packet enters a switch, it will ``see'' exactly one sequence of
-assignments. That is, absent cloning and multicast, each packet will
-take either the true or false branch of each if statement, and hit
-exactly one rule in a table. We call this sequence of assignments (and
-the guards required to execute them) a \emph{trace}
-$\sigma(\tau) \in \Cmd$. A trace is defined formally in
+When a packet $\pkt$ enters a switch, it will ``see'' exactly one
+sequence of assignments. That is, absent cloning and multicast, each
+packet will take either the true or false branch of each if statement,
+and hit exactly one rule in a table. We call this sequence of
+assignments (and the guards required to execute them) a \emph{trace}
+$\sigma(\pkt) \in \Cmd$. A trace is defined formally in
 Figure~\ref{fig:traces}.
 
 However, in our CEGIS loop, we compute the weakest precondition of the
@@ -636,10 +636,53 @@ number of paths through a switch program may number in the tens of
 thousands.
 
 
-\subsection{Automatic Widening}
+\subsubsection{Automatic Widening}
 
+A counter-example input packet $\pkt_0$ takes a path $\sigma(\pkt_0)$,
+we assume that an input packet's invalidity is indicative of the
+invalidity of the whole path. So, instead of exploring the whole space
+of packets that traverse $\sigma(\pkt_0)$, one-by-one, we will attempt
+to synthesize a rule (or rules) that solve for a whole class of
+counter-example packets.
 
-\subsection{Program Slicing}
+\todo[inline]{Something about heuristic widening templates?}
+
+To do this, we will change the way that we instrument our physical
+program. Instead of sketching equality conditions ($x = ?x$ for every
+key $x$ in a table), we can sketch range conditions:
+$?x_{l}\leq x \leq ?x_{h}$ for every key $x$ in a table. These ranges,
+of course, subsume equality conditions, so we do not lose any
+generality so far.
+
+However these holes are sometimes too general. Observe that our
+model-finding queries have the form
+
+\[\exists \overline{?x_h},\overline{?x_l}.~\forall \bar x.~\bigwedge x = \pkt_0.x \Rightarrow \phi\]
+where $\phi$ is the instrumented precondition of a trace or
+program. Assuming that we have only one field, $x$, in both the
+logical and physical programs, and that $\pkt_0.x = 7$, then
+we want to solve the formula
+\[\exists ?x_h,?x_l. \forall x. x = 7 \Rightarrow ?x_l \leq x \leq ?x_h\]
+for which there are many unfounded solutions, such as $?x_l = 0$ and
+$?x_h = 10000$. To constrain our solutions to the domain of the
+counterexample, we will use Z3's MaxSat solver to mininimize the size
+of the interval that we synthesize, which means that for the above
+formula, our model is $?x_l = 7 = ?x_h$.
+
+However, this doesn't get us any more expressive power! Leveraging the
+observation that the behavior of $\pkt_0$ is indicative of all the
+behavior on its path, we want the assumption of our condition to be
+weakest precondition that a packet must satisfy to take that path:
+$\wp(\sigma(\pkt_1), \TRUE)$. We need to do a similar thing in the
+logical program to avoid polluting our formula with
+unnecessarily-specific equality conditions latent in the formula
+constructed by $\pkt_1$; for each trace
+$\tau \in \alpha(\sigma(\pkt_1)$, we then search for the smallest
+model (minimizing $\sum (?x_h - ?x_l)$) satisfying
+\[\exists \overline{?x_l},\overline{?x_h}. \forall \overline
+  x. \wp(\sigma(\pkt_1),\TRUE) \Rightarrow \wp(\tau, \TRUE)\]
+
+\subsubsection{Program Slicing}
 
 
 \subsection{Abduction}
@@ -656,7 +699,7 @@ thousands.
 \end{itemize}
 
 \section{Implementation}
-\todo[inline]{Describe the Implementation}XS
+\todo[inline]{Describe the Implementation}
 \begin{itemize}
 \item P4 $\to$ Pipeline (including ternary explosion)
 \item Pipeline + Instance $\to$  GCL
