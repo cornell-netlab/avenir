@@ -555,7 +555,7 @@ $(\overline{\mathit{?f}}, \mathit{?Act}_s)$.
 
 \todo[inline]{Conflict step!}
 
-\subsection{Optimizations}
+\subsection{Model-Finding Optimizations}
 \begin{itemize}
 \item Get models using paths
 \item Candidate map
@@ -677,12 +677,89 @@ $\wp(\sigma(\pkt_1), \TRUE)$. We need to do a similar thing in the
 logical program to avoid polluting our formula with
 unnecessarily-specific equality conditions latent in the formula
 constructed by $\pkt_1$; for each trace
-$\tau \in \alpha(\sigma(\pkt_1)$, we then search for the smallest
-model (minimizing $\sum (?x_h - ?x_l)$) satisfying
+$\tau \in \alpha(\sigma(\pkt_1)$, we then search for a model
+(minimizing $\sum (?x_h - ?x_l)$) that satisfies
 \[\exists \overline{?x_l},\overline{?x_h}. \forall \overline
   x. \wp(\sigma(\pkt_1),\TRUE) \Rightarrow \wp(\tau, \TRUE)\]
 
+\subsection{Verification Optimization}
+One of the biggest bottlenecks in our CEGIS algorithm is the
+evaluation of the equivalence query. Using standard the
+weakest-precondition functions, the size of the verification condition
+(VC) we compute is exponential in the size of the input
+program~\cite{dijkstra}. This section explores ways to mitigate this blowup.
+
+\subsubsection{Linear-Size VCs}
+Packet processing pipelines never fail. Packets are dropped or proceed
+normally. Differing from other work which encodes packet
+drops similarly to $\assert \FALSE$, we include a special
+\texttt{drop}-bit into our programs that encodes whether packets are
+dropped, which mimics the physical reality of many
+architectures.
+
+Prior work has shown that you can compute quadratic-size logical
+characterizations of programs in so-called \emph{passive} form to a
+program transformation that reduces eliminates duplications latent in
+Dijkstra's weakest preconditions. A direct corollary of their work is
+that if your programs are assertion-free, as ours are, then you can
+compute \emph{linear-size} verification conditions.
+
+However, because, like in SSA form, passive programs give a different
+index to every variable, our relation program equivalence cannot be
+captured by $N(log) \Leftrightarrow N(phys)$, because $N(log)$ will
+capture all the different intermediate values that the fields of $log$
+go through (sim $N(phys)$), and we are only concerned with equivalence
+of the initial and final states. We also must rename the variables $x$
+in $phys$ to fresh names $x'$ to avoid capture, we call this new
+program $phys'$. To capture this we record the initial index ($0$) and
+the final index ($\max(x)$) of a variable $x$, to construct the
+following verification condition:
+\[\begin{array}{l}
+    N(log) \wedge N(phys') \wedge \bigwedge_{x \in \fvs(log;phys)} x_0 = x'_0 \\
+    \Rightarrow \bigwedge_{x \in fvs(log;phys)} x_{\max(x)} = x'_{\max(x)}
+  \end{array}
+\]
+
+However, this is too strong to handle dropped packets -- if both
+programs drop the packet, we don't care what its final value is, only
+that they both dropped the packet. We modify our verification
+condition to its final form below:
+\[ \begin{array}{l}
+     N(log) \wedge N(phys') \wedge \bigwedge_{x \in \fvs(log;phys)} x_0 = x'_0  \\
+     \Rightarrow \texttt{drop}_{\max(\texttt{drop})} = 0 = \texttt{drop}'_{\max(\texttt{drop}')}\\
+     \phantom{\Rightarrow}~\vee  \bigwedge_{x \in fvs(log;phys)} x_{\max(x)} = x'_{\max(x')}
+   \end{array}
+ \]
+
+Note that for small programs this VC is larger than the one computed
+via weakest preconditions, however, the linear scaling rapidly
+compensates for this fact.
+
+\subsubsection{Heuristic Initial Counter-Examples}
+To kick off our synthesis procedure on a given insertion, we first
+check whether we need to make any changes at all to the physical
+network -- it could be that the rule had no end-to-end semantic
+effect. If our new logical program and the physical program have
+diverged, Z3 will tell us and give us a counter example packet.
+
+Assume for the moment that the insertion changes the behavior of the
+program (we'll discuss the alternate case below). However, whatever
+counter-example Z3 produces (if it does at all) will necessarily hit
+the rule we just added! So instead of producing a possible
+counterexample by checking equivalence of two programs, we instead can
+produce a counterexample by asking Z3 for a packet that will hit the
+new rule we installed. This formula will necessarily be smaller since
+it only concerns a portion of one program, not two full programs.
+
+Once we produce a counter example packet $\pkt$, we can check whether
+it has different behavior in both the logical and physical programs
+making it a true counter example. If it is a false CE, we can default
+back to the full verification check; but if it is a true CE we can go
+directly to the incremental synthesis phase.
+
 \subsubsection{Program Slicing}
+
+
 
 
 \subsection{Abduction}
