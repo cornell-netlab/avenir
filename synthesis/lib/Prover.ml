@@ -244,7 +244,7 @@ let check_opt (test : test ) =
 (*
  Checks SMT query. Returns either None (UNSAT) or SAT (model map) 
 *)
-let check typ test =
+let check (params : Parameters.t) typ test =
   (* let mySolver = solver () in *)
   let response,model, dur = match typ with
     | `MinSat -> let r, m = check_opt test in r, m,  Time.Span.zero
@@ -257,7 +257,7 @@ let check typ test =
        let st = Time.now() in
        let _ = Z3.Solver.push mySolver;
                initSolver typ mySolver context test in
-       (* let _ = Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in *)
+       (* let _ = if params.debug then Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in *)
        let response = Z3.Solver.check mySolver [] in
        let dur = Time.(diff (now()) st) in
        (* let _ = Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver) in *)
@@ -266,7 +266,7 @@ let check typ test =
          then match Z3.Solver.get_model mySolver with
               | None -> None
               | Some m ->
-                 Printf.printf "SAT: %s \n%!" (Z3.Model.to_string m);
+                 if params.debug then Printf.printf "SAT: %s \n%!" (Z3.Model.to_string m);
                  Some (mkMotleyModel m)
          else None in
        response, model , dur in
@@ -295,7 +295,7 @@ let check typ test =
            (None, dur)
 
 (* Checks SMT Query for validity. Returns None (VALID) or Some model (Counter Example) *)          
-let check_valid test = check `Valid test
+let check_valid params test = check params `Valid test
 
 let rec all_agree (vs :  (string * size) list) =
   match vs with

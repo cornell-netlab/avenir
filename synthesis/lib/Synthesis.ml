@@ -118,7 +118,7 @@ let get_one_model_edit
             (if params.debug then Printf.printf "no holes, so skipping\n%!";
              None)
           else
-            let (res, time) = check `MinSat (log_wp %=>% wp_phys) in
+            let (res, time) = check params `MinSat (log_wp %=>% wp_phys) in
             data := {!data with
                       model_z3_time = Time.Span.(!data.model_z3_time + time);
                       model_z3_calls = !data.model_z3_calls + 1};
@@ -161,7 +161,7 @@ let get_one_model_edit_no_widening
           let condition = (Packet.to_test ~fvs:problem.fvs ~random_fill:false pkt %=>% wp_phys) in
           if params.debug then Printf.printf "Checking %s  => %s\n%!" (Packet.to_test ~fvs:problem.fvs ~random_fill:false pkt |> string_of_test) (string_of_test wp_phys);
           if holes_of_test condition = [] then None else
-            let (res, time) = check `Sat condition in
+            let (res, time) = check params `Sat condition in
             data := {!data with
                       model_z3_time = Time.Span.(!data.model_z3_time + time);
                       model_z3_calls = !data.model_z3_calls + 1
@@ -202,7 +202,7 @@ let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   let condition = equivalent problem.fvs u_log u_rea in
   let nd_mk_cond = Time.now () in
   let mk_cond_time = Time.diff nd_mk_cond st_mk_cond in
-  let model_opt, z3time = check_valid condition in
+  let model_opt, z3time = check_valid params condition in
   let pkt_opt = match model_opt with
     | None  -> if params.debug then Printf.printf "++++++++++valid+++++++++++++\n%!";
                `Yes
@@ -233,7 +233,7 @@ let rec solve_concrete
   match model_finder pkt data params problem with
   | None -> Printf.sprintf "Couldnt find a model" |> failwith
   | Some (model, action_map) ->
-     match Instance.fixup_edit model action_map problem.phys problem.phys_inst with
+     match Instance.fixup_edit (check params `Sat) model action_map problem.phys problem.phys_inst with
      | `Ok pinst' -> pinst'
      | `Conflict pinst' ->
         Printf.printf "BACKTRACKING\n%!";

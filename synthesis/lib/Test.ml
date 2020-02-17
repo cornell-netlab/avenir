@@ -430,8 +430,8 @@ let%test _ =
 let%test _ =
   let t = (!%( (Var ("x",8) %=% mkVInt (5,8)) %+% ((Var ("x",8) %=% mkVInt (3,8)) %&% (Var ("z",8) %=% mkVInt (6,8))))
            %+% !%( (Var ("x",8) %=% Hole ("hole0",8)) %+% (Var ("y",8) %=% Hole ("hole1",8)))) in
-  let (r,_) = check `Sat t in
-  let (r',_) = check `Sat t in
+  let (r,_) = check Parameters.default `Sat t in
+  let (r',_) = check Parameters.default `Sat t in
   r = None (* i.e. is unsat *)
   && r = r'
            

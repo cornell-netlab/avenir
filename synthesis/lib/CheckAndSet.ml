@@ -251,7 +251,7 @@ let populate one_big_table fvs physical_pipeline physical_check_name logical_row
            "outport"%<-%mkVInt(0,9);
            (Instance.apply `NoHoles `Exact log_inst one_big_table |> fst) ]
      in
-     begin match check `Sat (equivalent fvs phys_instrumented log_populated) with
+     begin match check Parameters.default `Sat (equivalent fvs phys_instrumented log_populated) with
      | None, d ->
         Printf.printf "Logical Program:\n%s\n%!The instrumented physical program:\n%s\n"
           (string_of_cmd log_populated)

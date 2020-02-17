@@ -202,8 +202,7 @@ module Row = struct
 
                            
                          
-  let remove_conflicts keys (ms : Match.t list)  (rows : t list)  =
-    let checker = Prover.check `Sat in
+  let remove_conflicts checker keys (ms : Match.t list)  (rows : t list)  =
     let prop = Match.list_to_test keys ms %=>%
                  (List.fold rows ~init:False ~f:(fun acc (ms',_,_) -> acc %+% Match.list_to_test keys ms')) in
     match fst (checker prop) with
@@ -315,7 +314,7 @@ module Instance = struct
 
 
 
-  let update_consistently match_model (phys : cmd) (tbl_name : string) (act_data : Row.action_data option) (act : int) (acc : [`Ok of t | `Conflict of t]) =
+  let update_consistently checker match_model (phys : cmd) (tbl_name : string) (act_data : Row.action_data option) (act : int) (acc : [`Ok of t | `Conflict of t]) =
     let (keys,_,_) = get_schema_of_table tbl_name phys |> Option.value_exn in
     match acc with
     | `Ok pinst -> begin match StringMap.find pinst tbl_name,
@@ -324,7 +323,7 @@ module Instance = struct
                  | None,Some row ->
                     `Ok (StringMap.set pinst ~key:tbl_name ~data:[row])
                  | Some rows, Some (ks, data,act) ->
-                    begin match Row.remove_conflicts keys  ks rows with
+                    begin match Row.remove_conflicts checker keys ks rows with
                     | None -> `Ok (StringMap.set pinst ~key:tbl_name
                                      ~data:((ks,data,act)::rows))
                     | Some rows' ->
@@ -339,7 +338,7 @@ module Instance = struct
        | None, Some row ->
         `Conflict (StringMap.set pinst ~key:tbl_name ~data:[row])
        | Some rows, Some (ks, data, act) ->
-          begin match Row.remove_conflicts keys ks rows with
+          begin match Row.remove_conflicts checker keys ks rows with
           | None -> `Conflict (StringMap.set pinst ~key:tbl_name
                                  ~data:((ks,data,act)::rows))
           | Some rows' ->
@@ -365,11 +364,10 @@ module Instance = struct
         
       )
 
-  let fixup_edit match_model (action_map : (Row.action_data * size) StringMap.t option) (phys : cmd) (pinst : t) : [`Ok of t | `Conflict of t] =
-    let st = Time.now () in
+  let fixup_edit checker match_model (action_map : (Row.action_data * size) StringMap.t option) (phys : cmd) (pinst : t) : [`Ok of t | `Conflict of t] =
     match action_map with
     | Some m -> StringMap.fold ~init:(`Ok pinst) m ~f:(fun ~key:tbl_name ~data:(act_data,act) ->
-                    update_consistently match_model phys tbl_name (Some act_data) act)
+                    update_consistently checker match_model phys tbl_name (Some act_data) act)
     | None -> 
        let tables_added_to =
          StringMap.fold match_model ~init:[]
@@ -384,10 +382,9 @@ module Instance = struct
        let out = List.fold tables_added_to ~init:(`Ok pinst')
          ~f:(fun inst tbl_name ->
            let act = StringMap.find_exn match_model ("?ActIn" ^ tbl_name) |> get_int in
-           update_consistently match_model phys tbl_name None act inst
+           update_consistently checker match_model phys tbl_name None act inst
          )
        in
-       Printf.printf "Took %fms to update model\n" (Time.diff (Time.now()) st |> Time.Span.to_ms);
        out
          
          

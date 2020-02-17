@@ -1,6 +1,5 @@
 open Core
 open Util
-open Tables
 
 type t =
   {
