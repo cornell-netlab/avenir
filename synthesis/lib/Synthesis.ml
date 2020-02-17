@@ -73,58 +73,6 @@ let complete cmd = complete_inner ~falsify:true cmd
 
 
 
-                                 
-
-     
-                                  
-(** Solves the inner loop of the cegis procedure. 
- * pre-condition: pkt is at an ingress host 
-**)
-(* let get_one_model ?fvs:(fvs = []) mySolver (pkt : Packet.t) (logical : cmd) (phys : cmd) =
- *   let (pkt',_), _ = trace_eval logical (pkt,None) |> Option.value_exn in
- *   (\* let _ = Printf.printf "input: %s\n output: %s\n%!" (Packet.string__packet pkt) (Packet.string__packet pkt') in  *\)
- *   let st = Time.now () in
- *   let phi = Packet.to_test ~fvs pkt' in
- *   let wp_phys_paths = wp_paths phys phi |> List.filter_map ~f:(fun (_,pre) -> pre <> False) in
- *   let wp_time = Time.diff (Time.now ()) st in
- *   (\* if wp_phys_paths = [] then failwith "No feasible paths!" else
- *    *   Printf.printf "%d feasible paths\n\n%!" (List.length wp_phys_paths);
- *    * Printf.printf "------------------------------------------------\n";
- *    * List.iter wp_phys_paths ~f:(fun path ->
- *    *     Printf.printf "%s\n\n%!" (string_of_test path)
- *    *   )
- *    * ; Printf.printf "----------------------------------------------------\n%!"
- *    * ; *\)
- *     let time_spent_in_z3 = ref Time.Span.zero in
- *     let num_calls_to_z3 = ref 0 in
- *     let model =
- *       List.find_map wp_phys_paths ~f:(fun wp_phys ->
- *           let _ = Printf.printf "PHYSICAL WEAKEST_PRECONDITION:\n%s\n\nOF PROGRAM:\n%s\n%!"
- *                     (string_of_test wp_phys)
- *                     (string_of_cmd phys)
- *           in
- *           if wp_phys = False
- *           then (Printf.printf "-- contradictory WP\n%!"; None (\*find_match rest_paths*\))
- *           else
- *             let condition = substV wp_phys pkt in
- *             let _ = Printf.printf "CONDITION: \n%s\n%!" (string_of_test condition) in
- *             num_calls_to_z3 := !num_calls_to_z3 + 1;
- *             match check mySolver `Sat condition with
- *             | (None, d) -> Printf.printf "unsolveable!\n%!";
- *                            time_spent_in_z3 := Time.Span.(!time_spent_in_z3 + d);
- *                            None
- *                              
- *             | Some model, d ->
- *                time_spent_in_z3 := Time.Span.(!time_spent_in_z3 + d);
- *                Some model
- *         )
- *     in
- *     Printf.printf "Took %d reps over %s to find model\n!"
- *       (!num_calls_to_z3)
- *       (Time.Span.to_string !time_spent_in_z3)
- *     ; model, !time_spent_in_z3, !num_calls_to_z3, wp_time *)
-
-
 let print_instance label linst =
   Printf.printf "%s instance is \n" label;
   StringMap.iteri linst ~f:(fun ~key ~data ->
@@ -133,8 +81,6 @@ let print_instance label linst =
           List.iter keys ~f:(fun k -> Printf.printf ",%s" (string_of_expr k));
           Printf.printf "  ---> %d \n%!" action)
       )
-
-              
 
 let get_one_model_edit
       (pkt : Packet.t)
@@ -151,33 +97,26 @@ let get_one_model_edit
   let log_wp = wp trace True in
   let wp_phys_paths =
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
-        Printf.printf "Candidate:\n%s \n" (string_of_cmd path);
+        if params.debug then
+          Printf.printf "Candidate:\n%s \n" (string_of_cmd path);
         let precs = if Option.is_none params.hints
                     then
                       [wp path (Packet.to_test ~fvs:problem.fvs pkt')]
-                      (* wp_paths ~no_negations:true path (Packet.test_of_wide ~fvs wide) (\* |> List.map ~f:(snd) *\)
-                       *                                                (\* Packet.to_test ~fvs pkt' *\)
-                       * |> List.map ~f:(fun (trace, _) ->
-                       *        let wide_test = Packet.test_of_wide ~fvs wide in
-                       *        let wpt = wp trace wide_test in
-                       *        Printf.printf "wide packet:\n %s \n%!" (string_of_test wide_test);
-                       *        Printf.printf "Candidate :\n %s\n%!" (string_of_cmd trace);
-                       *        Printf.printf "WP:\n %s\n%!" (string_of_test wpt);
-                       *        wpt) *)
                     else [wp path True]
         in
         acc @ List.map precs ~f:(inj_l acts))
               (* if prec = False then None else Some(prec, acts)) *)
   in
-  let _ = Printf.printf "The logical trace is: %s \n%!" (string_of_cmd trace) in
+  let _ = if params.debug then
+            Printf.printf "The logical trace is: %s \n%!" (string_of_cmd trace) in
   let wp_time = Time.diff (Time.now ()) st in
   let model =
     List.find_map wp_phys_paths ~f:(fun (wp_phys, acts) ->
         if wp_phys = False then None else
-          let _ = Printf.printf "LOGWP %s\n => PHYSWP %s\n%!" (string_of_test log_wp) (string_of_test wp_phys) in
+          let _ = if params.debug then Printf.printf "LOGWP %s\n => PHYSWP %s\n%!" (string_of_test log_wp) (string_of_test wp_phys) in
           if holes_of_test wp_phys = [] then
-            (Printf.printf "no holes, so skipping\n%!";
-            None)
+            (if params.debug then Printf.printf "no holes, so skipping\n%!";
+             None)
           else
             let (res, time) = check `MinSat (log_wp %=>% wp_phys) in
             data := {!data with
@@ -220,7 +159,7 @@ let get_one_model_edit_no_widening
           None
         else
           let condition = (Packet.to_test ~fvs:problem.fvs ~random_fill:false pkt %=>% wp_phys) in
-          Printf.printf "Checking %s  => %s\n%!" (Packet.to_test ~fvs:problem.fvs ~random_fill:false pkt |> string_of_test) (string_of_test wp_phys);
+          if params.debug then Printf.printf "Checking %s  => %s\n%!" (Packet.to_test ~fvs:problem.fvs ~random_fill:false pkt |> string_of_test) (string_of_test wp_phys);
           if holes_of_test condition = [] then None else
             let (res, time) = check `Sat condition in
             data := {!data with
@@ -228,7 +167,7 @@ let get_one_model_edit_no_widening
                       model_z3_calls = !data.model_z3_calls + 1
               };
             match res with
-            | None -> Printf.printf "no model\n%!";None
+            | None -> if params.debug then Printf.printf "no model\n%!";None
             | Some model -> Some (model, acts)
       )
   in
@@ -252,7 +191,7 @@ let symb_wp ?fvs:(fvs=[]) cmd =
   |> symbolic_pkt
   |> wp cmd
   
-let implements (data : ProfData.t ref) (problem : Problem.t) =
+let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
   (* let _ = Printf.printf "IMPLEMENTS on\n%!    ";
    *         List.iter fvs ~f:(fun (x,_) -> Printf.printf " %s" x);
    *         Printf.printf "\n%!" *)
@@ -265,11 +204,12 @@ let implements (data : ProfData.t ref) (problem : Problem.t) =
   let mk_cond_time = Time.diff nd_mk_cond st_mk_cond in
   let model_opt, z3time = check_valid condition in
   let pkt_opt = match model_opt with
-    | None  -> Printf.printf "++++++++++valid+++++++++++++\n%!";
+    | None  -> if params.debug then Printf.printf "++++++++++valid+++++++++++++\n%!";
                `Yes
     | Some x ->
        let pce = Packet.from_CE x |> Packet.un_SSA in
-       Printf.printf "----------invalid----------------\n%! CE = %s\n%!" (Packet.string__packet pce)
+       if params.debug then
+         Printf.printf "----------invalid----------------\n%! CE = %s\n%!" (Packet.string__packet pce)
      ; `NoAndCE pce
   in
   data := {!data with
@@ -302,9 +242,10 @@ let rec solve_concrete
   
 let cegis ~iter (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
   let rec loop (params : Parameters.t) (problem : Problem.t) =
-    Printf.printf "======================= LOOP (%d, %d) =======================\n%!%s\n%!" (iter) (params.gas) (Problem.to_string problem);
-    let res = implements data problem in
-    match Printf.printf "==++?+===++?\n%!"; res with
+    if params.debug then
+      Printf.printf "======================= LOOP (%d, %d) =======================\n%!%s\n%!" (iter) (params.gas) (Problem.to_string problem);
+    let res = implements params data problem in
+    match res with
     | `Yes ->
        Some problem.phys_inst
     | `NoAndCE counter ->

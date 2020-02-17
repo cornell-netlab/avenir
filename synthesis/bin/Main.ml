@@ -8,6 +8,9 @@ module Encode = Motley.Encode
 module Manip = Motley.Manip
 module Benchmark = Motley.Benchmark
 module CheckAndSet = Motley.CheckAndSet
+module Parameters = Motley.Parameters
+module ProfData = Motley.ProfData
+module Problem = Motley.Problem
 
 
 let parse_file (filename : string) : Ast.cmd =
@@ -16,29 +19,42 @@ let parse_file (filename : string) : Ast.cmd =
   Parser.main Lexer.tokens lexbuf
 
   
-(* module Solver = struct
- *   let spec = Command.Spec.(
- *       empty
- *       +> flag "-M" (optional string) ~doc: "<file> model for logical program"
- *       +> anon ("logical" %: string)
- *       +> anon ("real" %: string))
- * 
- *   let run model logical real () =
- *     let log_cmd = parse_file logical in
- *     let real_cmd = parse_file real in
- *     match model with
- *     | None -> Synthesis.synthesize log_cmd real_cmd |> ignore
- *     | Some m ->
- *        let log_cmd = Encode.apply_model_from_file log_cmd m in
- *        Synthesis.synthesize (Encode.apply_model_from_file log_cmd m) real_cmd |> ignore
- * end
- * 
- * 
- * let synthesize_cmd : Command.t = 
- *   Command.basic_spec
- *     ~summary:"Compute modifications to real program to implement logical program "
- *     Solver.spec
- *     Solver.run *)
+module Solver = struct
+  let spec = Command.Spec.(
+      empty
+      +> anon ("logical" %: string)
+      +> anon ("real" %: string)
+      +> flag "-w" no_arg ~doc:"Do widening"
+      +> flag "-g" (required int) ~doc:"max number of CEGIS reps"
+      +> flag "-DEBUG" no_arg ~doc:"Print Debugging commands"
+      +> flag "-i" no_arg ~doc:"Interactive Mode")
+
+  let run logical real widening gas debug interactive () =
+    let log = parse_file logical in
+    let phys = parse_file real in
+    Synthesis.synthesize ~iter:0
+      Parameters.({widening;
+                   gas;
+                   debug;
+                   interactive;
+                   hints=None})
+      (ProfData.zero ())      
+      Problem.({log; phys; log_inst = Motley.Tables.Instance.empty;
+                phys_inst = Motley.Tables.Instance.empty;
+                edits = [];
+                fvs = Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)})
+    |> ignore
+
+
+
+end
+
+
+let synthesize_cmd : Command.t = 
+  Command.basic_spec
+    ~summary:"Compute modifications to real program to implement logical program "
+    Solver.spec
+    Solver.run
 
 
 module Encoder = struct
@@ -237,8 +253,8 @@ let meta : Command.t =
 let main : Command.t =
   Command.group
     ~summary:"Invokes the specified Motley Command"
-    [ (*("inst-synth", synthesize_cmd)
-    ;*) ("encode-p4", encode_cmd)
+    [ ("synth", synthesize_cmd)
+    ; ("encode-p4", encode_cmd)
     ; ("edit-check", editCheck)
     ; ("edit-synth", editSynth)
     ; ("bench", benchmark)

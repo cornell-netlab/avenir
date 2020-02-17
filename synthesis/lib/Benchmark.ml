@@ -113,7 +113,8 @@ let reorder_benchmark varsize length max_inserts widening =
   in
   let params =
     Parameters.(
-      { widening;
+      { default with
+        widening;
         gas = 1000;
         hints = Some (List.return)
     }) in
@@ -121,8 +122,7 @@ let reorder_benchmark varsize length max_inserts widening =
     let open Problem in
     { log; phys; fvs;
       log_inst; phys_inst;
-      edits = []                                
-
+      edits = []
     } in
   measure params problem insertion_sequence
 
@@ -627,7 +627,8 @@ let basic_onf_ipv4 _ =
    * %> *)
   let params =
     Parameters.(
-      { widening = false;
+      { default with
+        widening = false;
         gas = 2;
         hints = None
     })in
@@ -683,7 +684,7 @@ let running_example gas widening =
               ]
             , Skip)
   in
-  let params = Parameters.({widening; gas; hints = None}) in
+  let params = Parameters.({default with widening; gas; hints = None}) in
   let problem  =
     let open Problem in
     {log; phys;
@@ -863,7 +864,7 @@ let onf_representative gas widening =
       ; "skip_next" %<-% mkVInt(0,1)
       ]
   in
-  let params = Parameters.({widening; gas; hints = None}) in
+  let params = Parameters.({default with widening; gas; hints = None}) in
   let problem =
     let open Problem in
     {log  = init_metadata %:% logical;
@@ -1016,7 +1017,7 @@ let of_to_pipe1 widening gas fp () =
             ] in
   (* let of_insertions = parse_classbench fp |> generate_edits in *)
   let pipe_insertions = parse_classbench fp |> generate_pipe1_edits in
-  let params = Parameters.({widening; gas; hints = None}) in
+  let params = Parameters.({default with widening; gas; hints = None}) in
   let problem = Problem.({log = pipe; phys = of_table;
                           log_inst = StringMap.empty; phys_inst = StringMap.empty;
                           edits = [];

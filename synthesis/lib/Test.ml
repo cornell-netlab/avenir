@@ -583,7 +583,7 @@ let%test _ =
     StringMap.of_alist_exn [] in
   ignore(synthesize
            ~iter:1
-           Parameters.({widening=false; gas=1000; hints = None})
+           Parameters.({default with widening=false; gas=1000; hints = None})
            (ProfData.zero ())
            Problem.({fvs=[("dst",2); ("out",2); ("x", 2)];
                      log; phys; log_inst; phys_inst; edits}));

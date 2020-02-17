@@ -11,7 +11,7 @@
 %token IF TOTAL PARTIAL ORDERED CASE BRACKETS FI
 %token LPAREN RPAREN LBRACE RBRACE
 %token EOF
-
+%token FUNC
 %left IMPLIES
 %left OR
 %left AND
@@ -50,12 +50,20 @@ command :
   { Ast.(Apply(s,ks,a,d)) }
 
 keys :
-| { [] }
-| k = ID; POUND; size = INT; COMMA; ks = keys { ((k, size)::ks) }
+  | { [] }
+  | k = ID; POUND; size = INT; COMMA; ks = keys { ((k, size)::ks) }
+
+params :
+  | { [] }
+  | k = ID; POUND; size = INT { [k,size] }
+  | k = ID; POUND; size = INT; COMMA; ks = keys { ((k, size)::ks) }
 
 actions :
-| LBRACE; c = command; RBRACE; { [([],c)] }
-| LBRACE; c = command; RBRACE; BAR; a = actions { ([],c)::a }
+  | LBRACE; c = command; RBRACE;  { [([],c)] }
+  | LBRACE; FUNC; LPAREN; ps = params; RPAREN; CASE; c = command; RBRACE;
+    { [(ps,c)] }
+  | LBRACE; FUNC; LPAREN; ps = params; RPAREN; CASE; c = command; RBRACE; BAR; a = actions
+    { (ps,c)::a }
                         
 select :
 | t = test; CASE; c = command; BRACKETS { [ t, c ] }
