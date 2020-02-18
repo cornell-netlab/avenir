@@ -36,8 +36,8 @@ module Solver = struct
       Parameters.({widening;
                    gas;
                    debug;
-                   interactive;
-                   hints=None})
+                   interactive})
+      None
       (ProfData.zero ())      
       Problem.({log; phys; log_inst = Motley.Tables.Instance.empty;
                 phys_inst = Motley.Tables.Instance.empty;

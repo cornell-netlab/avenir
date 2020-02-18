@@ -202,14 +202,19 @@ module Row = struct
 
                            
                          
-  let remove_conflicts checker keys (ms : Match.t list)  (rows : t list)  =
+  let remove_conflicts checker (params : Parameters.t) tbl_name keys (ms : Match.t list)  (rows : t list)  =
     let prop = Match.list_to_test keys ms %=>%
                  (List.fold rows ~init:False ~f:(fun acc (ms',_,_) -> acc %+% Match.list_to_test keys ms')) in
     match fst (checker prop) with
     | Some _ -> 
        let rows' =
          List.filter rows ~f:(fun ((ms', _,_)) ->
-             not(List.fold2_exn ms ms' ~init:true ~f:(fun acc m m' -> acc && Match.is_subset m m'))
+             if List.fold2_exn ms ms' ~init:true ~f:(fun acc m m' -> acc && Match.is_subset m m')
+             then
+               let _ = if params.interactive then
+                         Printf.printf "- %s : %s" tbl_name (Match.list_to_string ms) in
+               false
+             else true
            ) in
        if rows = rows'
        then None
@@ -311,22 +316,27 @@ module Instance = struct
          [(cond, default)] in
        (selects @ holes @ dflt_row |> mkOrdered
        , cnt (*+ 1*))
+        
+         
 
-
-
-  let update_consistently checker match_model (phys : cmd) (tbl_name : string) (act_data : Row.action_data option) (act : int) (acc : [`Ok of t | `Conflict of t]) =
+  let update_consistently checker (params:Parameters.t) match_model (phys : cmd) (tbl_name : string) (act_data : Row.action_data option) (act : int) (acc : [`Ok of t | `Conflict of t]) : [`Ok of t | `Conflict of t] =
     let (keys,_,_) = get_schema_of_table tbl_name phys |> Option.value_exn in
     match acc with
     | `Ok pinst -> begin match StringMap.find pinst tbl_name,
                                Row.mk_new_row match_model phys tbl_name act_data act with
                  | _, None -> acc
                  | None,Some row ->
+                    if params.interactive then
+                      Printf.printf "+%s : %s\n%!" tbl_name (Row.to_string row);
                     `Ok (StringMap.set pinst ~key:tbl_name ~data:[row])
                  | Some rows, Some (ks, data,act) ->
-                    begin match Row.remove_conflicts checker keys ks rows with
-                    | None -> `Ok (StringMap.set pinst ~key:tbl_name
+                    if params.interactive then
+                      Printf.printf "+%s : %s" tbl_name (Row.to_string (ks,data,act));
+                    begin match Row.remove_conflicts checker params tbl_name keys ks rows with
+                    | None ->
+                       `Ok (StringMap.set pinst ~key:tbl_name
                                      ~data:((ks,data,act)::rows))
-                    | Some rows' ->
+                    | Some rows' ->                      
                        `Conflict (StringMap.set pinst ~key:tbl_name
                                     ~data:((ks,data,act)::rows'))
                     end
@@ -336,9 +346,13 @@ module Instance = struct
                  Row.mk_new_row match_model phys tbl_name (act_data) act with
        | _, None -> acc
        | None, Some row ->
-        `Conflict (StringMap.set pinst ~key:tbl_name ~data:[row])
-       | Some rows, Some (ks, data, act) ->
-          begin match Row.remove_conflicts checker keys ks rows with
+          if params.interactive then
+            Printf.printf "+%s : %s\n%!" tbl_name (Row.to_string row);
+          `Conflict (StringMap.set pinst ~key:tbl_name ~data:[row])
+       | Some rows, Some (ks, data, act) ->          
+          if params.interactive then
+            Printf.printf "+%s : %s\n%!" tbl_name (Row.to_string (ks,data,act));
+          begin match Row.remove_conflicts checker params tbl_name keys ks rows with
           | None -> `Conflict (StringMap.set pinst ~key:tbl_name
                                  ~data:((ks,data,act)::rows))
           | Some rows' ->
@@ -347,16 +361,19 @@ module Instance = struct
           end
        end   
 
-  let remove_deleted_rows match_model (pinst : t) : t =
-    StringMap.fold pinst ~init:empty ~f:(fun ~key ~data acc ->
-        StringMap.set acc ~key
+  let remove_deleted_rows (params : Parameters.t) match_model (pinst : t) : t =
+    StringMap.fold pinst ~init:empty ~f:(fun ~key:tbl_name ~data acc ->
+        StringMap.set acc ~key:tbl_name
           ~data:(
             List.filteri data ~f:(fun i _ ->
-                match delete_hole i key with
+                match delete_hole i tbl_name with
                 | Hole(s,_) ->
                    begin match StringMap.find match_model s with
                    | None -> true
-                   | Some x -> get_int x = 1
+                   | Some x when get_int x = 1 -> true
+                   | Some x when params.interactive ->
+                      Printf.printf "- %s : row %d\n%!" tbl_name i; false
+                   | Some x -> false
                    end
                 | _ -> true
               )
@@ -364,10 +381,10 @@ module Instance = struct
         
       )
 
-  let fixup_edit checker match_model (action_map : (Row.action_data * size) StringMap.t option) (phys : cmd) (pinst : t) : [`Ok of t | `Conflict of t] =
+  let fixup_edit checker (params : Parameters.t) match_model (action_map : (Row.action_data * size) StringMap.t option) (phys : cmd) (pinst : t) : [`Ok of t | `Conflict of t] =
     match action_map with
     | Some m -> StringMap.fold ~init:(`Ok pinst) m ~f:(fun ~key:tbl_name ~data:(act_data,act) ->
-                    update_consistently checker match_model phys tbl_name (Some act_data) act)
+                    update_consistently checker params match_model phys tbl_name (Some act_data) act)
     | None -> 
        let tables_added_to =
          StringMap.fold match_model ~init:[]
@@ -378,11 +395,12 @@ module Instance = struct
                   :: acc
              else acc 
            ) in
-       let pinst' = remove_deleted_rows match_model pinst in
+       let pinst' = remove_deleted_rows params match_model pinst in
        let out = List.fold tables_added_to ~init:(`Ok pinst')
          ~f:(fun inst tbl_name ->
            let act = StringMap.find_exn match_model ("?ActIn" ^ tbl_name) |> get_int in
-           update_consistently checker match_model phys tbl_name None act inst
+           Printf.printf "Updating consistently\n%!";
+           update_consistently checker params match_model phys tbl_name None act inst
          )
        in
        out
@@ -392,3 +410,7 @@ end
                     
                     (* END TYPES *)
 
+
+
+
+                    

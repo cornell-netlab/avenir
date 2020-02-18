@@ -86,6 +86,7 @@ let get_one_model_edit
       (pkt : Packet.t)
       (data : ProfData.t ref)
       (params : Parameters.t)
+      (hints : (CandidateMap.trace -> CandidateMap.trace list) option)
       (problem : Problem.t)
   =
   (* print_instance "Logical" (apply_edit linst ledit);
@@ -93,13 +94,13 @@ let get_one_model_edit
   let linst_edited = Instance.update_list problem.log_inst problem.edits in
   let (pkt',_), wide, trace, actions = trace_eval_inst ~wide:StringMap.empty problem.log linst_edited (pkt,None) in
   let st = Time.now () in
-  let cands = CandidateMap.apply_hints `Range params.hints actions problem.phys problem.phys_inst in
+  let cands = CandidateMap.apply_hints `Range hints actions problem.phys problem.phys_inst in
   let log_wp = wp trace True in
   let wp_phys_paths =
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
         if params.debug then
           Printf.printf "Candidate:\n%s \n" (string_of_cmd path);
-        let precs = if Option.is_none params.hints
+        let precs = if Option.is_none hints
                     then
                       [wp path (Packet.to_test ~fvs:problem.fvs pkt')]
                     else [wp path True]
@@ -134,6 +135,7 @@ let get_one_model_edit_no_widening
       (pkt : Packet.t)
       (data : ProfData.t ref)
       (params : Parameters.t)
+      (hints : (CandidateMap.trace -> CandidateMap.trace list) option)
       (problem : Problem.t)
   =
   (* print_instance "Logical" (apply_edit linst ledit);
@@ -142,10 +144,10 @@ let get_one_model_edit_no_widening
   let (pkt',_), _, _, actions = trace_eval_inst ~wide:StringMap.empty
                                   problem.log linst_edited (pkt,None) in
   let st = Time.now () in
-  let cands = CandidateMap.apply_hints `Exact params.hints actions problem.phys problem.phys_inst in
+  let cands = CandidateMap.apply_hints `Exact hints actions problem.phys problem.phys_inst in
   let wp_phys_paths =
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
-        let precs = if Option.is_none params.hints
+        let precs = if Option.is_none hints
                     then
                       [wp path (Packet.to_test ~fvs:problem.fvs pkt')]
                     else [wp path True]
@@ -208,8 +210,8 @@ let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                `Yes
     | Some x ->
        let pce = Packet.from_CE x |> Packet.un_SSA in
-       if params.debug then
-         Printf.printf "----------invalid----------------\n%! CE = %s\n%!" (Packet.string__packet pce)
+       if params.debug || params.interactive then
+         Printf.printf "----------invalid----------------\n%! CE = %s\n%!" (Packet.string__packet pce)       
      ; `NoAndCE pce
   in
   data := {!data with
@@ -224,34 +226,45 @@ let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
 let rec solve_concrete
           ?packet:(packet=None)
           (data : ProfData.t ref)
-          (params : Parameters.t)
+          (params : Parameters.t)          
+          (hints : (CandidateMap.trace -> CandidateMap.trace list) option)
           (problem : Problem.t)
         : (Instance.t) =
   let values = multi_ints_of_cmd problem.log |> List.map ~f:(fun x -> Int x) in
   let pkt = packet |> Option.value ~default:(Packet.generate problem.fvs ~values) in
   let model_finder = if params.widening then get_one_model_edit else get_one_model_edit_no_widening in
-  match model_finder pkt data params problem with
+  match model_finder pkt data params hints problem with
   | None -> Printf.sprintf "Couldnt find a model" |> failwith
   | Some (model, action_map) ->
-     match Instance.fixup_edit (check params `Sat) model action_map problem.phys problem.phys_inst with
+     match Instance.fixup_edit (check params `Sat) params model action_map problem.phys problem.phys_inst with
      | `Ok pinst' -> pinst'
      | `Conflict pinst' ->
         Printf.printf "BACKTRACKING\n%!";
         (* failwith "BACKTRACKING" *)
         pinst'
   
-let cegis ~iter (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
+let cegis ~iter
+      (params : Parameters.t)
+      (hints : (CandidateMap.trace -> CandidateMap.trace list) option)
+      (data : ProfData.t ref)
+      (problem : Problem.t) =
   let rec loop (params : Parameters.t) (problem : Problem.t) =
-    if params.debug then
+    if params.interactive then
+      (Printf.printf "Press any key to loop again\n%!";
+       Stdio.In_channel.(input_char stdin) |> ignore);
+    if params.debug || params.interactive then
       Printf.printf "======================= LOOP (%d, %d) =======================\n%!%s\n%!" (iter) (params.gas) (Problem.to_string problem);
     let res = implements params data problem in
     match res with
     | `Yes ->
        Some problem.phys_inst
     | `NoAndCE counter ->
+       if params.interactive then
+         (Printf.printf "Press any key to resolve counterexample\n%!";
+          Stdio.In_channel.(input_char stdin) |> ignore);
        if params.gas = 0 then failwith "RAN OUT OF GAS" else
          let st = Time.now() in
-         let pinst' = solve_concrete ~packet:(Some counter) data params problem in
+         let pinst' = solve_concrete ~packet:(Some counter) data params hints problem in
          let dur = Time.diff (Time.now()) st in
          data := {!data with model_search_time = Time.Span.(!data.model_search_time + dur) };
          if StringMap.equal (=) problem.phys_inst pinst'
@@ -263,9 +276,9 @@ let cegis ~iter (params : Parameters.t) (data : ProfData.t ref) (problem : Probl
   let pinst' = loop params problem in
   pinst'
     
-let synthesize ~iter (params : Parameters.t) (data : ProfData.t ref)  (problem : Problem.t) =
+let synthesize ~iter (params : Parameters.t) (hints : (CandidateMap.trace -> CandidateMap.trace list) option) (data : ProfData.t ref)  (problem : Problem.t) =
   let start = Time.now () in
-  let pinst' = cegis ~iter params data problem in
+  let pinst' = cegis ~iter params hints data problem in
   let pinst_out = Option.value ~default:(StringMap.empty) pinst' (*|> complete*) in
   let stop = Time.now() in
   Printf.printf "\nSynthesized Program:\n%s\n\n%!"

@@ -8,7 +8,7 @@ open Tables
 module IntMap = Map.Make(Int)
 
 
-let rec run_experiment iter seq params problem =
+let rec run_experiment iter seq params hints problem =
   match seq with
   | [] -> []
     | edit::edits ->
@@ -16,14 +16,15 @@ let rec run_experiment iter seq params problem =
         *   (string_of_edit edit); *)
        let data = ProfData.zero () in
        let problem_inner = Problem.({problem with edits = edit}) in
-       let pinst'  = synthesize ~iter params data problem_inner  in
+       let pinst'  = synthesize ~iter params hints data problem_inner  in
        !data :: run_experiment (iter + 1) edits
                   params
+                  hints
                   Problem.({problem with log_inst = (Instance.update_list problem.log_inst edit);
                                          phys_inst = pinst'})
                         
-let measure params problem insertions =
-  run_experiment 0 insertions params problem
+let measure params hints problem insertions =
+  run_experiment 0 insertions params hints problem
   |> ProfData.to_csv
   |> Printf.printf "%s"
                                             
@@ -116,7 +117,7 @@ let reorder_benchmark varsize length max_inserts widening =
       { default with
         widening;
         gas = 1000;
-        hints = Some (List.return)
+
     }) in
   let problem =
     let open Problem in
@@ -124,7 +125,7 @@ let reorder_benchmark varsize length max_inserts widening =
       log_inst; phys_inst;
       edits = []
     } in
-  measure params problem insertion_sequence
+  measure params (Some (List.return))  problem insertion_sequence
 
 
 
@@ -629,8 +630,7 @@ let basic_onf_ipv4 _ =
     Parameters.(
       { default with
         widening = false;
-        gas = 2;
-        hints = None
+        gas = 2
     })in
   let problem =
     let open Problem in
@@ -642,6 +642,7 @@ let basic_onf_ipv4 _ =
   in
   synthesize ~iter
     params
+    None
     (ProfData.zero ())
     problem
 
@@ -684,7 +685,7 @@ let running_example gas widening =
               ]
             , Skip)
   in
-  let params = Parameters.({default with widening; gas; hints = None}) in
+  let params = Parameters.({default with widening; gas}) in
   let problem  =
     let open Problem in
     {log; phys;
@@ -698,6 +699,7 @@ let running_example gas widening =
   in
   synthesize ~iter:1
     params
+    None
     (ProfData.zero ())
     problem
       
@@ -864,7 +866,7 @@ let onf_representative gas widening =
       ; "skip_next" %<-% mkVInt(0,1)
       ]
   in
-  let params = Parameters.({default with widening; gas; hints = None}) in
+  let params = Parameters.({default with widening; gas}) in
   let problem =
     let open Problem in
     {log  = init_metadata %:% logical;
@@ -880,6 +882,7 @@ let onf_representative gas widening =
   in
   synthesize ~iter:1
     params
+    None
     (ProfData.zero ())
     problem
 
@@ -1017,9 +1020,9 @@ let of_to_pipe1 widening gas fp () =
             ] in
   (* let of_insertions = parse_classbench fp |> generate_edits in *)
   let pipe_insertions = parse_classbench fp |> generate_pipe1_edits in
-  let params = Parameters.({default with widening; gas; hints = None}) in
+  let params = Parameters.({default with widening; gas}) in
   let problem = Problem.({log = pipe; phys = of_table;
                           log_inst = StringMap.empty; phys_inst = StringMap.empty;
                           edits = [];
                           fvs}) in
-  measure params problem pipe_insertions
+  measure params None problem pipe_insertions
