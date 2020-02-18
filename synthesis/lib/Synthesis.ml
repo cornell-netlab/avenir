@@ -250,7 +250,7 @@ let cegis ~iter
       (problem : Problem.t) =
   let rec loop (params : Parameters.t) (problem : Problem.t) =
     if params.interactive then
-      (Printf.printf "Press any key to loop again\n%!";
+      (Printf.printf "Press enter to loop again\n%!";
        Stdio.In_channel.(input_char stdin) |> ignore);
     if params.debug || params.interactive then
       Printf.printf "======================= LOOP (%d, %d) =======================\n%!%s\n%!" (iter) (params.gas) (Problem.to_string problem);
@@ -260,7 +260,7 @@ let cegis ~iter
        Some problem.phys_inst
     | `NoAndCE counter ->
        if params.interactive then
-         (Printf.printf "Press any key to resolve counterexample\n%!";
+         (Printf.printf "Press enter to resolve counterexample\n%!";
           Stdio.In_channel.(input_char stdin) |> ignore);
        if params.gas = 0 then failwith "RAN OUT OF GAS" else
          let st = Time.now() in
