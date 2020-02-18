@@ -399,7 +399,6 @@ module Instance = struct
        let out = List.fold tables_added_to ~init:(`Ok pinst')
          ~f:(fun inst tbl_name ->
            let act = StringMap.find_exn match_model ("?ActIn" ^ tbl_name) |> get_int in
-           Printf.printf "Updating consistently\n%!";
            update_consistently checker params match_model phys tbl_name None act inst
          )
        in
