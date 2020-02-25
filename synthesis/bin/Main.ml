@@ -7,6 +7,10 @@ module Synthesis = Motley.Synthesis
 module Encode = Motley.Encode
 module Manip = Motley.Manip
 module Benchmark = Motley.Benchmark
+module CheckAndSet = Motley.CheckAndSet
+module Parameters = Motley.Parameters
+module ProfData = Motley.ProfData
+module Problem = Motley.Problem
 
 
 let parse_file (filename : string) : Ast.cmd =
@@ -15,29 +19,39 @@ let parse_file (filename : string) : Ast.cmd =
   Parser.main Lexer.tokens lexbuf
 
   
-(* module Solver = struct
- *   let spec = Command.Spec.(
- *       empty
- *       +> flag "-M" (optional string) ~doc: "<file> model for logical program"
- *       +> anon ("logical" %: string)
- *       +> anon ("real" %: string))
- * 
- *   let run model logical real () =
- *     let log_cmd = parse_file logical in
- *     let real_cmd = parse_file real in
- *     match model with
- *     | None -> Synthesis.synthesize log_cmd real_cmd |> ignore
- *     | Some m ->
- *        let log_cmd = Encode.apply_model_from_file log_cmd m in
- *        Synthesis.synthesize (Encode.apply_model_from_file log_cmd m) real_cmd |> ignore
- * end
- * 
- * 
- * let synthesize_cmd : Command.t = 
- *   Command.basic_spec
- *     ~summary:"Compute modifications to real program to implement logical program "
- *     Solver.spec
- *     Solver.run *)
+module Solver = struct
+  let spec = Command.Spec.(
+      empty
+      +> anon ("logical" %: string)
+      +> anon ("real" %: string)
+      +> flag "-w" no_arg ~doc:"Do widening"
+      +> flag "-g" (required int) ~doc:"max number of CEGIS reps"
+      +> flag "-DEBUG" no_arg ~doc:"Print Debugging commands"
+      +> flag "-i" no_arg ~doc:"Interactive Mode")
+
+  let run logical real widening gas debug interactive () =
+    let log = parse_file logical in
+    let phys = parse_file real in
+    Synthesis.synthesize ~iter:0
+      Parameters.({widening;
+                   gas;
+                   debug;
+                   interactive})
+      None
+      (ProfData.zero ())      
+      Problem.({log; phys; log_inst = Motley.Tables.Instance.empty;
+                phys_inst = Motley.Tables.Instance.empty;
+                edits = [];
+                fvs = Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)})
+    |> ignore
+end
+
+
+let synthesize_cmd : Command.t = 
+  Command.basic_spec
+    ~summary:"Compute modifications to real program to implement logical program "
+    Solver.spec
+    Solver.run
 
 
 module Encoder = struct
@@ -127,11 +141,12 @@ module Bench = struct
       empty
       +> anon ("varsize" %: int)
       +> anon ("num_tables" %: int)
-      +> anon ("max_inserts" %: int))
+      +> anon ("max_inserts" %: int)
+      +> flag "-w" no_arg ~doc:"perform widening")
    
 
-  let run varsize num_tables max_inserts () =
-    Benchmark.reorder_benchmark varsize num_tables max_inserts
+  let run varsize num_tables max_inserts widening () =
+    Benchmark.reorder_benchmark varsize num_tables max_inserts widening
 end
     
 
@@ -143,11 +158,18 @@ let benchmark : Command.t =
 
 
 module ONF = struct
-  let spec = Command.Spec.(empty)
+  let spec = Command.Spec.(
+      empty       
+      +> flag "-gas" (required int) ~doc:"how many cegis iterations?"
+      +> flag "-w" no_arg ~doc:"perform widening"
+      +> flag "-i" no_arg ~doc:"interactive mode"
+      +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
+      +> flag "-data" (required string) ~doc:"the input log" )
   
 
-  let run () =
-    Benchmark.basic_onf_ipv4 () |> ignore
+  let run gas widening interactive debug data_fp () =
+    Benchmark.basic_onf_ipv4 Parameters.({widening;gas;interactive;debug}) data_fp |> ignore
+    (* Benchmark.onf_representative gas widening |> ignore *)
 end
     
 
@@ -158,11 +180,14 @@ let onf : Command.t =
     ONF.run
 
 module RunningExample = struct
-  let spec = Command.Spec.(empty)
+  let spec = Command.Spec.(
+      empty
+      +> flag "-gas" (required int) ~doc:"how many cegis iterations?"
+      +> flag "-w" no_arg ~doc:"perform widening")
   
 
-  let run () =
-    Benchmark.running_example () |> ignore
+  let run gas widening () =
+    Benchmark.running_example gas widening |> ignore
 end
     
 
@@ -194,17 +219,49 @@ let wp_cmd : Command.t =
     ~summary:"Convert P4 programs into their GCL-While interpretation"
     WeakestPrecondition.spec
     WeakestPrecondition.run
-  
+
+
+module OFBench = struct
+  let spec = Command.Spec.(
+      empty
+      +> anon ("file" %: string)
+      +> flag "-w" no_arg ~doc:"do widening"
+      +> flag "-gas" (optional int) ~doc:"how many cegis iterations?")
+
+  let run classbench_file widening gas () =
+    Benchmark.of_to_pipe1 widening gas classbench_file () |> ignore
+end
+    
+
+let of_bench : Command.t =
+  Command.basic_spec
+    ~summary:"benchmarks against of tables"
+    OFBench.spec
+    OFBench.run
+
+module Meta = struct
+  let spec = Command.Spec.(empty)
+  let run = CheckAndSet.run
+end
+                
+let meta : Command.t =
+  Command.basic_spec
+    ~summary:"run CheckAndSet test"
+    Meta.spec
+    Meta.run
+    
 let main : Command.t =
   Command.group
     ~summary:"Invokes the specified Motley Command"
-    [ (*("inst-synth", synthesize_cmd)
-    ;*) ("encode-p4", encode_cmd)
+    [ ("synth", synthesize_cmd)
+    ; ("encode-p4", encode_cmd)
     ; ("edit-check", editCheck)
     ; ("edit-synth", editSynth)
     ; ("bench", benchmark)
     ; ("onf", onf)
+    ; ("of", of_bench)
     ; ("ex", running_example)
+    ; ("meta", meta)
     ; ("wp", wp_cmd)]
     
 let () = Command.run main

@@ -48,6 +48,7 @@ rule tokens = parse
 | "#"             { POUND }
 | ">"             { GREATER }
 | "<"             { LESS }
+| "\\"            { FUNC }
 | eof             { EOF }
 | id as x         { ID x }
 | _ { raise (ParseError (Printf.sprintf "At offset %d: unexpected character.\n" (Lexing.lexeme_start lexbuf))) }

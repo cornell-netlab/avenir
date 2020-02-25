@@ -555,14 +555,212 @@ $(\overline{\mathit{?f}}, \mathit{?Act}_s)$.
 
 \todo[inline]{Conflict step!}
 
-\subsection{Optimizations}
+\subsection{Model-Finding Optimizations}
 \begin{itemize}
 \item Get models using paths
 \item Candidate map
-\item generalizing counter examples for range queries
+\item Generalizing counter examples for range queries
+\item Program Slicing
 \item caching rule templates
 \item Linear-size VCs
 \end{itemize}
+
+\subsubsection{Path Abstraction}
+\label{sec:path-abstraction}
+When a packet $\pkt$ enters a switch, it will ``see'' exactly one
+sequence of assignments. That is, absent cloning and multicast, each
+packet will take either the true or false branch of each if statement,
+and hit exactly one rule in a table. We call this sequence of
+assignments (and the guards required to execute them) a \emph{trace}
+$\sigma(\pkt) \in \Cmd$. A trace is defined formally in
+Figure~\ref{fig:traces}.
+
+However, in our CEGIS loop, we compute the weakest precondition of the
+hole-ified physical program with respect to the \emph{full
+  program}. This includes the paths that execute completely different
+funcitonality or are unreachable by the input packet. However, we know
+that the counter-example input packet $\pkt_0$ will take exactly one
+path through both the logical and physical programs, so we can instead
+search through the paths through the hole-ified physical program for
+paths that could possibly implement the path that $\pkt_0$ took
+through the logical program, i.e. the weakest precondition of the
+output counterexample packet $\pkt_1$ is not equivalent to $\FALSE$.
+
+With physical-path weakest precondition $\phi$ of $\pkt_1$ in hand we
+ask Z3 for a model satisfying
+$\forall x_i. x_1 = \pkt.x_1 \wedge \ldots x_n = \pkt.x_n \Rightarrow
+\pkt_1$, which corresponds to either 0 or 1 edits to the physical
+program.
+
+\subsubsection{Precomputed Candidate Map}
+\label{sec:candidate-map}
+An observation made in the NetCore~\cite{} work is that the greatest
+difficulty in compiling networking programs to switches is in
+compiling the classifier that is used to determine which actions
+should be executed; the action languages are simple enough that this
+check is often syntactic or nearly-so.
+
+We find that we can reduce the search space (either by shrinking the
+full program, or by reducing the size of the set of paths described in
+Section~\ref{sec:path-abstraction}) by precomputing the set of
+physical action-traces that could possibly implement any given action
+trace in the logical program.
+
+To do this, we first compute (via cross-product) the set of possible
+logical action traces $\Tr(log)$, by simply iterating through all
+choices of the actions in the tables, including the default action. In
+order to capture action data, we simply replace bound variables with
+fresh holes. Then we do the same for the physical program $phys$ to
+create $\Tr(phys)$.
+
+Now, we need to consider when an action trace can be implemented in
+terms of another. Without action data, this reduces to equivalence of
+straight-line programs. However, in their presence, we need to abduce
+constraints on the action data that can be used. If this abduced
+condition is equivalent to unsat (which check via Z3) we simply do not
+include that action-trace as a canidate for the logical action-trace.
+
+We bundle these observations into a map
+$\alpha : \Tr(log) \to 2^{\Test \times \Tr(phys)}$ such that
+$(\phi, \sigma_p) \in \alpha(\sigma_l)$ whenever $\phi$ implies that
+$\sigma_p = \sigma_l$. Now, once we enter the inductive synthesis
+phase, and observe a counterexample, we can symbolically execute the
+input-packet counterexample $\pkt_0$ through the logical program and
+observe corresponding action-trace $\sigma_l$. Now, when we're trying
+to find a model, the path-based abstraction of
+Section~\ref{sec:path-abstraction} lets us simply skip over the
+logical traces that do not contain a sequence in $\alpha(\sigma_l)$ as
+a subsequence. We expect this optimization to be effective since, in
+the common case, $|\alpha(\sigma_l)|$ is close to 1, whereas the
+number of paths through a switch program may number in the tens of
+thousands.
+
+
+\subsubsection{Automatic Widening}
+
+A counter-example input packet $\pkt_0$ takes a path $\sigma(\pkt_0)$,
+we assume that an input packet's invalidity is indicative of the
+invalidity of the whole path. So, instead of exploring the whole space
+of packets that traverse $\sigma(\pkt_0)$, one-by-one, we will attempt
+to synthesize a rule (or rules) that solve for a whole class of
+counter-example packets.
+
+\todo[inline]{Something about heuristic widening templates?}
+
+To do this, we will change the way that we instrument our physical
+program. Instead of sketching equality conditions ($x = ?x$ for every
+key $x$ in a table), we can sketch range conditions:
+$?x_{l}\leq x \leq ?x_{h}$ for every key $x$ in a table. These ranges,
+of course, subsume equality conditions, so we do not lose any
+generality so far.
+
+However these holes are sometimes too general. Observe that our
+model-finding queries have the form
+
+\[\exists \overline{?x_h},\overline{?x_l}.~\forall \bar x.~\bigwedge x = \pkt_0.x \Rightarrow \phi\]
+where $\phi$ is the instrumented precondition of a trace or
+program. Assuming that we have only one field, $x$, in both the
+logical and physical programs, and that $\pkt_0.x = 7$, then
+we want to solve the formula
+\[\exists ?x_h,?x_l. \forall x. x = 7 \Rightarrow ?x_l \leq x \leq ?x_h\]
+for which there are many unfounded solutions, such as $?x_l = 0$ and
+$?x_h = 10000$. To constrain our solutions to the domain of the
+counterexample, we will use Z3's MaxSat solver to mininimize the size
+of the interval that we synthesize, which means that for the above
+formula, our model is $?x_l = 7 = ?x_h$.
+
+However, this doesn't get us any more expressive power! Leveraging the
+observation that the behavior of $\pkt_0$ is indicative of all the
+behavior on its path, we want the assumption of our condition to be
+weakest precondition that a packet must satisfy to take that path:
+$\wp(\sigma(\pkt_1), \TRUE)$. We need to do a similar thing in the
+logical program to avoid polluting our formula with
+unnecessarily-specific equality conditions latent in the formula
+constructed by $\pkt_1$; for each trace
+$\tau \in \alpha(\sigma(\pkt_1)$, we then search for a model
+(minimizing $\sum (?x_h - ?x_l)$) that satisfies
+\[\exists \overline{?x_l},\overline{?x_h}. \forall \overline
+  x. \wp(\sigma(\pkt_1),\TRUE) \Rightarrow \wp(\tau, \TRUE)\]
+
+\subsection{Verification Optimization}
+One of the biggest bottlenecks in our CEGIS algorithm is the
+evaluation of the equivalence query. Using standard the
+weakest-precondition functions, the size of the verification condition
+(VC) we compute is exponential in the size of the input
+program~\cite{dijkstra}. This section explores ways to mitigate this blowup.
+
+\subsubsection{Linear-Size VCs}
+Packet processing pipelines never fail. Packets are dropped or proceed
+normally. Differing from other work which encodes packet
+drops similarly to $\assert \FALSE$, we include a special
+\texttt{drop}-bit into our programs that encodes whether packets are
+dropped, which mimics the physical reality of many
+architectures.
+
+Prior work has shown that you can compute quadratic-size logical
+characterizations of programs in so-called \emph{passive} form to a
+program transformation that reduces eliminates duplications latent in
+Dijkstra's weakest preconditions. A direct corollary of their work is
+that if your programs are assertion-free, as ours are, then you can
+compute \emph{linear-size} verification conditions.
+
+However, because, like in SSA form, passive programs give a different
+index to every variable, our relation program equivalence cannot be
+captured by $N(log) \Leftrightarrow N(phys)$, because $N(log)$ will
+capture all the different intermediate values that the fields of $log$
+go through (sim $N(phys)$), and we are only concerned with equivalence
+of the initial and final states. We also must rename the variables $x$
+in $phys$ to fresh names $x'$ to avoid capture, we call this new
+program $phys'$. To capture this we record the initial index ($0$) and
+the final index ($\max(x)$) of a variable $x$, to construct the
+following verification condition:
+\[\begin{array}{l}
+    N(log) \wedge N(phys') \wedge \bigwedge_{x \in \fvs(log;phys)} x_0 = x'_0 \\
+    \Rightarrow \bigwedge_{x \in fvs(log;phys)} x_{\max(x)} = x'_{\max(x)}
+  \end{array}
+\]
+
+However, this is too strong to handle dropped packets -- if both
+programs drop the packet, we don't care what its final value is, only
+that they both dropped the packet. We modify our verification
+condition to its final form below:
+\[ \begin{array}{l}
+     N(log) \wedge N(phys') \wedge \bigwedge_{x \in \fvs(log;phys)} x_0 = x'_0  \\
+     \Rightarrow \texttt{drop}_{\max(\texttt{drop})} = 0 = \texttt{drop}'_{\max(\texttt{drop}')}\\
+     \phantom{\Rightarrow}~\vee  \bigwedge_{x \in fvs(log;phys)} x_{\max(x)} = x'_{\max(x')}
+   \end{array}
+ \]
+
+Note that for small programs this VC is larger than the one computed
+via weakest preconditions, however, the linear scaling rapidly
+compensates for this fact.
+
+\subsubsection{Heuristic Initial Counter-Examples}
+To kick off our synthesis procedure on a given insertion, we first
+check whether we need to make any changes at all to the physical
+network -- it could be that the rule had no end-to-end semantic
+effect. If our new logical program and the physical program have
+diverged, Z3 will tell us and give us a counter example packet.
+
+Assume for the moment that the insertion changes the behavior of the
+program (we'll discuss the alternate case below). However, whatever
+counter-example Z3 produces (if it does at all) will necessarily hit
+the rule we just added! So instead of producing a possible
+counterexample by checking equivalence of two programs, we instead can
+produce a counterexample by asking Z3 for a packet that will hit the
+new rule we installed. This formula will necessarily be smaller since
+it only concerns a portion of one program, not two full programs.
+
+Once we produce a counter example packet $\pkt$, we can check whether
+it has different behavior in both the logical and physical programs
+making it a true counter example. If it is a false CE, we can default
+back to the full verification check; but if it is a true CE we can go
+directly to the incremental synthesis phase.
+
+\subsubsection{Program Slicing}
+
+
+
 
 \subsection{Abduction}
 \begin{itemize}
@@ -578,7 +776,7 @@ $(\overline{\mathit{?f}}, \mathit{?Act}_s)$.
 \end{itemize}
 
 \section{Implementation}
-\todo[inline]{Describe the Implementation}XS
+\todo[inline]{Describe the Implementation}
 \begin{itemize}
 \item P4 $\to$ Pipeline (including ternary explosion)
 \item Pipeline + Instance $\to$  GCL

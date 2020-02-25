@@ -1,68 +1,69 @@
 open Core
 open Ast
+open Util
 
 module StringMap = Map.Make (String)
 
-type t = value1 StringMap.t
+type t = value StringMap.t
 
 type located = t * (int option)
 
 let string__packet (p : t) =
-  (StringMap.fold ~f:(fun ~key:k ~data:v acc -> acc ^ k ^ "," ^ (string_of_value1 v) ^ ",") p ~init:"(") ^ ")"
+  (StringMap.fold ~f:(fun ~key:k ~data:v acc -> acc ^ k ^ "," ^ (string_of_value v) ^ ",") p ~init:"(") ^ ")"
 
-let set_field (pkt : t) (field : string) (v : value1) : t  =
+let set_field (pkt : t) (field : string) (v : value) : t  =
   StringMap.set pkt ~key:field ~data:v
     
-let get_val (pkt : t) (field : string) : value1 =
+let get_val (pkt : t) (field : string) : value =
   match StringMap.find pkt field with
     | None -> failwith ("UseBeforeDef error " ^ field ^ " packet is " ^ string__packet pkt)
     | Some v -> v     
               
-let rec set_field_of_expr1 (pkt : t) (field : string) (e : expr1) : t =
+let rec set_field_of_expr (pkt : t) (field : string) (e : expr) : t =
   let binop op e e'=
-    let eVal = get_val (set_field_of_expr1 pkt field e) field in
-    let eVal' = get_val (set_field_of_expr1 pkt field e') field in
+    let eVal = get_val (set_field_of_expr pkt field e) field in
+    let eVal' = get_val (set_field_of_expr pkt field e') field in
     set_field pkt field (op eVal eVal')
   in
   match e with
-  | Value1 v -> set_field pkt field v
-  | Var1 (x,_) ->
+  | Value v -> set_field pkt field v
+  | Var (x,_) ->
      get_val pkt x
      |> set_field pkt field
-  | Hole1 _ ->
+  | Hole _ ->
      failwith "Packets cannot have holes in them"
-  | Plus  (e, e') -> binop add_values1 e e'
-  | Times (e, e') -> binop multiply_values1 e e'
-  | Minus (e, e') -> binop subtract_values1 e e'
-  | Tuple es ->
-       List.map es ~f:(fun e -> get_val (set_field_of_expr1 pkt field e) field)
-       |> VTuple
-       |> set_field pkt field
-                  
+  | Plus  (e, e') -> binop add_values e e'
+  | Times (e, e') -> binop multiply_values e e'
+  | Minus (e, e') -> binop subtract_values e e'
+   
                 
 
 let init_field_to_random bound pkt (f,sz) =
   set_field pkt f (Int (Random.int bound, sz))
 
-let rec init_field_to_value_in (values : value1 list) pkt (f, sz) =
+let rec init_field_to_value_in (values : value list) pkt (f, sz) =
   match values with
   | [] -> init_field_to_random 10000000 pkt (f,sz)
   | _ -> 
      let i = Random.int (List.length values) in
      let vi = List.nth_exn values i in
-     if size_of_value1 vi = sz then
+     if size_of_value vi = sz then
        set_field pkt f vi
      else
        init_field_to_value_in (List.filter values ~f:(fun x -> x <> vi)) pkt (f, sz)
 
-let to_test ?fvs:(fvs = []) (pkt : t) =
-  Printf.printf "Testifying %s\n%!" (string__packet pkt);
-  StringMap.fold pkt ~init:True
-    ~f:(fun ~key ~data test ->
-      if key <> "loc" && List.exists fvs ~f:(fun (x,_) -> key = x)then
-        Var1 (key,size_of_value1 data) %=% Value1 data
-        %&% test
-      else ( test ))
+let to_test ?fvs:(fvs = []) ?random_fill:(random_fill=false) (pkt : t) =
+  List.fold fvs ~init:True
+    ~f:(fun acc (x,sz) ->
+      acc %&% (
+          match StringMap.find pkt x with
+          | None ->
+             if random_fill then
+               Var(x,sz) %=% mkVInt(Random.int (pow 2 sz),sz)
+             else                  
+               True
+          | Some v ->
+             Var(x, sz) %=% Value(v)))
 
 
 let test_of_wide ?fvs:(fvs = []) wide =
@@ -70,8 +71,8 @@ let test_of_wide ?fvs:(fvs = []) wide =
     ~f:(fun ~key ~data:(lo,hi,sz) test ->
       if key <> "loc" && List.exists fvs ~f:(fun (x,_) -> key = x) then
         (if lo = hi
-         then Var1 (key, sz) %=% mkVInt(lo,sz)
-         else (mkVInt(lo, sz) %<=% Var1(key,sz)) %&% (Var1 (key, sz) %<=% mkVInt(hi,sz))
+         then Var (key, sz) %=% mkVInt(lo,sz)
+         else (mkVInt(lo, sz) %<=% Var(key,sz)) %&% (Var (key, sz) %<=% mkVInt(hi,sz))
         ) %&% test
       else ( test ))    
    
@@ -79,7 +80,7 @@ let empty = StringMap.empty
 
 let equal (pkt:t) (pkt':t) = StringMap.equal (=) pkt pkt'
                                                                                           
-let generate ?bound:(bound=10000000) ?values:(values=([] : value1 list))  (vars : (string * size) list) =
+let generate ?bound:(bound=10000000) ?values:(values=([] : value list))  (vars : (string * size) list) =
   match values with
   | [] ->
     List.fold vars ~init:empty ~f:(init_field_to_random bound)
@@ -92,7 +93,7 @@ let symbolize str =
     str ^ "_SYMBOLIC"
 let unsymbolize = String.substr_replace_all ~pattern:"_SYMBOLIC" ~with_:""
               
-let from_CE (model : value1 StringMap.t) : t =
+let from_CE (model : value StringMap.t) : t =
   StringMap.fold model ~init:empty
     ~f:(fun ~key ~data pkt ->
       let key = String.split key ~on:('!') |> List.hd_exn in
@@ -107,12 +108,15 @@ let un_SSA (pkt : t) : t =
     ~f:(fun ~key ~data acc_pkt ->
       match String.rsplit2 key ~on:'$' with
       | None ->
-         StringMap.set acc_pkt ~key ~data
-      | Some (key', _) ->
-         StringMap.set acc_pkt ~key:key' ~data
+         StringMap.set acc_pkt ~key:(key) ~data
+      | Some (key', i) ->
+         if int_of_string i = 0
+         then
+           StringMap.set acc_pkt ~key:(key') ~data
+         else acc_pkt
     )
                  
         
-let mk_packet_from_list (assoc : (string * value1) list) : t =
+let mk_packet_from_list (assoc : (string * value) list) : t =
   List.fold assoc ~init:empty
     ~f:(fun pkt (f, v) -> set_field pkt f v)

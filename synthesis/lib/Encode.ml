@@ -56,6 +56,13 @@ and gather_fields type_ctx =
                                      | _ -> None)
   |> List.concat
 
+and check_typedef_widths type_ctx n =
+  let open TypeDeclaration in
+  List.find_map type_ctx ~f:(fun d -> match d with
+                                    | (_, TypeDef {name; typ_or_decl = Left t;_}) ->
+                                        if n = snd name then Some t else None
+                                    | _ -> None)
+
 and lookup_field_width (type_ctx : TypeDeclaration.t list) fn : size option =
   let open TypeDeclaration in
   match fn with
@@ -66,7 +73,7 @@ and lookup_field_width (type_ctx : TypeDeclaration.t list) fn : size option =
     let flds = gather_fields type_ctx in
     match List.find flds ~f:(fun (_, f) -> snd f.name = fn) with
       | Some (_, f) -> lookup_type_width type_ctx f.typ
-      | None -> None
+      | None -> Option.bind (check_typedef_widths type_ctx fn) ~f:(lookup_type_width type_ctx)
 
 and lookup_field_width_exn (type_ctx : TypeDeclaration.t list) field : size =
 (* let _ = printf "field = %s\ntype_cxt = %s" field (Sexp.to_string ([%sexp_of: TypeDeclaration.t list] type_ctx)) in *)
@@ -158,10 +165,10 @@ let action_run_suffix = "_action_run()"
 let action_run_field members =
   string_of_memberlist members ^ action_run_suffix
 
-let rec encode_expression_to_value (type_ctx : TypeDeclaration.t list) (e : Expression.t) : expr1 =
+let rec encode_expression_to_value (type_ctx : TypeDeclaration.t list) (e : Expression.t) : expr =
   encode_expression_to_value_with_width (-1) type_ctx e
 
-and encode_expression_to_value_with_width width (type_ctx : TypeDeclaration.t list) (e : Expression.t) : expr1 =
+and encode_expression_to_value_with_width width (type_ctx : TypeDeclaration.t list) (e : Expression.t) : expr =
   let module E= Expression in
   let unimplemented name =
     failwith ("[Unimplemented Expression->Value Encoding for " ^ name ^"] at " ^ Petr4.Info.to_string (fst e))
@@ -175,20 +182,20 @@ and encode_expression_to_value_with_width width (type_ctx : TypeDeclaration.t li
     op (encode_expression_to_value_with_width w type_ctx e) (encode_expression_to_value_with_width w' type_ctx e')
   in
   match snd e with
-  | E.True -> Value1 (Int (1, 1))
-  | E.False -> Value1 (Int (0, 1))
+  | E.True -> Value (Int (1, 1))
+  | E.False -> Value (Int (0, 1))
   | E.Int (_,i) ->
       begin match i.width_signed with
-        | Some (w, _) -> Value1 (Int (Bigint.to_int_exn i.value, w))
-        | None -> Value1 (Int (Bigint.to_int_exn i.value, width))
+        | Some (w, _) -> Value (Int (Bigint.to_int_exn i.value, w))
+        | None -> Value (Int (Bigint.to_int_exn i.value, width))
       end
   | E.Name (_,s) ->
     let w = get_width type_ctx e in
-    Var1 (s, w)
+    Var (s, w)
   | E.ExpressionMember _ ->
     let members = dispatch_list e in
     let w = lookup_field_width_exn type_ctx (snd (List.last_exn members)) in
-    Var1 (dispatch_list e |> string_of_memberlist, w)
+    Var (dispatch_list e |> string_of_memberlist, w)
   | E.BinaryOp {op;args=(e, e')} ->
      begin match snd op with
      | Plus -> binop mkPlus e e'
@@ -206,7 +213,7 @@ and encode_expression_to_value_with_width width (type_ctx : TypeDeclaration.t li
      begin match List.last members with
      | None -> unimplemented "Function Call with nothing to dispatch"
      | Some (_,"isValid") ->
-        Var1 (validity_bit members, 1)
+        Var (validity_bit members, 1)
      | Some _ -> unimplemented ("FunctionCall for members " ^ string_of_memberlist members)
      end
   | _ -> unimplemented (ctor_name_expression e)
@@ -267,7 +274,7 @@ let rec encode_expression_to_test (type_ctx : TypeDeclaration.t list) (e: Expres
   | E.False -> False
   | E.Int _ -> type_error "an integer"
   | E.String (_,s) -> type_error ("a string \"" ^ s ^ "\"")
-  | E.Name (_,s) -> Eq(Var1(s, 1), mkVInt(1, 1)) (* This must be a boolean value *)
+  | E.Name (_,s) -> Eq(Var(s, 1), mkVInt(1, 1)) (* This must be a boolean value *)
   | E.TopLevel (_,s) -> type_error ("a TopLevel " ^ s)
   | E.ArrayAccess _ -> type_error ("an array access")
   | E.BitStringAccess _ -> type_error ("a bitstring access")
@@ -308,7 +315,8 @@ let rec encode_expression_to_test (type_ctx : TypeDeclaration.t list) (e: Expres
      begin match List.last members with
      | None -> unimplemented "Function Call with nothing to dispatch"
      | Some (_,"isValid") ->
-        Var1 (validity_bit members, 1) %=% Value1(Int (1, 1))
+        Var (validity_bit members, 1) %=% Value(Int (1, 1))
+        (* Var (string_of_memberlist members ^ "()", -1) %=% Value(Int (1, 1) ) *)
      | Some _ -> unimplemented ("FunctionCall for members " ^ string_of_memberlist members)
      end
   | E.FunctionCall _ ->
@@ -317,7 +325,7 @@ let rec encode_expression_to_test (type_ctx : TypeDeclaration.t list) (e: Expres
     let members = dispatch_list expr in
      begin match name with
      | (_,"hit") ->
-        Var1 (hit_bit members, 1) %=% mkVInt(1, 1)
+        Var (hit_bit members, 1) %=% mkVInt(1, 1)
      | _ -> unimplemented ("ExpressionMember for members " ^ string_of_memberlist members)
      end
   | _ -> unimplemented (ctor_name_expression e)
@@ -408,7 +416,7 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration
     end
   | Assignment {lhs=lhs; rhs=rhs} ->
     begin match encode_expression_to_value type_ctx lhs with
-      | Var1 (f,_) -> f %<-% encode_expression_to_value type_ctx rhs, false, false
+      | Var (f,_) -> f %<-% encode_expression_to_value type_ctx rhs, false, false
       | _ -> failwith ("[TypeError] lhs of assignment must be a field, at " ^ Petr4.Info.to_string info)
     end
   | DirectApplication {typ; args} ->
@@ -516,7 +524,7 @@ and assign_param (type_ctx : TypeDeclaration.t list) (param_arg : Parameter.t * 
         | Some (_, Out) -> []
         | Some (_, InOut) ->
           let n = dispatch_list value in
-          Assign(validity_bit_no_removal [param.variable], Var1(validity_bit_no_removal n, 1)) :: val_assgn
+          Assign(validity_bit_no_removal [param.variable], Var(validity_bit_no_removal n, 1)) :: val_assgn
       end
     | _ -> failwith "Unhandled argument"
 
@@ -543,8 +551,8 @@ and return_args (type_ctx : TypeDeclaration.t list) (param_arg : Parameter.t * A
         | Some (_, InOut) ->
           let n = dispatch_list value in
           let w = lookup_type_width_exn type_ctx param.typ in
-          let val_assgn = Assign (string_of_memberlist n, Var1(snd param.variable, w)) in
-          [Assign(validity_bit_no_removal n, Var1(validity_bit_no_removal [param.variable], 1)); val_assgn]
+          let val_assgn = Assign (string_of_memberlist n, Var(snd param.variable, w)) in
+          [Assign(validity_bit_no_removal n, Var(validity_bit_no_removal [param.variable], 1)); val_assgn]
       end
     | _ -> failwith "Unhandled argument"
 
@@ -571,10 +579,10 @@ and encode_action3 prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t
       ~f:(fun (rst, in_rb, in_eb) stmt ->
             let tstmt, ret_rb, ret_eb = encode_statement prog ctx type_ctx rv stmt in
             let tstmt2 = if in_rb
-                            then mkPartial [mkEq (Var1(return_bit rv, 1)) (mkVInt(0, 1)), tstmt]
+                            then mkPartial [mkEq (Var(return_bit rv, 1)) (mkVInt(0, 1)), tstmt]
                             else tstmt in
             let tstmt3 = if in_eb
-                            then mkPartial [mkEq (Var1(exit_bit, 1)) (mkVInt(0, 1)), tstmt2]
+                            then mkPartial [mkEq (Var(exit_bit, 1)) (mkVInt(0, 1)), tstmt2]
                             else tstmt in
             (rst %:% tstmt3, ret_rb, ret_eb))
   in
@@ -586,7 +594,7 @@ and encode_switch prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t 
   |> snd |> List.filter_map ~f:(fun x -> x)
 
 
-and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t list) (e : Expression.t) : expr1 * Table.action_ref list =
+and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t list) (e : Expression.t) : expr * Table.action_ref list =
   let dispList = dispatch_list e in
   match dispList with
   | [] -> failwith "[RuntimeException] Tried to encode an empty list of names"
@@ -602,7 +610,7 @@ and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : TypeDeclarati
     | _ -> failwith "Table not found"
 
 
- and encode_switch_case prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t list) (expr : expr1)
+ and encode_switch_case prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t list) (expr : expr)
                       (ts : Table.action_ref list) (rv : int) (fall_test : test)
                       (case : Statement.switch_case) : test * ((test * cmd) option) =
     let open Statement in
@@ -639,7 +647,13 @@ and encode_program (Program(top_decls) as prog : program ) =
     let _ = printf "type_cxt\n%s\n" (Sexp.to_string ([%sexp_of: TypeDeclaration.t list] type_cxt)) in
     assign_rv %:% encode_control prog c.locals type_cxt2 rv c.apply
   | Some _ -> failwith "Found a module called MyIngress, but it wasn't a control module"
-  
+    
+(* and encode_match ((_, m) : Table.key) : test =
+  match m.match_kind with
+  | _, "exact" -> encode_expression_to_value m.key %=% Hole ("?",-1)
+  | info, x -> failwith ("[Unimplemented MatchKind " ^ x ^ "] Cannot handle match kind "
+                   ^ x ^ " at " ^ Petr4.Info.to_string info )
+ *)
 and encode_table prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t list) (rv : int) (name : P4String.t) (props : Table.property list) : cmd =
   let open Table in
   let p4keys, p4actions, p4customs = List.fold_left props ~init:([], [], [])

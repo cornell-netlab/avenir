@@ -45,14 +45,41 @@ export LD_LIBRARY_PATH=`opam config var z3:lib`
 To build the executable, run
 
 ```
-dune build bin/main.exe
+make
 ```
 
-To build-and-run the executable, run
+which will create an executable `motley` in your current directory. To run the executable, run
 
 ```
-dune exec bin/main.exe <path/to/logical/program> <path/to/real/program>
+./motley <command here>
 ```
+
+
+# Running Experiments from ONF
+
+To run the ONF experiments, run
+
+```
+./motley onf -data <onf/csv/file> -gas 1
+```
+
+Using the datafile checked into the repository you can run
+
+```
+./motley onf -data ./benchmarks/onos_201_adds.csv -gas 1
+```
+
+However this might take too long, or you may want some intermediate
+results. You can truncate the file using, e.g. `head -100` or `head -1000`
+to create a new file.
+
+```
+head -200 ./benchmarks/onos_201_adds.csv > ./benchmarks/onos_201_200_adds.csv
+./motley onf -data ./benchmarks/onos_201_200_adds.csv -gas 1
+```
+
+If you get an `"OUT OF GAS"` failure, try increasing the value of the
+`-gas` parameter.
 
 
 # Writing and Running Tests
