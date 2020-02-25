@@ -32,9 +32,9 @@ let rec set_field_of_expr (pkt : t) (field : string) (e : expr) : t =
      |> set_field pkt field
   | Hole _ ->
      failwith "Packets cannot have holes in them"
-  | Plus  (e, e') -> binop add_values1 e e'
-  | Times (e, e') -> binop multiply_values1 e e'
-  | Minus (e, e') -> binop subtract_values1 e e'
+  | Plus  (e, e') -> binop add_values e e'
+  | Times (e, e') -> binop multiply_values e e'
+  | Minus (e, e') -> binop subtract_values e e'
    
                 
 

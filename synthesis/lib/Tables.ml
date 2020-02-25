@@ -7,18 +7,18 @@ open Manip
 
 module Match = struct      
   type t =
-    | Exact of int * int
-    | Between of int * int * int 
+    | Exact of value
+    | Between of value * value
                                
   let to_string m =
     match m with 
-    | Exact (i,s) -> Printf.sprintf "%d#%d" i s
-    | Between (lo,hi,s) -> Printf.sprintf "[%d,%d]#%d" lo hi s
+    | Exact x -> string_of_value x
+    | Between (lo,hi) -> Printf.sprintf "[%s,%s]" (string_of_value lo) (string_of_value hi)
 
   let to_test k m =
     match m with 
-    | Exact (x,sz) -> (Var k %=% mkVInt(x,sz))
-    | Between (lo, hi,sz) -> (mkVInt(lo,sz) %<=% Var k) %&% (Var k %<=% mkVInt(hi,sz))
+    | Exact x -> Var k %=% Value(x)
+    | Between (lo, hi) -> (Value(lo) %<=% Var k) %&% (Var k %<=% Value(hi))
 
   let holes encode_tag x sz =
     match encode_tag with
@@ -32,122 +32,123 @@ module Match = struct
   let list_to_test (keys : (string * size) list) (matches : t list) =
     List.fold2_exn keys matches ~init:True ~f:(fun acc k m -> acc %&% to_test k m)
 
-  let cap (m : t) (m' : t) =
-    match m, m' with
-    | Exact (i,_), Exact (j,_) ->
-       if i = j then [m] else []
-    | Exact (i,_), Between (lo, hi, _)
-      | Between (lo, hi, _), Exact(i,_)->
-       if lo <= i && i <= hi then
-         [m]
-       else
-         []
-    | Between (lo, hi, sz), Between (lo', hi', _) ->
-       let lo'' = max lo lo' in
-       let hi'' = min hi hi' in
-       if lo'' < hi'' then
-         [Between (lo'', hi'', sz)]
-       else if lo'' = hi'' then
-         [Exact(lo'',sz)]
-       else
-         []
+
+  let mk_ipv6_match ipv6_str =
+    let bv_low = Bytes.make 16 '\x00' in
+    let bv_hi = Bytes.make 16 '\xff' in
+    let (addr_str, prefix_len) =
+      match String.lsplit2 ipv6_str ~on:'/' with
+      | None -> (ipv6_str, 128)
+      | Some (addr, len) -> (addr, int_of_string len) in
+    let hex_addr =
+      let exp_addr_str =       
+        match String.substr_index addr_str ~pattern:"::" with
+        | None -> addr_str
+        | Some i ->
+           let rec loop addr =
+             if String.count addr ~f:((=) ':') = 8 then
+               String.substr_replace_all addr  ~pattern:"::" ~with_:":"
+             else
+               String.substr_replace_all addr ~pattern:("::") ~with_:":0000::"
+               |> loop
+           in
+           loop addr_str
+           |> String.split ~on:':'
+           |> List.fold ~init:"" ~f:(fun acc str ->
+                  Printf.sprintf "%s:%s" acc (lfill '0' 4 str))
+      in
+      String.substr_replace_all exp_addr_str ~pattern:":" ~with_:""
+    in
+    let bv_list = bytes_of_hex_string ("0x" ^ hex_addr) in
+    List.iteri bv_list ~f:(fun i byte ->
+        if i*8 >= prefix_len
+        then ()
+        else
+          (Bytes.set bv_low i byte;
+           Bytes.set bv_hi i byte);        
+      );
+    if bv_low = bv_hi then
+      Exact (BV bv_low)
+    else
+      Between (BV bv_low, BV bv_hi)
+    
+    (* List.iteri hextet_list ~f:(fun i hex_str ->
+     *     let hex_str = Printf.sprintf "%s%s" (String.make (4 - (String.length hex_str)) '0') hex_str in
+     *     let byte1_str = String.prefix hex_str 2 in
+     *     let byte2_str = String.suffix hex_str 2 in
+     *     assert (hex_str = byte1_str ^ byte2_str);
+     *     let char1_opt = Option.("0x" ^ byte1_str |> int_of_string_opt >>= Char.of_int) in
+     *     let char2_opt = Option.("0x" ^ byte2_str |> int_of_string_opt >>= Char.of_int) in
+     *     let char1, char2 =
+     *       match char1_opt,char2_opt with
+     *       | None,None -> Printf.sprintf "Couldn't find char for 0x%s nor 0x%s" byte1_str byte2_str |> failwith
+     *       | None,_ -> Printf.sprintf "Couldn't find char for 0x%s" byte1_str|> failwith
+     *       | _, None-> Printf.sprintf "Couldn't find char for 0x%s" byte2_str |> failwith
+     *       | Some c, Some c' -> c,c'
+     *     in
+     *     if 2*i*8 >= prefix_len
+     *     then ()
+     *     else
+     *       (Bytes.set bv_low (2*i) char1;
+     *        Bytes.set bv_hi (2*i) char1);        
+     * 
+     *     if 2*i*8 + 1 >= prefix_len
+     *     then ()
+     *     else
+     *       (Bytes.set bv_low (2*i+1) char2;
+     *        Bytes.set bv_hi (2*i+1) char2)
+     *   ); *)
+    
+    
+    let cap (m : t) (m' : t) =
+      match m, m' with
+      | Exact x, Exact y->
+         if veq x y then [m] else []
+      | Exact x, Between (lo, hi)
+        | Between (lo, hi), Exact x->
+         if vleq lo x && vleq x hi then
+           [m]
+         else
+           []
+      | Between (lo, hi), Between (lo', hi') ->
+         let lo'' = max lo lo' in
+         let hi'' = min hi hi' in
+         if veq lo'' hi'' then
+           [Exact lo'']
+         else if vleq lo'' hi'' then
+           [Between (lo'', hi'')]
+         else 
+           []
 
   let has_inter (m : t) (m' : t) : bool =
     match m, m' with
-    | Exact (x,_), Exact(y,_) -> x = y
-    | Exact (x, _), Between(lo, hi,_)
-      | Between(lo,hi,_), Exact(x,_)
-      -> lo <= x && x <= hi
-    | Between(lo, hi, _), Between(lo',hi',_)
+    | Exact x, Exact y -> veq x y
+    | Exact x, Between (lo, hi)
+      | Between(lo,hi), Exact(x)
+      -> vleq lo x && vleq x hi
+    | Between(lo, hi), Between(lo',hi')
       -> max lo lo' <= min hi hi'
                            
-  let cup (m : t) (m' : t) : t list =
-    match m, m' with
-    | Exact (i,_), Exact (j,sz) ->
-       if i = j then
-         [m]
-       else if off_by_one i j
-       then [Between (min i j, max i j, sz)]
-       else [m; m']
-    | Exact (i,_), Between (lo, hi, sz)
-      | Between (lo, hi, sz), Exact(i,_)->
-       if lo <= i && i <= hi then
-         [Between (lo, hi, sz)]
-       else if i + 1 = lo || hi + 1 = i
-       then [Between(min lo i, max hi i, sz)]
-       else [m;m']
-    | Between (lo, hi, sz), Between (lo', hi', _) ->
-       if hi >= lo - 1 && lo <= hi + 1
-       then [Between (min lo lo', max hi hi', sz)]
-       else [m;m']
-
-  let cup_list (ms : t list): t list =
-    List.fold ms ~init:[]
-      ~f:(fun acc m ->
-        List.fold acc ~init:[]
-          ~f:(fun acc' m' ->
-            acc' @ cup m m' ))
       
 
   let is_subset (m : t) (m': t) : bool =
     match m, m' with
-    | Exact (i, _), Exact (j, _) -> i = j
-    | Exact (i, _), Between (lo', hi',_) -> lo' <= i && i <= hi'
-    | Between (lo, hi, _), Exact (j,_) -> lo = j && hi = j
-    | Between (lo, hi, _), Between (lo', hi', _) ->  lo <= hi' && lo' <= hi
-                                                                           
-  let rec minus (m : t) (ms : t list) : t list =
-    let compare m m' =
-      match m, m' with
-      | Exact(i,_), Exact(j,_) -> compare i j
-      | Exact(i,_), Between(lo,_,_) -> compare i lo
-      | Between(lo, _,_), Exact(i,_) -> compare lo i
-      | Between(lo, _, _), Between(lo',_,_) -> compare lo lo'
-    in
-    match m with
-    | Exact(_, _) ->
-       if List.exists ms ~f:(is_subset m)
-       then []
-       else [m]
-    | Between(lo,hi, sz) ->
-       match ms with
-       | [] -> [m]
-       | (m'::ms') ->
-          match m' with
-          | Exact(j,_) ->
-             if j < lo || j > hi
-             then minus (Between (lo,hi,sz)) ms'
-             else if j = lo then
-               minus (Between(lo+1, hi, sz)) ms'
-             else if j = hi then
-               minus (Between (lo, hi-1, sz)) ms'
-             else
-               minus (Between (lo, j-1, sz)) ms'
-               @ minus (Between (j+1, hi, sz)) ms'
-               |> cup_list
-               |> List.sort ~compare
+    | Exact i, Exact j -> veq i j
+    | Exact i, Between (lo', hi') -> vleq lo' i && vleq i hi'
+    | Between (lo, hi), Exact j -> veq lo j && veq hi j
+    | Between (lo, hi), Between (lo', hi') -> vleq lo hi' && vleq lo' hi
 
-          | Between(lo', hi', _) ->
-             if lo' <= lo && hi <= hi'
-             then []
-             else if lo' <= lo
-             then minus (Between(hi'+1, hi, sz)) ms'
-             else if hi <= hi' then
-               minus (Between(lo, lo'-1,sz)) ms'
-             else (*lo < lo' && hi > hi'*)
-               minus (Between (lo, lo'-1, sz)) ms'
-               @ minus (Between (hi'+1, hi, sz)) ms'
-               |> cup_list
-               |> List.sort ~compare
+
+    
 end
                                        
 module Row = struct
-  type action_data = (int * int) list
+  type action_data = value list
   type t = Match.t list * action_data * int
-  let to_string (mtchs, ad, actid) =
+  let to_string ((mtchs, ad, actid) : t) =
     Printf.sprintf "%s   ---(%s)---> %d"
       (List.fold mtchs ~init:"" ~f:(fun acc m -> Printf.sprintf "%s, %s" acc (Match.to_string m)))
-      (List.fold ad ~init:"" ~f:(fun acc (d,_) -> Printf.sprintf "%s, %d" acc d))
+      (List.fold ad ~init:"" ~f:(fun acc d -> Printf.sprintf "%s, %s" acc (string_of_value d)))
       actid
 
   let mk_new_row match_model phys tbl_name data_opt act : t option =
@@ -165,16 +166,16 @@ module Row = struct
              | Some ks, Hole _, Hole _ ->
                 begin match fixup_val match_model (Hole("?"^v, sz)) with
                 | Hole _ -> None
-                | Value(Int (x, sz)) ->
-                   Some (ks @ [Match.Exact (x,sz)])
+                | Value v ->
+                   Some (ks @ [Match.Exact v])
                 | _ -> failwith "Model did something weird"
                 end
-             | Some ks, Value(Int(lo,_)), Value(Int(hi,_)) ->
-                let k = if lo = hi
-                        then [Match.Exact (lo, sz)]
-                        else if lo > hi
+             | Some ks, Value lo, Value hi ->
+                let k = if veq lo hi
+                        then [Match.Exact lo]
+                        else if vleq hi lo
                         then failwith "Low value greater than high value in model from z3"
-                        else [Match.Between (lo, hi,sz)] in
+                        else [Match.Between (lo, hi)] in
                 Some (ks @ k)
              | _, _,_ -> failwith "got something that wasn't a model"
            ) in
@@ -188,11 +189,11 @@ module Row = struct
                (* Printf.printf "Params for act %d :%s\n%!" act
                 *   (List.fold params ~init:"" ~f:(fun acc (p,_) -> Printf.sprintf "%s %s" acc p)); *)
                List.fold params ~init:[]
-                 ~f:(fun acc (p,sz) ->
+                 ~f:(fun acc (p,_) ->
                    match StringMap.find match_model p with
                    | None ->
                       failwith ("Couldn't find " ^ p)
-                   | Some v -> acc @ [(get_int v, sz)]
+                   | Some v -> acc @ [v]
                  )
        in
        match keys_holes with
@@ -227,7 +228,7 @@ module Edit = struct
   type t = string * Row.t
   let to_string (nm,(row) : t) =
     Printf.sprintf "%s <++ %s" nm (Row.to_string row) 
-
+                   
 end               
 
 module Instance = struct
@@ -390,6 +391,7 @@ module Instance = struct
          StringMap.fold match_model ~init:[]
            ~f:(fun ~key ~data acc ->
              if String.is_substring key ~substring:"AddRowTo"
+                && data = Int(1,1)
              then (String.substr_replace_all key ~pattern:"?" ~with_:""
                    |> String.substr_replace_first ~pattern:"AddRowTo" ~with_:"")
                   :: acc
@@ -397,10 +399,14 @@ module Instance = struct
            ) in
        let pinst' = remove_deleted_rows params match_model pinst in
        let out = List.fold tables_added_to ~init:(`Ok pinst')
-         ~f:(fun inst tbl_name ->
-           let act = StringMap.find_exn match_model ("?ActIn" ^ tbl_name) |> get_int in
-           update_consistently checker params match_model phys tbl_name None act inst
-         )
+                   ~f:(fun inst tbl_name ->
+                     let str = ("?ActIn" ^ tbl_name) in
+                     match StringMap.find match_model ("?ActIn" ^ tbl_name) with
+                     | None ->
+                        Printf.sprintf "Couldn't Find var %s\n" str |> failwith
+                     | Some v ->
+                        let act = get_int v in
+                        update_consistently checker params match_model phys tbl_name None act inst )
        in
        out
          

@@ -561,7 +561,7 @@ let bind_action_data vals (scope, cmd) : cmd =
   let holes = List.map scope fst in
   List.fold2_exn holes vals
     ~init:StringMap.empty
-    ~f:(fun acc x v -> StringMap.set acc ~key:x ~data:(Int v))
+    ~f:(fun acc x v -> StringMap.set acc ~key:x ~data:v)
   |> fill_holes (holify holes cmd) 
 
 

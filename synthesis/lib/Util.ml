@@ -108,3 +108,97 @@ let compile_dot ?(format="pdf") ?(engine="dot") ?(title=engine) data : string =
  * let show_dot_file ?format ?title ?engine file : unit =
  *   In_channel.read_all file
  *   |> show_dot ?format ?title ?engine                   *)
+
+
+let lfill c n str =
+  Printf.sprintf "%s%s"
+    (String.make (n - String.length str) c)
+    (str)
+                 
+
+(** Bytes and Stuff **)
+let rec bytes_of_hex_string str : char list =
+  let str = String.chop_prefix_exn str "0x" in
+  if String.length str = 0 then [] else
+    let first_byte = String.prefix str 2 in
+    let rest = String.drop_prefix str 2 in
+    match int_of_string_opt ("0x" ^ first_byte) with
+    | None ->
+       Printf.sprintf "Couldn't parse %s as string" first_byte |> failwith
+    | Some i -> (Char.of_int_exn i) :: bytes_of_hex_string ("0x"^rest)
+
+
+
+let bits_of_byte b =
+  let bi = Char.to_int b in
+  Printf.sprintf "%d%d%d%d%d%d%d%d"
+    ((bi asr 7) land 1)
+    ((bi asr 6) land 1)
+    ((bi asr 5) land 1)
+    ((bi asr 4) land 1)
+    ((bi asr 3) land 1)
+    ((bi asr 2) land 1)
+    ((bi asr 1) land 1)
+    ((bi asr 0) land 1)
+    
+  
+let rec byte_list_to_bit_string b : string =
+  match b with
+    | [] -> ""
+    | x::xs -> let bs = bits_of_byte x in
+               bs ^ byte_list_to_bit_string xs
+       
+
+let bytes_to_bit_string b = Bytes.to_list b |> byte_list_to_bit_string
+  
+                                                           
+let bytes_to_hex_string bytes =
+  let rec char_list_to_hex_string = function
+    | [] -> ""
+    | b::bs ->
+       Printf.sprintf "%s%s" (Char.to_int b |> Printf.sprintf "%x" |> lfill '0' 2) (char_list_to_hex_string bs)
+  in
+  Bytes.to_list bytes
+  |> char_list_to_hex_string
+  |> (^) "0x"
+
+
+let bytes_to_ipv6_string bytes =
+  let rec char_list_to_ipv6 = function
+    | [] -> ""
+    | b1::b2::bs ->
+       let s1 = Printf.sprintf "%x" (Char.to_int b1) |> lfill '0' 2 in
+       let s2 = Printf.sprintf "%x" (Char.to_int b2) |> lfill '0' 2 in
+       Printf.sprintf "%s%s:%s" s1 s2
+         (char_list_to_ipv6 bs)
+    | _ -> failwith "odd number of bytes"
+  in
+  Bytes.to_list bytes
+  |> char_list_to_ipv6
+  |> String.chop_suffix_exn ~suffix:":"
+
+
+
+let bit_string_to_decimal bs  =
+  let rec euc_div x' r base bs =
+    assert (r < 10);
+    match bs with
+    | [] -> (String.chop_prefix_exn x' ~prefix:"0", r)
+    | (b::bs') ->
+       let r = 2 * r + if b = '0' then 0 else 1 in
+       if r >= base
+       then euc_div (x' ^ "1") (r - base) base bs'
+       else euc_div (x' ^ "0") r base bs'
+  in
+  let rec loop result bs =
+    if bs = "0" then result else
+      let (bs',r) = euc_div "" 0 10 (String.to_list bs) in
+      
+      loop (Printf.sprintf "%d%s" r result) bs'
+  in
+  loop "" bs
+       
+  
+    
+      
+  

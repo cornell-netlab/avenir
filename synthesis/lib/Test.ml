@@ -578,7 +578,7 @@ let%test _ =
   let log_inst =
     StringMap.of_alist_exn [ ]
   in
-  let edits = [("log", ([Match.Exact (2,2)], [], 2))] in
+  let edits = [("log", ([Match.Exact (Int(2,2))], [], 2))] in
   let phys_inst =
     StringMap.of_alist_exn [] in
   ignore(synthesize

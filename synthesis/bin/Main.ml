@@ -44,9 +44,6 @@ module Solver = struct
                 edits = [];
                 fvs = Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)})
     |> ignore
-
-
-
 end
 
 
@@ -162,14 +159,17 @@ let benchmark : Command.t =
 
 module ONF = struct
   let spec = Command.Spec.(
-      empty
+      empty       
       +> flag "-gas" (required int) ~doc:"how many cegis iterations?"
-      +> flag "-w" no_arg ~doc:"perform widening" )
+      +> flag "-w" no_arg ~doc:"perform widening"
+      +> flag "-i" no_arg ~doc:"interactive mode"
+      +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
+      +> flag "-data" (required string) ~doc:"the input log" )
   
 
-  let run gas widening () =
-    (* Benchmark.basic_onf_ipv4 () |> ignore *)
-    Benchmark.onf_representative gas widening |> ignore
+  let run gas widening interactive debug data_fp () =
+    Benchmark.basic_onf_ipv4 Parameters.({widening;gas;interactive;debug}) data_fp |> ignore
+    (* Benchmark.onf_representative gas widening |> ignore *)
 end
     
 

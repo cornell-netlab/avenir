@@ -18,7 +18,16 @@ let rec mkZ3Value (rhoVars : (string * size) list) (v : expr) ctx (deBruijn : in
     op ctx (mkZ3Value rhoVars e ctx deBruijn quantified) (mkZ3Value rhoVars  e' ctx deBruijn quantified)
   in
   match v with
-  | Value (Int (i,sz)) ->  Z3.BitVector.mk_numeral ctx (Printf.sprintf "%d" i) sz 
+  | Value (Int (i,sz)) ->  Z3.BitVector.mk_numeral ctx (Printf.sprintf "%d" i) sz
+  | Value (BV x) ->
+     let s = bytes_to_bit_string x in
+     let i = bit_string_to_decimal s in
+     (* let _ = Printf.printf "%s\n %s\n %s\n" s (bytes_to_hex_string x) i in *)
+     let len = String.length s in
+     let bv = Z3.BitVector.mk_numeral ctx i len in
+     (* Printf.printf "%s\n%!" (Z3.Expr.to_string bv); *)
+     bv
+                             
   | Hole (x,sz) | Var (x,sz) ->     
      if List.exists quantified ~f:(fun (x', _) -> x = x') then
        match StringMap.find deBruijn x with
@@ -33,7 +42,7 @@ let rec mkZ3Value (rhoVars : (string * size) list) (v : expr) ctx (deBruijn : in
          ((* Printf.printf "RHOVARS IS EMPTY \n"; *)
           if sz <= 0 then failwith ("Size for " ^x^ "is "^ (string_of_int sz) ^" < 0")
           else
-           (Z3.BitVector.mk_const_s ctx x sz))
+            (Z3.BitVector.mk_const_s ctx x sz))
        else Z3.Expr.mk_app ctx
               (Z3.FuncDecl.mk_func_decl_s ctx x
                  (List.map rhoVars ~f:(fun (_,sz) -> Z3.BitVector.mk_sort ctx sz))
@@ -122,25 +131,33 @@ let initSolver typ solver ctx test =
 
 
 
-let parse_int str =
-  let parse_z3string str = int_of_string ("0" ^ String.chop_prefix_exn str ~prefix:"#")in
+let parse_val str =
+  let parse_z3string str =
+    let hexstring = "0" ^ String.chop_prefix_exn str ~prefix:"#" in
+    match int_of_string_opt hexstring  with
+    | None ->
+       bytes_of_hex_string hexstring |> Bytes.of_char_list |> BV
+    | Some i -> Int (i, if String.is_substring hexstring ~substring:"x"
+                        then (String.length str - 2) * 4
+                        else String.length hexstring - 2)
+  in
   if String.is_prefix str ~prefix:"#"
   then if String.is_prefix str ~prefix:"#b"
-       then (parse_z3string str, (String.length str - 2))
+       then parse_z3string str
        else
          let nchars = String.length str - 2 in
          if nchars <= 0
          then failwith ("Error parsing int " ^ str ^ " length is " ^ string_of_int nchars)
          else
-         (parse_z3string str, ((String.length str - 2) * 4))
-  else (int_of_string str, int_of_float((2. ** (float_of_int (int_of_string str)))) -1)
+           parse_z3string str
+  else Int(int_of_string str, int_of_float((2. ** (float_of_int (int_of_string str)))) -1)
 (*
  Converts a Z3 expression to Motley expression 
 *)
 let mkMotleyExpr expr =	
   match Z3.AST.get_ast_kind (Z3.Expr.ast_of_expr expr) with
   | NUMERAL_AST ->
-     Z3.Expr.to_string expr |> parse_int |> Int
+     Z3.Expr.to_string expr |> parse_val
   | APP_AST  
   | VAR_AST   
   | _  -> raise (Failure ("Prover: still not supporting: " ^ (Z3.AST.to_string (Z3.Expr.ast_of_expr expr)) ^ "\n"))
@@ -196,9 +213,8 @@ let parse_results holes results =
                             match List.nth  model_lines (i+1) with
                             | None -> acc_model
                             | Some str ->
-                               let (v,sz) = String.lstrip str |> String.rstrip ~drop:((=) ')') |> parse_int in
-                               Printf.printf "Extracting %s |-> %d from model \n%!" key v; 
-                               StringMap.set acc_model key (Int(v,sz))
+                               let (v) = String.lstrip str |> String.rstrip ~drop:((=) ')') |> parse_val in
+                               StringMap.set acc_model key v
                        else acc_model) in
        (Z3.Solver.SATISFIABLE, Some model)
   else (Z3.Solver.UNSATISFIABLE, None)                 
@@ -257,7 +273,7 @@ let check (params : Parameters.t) typ test =
        let st = Time.now() in
        let _ = Z3.Solver.push mySolver;
                initSolver typ mySolver context test in
-       (* let _ = if params.debug then Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in *)
+       let _ = if params.debug then Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in
        let response = Z3.Solver.check mySolver [] in
        let dur = Time.(diff (now()) st) in
        (* let _ = Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver) in *)

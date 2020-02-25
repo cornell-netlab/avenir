@@ -45,7 +45,7 @@ let rec mk_pipeline varsize =
     ) :: mk_pipeline varsize (n-1)
 
 
-let rec generate_n_insertions varsize length n avail_tables maxes =
+let rec generate_n_insertions varsize length n avail_tables maxes : Edit.t list =
   if n = 0 then
     let _ = Printf.printf "--generated--\n%!"in
     []
@@ -66,17 +66,17 @@ let rec generate_n_insertions varsize length n avail_tables maxes =
         else
           let (max', mtch) =
             if Random.int 6 < 1 then
-              (max_i + 1, Match.Exact (max_i, varsize))
+              (max_i + 1, Match.Exact (Int(max_i, varsize)))
             else
               let lo = max_i in
               let hi = min (lo + Random.int 3) (pow 2 varsize - 1) in
               if lo = hi then
-                (hi + 1, Match.Exact (hi, varsize))
+                (hi + 1, Match.Exact (Int(hi, varsize)))
               else
-                (hi + 1, Match.Between (lo, hi, varsize))
+                (hi + 1, Match.Between (Int(lo, varsize), Int(hi, varsize)))
           in
           let maxes' = StringMap.set maxes ~key:(tbl i) ~data:max' in
-          let act_data = (Random.int (pow 2 varsize),varsize) in
+          let act_data = Int(Random.int (pow 2 varsize),varsize) in
           let row = ([mtch], [act_data], 0) in
           Some (maxes', avail_tables, tbl i, row)
     in
@@ -231,7 +231,28 @@ let local_metadata_l3_admit = Var(local_metadata_l3_admit_str, 1)
 let local_metadata_egress_spec_at_punt_match = "local_metadata.egress_spec_at_punt_match"
 let local_metadata_egress_spec_at_punt_match = Var(local_metadata_egress_spec_at_punt_match, 9)
 
+    
+let onos_to_edits filename =
+  let lines = In_channel.read_lines filename in
+  let make_edit tbl_nm data : Edit.t =
+    match data with
+    | [ts; "ADD"; _; ipv6; id] ->
+       (tbl_nm, ([Match.mk_ipv6_match ipv6], [Int(int_of_string id, 32)], 0))
+    | [_; "REMOVE"; _; _; _] ->
+       failwith "cannot yet handle removes"
+    | _ ->
+       Printf.sprintf "Unrecognized row: %s\n%!"
+         (List.intersperse data ~sep:"---" |> List.reduce_exn ~f:(^))
+       |> failwith
+  in
+  let edits =
+    List.map lines ~f:(fun line ->
+        [String.split line ~on:','
+         |> make_edit "ipv6"]
+      ) in
+  edits
 
+                                                      
 
 let fwd_classifier_table =
   Apply(
@@ -599,26 +620,33 @@ let bcm_eth_ipv4_tcp =
 let (%>) c c' = ignore c; c'
 
 
-let basic_onf_ipv4 _ = 
+let basic_onf_ipv4 params filename = 
   let log =
     sequence [
         "class_id" %<-% mkVInt(0,32)
-      ; Apply("ipv4",
-              [("ipv4_dst", 32)],
+      ; Apply("ipv6",
+              [("ipv6_dst", 128)],
               [([("next_id",32)], "class_id"%<-% Var("next_id",32))],
               Skip)
-      ; Apply("next",
-              [("class_id", 32)],
-              [([("port",9)], "out_port"%<-% Var("port",9))],
-              Skip)
+      ;
+        mkOrdered [
+            Var("class_id",32) %=% mkVInt(1017,32), "out_port" %<-% mkVInt(17,9) ;
+            Var("class_id",32) %=% mkVInt(1018,32), "out_port" %<-% mkVInt(18,9) ;
+            Var("class_id",32) %=% mkVInt(1010,32), "out_port" %<-% mkVInt(10,9) ;
+            Var("class_id",32) %=% mkVInt(1012,32), "out_port" %<-% mkVInt(12,9) ;
+            Var("class_id",32) %=% mkVInt(1011,32), "out_port" %<-% mkVInt(11,9) ;
+            Var("class_id",32) %=% mkVInt(1008,32), "out_port" %<-% mkVInt(08,9) ;
+            Var("class_id",32) %=% mkVInt(1003,32), "out_port" %<-% mkVInt(03,9) ;
+            Var("class_id",32) %=% mkVInt(1019,32), "out_port" %<-% mkVInt(19,9) ;
+            True, "out_port" %<-% mkVInt(0,9)
+          ]
       ] in
   let phys =
     Apply("l3_fwd"
-        , [ ("ipv4_dst", 32) (*; ("ipv4_src", 32); ("ipv4_proto", 16)*) ]
+        , [ ("ipv6_dst", 128) (*; ("ipv4_src", 32); ("ipv4_proto", 16)*) ]
         , [ ([("port",9)], "out_port"%<-% Var("port",9))]
-        , Skip) in
-  let iter = 1 in
-  let fvs = [("ipv4_dst", 32); ("out_port", 32); (*("ipv4_src", 32); ("ipv4_proto", 16)*)] in
+        , "out_port" %<-% mkVInt(0,9)) in
+  let fvs = [("ipv6_dst", 128); ("out_port", 9); (*("ipv4_src", 32); ("ipv4_proto", 16)*)] in
   (* synthesize_edit  ~gas ~iter ~fvs p 
    *   logical
    *   physical
@@ -626,25 +654,15 @@ let basic_onf_ipv4 _ =
    *   StringMap.empty
    *   ("next", ([Exact (1,32)], [(1,9)],0))
    * %> *)
-  let params =
-    Parameters.(
-      { default with
-        widening = false;
-        gas = 2
-    })in
   let problem =
     let open Problem in
     { log; phys; fvs;
-      log_inst = StringMap.(set empty ~key:"next" ~data:[[Match.Exact (1,32)], [(1,9)],0]);
+      log_inst = StringMap.(set empty ~key:"ipv6" ~data:[]);
       phys_inst = StringMap.(set empty ~key:"l3_fwd" ~data:[]);
-      edits = [("ipv4", ( [Between (0,20,32)], [(1,32)],0))]    
+      edits = []
     }
   in
-  synthesize ~iter
-    params
-    None
-    (ProfData.zero ())
-    problem
+  measure params None problem (onos_to_edits filename)
 
 
 let parse_rule_to_update line =
@@ -689,11 +707,11 @@ let running_example gas widening =
   let problem  =
     let open Problem in
     {log; phys;
-     log_inst = StringMap.of_alist_exn [("src_table", [([Match.Exact (0,2)], [1,2], 0)
-                                                      ;([Match.Exact (1,2)], [2,2], 1)])
-                                      ; ("dst_table", [([Match.Exact (0,2)], [1,2], 0)])];
+     log_inst = StringMap.of_alist_exn [("src_table", [([Match.Exact (Int(0,2))], [Int(1,2)], 0)
+                                                      ;([Match.Exact (Int(1,2))], [Int(2,2)], 1)])
+                                      ; ("dst_table", [([Match.Exact (Int(0,2))], [Int(1,2)], 0)])];
      phys_inst = StringMap.empty;
-     edits = [("dst_table", ([Exact (1,2)], [2,2], 0))];
+     edits = [("dst_table", ([Exact (Int(1,2))], [Int(2,2)], 0))];
      fvs = ["src", 2; "dst", 2; "smac", 2; "dmac", 2; "out", 2 ]
     }
   in
@@ -812,7 +830,7 @@ let onf_representative gas widening =
                 "out_port" %<-% Var("op", 9)
               ; "smac" %<-% Var("smac", 48)
               ; "dmac" %<-% Var("dmac", 48)
-                                (* ; "ttl" %<-% Minus(Var("ttl",8), mkVInt(1,8)) *)
+                               (* ; "ttl" %<-% Minus(Var("ttl",8), mkVInt(1,8)) *)
               ]
            ; [], Skip
            ; [], "drop" %<-% mkVInt(1,1)]
@@ -872,11 +890,13 @@ let onf_representative gas widening =
     {log  = init_metadata %:% logical;
      phys = init_metadata %:% physical;
      log_inst = StringMap.of_alist_exn
-                  [ ("my_station_table", [ ([Match.Between(0,pow 2 9,9); Match.Between(0,pow 2 48,48); Match.Between(0, pow 2 16, 16)], [2, 2], 0 ) ])
-                  ; ("ipv4_dst", [([Match.Exact(1, 32)], [1,32], 0)])
+                  [ ("my_station_table", [ ([Match.Between(Int(0,9),Int(pow 2 9,9));
+                                             Match.Between(Int(0,48),Int(pow 2 48,48));
+                                             Match.Between(Int(0, 16), Int(pow 2 16, 16))], [Int(2, 2)], 0 ) ])
+                  ; ("ipv4_dst", [([Match.Exact(Int(1, 32))], [Int(1,32)], 0)])
                   ];
      phys_inst = Instance.empty;
-     edits = [("next", ([Match.Exact(1,32)], [1,9], 0))];
+     edits = [("next", ([Match.Exact(Int(1,32))], [Int(1,9)], 0))];
      fvs
     }
   in
@@ -920,9 +940,9 @@ let parse_ip_mask str =
   let lo_int = to_int lo in
   let hi_int = to_int hi in
   if lo_int = hi_int then
-    Match.Exact(lo_int, 32)
+    Match.Exact(Int(lo_int, 32))
   else
-    Match.Between(lo_int, hi_int, 32)
+    Match.Between(Int(lo_int, 32), Int(hi_int, 32))
   
     
 let parse_port_range str =
@@ -931,12 +951,12 @@ let parse_port_range str =
   let lo_int = String.strip lo |> int_of_string in
   let hi_int = String.strip hi |> int_of_string in
   if lo = hi
-  then Match.Exact(lo_int, 9)
-  else Match.Between(lo_int, hi_int, 9)
+  then Match.Exact(Int(lo_int, 9))
+  else Match.Between(Int(lo_int, 9), Int(hi_int, 9))
 
 let parse_proto str =
   let proto,_ = String.lsplit2_exn str ~on:'/' in
-  Match.Exact(int_of_string proto, 8)
+  Match.Exact(Int(int_of_string proto, 8))
               
 let parse_classbench fp =
   In_channel.read_lines fp
@@ -959,7 +979,7 @@ let generate_edits cb_rules =
       acc @ [
           IntMap.fold drop_table ~init:[]
             ~f:(fun ~key ~data acc ->
-                acc @ [("of", ([ip_dst; Match.Exact(key, 9)], [out_port, 9], data))]
+                acc @ [("of", ([ip_dst; Match.Exact(Int(key, 9))], [Int(out_port, 9)], data))]
             )
         ]
     )
@@ -975,9 +995,9 @@ let generate_pipe1_edits cb_rules =
       @ (if Random.int 2 = 0
           then []
           else let pt = Random.int (pow 2 9) in
-               [["ingress", ([Match.Exact(pt,9)], [], IntMap.find_exn drop_table pt)]]
+               [["ingress", ([Match.Exact(Int(pt,9))], [], IntMap.find_exn drop_table pt)]]
         )
-      @ [[("ipv4_fwd", ([ip_dst], [out_port, 9], 0))]]
+      @ [[("ipv4_fwd", ([ip_dst], [Int(out_port, 9)], 0))]]
     )
   in
   ip_table
@@ -1026,3 +1046,4 @@ let of_to_pipe1 widening gas fp () =
                           edits = [];
                           fvs}) in
   measure params None problem pipe_insertions
+

@@ -141,8 +141,19 @@ let get_one_model_edit_no_widening
   (* print_instance "Logical" (apply_edit linst ledit);
    * print_instance "Physical" pinst; *)
   let linst_edited =  Instance.update_list problem.log_inst problem.edits in
-  let (pkt',_), _, _, actions = trace_eval_inst ~wide:StringMap.empty
-                                  problem.log linst_edited (pkt,None) in
+  let (pkt',_), _, trace, actions = trace_eval_inst ~wide:StringMap.empty
+                                      problem.log linst_edited (pkt,None) in
+  let _ = if params.debug || params.interactive then
+            Printf.printf "CE input: %s \n%!CE TRACE: %s\nCE output: %s\n%!"
+              (Packet.string__packet pkt)
+              (string_of_cmd trace)
+              (Packet.string__packet pkt');
+          if params.interactive then
+            (Printf.printf "Press enter to solve for CE input-output pair\n";
+             In_channel.(input_char stdin) |> ignore
+            )
+                          
+  in
   let st = Time.now () in
   let cands = CandidateMap.apply_hints `Exact hints actions problem.phys problem.phys_inst in
   let wp_phys_paths =
@@ -167,7 +178,7 @@ let get_one_model_edit_no_widening
             data := {!data with
                       model_z3_time = Time.Span.(!data.model_z3_time + time);
                       model_z3_calls = !data.model_z3_calls + 1
-              };
+                    };
             match res with
             | None -> if params.debug then Printf.printf "no model\n%!";None
             | Some model -> Some (model, acts)
@@ -251,7 +262,7 @@ let cegis ~iter
   let rec loop (params : Parameters.t) (problem : Problem.t) =
     if params.interactive then
       (Printf.printf "Press enter to loop again\n%!";
-       Stdio.In_channel.(input_char stdin) |> ignore);
+       Stdio.In_channel.(input_char stdin) |> ignore);    
     if params.debug || params.interactive then
       Printf.printf "======================= LOOP (%d, %d) =======================\n%!%s\n%!" (iter) (params.gas) (Problem.to_string problem);
     let res = implements params data problem in

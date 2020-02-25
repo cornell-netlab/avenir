@@ -10,9 +10,9 @@ let rec eval_expr (pkt_loc : Packet.located) ( e : expr ) : value =
   | Value v -> v
   | Var (v,_) -> Packet.get_val (fst pkt_loc) v
   | Hole (h,_) -> Packet.get_val (fst pkt_loc) h
-  | Plus  (e, e') -> binop add_values1 e e'
-  | Times (e, e') -> binop multiply_values1 e e'
-  | Minus (e, e') -> binop subtract_values1 e e'
+  | Plus  (e, e') -> binop add_values e e'
+  | Times (e, e') -> binop multiply_values e e'
+  | Minus (e, e') -> binop subtract_values e e'
 
                    
 let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
@@ -26,11 +26,9 @@ let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   | Or (a, b) -> binopt (||) a b
   | Impl(a, b) -> check_test (!%(a) %+% b) pkt_loc
   | Iff (a, b) -> check_test ((!%(a) %+% b) %&% (!%b %+% a)) pkt_loc
-  | Eq (e,e') -> binope (equal_values1) e e'
-  | Le (e,e') ->
-     begin match eval_expr pkt_loc e, eval_expr pkt_loc e' with
-     | Int (v,_), Int(v',_) -> v <= v'
-     end
+  | Eq (e,e') -> binope (veq) e e'
+  | Le (e,e') -> binope (vleq) e e'
+
 
 let rec find_match ?idx:(idx = 0) pkt_loc ss ~default:default =
   match ss with 
@@ -43,25 +41,25 @@ let rec find_match ?idx:(idx = 0) pkt_loc ss ~default:default =
 
 let rec wide_eval wide (e : expr) =
   match e with
-  | Value(Int(x,sz)) -> (x,x,sz)
+  | Value(x) -> (x,x)
   | Var(x, sz) ->
      begin match StringMap.find wide x with
      | None -> failwith ("USE BEFORE DEF " ^ x)
-     | Some (lo,hi, sz) -> (lo,hi,sz)
+     | Some (lo,hi) -> (lo,hi)
      end
   | Hole _ -> failwith "dont know how to eval holes"
-  | Plus(x,y) -> let (lox,hix, szx) = wide_eval wide x in
-                 let (loy, hiy, _) = wide_eval wide y in
-                 (lox + loy, hix+hiy, szx)
-  | Times(x,y) -> let (lox, hix, szx) = wide_eval wide x in
-                  let (loy, hiy, _) = wide_eval wide y in
-                  (lox * loy, hix * hiy, szx)
-  | Minus(x,y) -> let (lox, hix, szx) = wide_eval wide x in
-                  let (loy, hiy, _) = wide_eval wide y in
-                  (lox - hiy, hix - loy, szx)
+  | Plus(x,y) -> let (lox,hix) = wide_eval wide x in
+                 let (loy, hiy) = wide_eval wide y in
+                 (add_values lox loy, add_values hix hiy)
+  | Times(x,y) -> let (lox, hix) = wide_eval wide x in
+                  let (loy, hiy) = wide_eval wide y in
+                  (multiply_values lox loy, multiply_values hix hiy)
+  | Minus(x,y) -> let (lox, hix) = wide_eval wide x in
+                  let (loy, hiy) = wide_eval wide y in
+                  (subtract_values lox hiy, subtract_values hix loy)
 
                                                    
-let widening_assignment (wide : (int*int*size) StringMap.t) f e : (int * int * size) StringMap.t =
+let widening_assignment (wide : (value*value) StringMap.t) f e : (value * value) StringMap.t =
   StringMap.set wide ~key:f ~data:(wide_eval wide e)
 
 let rec widening_test pkt wide t =
@@ -86,22 +84,22 @@ let rec widening_test pkt wide t =
   | Eq(Var(v,sz), e) | Eq(e,Var(v,sz)) ->
      if check_test t (pkt,None)
      then
-       let (lo,hi,sz) = wide_eval wide e in
-       Printf.printf "adding %s = [%d,%d]" v lo hi;
-       StringMap.set wide ~key:v ~data:(lo,hi,sz)
-     else let vlu = get_int (StringMap.find_exn pkt v) in
-          StringMap.set wide v (vlu, vlu, sz)
+       let (lo,hi) = wide_eval wide e in
+       Printf.printf "adding %s = [%s,%s]" v (string_of_value lo) (string_of_value hi);
+       StringMap.set wide ~key:v ~data:(lo,hi)
+     else let vlu = StringMap.find_exn pkt v in
+          StringMap.set wide v (vlu, vlu)
   | Le(Var(v,sz), e) | Le(e,Var(v,sz)) ->
      if check_test t (pkt,None)
      then
-       let (lo, hi, sz) = wide_eval wide e in
-       Printf.printf "adding %s <= [%d,%d]" v lo hi;
+       let (lo, hi) = wide_eval wide e in
+       Printf.printf "adding %s <= [%s,%s]" v (string_of_value lo) (string_of_value hi);
        StringMap.update wide v ~f:(function
-           | None -> (lo, hi, sz)
-           | Some (lo', hi', sz)
-             ->  (min lo lo', min hi hi', sz))
-     else let vlu = get_int (StringMap.find_exn pkt v) in
-          StringMap.set wide v (vlu, vlu, sz)
+           | None -> (lo, hi)
+           | Some (lo', hi')
+             ->  (min lo lo', min hi hi'))
+     else let vlu = StringMap.find_exn pkt v in
+          StringMap.set wide v (vlu, vlu)
   | _ -> failwith "dont know how to handle that kind of test"
           
 let widening_match pkt wide matches =
@@ -111,14 +109,14 @@ let widening_match pkt wide matches =
     ~f:(fun acc ((key,_), m)  ->
       let open Match in
       match m with 
-      | Exact (v, sz) ->
-         StringMap.set acc ~key ~data:(v,v,sz)
-      | Between (lo, hi, sz) ->
+      | Exact (v) ->
+         StringMap.set acc ~key ~data:(v,v)
+      | Between (lo, hi) ->
          StringMap.update acc key
            ~f:(function
-             | None -> (lo, hi, sz)
-             | Some (lo',hi', sz) ->
-                (max lo lo', min hi hi', sz)
+             | None -> (lo, hi)
+             | Some (lo',hi') ->
+                (max lo lo', min hi hi')
            )
     )
 
@@ -139,7 +137,7 @@ let action_to_execute pkt wide keys (rows : Row.t list ) =
     
                                                              
 let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(wide = StringMap.empty) *) (pkt_loc : Packet.located)
-        : (Packet.located * (int * int * int) StringMap.t * cmd * ((int * size) list * int) StringMap.t) =
+        : (Packet.located * (value * value) StringMap.t * cmd * (value list * int) StringMap.t) =
   let (pkt, loc_opt) = pkt_loc in
   if gas = 0
   then (failwith "========OUT OF EVAL GAS============\n")

@@ -8,6 +8,8 @@ type size = int
        
 type value =
   | Int of (int * size)
+  | BV of (Bytes.t)
+            
 
 type expr =
   | Value of value
@@ -16,10 +18,29 @@ type expr =
   | Plus of (expr * expr)
   | Times of (expr * expr)
   | Minus of (expr * expr)
-           
+
+
 let rec string_of_value (v : value) : string =
   match v with
   | Int (i,x) -> string_of_int i ^ "#" ^ string_of_int x
+  | BV (bs) -> if Bytes.length bs = 16
+               then bytes_to_ipv6_string bs
+               else bytes_to_hex_string bs
+
+let veq v v' =
+  match v,v' with
+  | Int (i,sz), Int(i',sz') when sz = sz' ->  i = i'
+  | Int _, Int _ -> failwith "Ints are different sizes" 
+  | BV x, BV x' -> Bytes.(x = x')
+  | _, _ -> failwith "Type mismatch"
+
+let vleq v v' =
+  match v, v' with
+  | Int(i,sz), Int(i',sz') when sz = sz' -> i <= i'
+  | Int _, Int _ -> failwith "Ints are different sizes"
+  | BV x, BV x' -> Bytes.(x <= x')
+  | _,_ -> failwith "Type Mismatch"
+                                  
 
 let rec string_of_expr (e : expr) : string =
   match e with
@@ -32,7 +53,8 @@ let rec string_of_expr (e : expr) : string =
 
 let rec sexp_string_of_value (v : value) =
   match v with
-  | Int (i,sz) -> "Int(" ^ string_of_int i ^ "," ^ string_of_int sz ^ ")"
+  | Int (i,sz) -> Printf.sprintf "Int(%d,%d)" i sz
+  | BV bs -> Printf.sprintf "BV(%s)" (Bytes.to_string bs)
                    
 let rec sexp_string_of_expr (e : expr) =
   match e with
@@ -50,10 +72,13 @@ let rec sexp_string_of_expr (e : expr) =
 let get_int (v : value) : int =
   match v with
   | Int (x, _) -> x
+  | BV x -> Printf.sprintf "0x%s" (Bytes.to_string x)
+            |> int_of_string
                   
 let rec size_of_value (v : value) : size =
   match v with
   | Int (_, s) -> s
+  | BV x -> Bytes.length x * 8
                            
 let rec size_of_expr (e : expr) : size =
   match e with
@@ -86,35 +111,30 @@ let mkTimes e e' = Times (e, e')
 
 
                    
-let rec add_values1 (v : value) (v' : value) : value =
+let rec add_values (v : value) (v' : value) : value =
   match v, v' with
-  | Int (x, sz), Int (x',sz') -> if sz = sz'
-                                 then Int (x + x',sz)
-                                 else
-                                   failwith (Printf.sprintf "Type error %d#%d and %d#%d have different bitvec sizes"
-                                               x sz x' sz')
+  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (x + x',sz)
+  | Int (x, sz), Int(x',sz') ->
+     failwith (Printf.sprintf "Type error %d#%d and %d#%d have different bitvec sizes" x sz x' sz')
+  | BV _, BV _ -> failwith "need to add"
+  | _, _ -> failwith "type mismatch"
 
-let rec multiply_values1 (v : value) (v' : value) : value =
+let rec multiply_values (v : value) (v' : value) : value =
   match v, v' with
-  | Int (x, sz), Int (x',sz') -> if sz = sz' then Int (x * x', sz) else
-                                   failwith (Printf.sprintf "Type error %d#%d and %d#%d have different file sizes"
-                                               x sz x' sz')
+  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (x * x', sz)
+  | Int (x,sz), Int (x',sz') -> failwith (Printf.sprintf "Type error %d#%d and %d#%d have different file sizes" x sz x' sz')
+  | BV _, BV _ -> failwith "Need to BV Multiply"
+  | _, _ -> failwith "type mismatch"
 
 
-let rec subtract_values1 (v : value) (v' : value) : value =
+let rec subtract_values (v : value) (v' : value) : value =
   match v, v' with
-  | Int (x, sz), Int (x',sz') -> if sz = sz' then Int (x - x', sz) else
-                                   failwith (Printf.sprintf "Type error %d#%d and %d#%d have different file sizes"
-                                               x sz x' sz')
-
-let equal_values1 (v : value) (v' : value) : bool =
-  match v, v' with
-  | Int x, Int x' -> x = x'
-  
-let rec le_values1 (v : value) (v' : value) : bool =
-  match v, v' with
-  | Int x, Int x' -> x < x'
-                  
+  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (x - x', sz)
+  | Int (x, sz), Int (x', sz') ->
+     failwith (Printf.sprintf "Type error %d#%d and %d#%d have different file sizes" x sz x' sz')
+  | BV _, BV _ -> failwith "Need to BV subtract "
+  | _, _ -> failwith "Type mismatch"
+         
 type test =
   | True | False
   | Eq of (expr * expr)
@@ -315,6 +335,7 @@ let holes_of_test = free_of_test `Hole
 let rec multi_ints_of_value e : (int * size) list =
   match e with
   | Int (i,sz) -> [i,sz]
+  | _ -> []
 
 let rec multi_ints_of_expr e : (int * size) list =
   match e with
