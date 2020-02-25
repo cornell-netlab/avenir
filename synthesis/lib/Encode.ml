@@ -60,6 +60,7 @@ and lookup_field_width (type_ctx : TypeDeclaration.t list) fn : size option =
   let open TypeDeclaration in
   match fn with
   | "ingress_port" -> Some 32 (* TODO: Is this right? *)
+  | "parser_error" -> Some 1 (* TODO: Is this right? *)
   | "isValid" -> Some 1
   | _ -> 
     let flds = gather_fields type_ctx in
@@ -69,7 +70,8 @@ and lookup_field_width (type_ctx : TypeDeclaration.t list) fn : size option =
 
 and lookup_field_width_exn (type_ctx : TypeDeclaration.t list) field : size =
 (* let _ = printf "field = %s\ntype_cxt = %s" field (Sexp.to_string ([%sexp_of: TypeDeclaration.t list] type_ctx)) in *)
-match lookup_field_width type_ctx field with
+let last_field = List.last_exn (String.split field ~on:'.') in
+match lookup_field_width type_ctx last_field with
     | Some i -> i
     | None -> -22 (* failwith ("lookup_field_width_exn: field " ^ field) *)
 
@@ -237,12 +239,19 @@ let get_decls : TopDeclaration.t list -> Declaration.t list =
         | Declaration d -> Some d
       )
 
+let get_type_decl_from_decl d =
+  let open Declaration in
+  let open TypeDeclaration in
+  match d with
+    | (i, Constant c) -> let _ = printf "const = %s\n" (snd c.name) in Some (i, TypeDef { annotations = c.annotations; name = c.name; typ_or_decl = Left c.typ; })
+    | _ -> None
+
 let get_type_decls : TopDeclaration.t list -> TypeDeclaration.t list =
   let open TopDeclaration in 
   List.filter_map
     ~f:(fun top_decl -> match top_decl with
         | TypeDeclaration d -> Some d
-        | Declaration _ -> None
+        | Declaration d -> get_type_decl_from_decl d
       )
 
 let rec encode_expression_to_test (type_ctx : TypeDeclaration.t list) (e: Expression.t) : test =
@@ -467,22 +476,47 @@ and dispatch_control (Program(top_decls) as prog : program) (ident : P4String.t)
   | Some _ -> failwith ("Found a module called " ^ snd ident ^ ", but it wasn't a control module")
 
 
-and assign_param (type_ctx : TypeDeclaration.t list) (param_arg : Parameter.t * Argument.t) =
-  let open Direction in
+and get_rel_variables (type_ctx : TypeDeclaration.t list) (param : Parameter.t) =
   let open Parameter in
+  let open Type in
+  let open TypeDeclaration in
+  let type_name t = match t with
+                      | (_, TypeName t) -> t
+                      | _ -> failwith "type_name: unhandled" in
+  let rel_field = List.find type_ctx
+                    ~f:(fun (_, d) ->
+                      match d with
+                        | Struct {name;_} -> snd name = snd (type_name (snd param).typ)
+                        | _ -> false
+                    )
+  in
+  match rel_field with
+    | Some (_, Struct s) -> s.fields
+    | _ -> failwith "get_rel_variables: unhandled"
+
+and assign_param (type_ctx : TypeDeclaration.t list) (param_arg : Parameter.t * Argument.t) =
   let open Argument in
+  let open Direction in
+  let open Expression in
+  let open Field in
+  let open Parameter in
   let param = snd (fst param_arg) in
   let arg = snd (snd param_arg) in
+  let flds = get_rel_variables type_ctx (fst param_arg) in
   match arg with
     | Expression {value} ->
-      let val_assgn = Assign (snd param.variable, encode_expression_to_value type_ctx value) in
+      let add_to_expr f v = match v with
+                              | (i, Name (ni, n)) -> (i, Name (ni, n ^ "." ^ snd f))
+                              | _ -> failwith "HERE" in
+      let val_assgn = List.map flds
+            ~f:(fun fld -> Assign(snd param.variable ^ "." ^ snd ((snd fld).name), encode_expression_to_value type_ctx (add_to_expr (snd fld).name value))) in
       begin match param.direction with
         | Some (_, In)
-        | None -> [val_assgn]
+        | None -> val_assgn
         | Some (_, Out) -> []
         | Some (_, InOut) ->
           let n = dispatch_list value in
-          [Assign(validity_bit_no_removal [param.variable], Var1(validity_bit_no_removal n, 1)); val_assgn]
+          Assign(validity_bit_no_removal [param.variable], Var1(validity_bit_no_removal n, 1)) :: val_assgn
       end
     | _ -> failwith "Unhandled argument"
 
@@ -602,6 +636,7 @@ and encode_program (Program(top_decls) as prog : program ) =
     let assign_rv = Assign(return_bit rv, mkVInt(1, 1)) in
     let type_cxt = get_type_decls top_decls in
     let type_cxt2 = List.map c.params ~f:update_typ_ctx_from_param @ type_cxt in
+    let _ = printf "type_cxt\n%s\n" (Sexp.to_string ([%sexp_of: TypeDeclaration.t list] type_cxt)) in
     assign_rv %:% encode_control prog c.locals type_cxt2 rv c.apply
   | Some _ -> failwith "Found a module called MyIngress, but it wasn't a control module"
   
