@@ -108,13 +108,13 @@ let get_one_model_edit
         acc @ List.map precs ~f:(inj_l acts))
               (* if prec = False then None else Some(prec, acts)) *)
   in
-  let _ = if params.debug then
+  let () = if params.debug then
             Printf.printf "The logical trace is: %s \n%!" (string_of_cmd trace) in
   let wp_time = Time.diff (Time.now ()) st in
   let model =
     List.find_map wp_phys_paths ~f:(fun (wp_phys, acts) ->
         if wp_phys = False then None else
-          let _ = if params.debug then Printf.printf "LOGWP %s\n => PHYSWP %s\n%!" (string_of_test log_wp) (string_of_test wp_phys) in
+          let () = if params.debug then Printf.printf "LOGWP %s\n => PHYSWP %s\n%!" (string_of_test log_wp) (string_of_test wp_phys) in
           if holes_of_test wp_phys = [] then
             (if params.debug then Printf.printf "no holes, so skipping\n%!";
              None)
@@ -143,15 +143,14 @@ let get_one_model_edit_no_widening
   let linst_edited =  Instance.update_list problem.log_inst problem.edits in
   let (pkt',_), _, trace, actions = trace_eval_inst ~wide:StringMap.empty
                                       problem.log linst_edited (pkt,None) in
-  let _ = if params.debug || params.interactive then
+  let () = if params.debug || params.interactive then
             Printf.printf "CE input: %s \n%!CE TRACE: %s\nCE output: %s\n%!"
               (Packet.string__packet pkt)
               (string_of_cmd trace)
               (Packet.string__packet pkt');
           if params.interactive then
             (Printf.printf "Press enter to solve for CE input-output pair\n";
-             In_channel.(input_char stdin) |> ignore
-            )
+             ignore (In_channel.(input_char stdin) : char option))
                           
   in
   let st = Time.now () in
@@ -200,7 +199,7 @@ let symbolic_pkt fvs =
         %&% acc_test)
 
 let symb_wp ?fvs:(fvs=[]) cmd =
-  List.dedup_and_sort ~compare (free_vars_of_cmd cmd @ fvs)
+  List.dedup_and_sort ~compare:Stdlib.compare (free_vars_of_cmd cmd @ fvs)
   |> symbolic_pkt
   |> wp cmd
   
@@ -262,7 +261,7 @@ let cegis ~iter
   let rec loop (params : Parameters.t) (problem : Problem.t) =
     if params.interactive then
       (Printf.printf "Press enter to loop again\n%!";
-       Stdio.In_channel.(input_char stdin) |> ignore);    
+       ignore(Stdio.In_channel.(input_char stdin) : char option));
     if params.debug || params.interactive then
       Printf.printf "======================= LOOP (%d, %d) =======================\n%!%s\n%!" (iter) (params.gas) (Problem.to_string problem);
     let res = implements params data problem in
@@ -272,7 +271,7 @@ let cegis ~iter
     | `NoAndCE counter ->
        if params.interactive then
          (Printf.printf "Press enter to resolve counterexample\n%!";
-          Stdio.In_channel.(input_char stdin) |> ignore);
+          ignore(Stdio.In_channel.(input_char stdin) : char option));
        if params.gas = 0 then failwith "RAN OUT OF GAS" else
          let st = Time.now() in
          let pinst' = solve_concrete ~packet:(Some counter) data params hints problem in

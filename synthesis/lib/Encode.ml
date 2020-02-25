@@ -98,14 +98,6 @@ let rec encode_expression_to_value (e : Expression.t) : expr =
      end
   | _ -> unimplemented (ctor_name_expression e)
 
-let get_decls : TopDeclaration.t list -> Declaration.t list =
-  let open TopDeclaration in 
-  List.filter_map
-    ~f:(fun top_decl -> match top_decl with
-        | TypeDeclaration _ -> None
-        | Declaration d -> Some d
-      )
-
 let rec encode_expression_to_test (e: Expression.t) : test =
   let module E = Expression in
   let unimplemented (name : string) : test = 
@@ -173,7 +165,7 @@ let lookup_exn (Program(top_decls) : program) (ctx : Declaration.t list) (ident 
     let module D = Declaration in 
     List.find ~f:(fun d -> snd (D.name d) = snd name) in
   match find ident ctx with
-  | None -> begin match find ident (get_decls top_decls) with
+  | None -> begin match find ident top_decls with
       | None -> failwith ("[Error: UseBeforeDef] Couldnt find " ^ snd ident)
       | Some d -> d
     end
@@ -260,7 +252,7 @@ and encode_control prog (ctx : Declaration.t list) ( body : Block.t ) =
 
 and encode_program (Program(top_decls) as prog : program ) =
   let open Declaration in
-  match List.find (get_decls top_decls) ~f:(fun d -> snd (Declaration.name d) = "MyIngress") with
+  match List.find top_decls ~f:(fun d -> snd (Declaration.name d) = "MyIngress") with
   | None -> failwith "Could not find control module MyIngress"
   | Some (_, Control c) -> encode_control prog c.locals c.apply
   | Some _ -> failwith "Found a module called MyIngress, but it wasn't a control module"
@@ -326,7 +318,7 @@ let preprocess include_dirs p4file =
        ["-undef"; "-nostdinc"; "-E"; "-x"; "c"; p4file])) in 
   let in_chan = Unix.open_process_in cmd in
   let str = In_channel.input_all in_chan in 
-  let _ = Unix.close_process_in in_chan in
+  let _ : Core.Unix.Exit_or_signal.t = Unix.close_process_in in_chan in
   str
 
 let parse_p4 include_dirs p4_file verbose = 

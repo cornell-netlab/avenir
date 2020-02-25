@@ -32,18 +32,19 @@ module Solver = struct
   let run logical real widening gas debug interactive () =
     let log = parse_file logical in
     let phys = parse_file real in
-    Synthesis.synthesize ~iter:0
-      Parameters.({widening;
-                   gas;
-                   debug;
-                   interactive})
-      None
-      (ProfData.zero ())      
-      Problem.({log; phys; log_inst = Motley.Tables.Instance.empty;
-                phys_inst = Motley.Tables.Instance.empty;
-                edits = [];
-                fvs = Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)})
-    |> ignore
+    let _ : Motley.Tables.Instance.t = 
+      Synthesis.synthesize ~iter:0
+        Parameters.({widening;
+                     gas;
+                     debug;
+                     interactive})
+        None
+        (ProfData.zero ())      
+        Problem.({log; phys; log_inst = Motley.Tables.Instance.empty;
+                  phys_inst = Motley.Tables.Instance.empty;
+                  edits = [];
+                  fvs = Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)}) in 
+    ()
 end
 
 
@@ -62,7 +63,7 @@ module Encoder = struct
       +> anon ("p4_file" %: string))
 
   let run include_dirs verbose p4_file () =    
-    ignore(Encode.encode_from_p4 include_dirs p4_file verbose)
+    ignore(Encode.encode_from_p4 include_dirs p4_file verbose : Ast.cmd)
 end
 
 let encode_cmd : Command.t =
@@ -168,7 +169,7 @@ module ONF = struct
   
 
   let run gas widening interactive debug data_fp () =
-    Benchmark.basic_onf_ipv4 Parameters.({widening;gas;interactive;debug}) data_fp |> ignore
+    ignore (Benchmark.basic_onf_ipv4 Parameters.({widening;gas;interactive;debug}) data_fp : unit)
     (* Benchmark.onf_representative gas widening |> ignore *)
 end
     
@@ -187,7 +188,7 @@ module RunningExample = struct
   
 
   let run gas widening () =
-    Benchmark.running_example gas widening |> ignore
+    ignore (Benchmark.running_example gas widening : Motley.Tables.Instance.t)
 end
     
 
@@ -206,7 +207,7 @@ module WeakestPrecondition = struct
 
   let run file z3 () =
     let cmd = parse_file file in
-    let _ = Printf.printf "PROGRAM: %s \n%!" (Ast.string_of_cmd cmd) in
+    let _ : unit = Printf.printf "PROGRAM: %s \n%!" (Ast.string_of_cmd cmd) in
     let wp = Synthesis.symb_wp cmd in
     if z3 then
       Printf.printf "wp: %s" (Ast.string_of_test wp)
@@ -229,7 +230,7 @@ module OFBench = struct
       +> flag "-gas" (optional int) ~doc:"how many cegis iterations?")
 
   let run classbench_file widening gas () =
-    Benchmark.of_to_pipe1 widening gas classbench_file () |> ignore
+    ignore(Benchmark.of_to_pipe1 widening gas classbench_file () : unit)
 end
     
 

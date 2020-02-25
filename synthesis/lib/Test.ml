@@ -587,7 +587,7 @@ let%test _ =
            None
            (ProfData.zero ())
            Problem.({fvs=[("dst",2); ("out",2); ("x", 2)];
-                     log; phys; log_inst; phys_inst; edits}));
+                     log; phys; log_inst; phys_inst; edits}) : Tables.Instance.t);
   true
 
     
@@ -633,7 +633,7 @@ fi
    *)
   let dst_is x = Var("dst", 2) %=% mkVInt(x,2) in
   let src_is x = Var("src", 2) %=% mkVInt(x,2) in
-  let logical =
+  let _ : Ast.cmd =
     mkOrdered [
         src_is 1, "dst" %<-% mkVInt(2,2);
         src_is 0, "smac" %<-% mkVInt(1,2);
@@ -645,7 +645,7 @@ fi
           dst_is 1, "out" %<-% mkVInt(2,2);
           True, Skip ]
   in
-  let physical =
+  let _ : Ast.cmd =
     mkOrdered [
        src_is 0 %&% dst_is 0, sequence["dst"%<-% mkVInt(1,2); "out" %<-% mkVInt(1,2)];
         Var("src",2) %=% mkVInt(1,2) %&% (Var("dst",1) %=% mkVInt(0,2)), "dst" %<-% mkVInt(0,2)

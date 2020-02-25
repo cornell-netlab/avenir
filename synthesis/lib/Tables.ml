@@ -111,8 +111,8 @@ module Match = struct
          else
            []
       | Between (lo, hi), Between (lo', hi') ->
-         let lo'' = max lo lo' in
-         let hi'' = min hi hi' in
+         let lo'' = Stdlib.max lo lo' in
+         let hi'' = Stdlib.min hi hi' in
          if veq lo'' hi'' then
            [Exact lo'']
          else if vleq lo'' hi'' then
@@ -127,7 +127,7 @@ module Match = struct
       | Between(lo,hi), Exact(x)
       -> vleq lo x && vleq x hi
     | Between(lo, hi), Between(lo',hi')
-      -> max lo lo' <= min hi hi'
+      -> Stdlib.max lo lo' <= Stdlib.min hi hi'
                            
       
 
@@ -212,7 +212,7 @@ module Row = struct
          List.filter rows ~f:(fun ((ms', _,_)) ->
              if List.fold2_exn ms ms' ~init:true ~f:(fun acc m m' -> acc && Match.is_subset m m')
              then
-               let _ = if params.interactive then
+               let () = if params.interactive then
                          Printf.printf "- %s : %s" tbl_name (Match.list_to_string ms) in
                false
              else true
