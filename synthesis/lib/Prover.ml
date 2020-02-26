@@ -18,16 +18,7 @@ let rec mkZ3Value (rhoVars : (string * size) list) (v : expr) ctx (deBruijn : in
     op ctx (mkZ3Value rhoVars e ctx deBruijn quantified) (mkZ3Value rhoVars  e' ctx deBruijn quantified)
   in
   match v with
-  | Value (Int (i,sz)) ->  Z3.BitVector.mk_numeral ctx (Printf.sprintf "%d" i) sz
-  | Value (BV x) ->
-     let s = bytes_to_bit_string x in
-     let i = bit_string_to_decimal s in
-     (* let _ = Printf.printf "%s\n %s\n %s\n" s (bytes_to_hex_string x) i in *)
-     let len = String.length s in
-     let bv = Z3.BitVector.mk_numeral ctx i len in
-     (* Printf.printf "%s\n%!" (Z3.Expr.to_string bv); *)
-     bv
-                             
+  | Value (Int (i,sz)) ->  Z3.BitVector.mk_numeral ctx (Bigint.to_string i) sz                             
   | Hole (x,sz) | Var (x,sz) ->     
      if List.exists quantified ~f:(fun (x', _) -> x = x') then
        match StringMap.find deBruijn x with
@@ -132,25 +123,12 @@ let initSolver typ solver ctx test =
 
 
 let parse_val str =
-  let parse_z3string str =
-    let hexstring = "0" ^ String.chop_prefix_exn str ~prefix:"#" in
-    match int_of_string_opt hexstring  with
-    | None ->
-       bytes_of_hex_string hexstring |> Bytes.of_char_list |> BV
-    | Some i -> Int (i, if String.is_substring hexstring ~substring:"x"
-                        then (String.length str - 2) * 4
-                        else String.length hexstring - 2)
-  in
-  if String.is_prefix str ~prefix:"#"
-  then if String.is_prefix str ~prefix:"#b"
-       then parse_z3string str
-       else
-         let nchars = String.length str - 2 in
-         if nchars <= 0
-         then failwith ("Error parsing int " ^ str ^ " length is " ^ string_of_int nchars)
-         else
-           parse_z3string str
-  else Int(int_of_string str, int_of_float((2. ** (float_of_int (int_of_string str)))) -1)
+  let hexstring = "0" ^ String.chop_prefix_exn str ~prefix:"#" in
+  Int (Bigint.of_string hexstring,
+       if String.is_substring hexstring ~substring:"x"
+       then (String.length str - 2) * 4
+       else String.length hexstring - 2)
+
 (*
  Converts a Z3 expression to Motley expression 
 *)
@@ -270,10 +248,10 @@ let check (params : Parameters.t) typ test =
          | `Sat -> satsolver ()
          | _ -> failwith "impossible"
        in
-       let st = Time.now() in
        let _ = Z3.Solver.push mySolver;
                initSolver typ mySolver context test in
        let _ = if params.debug then Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in
+       let st = Time.now() in
        let response = Z3.Solver.check mySolver [] in
        let dur = Time.(diff (now()) st) in
        (* let _ = Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver) in *)

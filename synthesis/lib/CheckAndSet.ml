@@ -110,7 +110,7 @@ let project keys idxs ms =
       | None ->
          begin match List.nth keys k with
          | Some (_, sz) ->
-            acc @ [Match.Between(Int (0,sz),Int(pow 2 sz,sz))]
+            acc @ [Match.Between(mkInt (0,sz), mkInt(pow 2 sz,sz))]
          | None -> Printf.sprintf "couldn't find %d in list of length %d" k (List.length keys)
                    |> failwith
          end
@@ -286,7 +286,7 @@ let test_population _ =
                                  ;[], Skip], Skip)
     ])
     "next"
-    [  [Exact(Int(3,9)); Exact(Int(255, 32))], [Int(2,9)], 0
+    [  [Exact(mkInt(3,9)); Exact(mkInt(255, 32))], [mkInt(2,9)], 0
      (* ; [Between(0,pow 2 9-1,9); Exact(2, 32)], [1,9], 0 *)
     ]
 

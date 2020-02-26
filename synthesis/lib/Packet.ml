@@ -39,7 +39,7 @@ let rec set_field_of_expr (pkt : t) (field : string) (e : expr) : t =
                 
 
 let init_field_to_random bound pkt (f,sz) =
-  set_field pkt f (Int (Random.int bound, sz))
+  set_field pkt f (Int (Random.int bound |> Bigint.of_int_exn, sz))
 
 let rec init_field_to_value_in (values : value list) pkt (f, sz) =
   match values with
