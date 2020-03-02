@@ -4,7 +4,10 @@ type t = {
     log_inst_size : int;
     phys_inst_size : int;
     time : Time.Span.t;
-    eq_time : Time.Span.t;
+    impl_time : Time.Span.t;
+    check_valid_time : Time.Span.t;
+    eq_time : Time.Span.t;    
+    make_vc_time: Time.Span.t;
     eq_num_z3_calls : int;
     model_search_time : Time.Span.t;
     cand_time : Time.Span.t;
@@ -15,7 +18,6 @@ type t = {
     model_z3_calls: int;
     fixup_time : Time.Span.t;
     search_wp_time: Time.Span.t;
-    make_vc_time: Time.Span.t;
     tree_sizes: int list;
   }
 
@@ -24,7 +26,10 @@ let headers =
   ["log_inst_size";
    "phys_inst_size";
    "time";
-   "eq_time";
+   "impl_time";
+   "check_valid_time";
+   "eq_time";   
+   "make_vc_time";
    "eq_num_z3_calls";
    "model_search_time";
    "cand_time";
@@ -35,7 +40,6 @@ let headers =
    "model_z3_calls";
    "fixup_time";
    "search_wp_time";
-   "make_vc_time";
    "mean_tree_size";
    "min_tree_size";
    "max_tree_size"]
@@ -50,11 +54,14 @@ let min_tree_size data = List.fold (data.tree_sizes) ~init:(max_tree_size data) 
     
     
 let to_string (data : t) =
-  Printf.sprintf "%d,%d,%f,%f,%d,%f,%f,%f,%f,%f,%f,%d,%f,%f,%f,%d,%d,%d"
-    data.log_inst_size
+  Printf.sprintf "%d,%d,%f,%f,%f,%f,%f,%d,%f,%f,%f,%f,%f,%f,%d,%f,%f,%d,%d,%d"
+    data.log_inst_size 
     data.phys_inst_size
     (data.time |> Time.Span.to_ms)
+    (data.impl_time |> Time.Span.to_ms)
+    (data.check_valid_time |> Time.Span.to_ms)
     (data.eq_time |> Time.Span.to_ms)
+    (data.make_vc_time |> Time.Span.to_ms)
     data.eq_num_z3_calls
     (data.model_search_time |> Time.Span.to_ms)
     (data.cand_time |> Time.Span.to_ms)
@@ -65,7 +72,6 @@ let to_string (data : t) =
     data.model_z3_calls
     (data.fixup_time |> Time.Span.to_ms)
     (data.search_wp_time |> Time.Span.to_ms)
-    (data.make_vc_time |> Time.Span.to_ms)
     (mean_tree_size data)
     (min_tree_size data)
     (max_tree_size data)
@@ -79,7 +85,10 @@ let zero _ : t ref =
   ref { log_inst_size = 0;
         phys_inst_size = 0;
         time = Time.Span.zero;
+        impl_time = Time.Span.zero;
+        check_valid_time = Time.Span.zero;
         eq_time = Time.Span.zero;
+        make_vc_time = Time.Span.zero;
         eq_num_z3_calls = 0;
         model_search_time = Time.Span.zero;
         cand_time = Time.Span.zero;
@@ -90,7 +99,6 @@ let zero _ : t ref =
         model_z3_calls = 0;
         fixup_time = Time.Span.zero;
         search_wp_time = Time.Span.zero;
-        make_vc_time = Time.Span.zero;
         tree_sizes = [];
     }
     

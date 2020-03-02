@@ -248,12 +248,13 @@ let check (params : Parameters.t) typ test =
          | `Sat -> satsolver ()
          | _ -> failwith "impossible"
        in
+       let st = Time.now() in
+       
        let _ = Z3.Solver.push mySolver;
                initSolver typ mySolver context test in
        let _ = if params.debug then Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in
-       let st = Time.now() in
        let response = Z3.Solver.check mySolver [] in
-       let dur = Time.(diff (now()) st) in
+       let dur = Time.(diff (now()) st) in       
        (* let _ = Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver) in *)
        let model =
          if response = SATISFIABLE

@@ -224,7 +224,10 @@ let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   let condition = equivalent problem.fvs u_log u_rea in  
   let nd_mk_cond = Time.now () in
   let mk_cond_time = Time.diff nd_mk_cond st_mk_cond in
+  let cv_st = Time.now () in
   let model_opt, z3time = check_valid params condition in
+  let cv_nd = Time.now () in
+  data := {!data with check_valid_time = Time.Span.(!data.check_valid_time + Time.diff cv_nd cv_st)};
   let pkt_opt = match model_opt with
     | None  -> if params.debug then Printf.printf "++++++++++valid+++++++++++++\n%!";
                `Yes
@@ -236,7 +239,8 @@ let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   in
   data := {!data with
             eq_time = Time.Span.(!data.eq_time + z3time);
-            make_vc_time = Time.Span.(!data.eq_time + mk_cond_time);
+            eq_num_z3_calls = !data.eq_num_z3_calls + 1;
+            make_vc_time = Time.Span.(!data.make_vc_time + mk_cond_time);
             tree_sizes = num_nodes_in_test condition :: !data.tree_sizes
           };
   pkt_opt
@@ -279,7 +283,9 @@ let cegis ~iter
        Stdio.In_channel.(input_char stdin) |> ignore);    
     if params.debug || params.interactive then
       Printf.printf "======================= LOOP (%d, %d) =======================\n%!%s\n%!" (iter) (params.gas) (Problem.to_string problem);
+    let imp_st = Time.now () in
     let res = implements params data problem in
+    data := {!data with impl_time = Time.Span.(!data.impl_time + (Time.diff (Time.now()) imp_st))};
     match res with
     | `Yes ->
        Some problem.phys_inst
