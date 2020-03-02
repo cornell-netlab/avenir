@@ -2,10 +2,16 @@ open Bignum
 open Core
 open Util
 
+let (=) = Stdlib.(=)
+let (<) = Stdlib.(<)
+let (<=) = Stdlib.(<=)
+let (<>) = Stdlib.(<>)
+
 let enable_smart_constructors = true
 
 type size = int
 
+let (=) = Stdlib.(=)
        
 type value =
   | Int of (Bigint.t * size)
@@ -649,7 +655,6 @@ and holify_cmd holes c : cmd=
 let holify holes c =  holify_cmd holes c
         
 let sequence = List.reduce_exn ~f:(%:%)
-
 
 let rec get_schema_of_table name phys =
   match phys with

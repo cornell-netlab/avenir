@@ -66,7 +66,7 @@ module Match = struct
       let hi = Bigint.(((bv land mask) + (Bigint.shift_left Bigint.one (Int.(128 - prefix_len))) - Bigint.one)) in
       let lo = Bigint.(bv land mask) in
       Between (Int(lo,128), Int(hi,128)) 
-    
+
   let cap (m : t) (m' : t) =
     match m, m' with
     | Exact x, Exact y->
@@ -78,8 +78,8 @@ module Match = struct
        else
          []
     | Between (lo, hi), Between (lo', hi') ->
-       let lo'' = max lo lo' in
-       let hi'' = min hi hi' in
+       let lo'' = Stdlib.max lo lo' in
+       let hi'' = Stdlib.min hi hi' in
        if veq lo'' hi'' then
          [Exact lo'']
        else if vleq lo'' hi'' then
@@ -94,7 +94,7 @@ module Match = struct
       | Between(lo,hi), Exact(x)
       -> vleq lo x && vleq x hi
     | Between(lo, hi), Between(lo',hi')
-      -> max lo lo' <= min hi hi'
+      -> Stdlib.max lo lo' <= Stdlib.min hi hi'
                            
       
 
@@ -168,7 +168,6 @@ module Row = struct
        | Some ks -> Some (ks, data, act)
 
 
-                           
   let remove_conflicts _ _ _ _ _ _ = None
   (* let remove_conflicts checker (params : Parameters.t) tbl_name keys (ms : Match.t list)  (rows : t list)  =
    *   let prop = Match.list_to_test keys ms %=>%

@@ -81,7 +81,7 @@ let rec encode_expression_to_value (e : Expression.t) : expr =
   match snd e with
   | E.True -> type_error "True"
   | E.False -> type_error "False"
-  | E.Int (_,i) -> Value (Int (i.value, -1))
+  | E.Int (_,i) -> mkVInt((i.value |> Petr4.Bigint.to_int_exn), -1)
   | E.Name (_,s) -> Var (s,-1)
   | E.ExpressionMember _ -> Var (dispatch_list e |> string_of_memberlist, -1)
   | E.BinaryOp {op;args=(e, e')} ->
@@ -97,14 +97,6 @@ let rec encode_expression_to_value (e : Expression.t) : expr =
        -> unimplemented (string_of_binop op)
      end
   | _ -> unimplemented (ctor_name_expression e)
-
-let get_decls : TopDeclaration.t list -> Declaration.t list =
-  let open TopDeclaration in 
-  List.filter_map
-    ~f:(fun top_decl -> match top_decl with
-        | TypeDeclaration _ -> None
-        | Declaration d -> Some d
-      )
 
 let rec encode_expression_to_test (e: Expression.t) : test =
   let module E = Expression in
@@ -160,7 +152,7 @@ let rec encode_expression_to_test (e: Expression.t) : test =
      begin match List.last members with
      | None -> unimplemented "Function Call with nothing to dispatch"
      | Some (_,"isValid") ->
-        Var (string_of_memberlist members ^ "()", -1) %=% Value(Int (Bigint.one, 1) )
+        Var (string_of_memberlist members ^ "()", -1) %=% mkVInt(1, 1)
      | Some _ -> unimplemented ("FunctionCall for members " ^ string_of_memberlist members)
      end
   | E.FunctionCall _ ->
@@ -173,7 +165,7 @@ let lookup_exn (Program(top_decls) : program) (ctx : Declaration.t list) (ident 
     let module D = Declaration in 
     List.find ~f:(fun d -> snd (D.name d) = snd name) in
   match find ident ctx with
-  | None -> begin match find ident (get_decls top_decls) with
+  | None -> begin match find ident top_decls with
       | None -> failwith ("[Error: UseBeforeDef] Couldnt find " ^ snd ident)
       | Some d -> d
     end
@@ -260,7 +252,7 @@ and encode_control prog (ctx : Declaration.t list) ( body : Block.t ) =
 
 and encode_program (Program(top_decls) as prog : program ) =
   let open Declaration in
-  match List.find (get_decls top_decls) ~f:(fun d -> snd (Declaration.name d) = "MyIngress") with
+  match List.find top_decls ~f:(fun d -> snd (Declaration.name d) = "MyIngress") with
   | None -> failwith "Could not find control module MyIngress"
   | Some (_, Control c) -> encode_control prog c.locals c.apply
   | Some _ -> failwith "Found a module called MyIngress, but it wasn't a control module"
@@ -310,7 +302,7 @@ let apply_model_from_file (c : cmd) (model_file : string) : cmd =
       match parse_line line with
       | None -> c
       | Some (hole, data) ->
-         StringMap.singleton hole (Int (Bigint.of_int_exn data, -1))
+         StringMap.singleton hole (mkInt (data, -1))
          |> fill_holes c)  
 
 (* P4-PARSING *)
@@ -326,7 +318,7 @@ let preprocess include_dirs p4file =
        ["-undef"; "-nostdinc"; "-E"; "-x"; "c"; p4file])) in 
   let in_chan = Unix.open_process_in cmd in
   let str = In_channel.input_all in_chan in 
-  let _ = Unix.close_process_in in_chan in
+  let _ : Core.Unix.Exit_or_signal.t = Unix.close_process_in in_chan in
   str
 
 let parse_p4 include_dirs p4_file verbose = 

@@ -1,5 +1,8 @@
 open Core
 
+let (=) = Stdlib.(=)
+let (<>) = Stdlib.(<>)
+
 module type HashCmp = sig
   type t [@@deriving sexp, compare, eq, hash]
   (* val pp : Format.formatter -> t -> unit *)

@@ -47,13 +47,13 @@ let rec mk_pipeline varsize =
 
 let rec generate_n_insertions varsize length n avail_tables maxes : Edit.t list =
   if n = 0 then
-    let _ = Printf.printf "--generated--\n%!"in
+    let _ : unit = Printf.printf "--generated--\n%!"in
     []
   else if avail_tables = [] then
-    let _ = Printf.printf "--filled up --\n%!" in
+    let _ : unit = Printf.printf "--filled up --\n%!" in
     []
   else
-    let _ = Printf.printf "generating %d \n%!" n in
+    let _ : unit = Printf.printf "generating %d \n%!" n in
     let rec loop_free_match avail_tables =
       if avail_tables = []
       then None
@@ -82,10 +82,10 @@ let rec generate_n_insertions varsize length n avail_tables maxes : Edit.t list 
     in
     match loop_free_match avail_tables with
     | None ->
-       let _ = Printf.printf "--filled up --\n%!" in
+       let _ : unit = Printf.printf "--filled up --\n%!" in
        []
     | Some (maxes', avail_tables', name, row) ->
-       let _ = Printf.printf "Inserting\n%!" in
+       let _ : unit = Printf.printf "Inserting\n%!" in
        (name, row)
        :: generate_n_insertions varsize length (n-1) avail_tables' maxes'
                                   
@@ -947,7 +947,7 @@ let parse_ip_mask str =
     
 let parse_port_range str =
   let lo,hi = String.lsplit2_exn str ~on:':' in
-  let _ = Printf.printf "(%s:%s)\n%!" lo hi in
+  let () = Printf.printf "(%s:%s)\n%!" lo hi in
   let lo_int = String.strip lo |> int_of_string in
   let hi_int = String.strip hi |> int_of_string in
   if lo = hi

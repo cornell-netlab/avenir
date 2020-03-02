@@ -97,7 +97,7 @@ let rec widening_test pkt wide t =
        StringMap.update wide v ~f:(function
            | None -> (lo, hi)
            | Some (lo', hi')
-             ->  (min lo lo', min hi hi'))
+             ->  (Stdlib.min lo lo', Stdlib.min hi hi'))
      else let vlu = StringMap.find_exn pkt v in
           StringMap.set wide v (vlu, vlu)
   | _ -> failwith "dont know how to handle that kind of test"
@@ -116,7 +116,7 @@ let widening_match pkt wide matches =
            ~f:(function
              | None -> (lo, hi)
              | Some (lo',hi') ->
-                (max lo lo', min hi hi')
+                (Stdlib.max lo lo', Stdlib.min hi hi')
            )
     )
 

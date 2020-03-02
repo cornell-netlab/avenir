@@ -158,7 +158,7 @@ let mkMotleyModel model =
 
 let toZ3String test =
   let mySolver = satsolver () in
-  let _ = initSolver `Sat mySolver context test in
+  let _ : unit = initSolver `Sat mySolver context test in
   Printf.sprintf "%s" (Z3.Solver.to_string mySolver)
 
 
@@ -225,7 +225,7 @@ let check_opt (test : test ) =
   [initZ3Test context test [] (free_vars_of_test test) ]
   |> Z3.Optimize.add solver;
   List.iter constraints ~f:(fun e ->
-      Z3.Optimize.minimize solver e |> ignore
+      ignore (Z3.Optimize.minimize solver e : Z3.Optimize.handle)
     );
   Core.Out_channel.write_all "query.smt" ~data:(Printf.sprintf "%s\n(get-model)" (Z3.Optimize.to_string solver));
   (* Printf.printf "OPTIMAL SOLVER :\n %s \n\n%!" (Z3.Optimize.to_string solver); *)
@@ -249,10 +249,9 @@ let check (params : Parameters.t) typ test =
          | _ -> failwith "impossible"
        in
        let st = Time.now() in
-       
-       let _ = Z3.Solver.push mySolver;
-               initSolver typ mySolver context test in
-       let _ = if params.debug then Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in
+       let () = Z3.Solver.push mySolver;
+                initSolver typ mySolver context test in
+       let () = if params.debug then Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in
        let response = Z3.Solver.check mySolver [] in
        let dur = Time.(diff (now()) st) in       
        (* let _ = Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver) in *)
