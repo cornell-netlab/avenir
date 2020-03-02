@@ -11,6 +11,7 @@ module CheckAndSet = Motley.CheckAndSet
 module Parameters = Motley.Parameters
 module ProfData = Motley.ProfData
 module Problem = Motley.Problem
+module Tables = Motley.Tables
 
 
 let parse_file (filename : string) : Ast.cmd =
@@ -150,7 +151,7 @@ module Bench = struct
    
 
   let run varsize num_tables max_inserts widening () =
-    Benchmark.reorder_benchmark varsize num_tables max_inserts widening
+    ignore(Benchmark.reorder_benchmark varsize num_tables max_inserts widening : Tables.Edit.t list)
 end
     
 
@@ -173,7 +174,7 @@ module ONF = struct
   
 
   let run gas widening do_slice interactive debug data_fp () =
-    ignore (Benchmark.basic_onf_ipv4 Parameters.({widening;do_slice;gas;interactive;debug}) data_fp : unit)
+    ignore (Benchmark.basic_onf_ipv4 Parameters.({widening;do_slice;gas;interactive;debug}) data_fp : Tables.Edit.t list)
     (* Benchmark.onf_representative gas widening |> ignore *)
 end
     
@@ -234,7 +235,7 @@ module OFBench = struct
       +> flag "-gas" (optional int) ~doc:"how many cegis iterations?")
 
   let run classbench_file widening gas () =
-    ignore(Benchmark.of_to_pipe1 widening gas classbench_file () : unit)
+    ignore(Benchmark.of_to_pipe1 widening gas classbench_file () : Tables.Edit.t list)
 end
     
 

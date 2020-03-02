@@ -219,8 +219,13 @@ let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
    *         List.iter fvs ~f:(fun (x,_) -> Printf.printf " %s" x);
    *         Printf.printf "\n%!" *)
   (* in *)
-  let u_log,_ = problem.log |> Instance.apply `NoHoles `Exact (Instance.update_list problem.log_inst problem.log_edits)  in
+  let u_log,_ = problem.log |> (Instance.update_list problem.log_inst problem.log_edits
+                                |> Instance.apply ~no_miss:params.do_slice `NoHoles `Exact)
+  in
   let u_rea,_ = problem.phys |> Instance.apply `NoHoles `Exact (Instance.update_list problem.phys_inst problem.phys_edits) in
+  if params.debug then
+    Printf.printf "-------------------------------------------\n%s \n???====?=====????\n %s\n-------------------------------------\n%!"
+      (string_of_cmd u_log) (string_of_cmd u_rea);
   let st_mk_cond = Time.now () in
   let condition = equivalent problem.fvs u_log u_rea in  
   let nd_mk_cond = Time.now () in
@@ -260,13 +265,37 @@ let rec solve_concrete
   let model_finder = if params.widening
                      then get_one_model_edit
                      else get_one_model_edit_no_widening in
-  let st = Time.now() in
+  let st = Time.now () in
   match model_finder pkt data params hints problem with
   | None -> Printf.sprintf "Couldnt find a model" |> failwith
   | Some (model, action_map) ->
      data := {!data with model_search_time = Time.Span.(!data.model_search_time + Time.diff (Time.now()) st) };
      Edit.extract problem.phys model
-    
+
+
+(* The truth of a slice implies the truth of the full programs when
+ * the inserted rules are disjoint with every previous rule (i.e. no overlaps or deletions)
+ * Here we only check that the rules are exact, which implies this property given the assumption that every insertion is reachable
+*)                  
+let slice_conclusive _ _ (problem : Problem.t) =
+  List.length problem.phys_edits > 0 &&
+  List.for_all (problem.log_edits @ problem.phys_edits)
+    ~f:(function | Add (_, (ms, _,_)) ->
+                    List.for_all ms ~f:(function | Exact _ -> true | _ -> false) (* need to check disjointness with previous rows here *)
+                 | Del _ -> false)    
+                  
+let slice (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
+  if params.debug then
+    Printf.printf "///////////////////////////SLICE (%d) (%d)///////////////////////////////\n"
+      (List.length problem.log_edits) (List.length problem.phys_edits);
+  let log_inst_slice = Instance.update_list Instance.empty problem.log_edits in
+  let phys_inst_slice = Instance.update_list Instance.empty problem.phys_edits in
+  let log_inst = Instance.overwrite problem.log_inst log_inst_slice in
+  let phys_inst = Instance.overwrite problem.phys_inst phys_inst_slice in
+  {problem with log_inst; phys_inst;
+                log_edits = []; phys_edits = [] }
+  
+
 let cegis ~iter
       (params : Parameters.t)
       (hints : (CandidateMap.trace -> CandidateMap.trace list) option)
@@ -281,15 +310,12 @@ let cegis ~iter
     if params.debug || params.interactive then
       Printf.printf "======================= LOOP (%d, %d) =======================\n%!%s\n%!" (iter) (params.gas) (Problem.to_string problem);
     let imp_st = Time.now () in
-    let res = implements params data problem in    
+    let res = if params.do_slice
+              then implements params data (slice params data problem)
+              else implements params data problem in
     data := {!data with impl_time = Time.Span.(!data.impl_time + (Time.diff (Time.now()) imp_st))};
-    match res with
-    | `Yes ->
-       if params.do_slice
-       then loop {params with do_slice = false} problem
-       else Some problem.phys_edits
-    | `NoAndCE counter ->
-       if params.interactive then
+    let do_cex counter =
+      if params.interactive then
          (Printf.printf "Press enter to resolve counterexample\n%!";
           ignore(Stdio.In_channel.(input_char stdin) : char option));
        if params.gas = 0 then failwith "RAN OUT OF GAS" else
@@ -299,18 +325,30 @@ let cegis ~iter
          else loop
                 { params with gas = params.gas - 1 }
                 { problem with phys_edits = pedits }
+    in
+    match res with
+    | `Yes ->
+       if params.do_slice && not (slice_conclusive params data problem)
+       then
+         match implements params data problem with
+         | `Yes -> Some problem.phys_edits
+         | `NoAndCE counter -> do_cex counter
+       else Some problem.phys_edits
+    | `NoAndCE counter -> do_cex counter
   in
   loop params problem
     
 let synthesize ~iter (params : Parameters.t) (hints : (CandidateMap.trace -> CandidateMap.trace list) option) (data : ProfData.t ref)  (problem : Problem.t) =
   let start = Time.now () in
-  let pinst' = cegis ~iter params hints data problem in
-  let pinst_out = Option.value ~default:[] pinst' (*|> complete*) in
+  let pedits = cegis ~iter params hints data problem in
+  let pedits_out = Option.value ~default:[] pedits in
   let stop = Time.now() in
-  Printf.printf "\nSynthesized Program:\n%s\n\n%!"
-    (Instance.apply `NoHoles `Exact (Instance.update_list problem.phys_inst problem.phys_edits) problem.phys |> fst |> string_of_cmd);
+  if params.debug || params.interactive then
+    Printf.printf "\nSynthesized Program (%d edits made):\n%s\n\n%!"
+      (List.length pedits_out)
+      (Instance.apply `NoHoles `Exact (Instance.update_list problem.phys_inst pedits_out) problem.phys |> fst |> string_of_cmd);
   data := {!data with
             log_inst_size = List.length problem.log_edits + (Instance.size problem.log_inst);
             phys_inst_size = Instance.size problem.phys_inst;
             time = Time.diff stop start};
-  pinst_out
+  pedits_out

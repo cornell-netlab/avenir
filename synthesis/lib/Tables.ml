@@ -209,8 +209,8 @@ module Edit = struct
            if data |> get_int = Bigint.one then
              let act =  match StringMap.find m (Printf.sprintf "?ActIn%s" tbl) with
                | None -> failwith ""
-               | Some v -> get_int v |> Bigint.to_int_exn in
-             match Row.mk_new_row m phys tbl None act with
+               | Some v -> get_int v |> Bigint.to_int_exn in 
+            match Row.mk_new_row m phys tbl None act with
              | None -> failwith (Printf.sprintf "Couldn't make new row in table %s\n" tbl)
              | Some row ->
                 (fst acc, Add (tbl, row) :: snd acc)
@@ -244,27 +244,32 @@ module Instance = struct
     | (e::es) -> update_list (update inst e) es
 
 
+  let rec overwrite (old_inst : t) (new_inst : t) : t =
+    StringMap.fold new_inst ~init:old_inst
+      ~f:(fun ~key ~data acc -> StringMap.set acc ~key ~data)
+
+
   let size : t -> int =
     StringMap.fold ~init:0 ~f:(fun ~key:_ ~data -> (+) (List.length data))
                              
   let delete_hole i tbl = Hole(Printf.sprintf "?DeleteRow%dIn%s" i tbl, 1)    
 
-  let rec apply tag encode_tag ?cnt:(cnt=0) (inst : t) (prog : cmd) : (cmd * int) =
+  let rec apply ?no_miss:(no_miss = false) tag encode_tag ?cnt:(cnt=0) (inst : t) (prog : cmd) : (cmd * int) =
     match prog with
     | Skip 
       | Assign _
       | Assert _ 
       | Assume _ -> (prog, cnt)
     | Seq (c1,c2) ->
-       let (c1', cnt1) = apply tag encode_tag ~cnt inst c1 in
-       let (c2', cnt2) = apply tag encode_tag ~cnt:cnt1 inst c2 in
+       let (c1', cnt1) = apply ~no_miss tag encode_tag ~cnt inst c1 in
+       let (c2', cnt2) = apply ~no_miss tag encode_tag ~cnt:cnt1 inst c2 in
        (c1' %:% c2', cnt2)
     | While _ -> failwith "while loops not supported"
     | Select (typ, ss) ->
        let (ss, ss_cnt) =
          List.fold ss ~init:([],cnt)
            ~f:(fun (acc, cnt) (t, c) ->
-             let (c', cnt') = apply tag encode_tag ~cnt inst c in
+             let (c', cnt') = apply ~no_miss tag encode_tag ~cnt inst c in
              acc @ [(t,c')], cnt'
            ) in
        (mkSelect typ ss, ss_cnt)
@@ -305,10 +310,7 @@ module Instance = struct
          | `NoHoles -> []
        in
        let dflt_row =
-         let cond =
-           match tag with
-           | `WithHoles -> True (*add_row_hole %=% mkVInt (0,1)*)
-           | `NoHoles -> True in
+         let cond = if no_miss then False else True in
          [(cond, default)] in
        (selects @ holes @ dflt_row |> mkOrdered
        , cnt (*+ 1*))

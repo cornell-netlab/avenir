@@ -17,16 +17,17 @@ let rec run_experiment iter seq params hints problem =
        let data = ProfData.zero () in
        let problem_inner = Problem.({problem with log_edits = edit}) in
        let pedits = synthesize ~iter params hints data problem_inner  in
-       !data :: run_experiment (iter + 1) edits
-                  params
-                  hints
-                  Problem.({problem with log_inst = Instance.update_list problem.log_inst edit;
-                                         phys_inst = Instance.update_list problem.phys_inst pedits})
+       Printf.printf "%s\n%!" (ProfData.to_string !data);
+       run_experiment (iter + 1) edits
+         params
+         hints
+         Problem.({problem with log_inst = Instance.update_list problem.log_inst edit;
+                                phys_inst = Instance.update_list problem.phys_inst pedits})
                         
 let measure params hints problem insertions =
+  Printf.printf "%s\n%!" ProfData.header_string;
   run_experiment 0 insertions params hints problem
-  |> ProfData.to_csv
-  |> Printf.printf "%s"
+
                                             
 let permute l =
   List.map l ~f:(inj_r (Random.int (List.length l)))
