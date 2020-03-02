@@ -25,16 +25,18 @@ module Solver = struct
       +> anon ("logical" %: string)
       +> anon ("real" %: string)
       +> flag "-w" no_arg ~doc:"Do widening"
+      +> flag "-s" no_arg ~doc:"Do slicing optimization"
       +> flag "-g" (required int) ~doc:"max number of CEGIS reps"
       +> flag "-DEBUG" no_arg ~doc:"Print Debugging commands"
       +> flag "-i" no_arg ~doc:"Interactive Mode")
 
-  let run logical real widening gas debug interactive () =
+  let run logical real widening do_slice gas debug interactive () =
     let log = parse_file logical in
     let phys = parse_file real in
-    let _ : Motley.Tables.Instance.t = 
+    let _ : Motley.Tables.Edit.t list = 
       Synthesis.synthesize ~iter:0
         Parameters.({widening;
+                     do_slice;
                      gas;
                      debug;
                      interactive})
@@ -42,7 +44,8 @@ module Solver = struct
         (ProfData.zero ())      
         Problem.({log; phys; log_inst = Motley.Tables.Instance.empty;
                   phys_inst = Motley.Tables.Instance.empty;
-                  edits = [];
+                  log_edits = [];
+                  phys_edits = [];
                   fvs = Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)}) in 
     ()
 end
@@ -163,13 +166,14 @@ module ONF = struct
       empty       
       +> flag "-gas" (required int) ~doc:"how many cegis iterations?"
       +> flag "-w" no_arg ~doc:"perform widening"
+      +> flag "-s" no_arg ~doc:"perform slicing optimization"
       +> flag "-i" no_arg ~doc:"interactive mode"
       +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
       +> flag "-data" (required string) ~doc:"the input log" )
   
 
-  let run gas widening interactive debug data_fp () =
-    ignore (Benchmark.basic_onf_ipv4 Parameters.({widening;gas;interactive;debug}) data_fp : unit)
+  let run gas widening do_slice interactive debug data_fp () =
+    ignore (Benchmark.basic_onf_ipv4 Parameters.({widening;do_slice;gas;interactive;debug}) data_fp : unit)
     (* Benchmark.onf_representative gas widening |> ignore *)
 end
     
@@ -188,7 +192,7 @@ module RunningExample = struct
   
 
   let run gas widening () =
-    ignore (Benchmark.running_example gas widening : Motley.Tables.Instance.t)
+    ignore (Benchmark.running_example gas widening : Motley.Tables.Edit.t list)
 end
     
 

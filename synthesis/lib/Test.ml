@@ -578,7 +578,8 @@ let%test _ =
   let log_inst =
     StringMap.of_alist_exn [ ]
   in
-  let edits = [("log", ([Match.Exact (mkInt(2,2))], [], 2))] in
+  let log_edits = [Tables.Edit.Add ("log", ([Match.Exact (mkInt(2,2))], [], 2))] in
+  let phys_edits = [] in
   let phys_inst =
     StringMap.of_alist_exn [] in
   ignore(synthesize
@@ -587,7 +588,7 @@ let%test _ =
            None
            (ProfData.zero ())
            Problem.({fvs=[("dst",2); ("out",2); ("x", 2)];
-                     log; phys; log_inst; phys_inst; edits}) : Tables.Instance.t);
+                     log; phys; log_inst; phys_inst; log_edits; phys_edits}) : Tables.Edit.t list);
   true
 
     

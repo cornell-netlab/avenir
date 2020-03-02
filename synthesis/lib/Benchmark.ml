@@ -15,13 +15,13 @@ let rec run_experiment iter seq params hints problem =
        (* Printf.printf "==== BENCHMARKING INSERTION OF (%s) =====\n%!"
         *   (string_of_edit edit); *)
        let data = ProfData.zero () in
-       let problem_inner = Problem.({problem with edits = edit}) in
-       let pinst'  = synthesize ~iter params hints data problem_inner  in
+       let problem_inner = Problem.({problem with log_edits = edit}) in
+       let pedits = synthesize ~iter params hints data problem_inner  in
        !data :: run_experiment (iter + 1) edits
                   params
                   hints
-                  Problem.({problem with log_inst = (Instance.update_list problem.log_inst edit);
-                                         phys_inst = pinst'})
+                  Problem.({problem with log_inst = Instance.update_list problem.log_inst edit;
+                                         phys_inst = Instance.update_list problem.phys_inst pedits})
                         
 let measure params hints problem insertions =
   run_experiment 0 insertions params hints problem
@@ -86,7 +86,7 @@ let rec generate_n_insertions varsize length n avail_tables maxes : Edit.t list 
        []
     | Some (maxes', avail_tables', name, row) ->
        let _ : unit = Printf.printf "Inserting\n%!" in
-       (name, row)
+       Add (name, row)
        :: generate_n_insertions varsize length (n-1) avail_tables' maxes'
                                   
 let reorder_benchmark varsize length max_inserts widening =
@@ -123,7 +123,8 @@ let reorder_benchmark varsize length max_inserts widening =
     let open Problem in
     { log; phys; fvs;
       log_inst; phys_inst;
-      edits = []
+      log_edits = [];
+      phys_edits = [];
     } in
   measure params (Some (List.return))  problem insertion_sequence
 
@@ -237,7 +238,7 @@ let onos_to_edits filename =
   let make_edit tbl_nm data : Edit.t =
     match data with
     | [ts; "ADD"; _; ipv6; id] ->
-       (tbl_nm, ([Match.mk_ipv6_match ipv6], [Int(Bigint.of_string id, 32)], 0))
+       Add (tbl_nm, ([Match.mk_ipv6_match ipv6], [Int(Bigint.of_string id, 32)], 0))
     | [_; "REMOVE"; _; _; _] ->
        failwith "cannot yet handle removes"
     | _ ->
@@ -659,7 +660,8 @@ let basic_onf_ipv4 params filename =
     { log; phys; fvs;
       log_inst = StringMap.(set empty ~key:"ipv6" ~data:[]);
       phys_inst = StringMap.(set empty ~key:"l3_fwd" ~data:[]);
-      edits = []
+      log_edits = [];
+      phys_edits = []
     }
   in
   measure params None problem (onos_to_edits filename)
@@ -711,7 +713,8 @@ let running_example gas widening =
                                                       ;([Match.Exact (mkInt(1,2))], [mkInt(2,2)], 1)])
                                       ; ("dst_table", [([Match.Exact (mkInt(0,2))], [mkInt(1,2)], 0)])];
      phys_inst = StringMap.empty;
-     edits = [("dst_table", ([Exact (mkInt(1,2))], [mkInt(2,2)], 0))];
+     log_edits = [Add ("dst_table", ([Exact (mkInt(1,2))], [mkInt(2,2)], 0))];
+     phys_edits = [];
      fvs = ["src", 2; "dst", 2; "smac", 2; "dmac", 2; "out", 2 ]
     }
   in
@@ -896,7 +899,8 @@ let onf_representative gas widening =
                   ; ("ipv4_dst", [([Match.Exact(mkInt(1, 32))], [mkInt(1,32)], 0)])
                   ];
      phys_inst = Instance.empty;
-     edits = [("next", ([Match.Exact(mkInt(1,32))], [mkInt(1,9)], 0))];
+     log_edits = [Add("next", ([Match.Exact(mkInt(1,32))], [mkInt(1,9)], 0))];
+     phys_edits = [];
      fvs
     }
   in
@@ -984,7 +988,7 @@ let generate_edits cb_rules =
         ]
     )
 
-let generate_pipe1_edits cb_rules =
+let generate_pipe1_edits cb_rules : Edit.t list list =
   let drop_table = List.fold (pow 2 9 |> range_ex 0) ~init:IntMap.empty
                      ~f:(fun acc port -> IntMap.set acc ~key:port ~data:(Random.int 2)) in
   let ip_table =
@@ -995,9 +999,9 @@ let generate_pipe1_edits cb_rules =
       @ (if Random.int 2 = 0
           then []
           else let pt = Random.int (pow 2 9) in
-               [["ingress", ([Match.Exact(mkInt(pt,9))], [], IntMap.find_exn drop_table pt)]]
+               [[Tables.Edit.Add ("ingress", ([Match.Exact(mkInt(pt,9))], [], IntMap.find_exn drop_table pt))]]
         )
-      @ [[("ipv4_fwd", ([ip_dst], [mkInt(out_port, 9)], 0))]]
+      @ [[Tables.Edit.Add ("ipv4_fwd", ([ip_dst], [mkInt(out_port, 9)], 0))]]
     )
   in
   ip_table
@@ -1043,7 +1047,8 @@ let of_to_pipe1 widening gas fp () =
   let params = Parameters.({default with widening; gas}) in
   let problem = Problem.({log = pipe; phys = of_table;
                           log_inst = StringMap.empty; phys_inst = StringMap.empty;
-                          edits = [];
+                          log_edits = [];
+                          phys_edits = [];
                           fvs}) in
   measure params None problem pipe_insertions
 

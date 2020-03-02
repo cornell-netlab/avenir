@@ -201,4 +201,4 @@ let bit_string_to_decimal bs  =
   
     
       
-  
+let uncurry f (x,y) = f x y

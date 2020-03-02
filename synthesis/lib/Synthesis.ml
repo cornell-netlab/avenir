@@ -91,10 +91,11 @@ let get_one_model_edit
   =
   (* print_instance "Logical" (apply_edit linst ledit);
    * print_instance "Physical" pinst; *)
-  let linst_edited = Instance.update_list problem.log_inst problem.edits in
+  let linst_edited = Instance.update_list problem.log_inst problem.log_edits in
+  let pinst_edited = Instance.update_list problem.phys_inst problem.phys_edits in
   let (pkt',_), wide, trace, actions = trace_eval_inst ~wide:StringMap.empty problem.log linst_edited (pkt,None) in
   let st = Time.now () in
-  let cands = CandidateMap.apply_hints `Range hints actions problem.phys problem.phys_inst in
+  let cands = CandidateMap.apply_hints `Range hints actions problem.phys pinst_edited in
   let log_wp = wp trace True in
   let wp_phys_paths =
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
@@ -141,7 +142,8 @@ let get_one_model_edit_no_widening
   (* print_instance "Logical" (apply_edit linst ledit);
    * print_instance "Physical" pinst; *)
   let interp_st = Time.now () in
-  let linst_edited =  Instance.update_list problem.log_inst problem.edits in
+  let linst_edited =  Instance.update_list problem.log_inst problem.log_edits in
+  let phys_edited = Instance.update_list problem.phys_inst problem.phys_edits in
   let (pkt',_), _, trace, actions = trace_eval_inst ~wide:StringMap.empty
                                       problem.log linst_edited (pkt,None) in
   data := {!data with interp_time = Time.Span.(!data.interp_time + (Time.diff (Time.now ()) interp_st)) };
@@ -156,7 +158,7 @@ let get_one_model_edit_no_widening
              ignore (In_channel.(input_char stdin) : char option))
   in
   let cst = Time.now () in
-  let cands = CandidateMap.apply_hints `Exact hints actions problem.phys problem.phys_inst in
+  let cands = CandidateMap.apply_hints `Exact hints actions problem.phys phys_edited in
   data := {!data with cand_time = Time.Span.(!data.cand_time +  Time.diff (Time.now ()) cst) };
   let wp_st = Time.now () in
   let wp_phys_paths =
@@ -217,8 +219,8 @@ let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
    *         List.iter fvs ~f:(fun (x,_) -> Printf.printf " %s" x);
    *         Printf.printf "\n%!" *)
   (* in *)
-  let u_log,_ = problem.log |> Instance.apply `NoHoles `Exact (Instance.update_list problem.log_inst problem.edits)  in
-  let u_rea,_ = problem.phys |> Instance.apply `NoHoles `Exact problem.phys_inst in
+  let u_log,_ = problem.log |> Instance.apply `NoHoles `Exact (Instance.update_list problem.log_inst problem.log_edits)  in
+  let u_rea,_ = problem.phys |> Instance.apply `NoHoles `Exact (Instance.update_list problem.phys_inst problem.phys_edits) in
   let st_mk_cond = Time.now () in
   let condition = equivalent problem.fvs u_log u_rea in  
   let nd_mk_cond = Time.now () in
@@ -252,66 +254,63 @@ let rec solve_concrete
           (params : Parameters.t)          
           (hints : (CandidateMap.trace -> CandidateMap.trace list) option)
           (problem : Problem.t)
-        : (Instance.t) =
+        : (Edit.t list) =
   let values = multi_ints_of_cmd problem.log |> List.map ~f:(fun x -> Int x) in
   let pkt = packet |> Option.value ~default:(Packet.generate problem.fvs ~values) in
   let model_finder = if params.widening
                      then get_one_model_edit
                      else get_one_model_edit_no_widening in
   let st = Time.now() in
-  let x = match model_finder pkt data params hints problem with
+  match model_finder pkt data params hints problem with
   | None -> Printf.sprintf "Couldnt find a model" |> failwith
   | Some (model, action_map) ->
      data := {!data with model_search_time = Time.Span.(!data.model_search_time + Time.diff (Time.now()) st) };
-     match Instance.fixup_edit (check params `Sat) params data model action_map problem.phys problem.phys_inst with
-     | `Ok pinst' -> pinst'
-     | `Conflict pinst' ->
-        Printf.printf "BACKTRACKING\n%!";
-        (* failwith "BACKTRACKING" *)
-        pinst' in
-  x
-  
+     Edit.extract problem.phys model
+    
 let cegis ~iter
       (params : Parameters.t)
       (hints : (CandidateMap.trace -> CandidateMap.trace list) option)
       (data : ProfData.t ref)
-      (problem : Problem.t) =
-  let rec loop (params : Parameters.t) (problem : Problem.t) =
+      (problem : Problem.t)
+    : (Edit.t list) option
+  =
+  let rec loop (params : Parameters.t) (problem : Problem.t) : (Edit.t list) option =
     if params.interactive then
       (Printf.printf "Press enter to loop again\n%!";
        ignore(Stdio.In_channel.(input_char stdin) : char option));
     if params.debug || params.interactive then
       Printf.printf "======================= LOOP (%d, %d) =======================\n%!%s\n%!" (iter) (params.gas) (Problem.to_string problem);
     let imp_st = Time.now () in
-    let res = implements params data problem in
+    let res = implements params data problem in    
     data := {!data with impl_time = Time.Span.(!data.impl_time + (Time.diff (Time.now()) imp_st))};
     match res with
     | `Yes ->
-       Some problem.phys_inst
+       if params.do_slice
+       then loop {params with do_slice = false} problem
+       else Some problem.phys_edits
     | `NoAndCE counter ->
        if params.interactive then
          (Printf.printf "Press enter to resolve counterexample\n%!";
           ignore(Stdio.In_channel.(input_char stdin) : char option));
        if params.gas = 0 then failwith "RAN OUT OF GAS" else
-         let pinst' = solve_concrete ~packet:(Some counter) data params hints problem in
-         if StringMap.equal (=) problem.phys_inst pinst'
+         let pedits = solve_concrete ~packet:(Some counter) data params hints problem in
+         if List.length pedits = 0
          then failwith ("Could not make progress on edits ")
          else loop
-                {params with gas = params.gas-1}
-                {problem with phys_inst = pinst'}
+                { params with gas = params.gas - 1 }
+                { problem with phys_edits = pedits }
   in
-  let pinst' = loop params problem in
-  pinst'
+  loop params problem
     
 let synthesize ~iter (params : Parameters.t) (hints : (CandidateMap.trace -> CandidateMap.trace list) option) (data : ProfData.t ref)  (problem : Problem.t) =
   let start = Time.now () in
   let pinst' = cegis ~iter params hints data problem in
-  let pinst_out = Option.value ~default:(StringMap.empty) pinst' (*|> complete*) in
+  let pinst_out = Option.value ~default:[] pinst' (*|> complete*) in
   let stop = Time.now() in
   Printf.printf "\nSynthesized Program:\n%s\n\n%!"
-    (Instance.apply `NoHoles `Exact pinst_out problem.phys |> fst |> string_of_cmd);
+    (Instance.apply `NoHoles `Exact (Instance.update_list problem.phys_inst problem.phys_edits) problem.phys |> fst |> string_of_cmd);
   data := {!data with
-            log_inst_size = List.length problem.edits + (Instance.size problem.log_inst);
+            log_inst_size = List.length problem.log_edits + (Instance.size problem.log_inst);
             phys_inst_size = Instance.size problem.phys_inst;
             time = Time.diff stop start};
   pinst_out

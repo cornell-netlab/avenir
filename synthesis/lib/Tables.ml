@@ -191,9 +191,31 @@ module Row = struct
 end
 
 module Edit = struct
-  type t = string * Row.t
-  let to_string (nm,(row) : t) =
-    Printf.sprintf "%s <++ %s" nm (Row.to_string row) 
+  type t = Add of string * Row.t
+         | Del of string * int
+                             
+  let to_string e =
+    match e with
+    | Add (nm, row) -> Printf.sprintf "%s <++ %s" nm (Row.to_string row)
+    | Del (nm, idx) -> Printf.sprintf "%s minus row %d" nm idx
+
+
+  let extract phys (m : value StringMap.t)  : t list =
+    StringMap.fold m ~init:([],[]) (*Deletions, additions*)
+      ~f:(fun ~key ~data acc ->
+        match String.chop_prefix key ~prefix:"?AddRowTo" with
+        | None -> acc
+        | Some tbl ->
+           if data |> get_int = Bigint.one then
+             let act =  match StringMap.find m (Printf.sprintf "?ActIn%s" tbl) with
+               | None -> failwith ""
+               | Some v -> get_int v |> Bigint.to_int_exn in
+             match Row.mk_new_row m phys tbl None act with
+             | None -> failwith (Printf.sprintf "Couldn't make new row in table %s\n" tbl)
+             | Some row ->
+                (fst acc, Add (tbl, row) :: snd acc)
+           else acc)
+    |> uncurry (@)
                    
 end               
 
@@ -202,12 +224,19 @@ module Instance = struct
 
   let empty = StringMap.empty  
                  
-  let update (inst : t) ((tbl, row) : Edit.t) =
-    StringMap.update inst tbl
-      ~f:(fun rows_opt ->
-        match rows_opt with
-        | None -> [row]
-        | Some rows -> row::rows)
+  let update (inst : t) (e : Edit.t) =
+    match e with
+    | Add (tbl, row) ->
+       StringMap.update inst tbl
+         ~f:(fun rows_opt ->
+           match rows_opt with
+           | None -> [row]
+           | Some rows -> row::rows)
+    | Del (tbl, i) ->
+       StringMap.change inst tbl
+         ~f:(function
+           | None -> None
+           | Some rows -> List.filteri rows ~f:(fun j _ -> i <> j) |> Some)
       
   let rec update_list (inst : t) (edits : Edit.t list) =
     match edits with
