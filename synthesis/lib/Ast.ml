@@ -1,3 +1,4 @@
+open Bignum
 open Core
 open Util
 
@@ -13,8 +14,7 @@ type size = int
 let (=) = Stdlib.(=)
        
 type value =
-  | Int of (int * size)
-  | BV of (Bytes.t)
+  | Int of (Bigint.t * size)
             
 
 type expr =
@@ -28,24 +28,17 @@ type expr =
 
 let rec string_of_value (v : value) : string =
   match v with
-  | Int (i,x) -> string_of_int i ^ "#" ^ string_of_int x
-  | BV (bs) -> if Bytes.length bs = 16
-               then bytes_to_ipv6_string bs
-               else bytes_to_hex_string bs
+  | Int (i,x) -> Printf.sprintf "%s#%d" (Bigint.to_string i) x
 
 let veq v v' =
   match v,v' with
-  | Int (i,sz), Int(i',sz') when sz = sz' ->  i = i'
+  | Int (i,sz), Int(i',sz') when sz = sz' ->  Bigint.equal i i'
   | Int _, Int _ -> failwith "Ints are different sizes" 
-  | BV x, BV x' -> Bytes.(x = x')
-  | _, _ -> failwith "Type mismatch"
 
 let vleq v v' =
   match v, v' with
-  | Int(i,sz), Int(i',sz') when sz = sz' -> i <= i'
+  | Int(i,sz), Int(i',sz') when sz = sz' -> Bigint.(<=) i i'
   | Int _, Int _ -> failwith "Ints are different sizes"
-  | BV x, BV x' -> Bytes.(x <= x')
-  | _,_ -> failwith "Type Mismatch"
                                   
 
 let rec string_of_expr (e : expr) : string =
@@ -59,8 +52,7 @@ let rec string_of_expr (e : expr) : string =
 
 let rec sexp_string_of_value (v : value) =
   match v with
-  | Int (i,sz) -> Printf.sprintf "Int(%d,%d)" i sz
-  | BV bs -> Printf.sprintf "BV(%s)" (Bytes.to_string bs)
+  | Int (i,sz) -> Printf.sprintf "Int(%s,%d)" (Bigint.to_string i) sz
                    
 let rec sexp_string_of_expr (e : expr) =
   match e with
@@ -75,16 +67,13 @@ let rec sexp_string_of_expr (e : expr) =
      "Minus(" ^ sexp_string_of_expr e ^ ", " ^ sexp_string_of_expr e' ^ ")"
 
 
-let get_int (v : value) : int =
+let get_int (v : value) : Bigint.t =
   match v with
   | Int (x, _) -> x
-  | BV x -> Printf.sprintf "0x%s" (Bytes.to_string x)
-            |> int_of_string
                   
 let rec size_of_value (v : value) : size =
   match v with
   | Int (_, s) -> s
-  | BV x -> Bytes.length x * 8
                            
 let rec size_of_expr (e : expr) : size =
   match e with
@@ -109,7 +98,7 @@ let rec num_nodes_in_expr e =
      + 1
 
                                                                             
-let mkInt i = Int i     
+let mkInt (i,sz) = Int (Bigint.of_int_exn i, sz)
 let mkVInt i = Value (mkInt i)    
 let mkPlus e e' = Plus(e,e')
 let mkMinus e e' = Minus (e, e')
@@ -119,27 +108,21 @@ let mkTimes e e' = Times (e, e')
                    
 let rec add_values (v : value) (v' : value) : value =
   match v, v' with
-  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (x + x',sz)
+  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x + x'),sz)
   | Int (x, sz), Int(x',sz') ->
-     failwith (Printf.sprintf "Type error %d#%d and %d#%d have different bitvec sizes" x sz x' sz')
-  | BV _, BV _ -> failwith "need to add"
-  | _, _ -> failwith "type mismatch"
+     failwith (Printf.sprintf "Type error %s#%d and %s#%d have different bitvec sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 
 let rec multiply_values (v : value) (v' : value) : value =
   match v, v' with
-  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (x * x', sz)
-  | Int (x,sz), Int (x',sz') -> failwith (Printf.sprintf "Type error %d#%d and %d#%d have different file sizes" x sz x' sz')
-  | BV _, BV _ -> failwith "Need to BV Multiply"
-  | _, _ -> failwith "type mismatch"
+  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x * x'), sz)
+  | Int (x,sz), Int (x',sz') -> failwith (Printf.sprintf "Type error %s#%d and %s#%d have different file sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 
 
 let rec subtract_values (v : value) (v' : value) : value =
   match v, v' with
-  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (x - x', sz)
+  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x - x'), sz)
   | Int (x, sz), Int (x', sz') ->
-     failwith (Printf.sprintf "Type error %d#%d and %d#%d have different file sizes" x sz x' sz')
-  | BV _, BV _ -> failwith "Need to BV subtract "
-  | _, _ -> failwith "Type mismatch"
+     failwith (Printf.sprintf "Type error %s#%d and %s#%d have different file sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
          
 type test =
   | True | False
@@ -338,19 +321,33 @@ let free_vars_of_test t : (string * size) list=
                 
 let holes_of_test = free_of_test `Hole
 
-let rec multi_ints_of_value e : (int * size) list =
+let rec has_hole_expr = function
+  | Value _ | Var _  -> false
+  | Hole _ -> true
+  | Plus (e1,e2) | Minus(e1,e2) | Times (e1,e2) ->
+     has_hole_expr e1 || has_hole_expr e2
+                                 
+let rec has_hole_test = function
+  | True | False -> false
+  | Neg b -> has_hole_test b
+  | And (a,b) | Or(a,b) | Impl (a,b) | Iff(a,b) ->
+     has_hole_test a || has_hole_test b
+  | Eq (e1,e2) | Le (e1,e2) ->
+     has_hole_expr e1 || has_hole_expr e2
+                                 
+
+let rec multi_ints_of_value e : (Bigint.t * size) list =
   match e with
   | Int (i,sz) -> [i,sz]
-  | _ -> []
 
-let rec multi_ints_of_expr e : (int * size) list =
+let rec multi_ints_of_expr e : (Bigint.t * size) list =
   match e with
   | Value v -> multi_ints_of_value v
   | Var _ | Hole _ -> []
   | Plus (e,e') | Times (e,e') | Minus (e,e')
     -> multi_ints_of_expr e @ multi_ints_of_expr e'
                   
-let rec multi_ints_of_test test : (int * size) list =
+let rec multi_ints_of_test test : (Bigint.t * size) list =
   begin match test with
     | True | False -> 
       []
@@ -581,7 +578,7 @@ let rec free_of_cmd typ (c:cmd) : (string * size) list =
 let free_vars_of_cmd = free_of_cmd `Var
 let holes_of_cmd = free_of_cmd `Hole
       
-let rec multi_ints_of_cmd c : (int * size) list =
+let rec multi_ints_of_cmd c : (Bigint.t * size) list =
   match c with
   | Skip -> []
   (* | Assign (_, Int i) ->

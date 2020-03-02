@@ -57,12 +57,12 @@ let print_schema schema =
                 
 
 type key_match =
-  | Int of int
+  | Int of Bigint.t
   | Range of {lo: int; hi : int}
 
 let print_key_match (km : key_match) : unit =
   match km with
-  | Int i -> Printf.printf "%i" i
+  | Int i -> Printf.printf "%s" (Bigint.to_string i)
   | Range r -> Printf.printf "[%i;%i]" r.lo r.hi
     
 type instance =
@@ -162,15 +162,15 @@ let rec evalRel (r : key_match list) (t : schema) (e : expr) =
      end
   | Plus (e,e') ->
      begin match evalRel r t e, evalRel r t e' with
-     | Int (x, sz), Int (y,_) -> Int (x + y, sz)
+     | Int (x, sz), Int (y,_) -> Int (Bigint.(x + y), sz)
      end
   | Times (e, e') ->
      begin match evalRel r t e, evalRel r t e' with
-     | Int (x, sz), Int (y,_) -> Int (x * y, sz)
+     | Int (x, sz), Int (y,_) -> Int (Bigint.(x * y), sz)
      end
   | Minus (e, e') ->
      begin match evalRel r t e, evalRel r t e' with
-     | Int (x, sz), Int (y,_) -> Int (x - y, sz)
+     | Int (x, sz), Int (y,_) -> Int (Bigint.(x - y), sz)
      end
   | _ -> failwith "IDK how to use tuples"
 
@@ -408,7 +408,7 @@ let match_test (tbl : schema) (matches : key_match list) =
   List.fold2_exn tbl.keys matches ~init:True
     ~f:(fun acc (k, _, _)  m ->
       match m with
-      | Int i -> (Var (k, 2) %=% mkVInt (i,2)) %&% acc
+      | Int i -> (Var (k, 2) %=% Value(Int (i,2))) %&% acc
       | Range {lo; hi} -> (Var (k, 2) %>=% mkVInt (lo, 2)) %&%
                             (Var (k, 2) %<=% mkVInt (hi, 2)) %&%
                               acc)
@@ -577,7 +577,7 @@ let rec mk_random_instance n (table : schema) =
   if n = 0 then {keys = []; actions = []}
   else
     {
-      keys = [List.map table.keys ~f:(fun (_,lo,hi) -> Int (Random.int (hi+1) + lo))];
+      keys = [List.map table.keys ~f:(fun (_,lo,hi) -> Int (Random.int (hi+1) + lo |> Bigint.of_int_exn))];
       actions = [List.map table.actions ~f:random_elt]
     } |> append_instance (mk_random_instance (n-1) table)
                    

@@ -26,8 +26,8 @@ let complete_inner ~falsify (cmd : cmd) =
     let hole_replace x sz comp =
       if falsify
       then False
-      else let i = random_int_nin (List.map ~f:fst domain) in
-           comp x (Value (Int (i,sz)))
+      else let i = random_int_nin (List.map ~f:(fun x -> fst x |> Bigint.to_int_exn) domain) in
+           comp x (Value (Int (Bigint.of_int_exn i,sz)))
     in
     match t with
     | True | False -> t
@@ -46,8 +46,8 @@ let complete_inner ~falsify (cmd : cmd) =
       begin
         match v with
         | Hole _ ->
-           let i = random_int_nin (List.map ~f:fst domain) in
-           let sz = int_of_float (2. ** float_of_int i) in
+           let i = random_int_nin (List.map ~f:(fun x -> fst x |> Bigint.to_int_exn) domain) |> Bigint.of_int_exn in
+           let sz = Bigint.((one + one) ** i |> to_int_exn) in
            f %<-% Value (Int (i,sz))
         | _ -> cmd
       end
@@ -140,9 +140,12 @@ let get_one_model_edit_no_widening
   =
   (* print_instance "Logical" (apply_edit linst ledit);
    * print_instance "Physical" pinst; *)
+  let interp_st = Time.now () in
   let linst_edited =  Instance.update_list problem.log_inst problem.edits in
   let (pkt',_), _, trace, actions = trace_eval_inst ~wide:StringMap.empty
                                       problem.log linst_edited (pkt,None) in
+  data := {!data with interp_time = Time.Span.(!data.interp_time + (Time.diff (Time.now ()) interp_st)) };
+  
   let () = if params.debug || params.interactive then
             Printf.printf "CE input: %s \n%!CE TRACE: %s\nCE output: %s\n%!"
               (Packet.string__packet pkt)
@@ -151,10 +154,11 @@ let get_one_model_edit_no_widening
           if params.interactive then
             (Printf.printf "Press enter to solve for CE input-output pair\n";
              ignore (In_channel.(input_char stdin) : char option))
-                          
   in
-  let st = Time.now () in
+  let cst = Time.now () in
   let cands = CandidateMap.apply_hints `Exact hints actions problem.phys problem.phys_inst in
+  data := {!data with cand_time = Time.Span.(!data.cand_time +  Time.diff (Time.now ()) cst) };
+  let wp_st = Time.now () in
   let wp_phys_paths =
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
         let precs = if Option.is_none hints
@@ -164,29 +168,34 @@ let get_one_model_edit_no_widening
         in
         acc @ List.map precs ~f:(inj_l acts))
   in
-  let wp_time = Time.diff (Time.now ()) st in
+  data := {!data with search_wp_time = Time.Span.(!data.search_wp_time + Time.diff (Time.now ()) wp_st)};
   let model =
     List.find_map wp_phys_paths ~f:(fun (wp_phys, acts) ->
         if wp_phys = False then
           None
         else
-          let condition = (Packet.to_test ~fvs:problem.fvs ~random_fill:false pkt %=>% wp_phys) in
+          let cdst = Time.now () in
+          let condition = (Packet.to_test ~fvs:problem.fvs ~random_fill:false pkt %=>% wp_phys) in          
+          let c_dur = Time.diff (Time.now ()) cdst in
           if params.debug then Printf.printf "Checking %s  => %s\n%!" (Packet.to_test ~fvs:problem.fvs ~random_fill:false pkt |> string_of_test) (string_of_test wp_phys);
-          if holes_of_test condition = [] then None else
-            let (res, time) = check params `Sat condition in
-            data := {!data with
-                      model_z3_time = Time.Span.(!data.model_z3_time + time);
-                      model_z3_calls = !data.model_z3_calls + 1
+          let h_st = Time.now() in 
+          if condition |> has_hole_test then
+            let h_dur =  Time.diff (Time.now ()) h_st in
+            let (res, dur) = check params `Sat condition in
+            data := {!data with                      
+                      model_holes_time = Time.Span.(!data.model_holes_time + h_dur);
+                      model_z3_time = Time.Span.(!data.model_z3_time + dur);
+                      model_z3_calls = !data.model_z3_calls + 1;
+                      model_cond_time = Time.Span.(!data.model_cond_time + c_dur)
                     };
-            match res with
+            begin match res with
             | None -> if params.debug then Printf.printf "no model\n%!";None
             | Some model -> Some (model, acts)
+            end
+          else None
       )
   in
-  data := {!data with search_wp_time = Time.Span.(!data.search_wp_time + wp_time)};
   model
-    
-  
 
 let symbolic_pkt fvs = 
   List.fold fvs ~init:True
@@ -211,10 +220,13 @@ let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   let u_log,_ = problem.log |> Instance.apply `NoHoles `Exact (Instance.update_list problem.log_inst problem.edits)  in
   let u_rea,_ = problem.phys |> Instance.apply `NoHoles `Exact problem.phys_inst in
   let st_mk_cond = Time.now () in
-  let condition = equivalent problem.fvs u_log u_rea in
+  let condition = equivalent problem.fvs u_log u_rea in  
   let nd_mk_cond = Time.now () in
   let mk_cond_time = Time.diff nd_mk_cond st_mk_cond in
+  let cv_st = Time.now () in
   let model_opt, z3time = check_valid params condition in
+  let cv_nd = Time.now () in
+  data := {!data with check_valid_time = Time.Span.(!data.check_valid_time + Time.diff cv_nd cv_st)};
   let pkt_opt = match model_opt with
     | None  -> if params.debug then Printf.printf "++++++++++valid+++++++++++++\n%!";
                `Yes
@@ -226,7 +238,8 @@ let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   in
   data := {!data with
             eq_time = Time.Span.(!data.eq_time + z3time);
-            make_vc_time = Time.Span.(!data.eq_time + mk_cond_time);
+            eq_num_z3_calls = !data.eq_num_z3_calls + 1;
+            make_vc_time = Time.Span.(!data.make_vc_time + mk_cond_time);
             tree_sizes = num_nodes_in_test condition :: !data.tree_sizes
           };
   pkt_opt
@@ -242,16 +255,21 @@ let rec solve_concrete
         : (Instance.t) =
   let values = multi_ints_of_cmd problem.log |> List.map ~f:(fun x -> Int x) in
   let pkt = packet |> Option.value ~default:(Packet.generate problem.fvs ~values) in
-  let model_finder = if params.widening then get_one_model_edit else get_one_model_edit_no_widening in
-  match model_finder pkt data params hints problem with
+  let model_finder = if params.widening
+                     then get_one_model_edit
+                     else get_one_model_edit_no_widening in
+  let st = Time.now() in
+  let x = match model_finder pkt data params hints problem with
   | None -> Printf.sprintf "Couldnt find a model" |> failwith
   | Some (model, action_map) ->
-     match Instance.fixup_edit (check params `Sat) params model action_map problem.phys problem.phys_inst with
+     data := {!data with model_search_time = Time.Span.(!data.model_search_time + Time.diff (Time.now()) st) };
+     match Instance.fixup_edit (check params `Sat) params data model action_map problem.phys problem.phys_inst with
      | `Ok pinst' -> pinst'
      | `Conflict pinst' ->
         Printf.printf "BACKTRACKING\n%!";
         (* failwith "BACKTRACKING" *)
-        pinst'
+        pinst' in
+  x
   
 let cegis ~iter
       (params : Parameters.t)
@@ -264,7 +282,9 @@ let cegis ~iter
        ignore(Stdio.In_channel.(input_char stdin) : char option));
     if params.debug || params.interactive then
       Printf.printf "======================= LOOP (%d, %d) =======================\n%!%s\n%!" (iter) (params.gas) (Problem.to_string problem);
+    let imp_st = Time.now () in
     let res = implements params data problem in
+    data := {!data with impl_time = Time.Span.(!data.impl_time + (Time.diff (Time.now()) imp_st))};
     match res with
     | `Yes ->
        Some problem.phys_inst
@@ -273,10 +293,7 @@ let cegis ~iter
          (Printf.printf "Press enter to resolve counterexample\n%!";
           ignore(Stdio.In_channel.(input_char stdin) : char option));
        if params.gas = 0 then failwith "RAN OUT OF GAS" else
-         let st = Time.now() in
          let pinst' = solve_concrete ~packet:(Some counter) data params hints problem in
-         let dur = Time.diff (Time.now()) st in
-         data := {!data with model_search_time = Time.Span.(!data.model_search_time + dur) };
          if StringMap.equal (=) problem.phys_inst pinst'
          then failwith ("Could not make progress on edits ")
          else loop

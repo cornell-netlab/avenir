@@ -27,7 +27,7 @@ let rec generate_random_string length =
             
 let generate_random_expr1 size =
   match Random.int 3 with
-  | 0 -> Value (Int (Random.int 256, 8))
+  | 0 -> Value (Int (Random.int 256 |> Bigint.of_int_exn, 8))
   | 1 -> Var (generate_random_string size, 8)
   | 2 -> Hole (generate_random_string size, 8)
   | _ -> failwith "generated random integer larger than 2"
@@ -72,8 +72,8 @@ let rec generate_random_cmd size =
 
 let loop_body =
   mkSelect Partial
-    [ Var ("pkt",8) %=% Value(Int (3,8)) , ("pkt" %<-% Value(Int (6,8))) %:% ("loc" %<-% Value(Int (10,8)))
-    ; Var ("pkt",8) %=% Value(Int (4,8)) , ("pkt" %<-% Value(Int (2,8))) %:% ("loc" %<-% Value(Int (11,8)))]       
+    [ Var ("pkt",8) %=% mkVInt (3,8) , ("pkt" %<-% mkVInt (6, 8)) %:% ("loc" %<-% mkVInt (10,8))
+    ; Var ("pkt",8) %=% mkVInt (4,8) , ("pkt" %<-% mkVInt (2, 8)) %:% ("loc" %<-% mkVInt (11,8))]       
     
 let simple_test =
   "h" %<-% Var ("Ingress",8) %:%
@@ -124,7 +124,7 @@ let%test _ = (*Sequencing unrolls works*)
 
 let%test _ = (*Selection unrolls works*)
   let cond = Var ("h",8) %<>% Var ("Egress",8) in
-  let selectCond = Var ("h",8) %=% Value (Int (5,8)) in
+  let selectCond = Var ("h",8) %=% mkVInt ((5,8)) in
   unroll 1 (mkSelect Total [ selectCond, mkWhile cond loop_body
                            ; True, mkWhile cond loop_body])
   = mkSelect Total [selectCond, unroll 1 (mkWhile cond loop_body)
@@ -132,8 +132,8 @@ let%test _ = (*Selection unrolls works*)
 
 (* Testing equality smart constructor *)
 let%test _ =
-  let exp = Var ("x",8) %=% Value(Int (7,8)) in
-  let got = Value (Int (7,8)) %=% Var ("x",8) in
+  let exp = Var ("x",8) %=%  mkVInt(7,8) in
+  let got = mkVInt (7,8) %=% Var ("x",8) in
   if exp = got then true else
     (print_test_neq ~got ~exp;false)
   
@@ -146,12 +146,12 @@ let%test _ = (*Skip behaves well *)
   && wp Skip (Var ("x",8) %=% Var ("y",8)) = Var ("x",8) %=% Var ("y",8)
 
 let%test _ = (* Assign behaves well with integers *)
-  let prog = "h" %<-% Value(Int (7,8)) in
+  let prog = "h" %<-% mkVInt (7,8) in
   (* Printf.printf "%s\n" (string_of_test (wp prog (Var "h" %=% Int 7))); *)
   (* Int 7 %=% Int 7 = wp prog (Var "h" %=% Int 7) *)
-  if Value (Int (7,8)) %=% Var ("g",8) = wp prog (Var ("h",8) %=% Var ("g",8)) then true else
+  if mkVInt(7,8) %=% Var ("g",8) = wp prog (Var ("h",8) %=% Var ("g",8)) then true else
     (print_test_neq
-       ~exp:(Value (Int (7,8)) %=% Var ("g",8))
+       ~exp:(mkVInt (7,8) %=% Var ("g",8))
        ~got:(wp prog (Var ("h",8) %=% Var ("g",8)))
     ; false)
   
@@ -578,7 +578,7 @@ let%test _ =
   let log_inst =
     StringMap.of_alist_exn [ ]
   in
-  let edits = [("log", ([Match.Exact (Int(2,2))], [], 2))] in
+  let edits = [("log", ([Match.Exact (mkInt(2,2))], [], 2))] in
   let phys_inst =
     StringMap.of_alist_exn [] in
   ignore(synthesize

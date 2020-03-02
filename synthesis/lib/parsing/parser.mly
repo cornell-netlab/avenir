@@ -1,4 +1,4 @@
-%token <int> INT
+%token <string> INT
 %token <string> ID
 %token QUESTION COMMA BAR POUND
 %token TRUE
@@ -51,12 +51,12 @@ command :
 
 keys :
   | { [] }
-  | k = ID; POUND; size = INT; COMMA; ks = keys { ((k, size)::ks) }
+  | k = ID; POUND; size = INT; COMMA; ks = keys { ((k, int_of_string size)::ks) }
 
 params :
   | { [] }
-  | k = ID; POUND; size = INT { [k,size] }
-  | k = ID; POUND; size = INT; COMMA; ks = keys { ((k, size)::ks) }
+  | k = ID; POUND; size = INT { [k,int_of_string size] }
+  | k = ID; POUND; size = INT; COMMA; ks = keys { ((k, int_of_string size)::ks) }
 
 actions :
   | LBRACE; c = command; RBRACE;  { [([],c)] }
@@ -72,13 +72,13 @@ select :
   { (t, c) :: s }
 
 expr :
-| i = INT; POUND; size = INT { Ast.(Value (Int (i,size))) }
-| x = ID; POUND; size = INT  { Ast.Var (x, size) }
+| i = INT; POUND; size = INT { Ast.(Value (Int (Bigint.of_string i, int_of_string size))) }
+| x = ID; POUND; size = INT  { Ast.Var (x, int_of_string size) }
 | e = expr; PLUS; e1 = expr { Ast.(mkPlus e e1) }
 | e = expr; MINUS; e1 = expr { Ast.(mkPlus e e1) }
 | e = expr; TIMES; e1 = expr { Ast.(mkTimes e e1) }
 | LPAREN; e = expr; RPAREN { e }
-| QUESTION; x = ID; POUND; size = INT { Ast.Hole (x, size) }
+| QUESTION; x = ID; POUND; size = INT { Ast.Hole (x, int_of_string size) }
 
 test :
 | TRUE

@@ -81,7 +81,7 @@ let rec encode_expression_to_value (e : Expression.t) : expr =
   match snd e with
   | E.True -> type_error "True"
   | E.False -> type_error "False"
-  | E.Int (_,i) -> Value (Int (Bigint.to_int_exn i.value, -1))
+  | E.Int (_,i) -> mkVInt((i.value |> Petr4.Bigint.to_int_exn), -1)
   | E.Name (_,s) -> Var (s,-1)
   | E.ExpressionMember _ -> Var (dispatch_list e |> string_of_memberlist, -1)
   | E.BinaryOp {op;args=(e, e')} ->
@@ -152,7 +152,7 @@ let rec encode_expression_to_test (e: Expression.t) : test =
      begin match List.last members with
      | None -> unimplemented "Function Call with nothing to dispatch"
      | Some (_,"isValid") ->
-        Var (string_of_memberlist members ^ "()", -1) %=% Value(Int (1, 1) )
+        Var (string_of_memberlist members ^ "()", -1) %=% mkVInt(1, 1)
      | Some _ -> unimplemented ("FunctionCall for members " ^ string_of_memberlist members)
      end
   | E.FunctionCall _ ->
@@ -302,7 +302,7 @@ let apply_model_from_file (c : cmd) (model_file : string) : cmd =
       match parse_line line with
       | None -> c
       | Some (hole, data) ->
-         StringMap.singleton hole (Int (data, -1))
+         StringMap.singleton hole (mkInt (data, -1))
          |> fill_holes c)  
 
 (* P4-PARSING *)

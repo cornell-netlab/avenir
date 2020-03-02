@@ -66,17 +66,17 @@ let rec generate_n_insertions varsize length n avail_tables maxes : Edit.t list 
         else
           let (max', mtch) =
             if Random.int 6 < 1 then
-              (max_i + 1, Match.Exact (Int(max_i, varsize)))
+              (max_i + 1, Match.Exact (mkInt(max_i, varsize)))
             else
               let lo = max_i in
               let hi = min (lo + Random.int 3) (pow 2 varsize - 1) in
               if lo = hi then
-                (hi + 1, Match.Exact (Int(hi, varsize)))
+                (hi + 1, Match.Exact (mkInt(hi, varsize)))
               else
-                (hi + 1, Match.Between (Int(lo, varsize), Int(hi, varsize)))
+                (hi + 1, Match.Between (mkInt(lo, varsize), mkInt(hi, varsize)))
           in
           let maxes' = StringMap.set maxes ~key:(tbl i) ~data:max' in
-          let act_data = Int(Random.int (pow 2 varsize),varsize) in
+          let act_data = mkInt(Random.int (pow 2 varsize),varsize) in
           let row = ([mtch], [act_data], 0) in
           Some (maxes', avail_tables, tbl i, row)
     in
@@ -237,7 +237,7 @@ let onos_to_edits filename =
   let make_edit tbl_nm data : Edit.t =
     match data with
     | [ts; "ADD"; _; ipv6; id] ->
-       (tbl_nm, ([Match.mk_ipv6_match ipv6], [Int(int_of_string id, 32)], 0))
+       (tbl_nm, ([Match.mk_ipv6_match ipv6], [Int(Bigint.of_string id, 32)], 0))
     | [_; "REMOVE"; _; _; _] ->
        failwith "cannot yet handle removes"
     | _ ->
@@ -707,11 +707,11 @@ let running_example gas widening =
   let problem  =
     let open Problem in
     {log; phys;
-     log_inst = StringMap.of_alist_exn [("src_table", [([Match.Exact (Int(0,2))], [Int(1,2)], 0)
-                                                      ;([Match.Exact (Int(1,2))], [Int(2,2)], 1)])
-                                      ; ("dst_table", [([Match.Exact (Int(0,2))], [Int(1,2)], 0)])];
+     log_inst = StringMap.of_alist_exn [("src_table", [([Match.Exact (mkInt(0,2))], [mkInt(1,2)], 0)
+                                                      ;([Match.Exact (mkInt(1,2))], [mkInt(2,2)], 1)])
+                                      ; ("dst_table", [([Match.Exact (mkInt(0,2))], [mkInt(1,2)], 0)])];
      phys_inst = StringMap.empty;
-     edits = [("dst_table", ([Exact (Int(1,2))], [Int(2,2)], 0))];
+     edits = [("dst_table", ([Exact (mkInt(1,2))], [mkInt(2,2)], 0))];
      fvs = ["src", 2; "dst", 2; "smac", 2; "dmac", 2; "out", 2 ]
     }
   in
@@ -890,13 +890,13 @@ let onf_representative gas widening =
     {log  = init_metadata %:% logical;
      phys = init_metadata %:% physical;
      log_inst = StringMap.of_alist_exn
-                  [ ("my_station_table", [ ([Match.Between(Int(0,9),Int(pow 2 9,9));
-                                             Match.Between(Int(0,48),Int(pow 2 48,48));
-                                             Match.Between(Int(0, 16), Int(pow 2 16, 16))], [Int(2, 2)], 0 ) ])
-                  ; ("ipv4_dst", [([Match.Exact(Int(1, 32))], [Int(1,32)], 0)])
+                  [ ("my_station_table", [ ([Match.Between(mkInt(0,9), mkInt(pow 2 9,9));
+                                             Match.Between(mkInt(0,48), mkInt(pow 2 48,48));
+                                             Match.Between(mkInt(0, 16), mkInt(pow 2 16, 16))], [mkInt(2, 2)], 0 ) ])
+                  ; ("ipv4_dst", [([Match.Exact(mkInt(1, 32))], [mkInt(1,32)], 0)])
                   ];
      phys_inst = Instance.empty;
-     edits = [("next", ([Match.Exact(Int(1,32))], [Int(1,9)], 0))];
+     edits = [("next", ([Match.Exact(mkInt(1,32))], [mkInt(1,9)], 0))];
      fvs
     }
   in
@@ -940,9 +940,9 @@ let parse_ip_mask str =
   let lo_int = to_int lo in
   let hi_int = to_int hi in
   if lo_int = hi_int then
-    Match.Exact(Int(lo_int, 32))
+    Match.Exact(mkInt(lo_int, 32))
   else
-    Match.Between(Int(lo_int, 32), Int(hi_int, 32))
+    Match.Between(mkInt(lo_int, 32), mkInt(hi_int, 32))
   
     
 let parse_port_range str =
@@ -951,12 +951,12 @@ let parse_port_range str =
   let lo_int = String.strip lo |> int_of_string in
   let hi_int = String.strip hi |> int_of_string in
   if lo = hi
-  then Match.Exact(Int(lo_int, 9))
-  else Match.Between(Int(lo_int, 9), Int(hi_int, 9))
+  then Match.Exact(mkInt(lo_int, 9))
+  else Match.Between(mkInt(lo_int, 9), mkInt(hi_int, 9))
 
 let parse_proto str =
   let proto,_ = String.lsplit2_exn str ~on:'/' in
-  Match.Exact(Int(int_of_string proto, 8))
+  Match.Exact(Int(Bigint.of_string proto, 8))
               
 let parse_classbench fp =
   In_channel.read_lines fp
@@ -979,7 +979,7 @@ let generate_edits cb_rules =
       acc @ [
           IntMap.fold drop_table ~init:[]
             ~f:(fun ~key ~data acc ->
-                acc @ [("of", ([ip_dst; Match.Exact(Int(key, 9))], [Int(out_port, 9)], data))]
+                acc @ [("of", ([ip_dst; Match.Exact(mkInt(key, 9))], [mkInt(out_port, 9)], data))]
             )
         ]
     )
@@ -995,9 +995,9 @@ let generate_pipe1_edits cb_rules =
       @ (if Random.int 2 = 0
           then []
           else let pt = Random.int (pow 2 9) in
-               [["ingress", ([Match.Exact(Int(pt,9))], [], IntMap.find_exn drop_table pt)]]
+               [["ingress", ([Match.Exact(mkInt(pt,9))], [], IntMap.find_exn drop_table pt)]]
         )
-      @ [[("ipv4_fwd", ([ip_dst], [Int(out_port, 9)], 0))]]
+      @ [[("ipv4_fwd", ([ip_dst], [mkInt(out_port, 9)], 0))]]
     )
   in
   ip_table
