@@ -250,7 +250,7 @@ let check (params : Parameters.t) typ test =
        in
        let st = Time.now() in
        let () = Z3.Solver.push mySolver;
-               initSolver typ mySolver context test in
+                initSolver typ mySolver context test in
        let () = if params.debug then Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in
        let response = Z3.Solver.check mySolver [] in
        let dur = Time.(diff (now()) st) in       
