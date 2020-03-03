@@ -80,7 +80,7 @@ and lookup_field_width_exn (type_ctx : TypeDeclaration.t list) field : size =
 let last_field = List.last_exn (String.split field ~on:'.') in
 match lookup_field_width type_ctx last_field with
     | Some i -> i
-    | None -> -22 (* failwith ("lookup_field_width_exn: field " ^ field) *)
+    | None -> failwith ("lookup_field_width_exn: field " ^ field)
 
 (* Expressions *)
 let ctor_name_expression (e : Expression.t) : string =
@@ -178,8 +178,13 @@ and encode_expression_to_value_with_width width (type_ctx : TypeDeclaration.t li
   in
   let binop op e e' =
     let w = get_width type_ctx e in
-    let w' = get_width type_ctx e' in 
-    op (encode_expression_to_value_with_width w type_ctx e) (encode_expression_to_value_with_width w' type_ctx e')
+    let w' = get_width type_ctx e' in
+    let fw, fw' = match w, w' with
+                    | -1, tw
+                    | tw, -1 -> tw, tw
+                    | tw, tw' -> tw, tw'
+    in
+    op (encode_expression_to_value_with_width fw type_ctx e) (encode_expression_to_value_with_width fw' type_ctx e')
   in
   match snd e with
   | E.True -> Value (Int (1, 1))
@@ -250,7 +255,7 @@ let get_type_decl_from_decl d =
   let open Declaration in
   let open TypeDeclaration in
   match d with
-    | (i, Constant c) -> let _ = printf "const = %s\n" (snd c.name) in Some (i, TypeDef { annotations = c.annotations; name = c.name; typ_or_decl = Left c.typ; })
+    | (i, Constant c) -> Some (i, TypeDef { annotations = c.annotations; name = c.name; typ_or_decl = Left c.typ; })
     | _ -> None
 
 let get_type_decls : TopDeclaration.t list -> TypeDeclaration.t list =
@@ -416,7 +421,7 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration
     end
   | Assignment {lhs=lhs; rhs=rhs} ->
     begin match encode_expression_to_value type_ctx lhs with
-      | Var (f,_) -> f %<-% encode_expression_to_value type_ctx rhs, false, false
+      | Var (f,s) -> f %<-% encode_expression_to_value_with_width s type_ctx rhs, false, false
       | _ -> failwith ("[TypeError] lhs of assignment must be a field, at " ^ Petr4.Info.to_string info)
     end
   | DirectApplication {typ; args} ->
