@@ -8,6 +8,7 @@ type t =
     gas : int;
     debug: bool;
     interactive : bool;
+    fastcx : bool;
   }
 
 let default =
@@ -15,6 +16,5 @@ let default =
     do_slice = false;
     gas = 1000;
     debug = true;
-    interactive = false }  
-
-
+    interactive = false;
+    fastcx = false }

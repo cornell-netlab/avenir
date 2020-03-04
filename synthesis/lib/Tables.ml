@@ -6,18 +6,18 @@ open Manip
 
 (* TYPES *)
 
-module Match = struct      
+module Match = struct
   type t =
     | Exact of value
     | Between of value * value
-                               
+
   let to_string m =
-    match m with 
+    match m with
     | Exact x -> string_of_value x
     | Between (lo,hi) -> Printf.sprintf "[%s,%s]" (string_of_value lo) (string_of_value hi)
 
   let to_test k m =
-    match m with 
+    match m with
     | Exact x -> Var k %=% Value(x)
     | Between (lo, hi) -> (Value(lo) %<=% Var k) %&% (Var k %<=% Value(hi))
 
@@ -25,8 +25,8 @@ module Match = struct
     match encode_tag with
     | `Range -> (Var (x,sz) %<=% Hole ("?"^x^"_hi",sz))
                 %&% (Var(x,sz) %>=% Hole("?"^x^"_lo",sz))
-    | `Exact -> Var(x, sz) %=% Hole ("?"^x, sz)         
-                                                               
+    | `Exact -> Var(x, sz) %=% Hole ("?"^x, sz)
+
   let list_to_string : t list -> string =
     List.fold ~init:"" ~f:(fun acc m -> Printf.sprintf "%s %s" acc (to_string m))
 
@@ -40,7 +40,7 @@ module Match = struct
       | None -> (ipv6_str, 128)
       | Some (addr, len) -> (addr, int_of_string len) in
     let hex_addr =
-      let exp_addr_str =       
+      let exp_addr_str =
         match String.substr_index addr_str ~pattern:"::" with
         | None -> addr_str
         | Some i ->
@@ -62,10 +62,10 @@ module Match = struct
     if prefix_len = 128 then
       Exact(Int(bv,128))
     else
-      let mask = Bigint.of_string ("0b" ^ String.make (prefix_len/4) 'f' ^ String.make ((128 - prefix_len) / 4) '0' ) in    
+      let mask = Bigint.of_string ("0b" ^ String.make (prefix_len/4) 'f' ^ String.make ((128 - prefix_len) / 4) '0' ) in
       let hi = Bigint.(((bv land mask) + (Bigint.shift_left Bigint.one (Int.(128 - prefix_len))) - Bigint.one)) in
       let lo = Bigint.(bv land mask) in
-      Between (Int(lo,128), Int(hi,128)) 
+      Between (Int(lo,128), Int(hi,128))
 
   let cap (m : t) (m' : t) =
     match m, m' with
@@ -84,7 +84,7 @@ module Match = struct
          [Exact lo'']
        else if vleq lo'' hi'' then
          [Between (lo'', hi'')]
-       else 
+       else
          []
 
   let has_inter (m : t) (m' : t) : bool =
@@ -95,8 +95,8 @@ module Match = struct
       -> vleq lo x && vleq x hi
     | Between(lo, hi), Between(lo',hi')
       -> Stdlib.max lo lo' <= Stdlib.min hi hi'
-                           
-      
+
+
 
   let is_subset (m : t) (m': t) : bool =
     match m, m' with
@@ -106,9 +106,9 @@ module Match = struct
     | Between (lo, hi), Between (lo', hi') -> vleq lo hi' && vleq lo' hi
 
 
-    
+
 end
-                                       
+
 module Row = struct
   type action_data = value list
   type t = Match.t list * action_data * int
@@ -173,7 +173,7 @@ module Row = struct
    *   let prop = Match.list_to_test keys ms %=>%
    *                (List.fold rows ~init:False ~f:(fun acc (ms',_,_) -> acc %+% Match.list_to_test keys ms')) in
    *   match fst (checker prop) with
-   *   | Some _ -> 
+   *   | Some _ ->
    *      let rows' =
    *        List.filter rows ~f:(fun ((ms', _,_)) ->
    *            if List.fold2_exn ms ms' ~init:true ~f:(fun acc m m' -> acc && Match.is_subset m m')
@@ -187,13 +187,13 @@ module Row = struct
    *      then None
    *      else Some rows'
    *   | None -> None              *)
-                         
+
 end
 
 module Edit = struct
-  type t = Add of string * Row.t
+  type t = Add of string * Row.t (* Name of table *)
          | Del of string * int
-                             
+
   let to_string e =
     match e with
     | Add (nm, row) -> Printf.sprintf "%s <++ %s" nm (Row.to_string row)
@@ -209,21 +209,21 @@ module Edit = struct
            if data |> get_int = Bigint.one then
              let act =  match StringMap.find m (Printf.sprintf "?ActIn%s" tbl) with
                | None -> failwith ""
-               | Some v -> get_int v |> Bigint.to_int_exn in 
+               | Some v -> get_int v |> Bigint.to_int_exn in
             match Row.mk_new_row m phys tbl None act with
              | None -> failwith (Printf.sprintf "Couldn't make new row in table %s\n" tbl)
              | Some row ->
                 (fst acc, Add (tbl, row) :: snd acc)
            else acc)
     |> uncurry (@)
-                   
-end               
+
+end
 
 module Instance = struct
   type t = Row.t list StringMap.t
 
-  let empty = StringMap.empty  
-                 
+  let empty = StringMap.empty
+
   let update (inst : t) (e : Edit.t) =
     match e with
     | Add (tbl, row) ->
@@ -237,7 +237,7 @@ module Instance = struct
          ~f:(function
            | None -> None
            | Some rows -> List.filteri rows ~f:(fun j _ -> i <> j) |> Some)
-      
+
   let rec update_list (inst : t) (edits : Edit.t list) =
     match edits with
     | [] -> inst
@@ -251,14 +251,14 @@ module Instance = struct
 
   let size : t -> int =
     StringMap.fold ~init:0 ~f:(fun ~key:_ ~data -> (+) (List.length data))
-                             
-  let delete_hole i tbl = Hole(Printf.sprintf "?DeleteRow%dIn%s" i tbl, 1)    
+
+  let delete_hole i tbl = Hole(Printf.sprintf "?DeleteRow%dIn%s" i tbl, 1)
 
   let rec apply ?no_miss:(no_miss = false) tag encode_tag ?cnt:(cnt=0) (inst : t) (prog : cmd) : (cmd * int) =
     match prog with
-    | Skip 
+    | Skip
       | Assign _
-      | Assert _ 
+      | Assert _
       | Assume _ -> (prog, cnt)
     | Seq (c1,c2) ->
        let (c1', cnt1) = apply ~no_miss tag encode_tag ~cnt inst c1 in
@@ -298,9 +298,9 @@ module Instance = struct
        let which_act_hole = Hole ("?ActIn" ^ tbl, actSize) in
        let holes =
          match tag with
-         | `WithHoles -> 
+         | `WithHoles ->
             List.mapi acts
-              ~f:(fun i (scope, act) -> 
+              ~f:(fun i (scope, act) ->
                 (List.fold keys ~init:True
                    ~f:(fun acc (x,sz) ->
                      acc %&% Match.holes encode_tag x sz))
@@ -314,8 +314,8 @@ module Instance = struct
          [(cond, default)] in
        (selects @ holes @ dflt_row |> mkOrdered
        , cnt (*+ 1*))
-        
-         
+
+
 
   let update_consistently checker (params:Parameters.t) match_model (phys : cmd) (tbl_name : string) (act_data : Row.action_data option) (act : int) (acc : [`Ok of t | `Conflict of t]) : [`Ok of t | `Conflict of t] =
     let (keys,_,_) = get_schema_of_table tbl_name phys |> Option.value_exn in
@@ -334,7 +334,7 @@ module Instance = struct
                     | None ->
                        `Ok (StringMap.set pinst ~key:tbl_name
                                      ~data:((ks,data,act)::rows))
-                    | Some rows' ->                      
+                    | Some rows' ->
                        `Conflict (StringMap.set pinst ~key:tbl_name
                                     ~data:((ks,data,act)::rows'))
                     end
@@ -347,7 +347,7 @@ module Instance = struct
           if params.interactive then
             Printf.printf "+%s : %s\n%!" tbl_name (Row.to_string row);
           `Conflict (StringMap.set pinst ~key:tbl_name ~data:[row])
-       | Some rows, Some (ks, data, act) ->          
+       | Some rows, Some (ks, data, act) ->
           if params.interactive then
             Printf.printf "+%s : %s\n%!" tbl_name (Row.to_string (ks,data,act));
           begin match Row.remove_conflicts checker params tbl_name keys ks rows with
@@ -357,7 +357,7 @@ module Instance = struct
            `Conflict (StringMap.set pinst ~key:tbl_name
                         ~data:((ks,data,act)::rows'))
           end
-       end   
+       end
 
   let remove_deleted_rows (params : Parameters.t) match_model (pinst : t) : t =
     StringMap.fold pinst ~init:empty ~f:(fun ~key:tbl_name ~data acc ->
@@ -368,7 +368,7 @@ module Instance = struct
                 | Hole(s,_) ->
                    begin match StringMap.find match_model s with
                    | None -> true
-                   | Some do_delete when get_int do_delete = Bigint.one -> 
+                   | Some do_delete when get_int do_delete = Bigint.one ->
                       if params.interactive then Printf.printf "- %s : row %d\n%!" tbl_name i;
                       false
                    | Some x -> true
@@ -376,7 +376,7 @@ module Instance = struct
                 | _ -> true
               )
           )
-        
+
       )
 
   let fixup_edit checker (params : Parameters.t) (data : ProfData.t ref) match_model (action_map : (Row.action_data * size) StringMap.t option) (phys : cmd) (pinst : t) : [`Ok of t | `Conflict of t] =
@@ -384,7 +384,7 @@ module Instance = struct
     match action_map with
     | Some m -> StringMap.fold ~init:(`Ok pinst) m ~f:(fun ~key:tbl_name ~data:(act_data,act) ->
                     update_consistently checker params match_model phys tbl_name (Some act_data) act)
-    | None -> 
+    | None ->
        let tables_added_to =
          StringMap.fold match_model ~init:[]
            ~f:(fun ~key ~data acc ->
@@ -393,7 +393,7 @@ module Instance = struct
              then (String.substr_replace_all key ~pattern:"?" ~with_:""
                    |> String.substr_replace_first ~pattern:"AddRowTo" ~with_:"")
                   :: acc
-             else acc 
+             else acc
            ) in
        let pinst' = remove_deleted_rows params match_model pinst in
        let out = List.fold tables_added_to ~init:(`Ok pinst')
@@ -408,13 +408,8 @@ module Instance = struct
        in
        data := {!data with fixup_time = Time.Span.(!data.fixup_time + Time.diff (Time.now ()) st)};
        out
-         
-         
+
+
 end
-                    
+
                     (* END TYPES *)
-
-
-
-
-                    

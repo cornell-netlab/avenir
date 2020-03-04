@@ -16,10 +16,10 @@ module Tables = Motley.Tables
 
 let parse_file (filename : string) : Ast.cmd =
   let cts = In_channel.read_all filename in
-  let lexbuf = Lexing.from_string cts in  
+  let lexbuf = Lexing.from_string cts in
   Parser.main Lexer.tokens lexbuf
 
-  
+
 module Solver = struct
   let spec = Command.Spec.(
       empty
@@ -29,30 +29,32 @@ module Solver = struct
       +> flag "-s" no_arg ~doc:"Do slicing optimization"
       +> flag "-g" (required int) ~doc:"max number of CEGIS reps"
       +> flag "-DEBUG" no_arg ~doc:"Print Debugging commands"
-      +> flag "-i" no_arg ~doc:"Interactive Mode")
+      +> flag "-i" no_arg ~doc:"Interactive Mode"
+      +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly")
 
-  let run logical real widening do_slice gas debug interactive () =
+  let run logical real widening do_slice gas debug interactive fastcx () =
     let log = parse_file logical in
     let phys = parse_file real in
-    let _ : Motley.Tables.Edit.t list = 
+    let _ : Motley.Tables.Edit.t list =
       Synthesis.synthesize ~iter:0
         Parameters.({widening;
                      do_slice;
                      gas;
                      debug;
-                     interactive})
+                     interactive;
+                     fastcx})
         None
-        (ProfData.zero ())      
+        (ProfData.zero ())
         Problem.({log; phys; log_inst = Motley.Tables.Instance.empty;
                   phys_inst = Motley.Tables.Instance.empty;
                   log_edits = [];
                   phys_edits = [];
-                  fvs = Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)}) in 
+                  fvs = Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)}) in
     ()
 end
 
 
-let synthesize_cmd : Command.t = 
+let synthesize_cmd : Command.t =
   Command.basic_spec
     ~summary:"Compute modifications to real program to implement logical program "
     Solver.spec
@@ -66,7 +68,7 @@ module Encoder = struct
       +> flag "-v" no_arg ~doc:"verbose mode"
       +> anon ("p4_file" %: string))
 
-  let run include_dirs verbose p4_file () =    
+  let run include_dirs verbose p4_file () =
     ignore(Encode.encode_from_p4 include_dirs p4_file verbose : Ast.cmd)
 end
 
@@ -85,7 +87,7 @@ module EditCheck = struct
       +> flag "-t" (required string) ~doc:"The logical table to edit"
       +> anon ("logical" %: string)
       +> anon ("concrete" %: string))
-   
+
 
   let run (_:bool) _ _ _ _ () =
     Printf.printf "deprecated"
@@ -98,7 +100,7 @@ module EditCheck = struct
      *     Printf.printf "ADD<N to Concrete:\n %s \n%!" (Ast.string_of_cmd (Synthesis.concretely_instrument n real_cmd))
      *   end else ignore(Synthesis.check_add n name log_cmd real_cmd) *)
 end
-  
+
 let editCheck : Command.t =
   Command.basic_spec
     ~summary: "Check whether there exist `n` outputs that implement an edit"
@@ -113,7 +115,7 @@ module EditSynth = struct
       +> flag "-t" (required string) ~doc:"The logical table to edit"
       +> anon ("logical" %: string)
       +> anon ("concrete" %: string))
-   
+
 
   let run (_:bool) _ _ _ _ () =
     Printf.printf "deprecated"
@@ -127,18 +129,18 @@ module EditSynth = struct
      *     Printf.printf "Real : \n %s \n %!" (string_of_cmd (base_translation real_cmd));
      *     Printf.printf "ADD1 to Logical:\n %s\n%!" (string_of_cmd logAdd1_cmd);
      *     Printf.printf "ADD<N to Concrete:\n %s \n%!"
-     *       (string_of_cmd (edit_synth_real_inst ~numFs ~setSize:1 real_cmd))          
+     *       (string_of_cmd (edit_synth_real_inst ~numFs ~setSize:1 real_cmd))
      *   end
      * else
      *   ignore(Synthesis.synth_add numFs name log_cmd real_cmd) *)
 end
-  
+
 let editSynth : Command.t =
   Command.basic_spec
     ~summary: "Produce a function that transforms edits"
     EditSynth.spec
     EditSynth.run
-    
+
 
 
 module Bench = struct
@@ -148,36 +150,36 @@ module Bench = struct
       +> anon ("num_tables" %: int)
       +> anon ("max_inserts" %: int)
       +> flag "-w" no_arg ~doc:"perform widening")
-   
+
 
   let run varsize num_tables max_inserts widening () =
     ignore(Benchmark.reorder_benchmark varsize num_tables max_inserts widening : Tables.Edit.t list)
 end
-    
+
 
 let benchmark : Command.t =
   Command.basic_spec
     ~summary: "Run some benchmarks"
     Bench.spec
-    Bench.run             
+    Bench.run
 
 
 module ONF = struct
   let spec = Command.Spec.(
-      empty       
+      empty
       +> flag "-gas" (required int) ~doc:"how many cegis iterations?"
       +> flag "-w" no_arg ~doc:"perform widening"
       +> flag "-s" no_arg ~doc:"perform slicing optimization"
       +> flag "-i" no_arg ~doc:"interactive mode"
       +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
       +> flag "-data" (required string) ~doc:"the input log" )
-  
+
 
   let run gas widening do_slice interactive debug data_fp () =
-    ignore (Benchmark.basic_onf_ipv4 Parameters.({widening;do_slice;gas;interactive;debug}) data_fp : Tables.Edit.t list)
+    ignore (Benchmark.basic_onf_ipv4 Parameters.({widening;do_slice;gas;interactive;debug;fastcx=false}) data_fp : Tables.Edit.t list)
     (* Benchmark.onf_representative gas widening |> ignore *)
 end
-    
+
 
 let onf : Command.t =
   Command.basic_spec
@@ -190,19 +192,19 @@ module RunningExample = struct
       empty
       +> flag "-gas" (required int) ~doc:"how many cegis iterations?"
       +> flag "-w" no_arg ~doc:"perform widening")
-  
+
 
   let run gas widening () =
     ignore (Benchmark.running_example gas widening : Motley.Tables.Edit.t list)
 end
-    
+
 
 let running_example : Command.t =
   Command.basic_spec
     ~summary: "Run the onf benchmark"
     RunningExample.spec
-    RunningExample.run     
-    
+    RunningExample.run
+
 
 module WeakestPrecondition = struct
   let spec = Command.Spec.(
@@ -237,7 +239,7 @@ module OFBench = struct
   let run classbench_file widening gas () =
     ignore(Benchmark.of_to_pipe1 widening gas classbench_file () : Tables.Edit.t list)
 end
-    
+
 
 let of_bench : Command.t =
   Command.basic_spec
@@ -249,13 +251,13 @@ module Meta = struct
   let spec = Command.Spec.(empty)
   let run = CheckAndSet.run
 end
-                
+
 let meta : Command.t =
   Command.basic_spec
     ~summary:"run CheckAndSet test"
     Meta.spec
     Meta.run
-    
+
 let main : Command.t =
   Command.group
     ~summary:"Invokes the specified Motley Command"
@@ -269,8 +271,5 @@ let main : Command.t =
     ; ("ex", running_example)
     ; ("meta", meta)
     ; ("wp", wp_cmd)]
-    
+
 let () = Command.run main
-
-
-	
