@@ -5,6 +5,7 @@ open Ast
 open Manip
 
 (* TYPES *)
+let (=) = Stdlib.(=)
 
 module Match = struct      
   type t =
@@ -96,16 +97,12 @@ module Match = struct
     | Between(lo, hi), Between(lo',hi')
       -> Stdlib.max lo lo' <= Stdlib.min hi hi'
                            
-      
-
   let is_subset (m : t) (m': t) : bool =
     match m, m' with
     | Exact i, Exact j -> veq i j
     | Exact i, Between (lo', hi') -> vleq lo' i && vleq i hi'
     | Between (lo, hi), Exact j -> veq lo j && veq hi j
     | Between (lo, hi), Between (lo', hi') -> vleq lo hi' && vleq lo' hi
-
-
     
 end
                                        
@@ -113,11 +110,17 @@ module Row = struct
   type action_data = value list
   type t = Match.t list * action_data * int
   let to_string ((mtchs, ad, actid) : t) =
-    Printf.sprintf "%s   ---(%s)---> %d"
+    Printf.sprintf "%s ---(%s)---> %d"
       (List.fold mtchs ~init:"" ~f:(fun acc m -> Printf.sprintf "%s, %s" acc (Match.to_string m)))
       (List.fold ad ~init:"" ~f:(fun acc d -> Printf.sprintf "%s, %s" acc (string_of_value d)))
       actid
 
+  let intersects (m1s, _,_ : t) (m2s, _, _ : t) : bool =
+    List.fold2_exn m1s m2s ~init:true
+      ~f:(fun acc m1 m2 -> acc && Match.has_inter m1 m2)
+    
+
+      
   let mk_new_row match_model phys tbl_name data_opt act : t option =
     match get_schema_of_table tbl_name phys with
     | None -> failwith ("Couldnt find keys for table " ^ tbl_name)
@@ -198,7 +201,6 @@ module Edit = struct
     match e with
     | Add (nm, row) -> Printf.sprintf "%s <++ %s" nm (Row.to_string row)
     | Del (nm, idx) -> Printf.sprintf "%s minus row %d" nm idx
-
 
   let extract phys (m : value StringMap.t)  : t list =
     StringMap.fold m ~init:([],[]) (*Deletions, additions*)
@@ -284,7 +286,10 @@ module Instance = struct
                          ~f:(fun acc x m ->
                            (acc %&% Match.to_test x m)
                            %&% match tag with
-                               | `WithHoles -> (delete_hole i tbl %=% mkVInt(0,1))
+                               | `WithHoles ds ->
+                                  if List.exists ds ~f:((=) (tbl, i))
+                                  then delete_hole i tbl %=% mkVInt(0,1)
+                                  else True
                                | `NoHoles -> True ) in
              if action >= List.length acts then
                []
@@ -298,7 +303,7 @@ module Instance = struct
        let which_act_hole = Hole ("?ActIn" ^ tbl, actSize) in
        let holes =
          match tag with
-         | `WithHoles -> 
+         | `WithHoles _ -> 
             List.mapi acts
               ~f:(fun i (scope, act) -> 
                 (List.fold keys ~init:True

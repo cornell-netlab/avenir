@@ -71,16 +71,7 @@ let complete_inner ~falsify (cmd : cmd) =
 
 let complete cmd = complete_inner ~falsify:true cmd   
 
-
-
-let print_instance label linst =
-  Printf.printf "%s instance is \n" label;
-  StringMap.iteri linst ~f:(fun ~key ~data ->
-      Printf.printf "%s -> \n" key;
-      List.iter data ~f:(fun (keys,action) ->
-          List.iter keys ~f:(fun k -> Printf.printf ",%s" (string_of_expr k));
-          Printf.printf "  ---> %d \n%!" action)
-      )
+let compute_deletions pkt (problem : Problem.t) = get_nd_hits problem.log problem.log_inst pkt
 
 let get_one_model_edit
       (pkt : Packet.t)
@@ -89,13 +80,12 @@ let get_one_model_edit
       (hints : (CandidateMap.trace -> CandidateMap.trace list) option)
       (problem : Problem.t)
   =
-  (* print_instance "Logical" (apply_edit linst ledit);
-   * print_instance "Physical" pinst; *)
   let linst_edited = Instance.update_list problem.log_inst problem.log_edits in
   let pinst_edited = Instance.update_list problem.phys_inst problem.phys_edits in
   let (pkt',_), wide, trace, actions = trace_eval_inst ~wide:StringMap.empty problem.log linst_edited (pkt,None) in
+  let deletions = compute_deletions pkt problem in
   let st = Time.now () in
-  let cands = CandidateMap.apply_hints `Range hints actions problem.phys pinst_edited in
+  let cands = CandidateMap.apply_hints (`WithHoles deletions) `Range hints actions problem.phys pinst_edited in
   let log_wp = wp trace True in
   let wp_phys_paths =
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
@@ -146,6 +136,7 @@ let get_one_model_edit_no_widening
   let phys_edited = Instance.update_list problem.phys_inst problem.phys_edits in
   let (pkt',_), _, trace, actions = trace_eval_inst ~wide:StringMap.empty
                                       problem.log linst_edited (pkt,None) in
+  let deletions = compute_deletions pkt problem in
   data := {!data with interp_time = Time.Span.(!data.interp_time + (Time.diff (Time.now ()) interp_st)) };
   
   let () = if params.debug || params.interactive then
@@ -158,14 +149,15 @@ let get_one_model_edit_no_widening
              ignore (In_channel.(input_char stdin) : char option))
   in
   let cst = Time.now () in
-  let cands = CandidateMap.apply_hints `Exact hints actions problem.phys phys_edited in
+  let cands = CandidateMap.apply_hints (`WithHoles deletions) `Exact hints actions problem.phys phys_edited in
   data := {!data with cand_time = Time.Span.(!data.cand_time +  Time.diff (Time.now ()) cst) };
   let wp_st = Time.now () in
   let wp_phys_paths =
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
         let precs = if Option.is_none hints
                     then
-                      [wp path (Packet.to_test ~fvs:problem.fvs pkt')]
+                      wp_paths ~no_negations:false path (Packet.to_test ~fvs:problem.fvs pkt')
+                      |> List.map ~f:snd
                     else [wp path True]
         in
         acc @ List.map precs ~f:(inj_l acts))
@@ -313,7 +305,8 @@ let cegis ~iter
     let res = if params.do_slice
               then implements params data (slice params data problem)
               else implements params data problem in
-    data := {!data with impl_time = Time.Span.(!data.impl_time + (Time.diff (Time.now()) imp_st))};
+    let imp_dur = Time.(diff (now()) imp_st) in
+    data := {!data with impl_time = Time.Span.(!data.impl_time + imp_dur)};
     let do_cex counter =
       if params.interactive then
          (Printf.printf "Press enter to resolve counterexample\n%!";
