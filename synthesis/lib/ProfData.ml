@@ -48,7 +48,8 @@ let headers =
 let header_string =
   List.reduce_exn headers ~f:(fun x y -> x ^ "," ^ y)
 
-let mean_tree_size data = List.fold (data.tree_sizes) ~init:0 ~f:((+)) / List.length (data.tree_sizes)
+let mean_tree_size data =
+  if List.length data.tree_sizes = 0 then 0 else List.fold (data.tree_sizes) ~init:0 ~f:((+)) / List.length (data.tree_sizes)
 let max_tree_size data = List.fold (data.tree_sizes) ~init:0 ~f:(max)
 let min_tree_size data = List.fold (data.tree_sizes) ~init:(max_tree_size data) ~f:(min)
 

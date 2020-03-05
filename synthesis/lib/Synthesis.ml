@@ -138,6 +138,7 @@ let get_one_model_edit_no_widening
   let (pkt',_), _, trace, actions = trace_eval_inst ~wide:StringMap.empty
   problem.log linst_edited (pkt,None) in
   let deletions = compute_deletions pkt problem in
+  assert (List.length deletions = 0);
   data := {!data with interp_time = Time.Span.(!data.interp_time + (Time.diff (Time.now ()) interp_st)) };
 
   let () = if params.debug || params.interactive then
@@ -157,7 +158,7 @@ let get_one_model_edit_no_widening
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
         let precs = if Option.is_none hints
                     then
-                      wp_paths ~no_negations:false path (Packet.to_test ~fvs:problem.fvs pkt')
+                      wp_paths ~no_negations:true path (Packet.to_test ~fvs:problem.fvs pkt')
                       |> List.map ~f:snd
                     else [wp path True]
         in
@@ -301,12 +302,16 @@ let cegis ~iter
        ignore(Stdio.In_channel.(input_char stdin) : char option));
     if params.debug || params.interactive then
       Printf.printf "======================= LOOP (%d, %d) =======================\n%!%s\n%!" (iter) (params.gas) (Problem.to_string problem);
-    let imp_st = Time.now () in (* uodate data after setting time start  *)
+    let imp_st = Time.now () in (* update data after setting time start  *)
     let res = (if params.fastcx
-               then (fastcx_gen data problem.log (List.hd_exn problem.log_edits) |> unreachable params)
+               then
+                 ( if params.debug then Printf.printf "getting fast cx\n";
+                   List.hd_exn problem.log_edits
+                   |> get_cex params data problem.log )
                else (if params.do_slice
                      then implements params data (slice params data problem)
                      else implements params data problem)) in
+    let params = {params with fastcx = false} in
     let imp_dur = Time.(diff (now()) imp_st) in
     data := {!data with impl_time = Time.Span.(!data.impl_time + imp_dur)};
     let do_cex counter =
@@ -343,7 +348,7 @@ let synthesize ~iter (params : Parameters.t) (hints : (CandidateMap.trace -> Can
       (List.length pedits_out)
       (Instance.apply `NoHoles `Exact (Instance.update_list problem.phys_inst pedits_out) problem.phys |> fst |> string_of_cmd);
   data := {!data with
-           log_inst_size = List.length problem.log_edits + (Instance.size problem.log_inst);
-           phys_inst_size = Instance.size problem.phys_inst;
-           time = Time.diff stop start};
+            log_inst_size = List.length problem.log_edits + (Instance.size problem.log_inst);
+            phys_inst_size = Instance.size problem.phys_inst;
+            time = Time.diff stop start};
   pedits_out

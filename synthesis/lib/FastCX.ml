@@ -35,6 +35,10 @@ let fastcx_gen data log e =
 
 let unreachable params (test : Ast.test)=
   ignore (params.fastcx = false : bool);
-  match check params `Sat test with
+  match check_valid params test with
   | (Some x, _) -> `NoAndCE x
   | (None, _) -> `Yes
+
+let get_cex params data log e =
+  fastcx_gen data log e
+  |> unreachable params

@@ -172,11 +172,12 @@ module ONF = struct
       +> flag "-s" no_arg ~doc:"perform slicing optimization"
       +> flag "-i" no_arg ~doc:"interactive mode"
       +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
-      +> flag "-data" (required string) ~doc:"the input log" )
+      +> flag "-data" (required string) ~doc:"the input log"
+      +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly")
 
 
-  let run gas widening do_slice interactive debug data_fp () =
-    ignore (Benchmark.basic_onf_ipv4 Parameters.({widening;do_slice;gas;interactive;debug;fastcx=false}) data_fp : Tables.Edit.t list)
+  let run gas widening do_slice interactive debug data_fp fastcx () =
+    ignore (Benchmark.basic_onf_ipv4 Parameters.({widening;do_slice;gas;interactive;debug;fastcx}) data_fp : Tables.Edit.t list)
     (* Benchmark.onf_representative gas widening |> ignore *)
 end
 
