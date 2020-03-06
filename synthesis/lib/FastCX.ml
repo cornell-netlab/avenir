@@ -4,6 +4,8 @@ open Tables
 open Manip
 open Prover
 open Parameters
+open Semantics
+open Packet
 let rec one_some (table: string) (lst : ((test * cmd) list)) : Ast.cmd option =
   let processed = List.map lst ~f:(fun (b, c) -> (b, truncated table c)) in
   let elim = List.filter processed ~f:(fun (b,c) -> if c = None then false else true) in
@@ -33,12 +35,12 @@ let fastcx_gen data log e =
     let prefix = truncated t log |> Option.value_exn in wp prefix phi
   | Edit.Del (_, _) -> failwith "unimplemented"
 
-let unreachable params (test : Ast.test)=
+let unreachable params log linst phys pinst (test : Ast.test) =
   ignore (params.fastcx = false : bool);
   match check_valid params test with
-  | (Some x, _) -> `NoAndCE x
+  | (Some x, _) -> if (trace_eval_inst log linst = trace_eval_inst phys pinst) then `Yes else `NoAndCE x
   | (None, _) -> `Yes
 
-let get_cex params data log e =
+let get_cex params data log linst phys pinst e =
   fastcx_gen data log e
-  |> unreachable params
+  |> unreachable params log linst phys pinst

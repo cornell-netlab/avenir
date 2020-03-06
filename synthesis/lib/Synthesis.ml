@@ -307,7 +307,7 @@ let cegis ~iter
                then
                  ( if params.debug then Printf.printf "getting fast cx\n";
                    List.hd_exn problem.log_edits
-                   |> get_cex params data problem.log )
+                   |> get_cex params data problem.log problem.log_inst problem.phys problem.phys_inst)
                else (if params.do_slice
                      then implements params data (slice params data problem)
                      else implements params data problem)) in
