@@ -38,7 +38,7 @@ let fastcx_gen data log e =
 let unreachable params log linst phys pinst (test : Ast.test) =
   ignore (params.fastcx = false : bool);
   match check_valid params test with
-  | (Some x, _) -> if (trace_eval_inst log linst = trace_eval_inst phys pinst) then `Yes else `NoAndCE x
+  | (Some x, _) -> if (trace_eval_inst log linst (x, Some 0) = trace_eval_inst phys pinst (x, Some 0)) then `Yes else `NoAndCE x
   | (None, _) -> `Yes
 
 let get_cex params data log linst phys pinst e =
