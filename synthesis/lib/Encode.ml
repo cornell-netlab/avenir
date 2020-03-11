@@ -233,7 +233,7 @@ and get_width (type_ctx : TypeDeclaration.t list) (e : Expression.t) : size =
           | Some (w, _) -> w
           | None -> -1
         end
-    | E.Name (_, s) -> let w = lookup_field_width_exn type_ctx s in let _ = printf "2 w = %i when s = %s\n" w s in w
+    | E.Name (_, s) -> lookup_field_width_exn type_ctx s
     | E.ExpressionMember _ ->
       let members = dispatch_list e in
       lookup_field_width_exn type_ctx (snd (List.last_exn members))
@@ -639,7 +639,16 @@ and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : TypeDeclarati
           | Name _ -> failwith "encode_switch_case"
         end
 
- 
+
+and assign_constants (type_ctx : TypeDeclaration.t list) (decl : Declaration.t list) =
+  let es = List.filter_map decl
+              ~f:(fun t -> match t with
+                              | (_, Constant { name = n; typ = t; value = e}) ->
+                                  let w = lookup_type_width_exn type_ctx t in
+                                  Some(Assign(snd n, encode_expression_to_value_with_width w type_ctx e))
+                              | _ -> None ) in
+  List.fold es ~f:mkSeq ~init:Skip
+
 and encode_program (Program(top_decls) as prog : program ) =
   let open Declaration in
   match List.find (get_decls top_decls) ~f:(fun d -> snd (Declaration.name d) = "MyIngress") with
@@ -650,7 +659,8 @@ and encode_program (Program(top_decls) as prog : program ) =
     let type_cxt = get_type_decls top_decls in
     let type_cxt2 = List.map c.params ~f:update_typ_ctx_from_param @ type_cxt in
     let _ = printf "type_cxt\n%s\n" (Sexp.to_string ([%sexp_of: TypeDeclaration.t list] type_cxt)) in
-    assign_rv %:% encode_control prog c.locals type_cxt2 rv c.apply
+    let assign_consts = assign_constants type_cxt2 (get_decls top_decls) in
+    assign_consts %:% assign_rv %:% encode_control prog c.locals type_cxt2 rv c.apply
   | Some _ -> failwith "Found a module called MyIngress, but it wasn't a control module"
     
 (* and encode_match ((_, m) : Table.key) : test =
