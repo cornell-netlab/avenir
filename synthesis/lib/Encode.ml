@@ -17,7 +17,7 @@ let rec lookup_type_width (type_ctx : TypeDeclaration.t list) (typ : Type.t) =
     | BitType e ->
       begin match snd e with
         | Int (_, i) -> Some (Bigint.to_int_exn i.value)
-        |_ -> failwith "lookup_type_width: Unimplemented expr"
+        | _ -> failwith "lookup_type_width: Unimplemented expr"
       end
 
     | TypeName n ->
@@ -41,6 +41,7 @@ let rec lookup_type_width (type_ctx : TypeDeclaration.t list) (typ : Type.t) =
                               ^ Sexp.to_string ([%sexp_of: Type.t] typ) ^ " "
                               ^ Sexp.to_string ([%sexp_of: TypeDeclaration.t option] t))
       end
+    | HeaderStack { header; size} -> Option.map (lookup_type_width type_ctx header) ~f:(fun w -> w * encode_expr_to_int size)
     | _ -> failwith ("lookup_type_width: 2 type not handled " ^ Sexp.to_string ([%sexp_of: Type.t] typ))
 
 and lookup_type_width_exn (type_ctx : TypeDeclaration.t list) typ : size =
@@ -81,6 +82,12 @@ let last_field = List.last_exn (String.split field ~on:'.') in
 match lookup_field_width type_ctx last_field with
     | Some i -> i
     | None -> failwith ("lookup_field_width_exn: field " ^ field)
+
+and encode_expr_to_int (e : Expression.t) : int =
+  let open Expression in
+  match snd e with
+    | Int (_, i) -> Bigint.to_int_exn i.value
+    | _ -> failwith ("encode_express_to_int")
 
 (* Expressions *)
 let ctor_name_expression (e : Expression.t) : string =
@@ -131,7 +138,7 @@ let string_of_binop (e : Op.bin) : string =
   | PlusPlus -> "PlusPlus"
   | And -> "And"
   | Or -> "Or"
-  
+
 let rec dispatch_list ((info,expr) : Expression.t) : P4String.t list =
   let module E = Expression in
   let type_error name =
@@ -141,11 +148,21 @@ let rec dispatch_list ((info,expr) : Expression.t) : P4String.t list =
   | E.Name s -> [s]
   | E.ExpressionMember {expr; name} -> dispatch_list expr @ [name]
   | E.FunctionCall {func; type_args=[];_} -> dispatch_list func
+  | E.ArrayAccess {array; index} -> header_stack_name array index
   | _ ->  ctor_name_expression (info,expr) |> type_error
 
-let string_of_memberlist =
+and string_of_memberlist =
   concatMap ~f:(snd) ~c:(fun x y -> x ^ "." ^ y) 
   
+and header_stack_name (name:Expression.t) (size:Expression.t) =
+  let open Expression in
+  match snd name with
+    | ExpressionMember _ ->
+      let members = dispatch_list name in
+      let i = encode_expr_to_int size in
+      members @ [(M "encoding", string_of_int i)]
+    | _ -> failwith "header_stack_name"
+
 let validity_bit_no_removal members =
   string_of_memberlist members ^ "_valid()"
 
@@ -460,8 +477,9 @@ and dispatch_direct_app prog ((_, ident) : Type.t) (args : Argument.t list) =
     | TypeName (_, "counter") -> Skip, false, false (* TODO: out of scope *)
     | TypeName (_, "direct_counter") -> Skip, false, false (* TODO: out of scope *)
     | TypeName (_, "meter") -> Skip, false, false (* TODO: out of scope *)
+    | SpecializedType _ -> Skip, false, false (* TODO: out of scope *)
     | TypeName n -> dispatch_control prog n args
-    | _ -> failwith ("[Unimplemented Type]")
+    | _ -> failwith ("[Unimplemented Type]" ^ (Sexp.to_string ([%sexp_of: Type.pre_t] ident)))
 
 and dispatch_control (Program(top_decls) as prog : program) (ident : P4String.t) (args : Argument.t list) =
   let open Declaration in
@@ -658,7 +676,7 @@ and encode_program (Program(top_decls) as prog : program ) =
     let assign_rv = Assign(return_bit rv, mkVInt(1, 1)) in
     let type_cxt = get_type_decls top_decls in
     let type_cxt2 = List.map c.params ~f:update_typ_ctx_from_param @ type_cxt in
-    let _ = printf "type_cxt\n%s\n" (Sexp.to_string ([%sexp_of: TypeDeclaration.t list] type_cxt)) in
+    (* let _ = printf "type_cxt\n%s\n" (Sexp.to_string ([%sexp_of: TypeDeclaration.t list] type_cxt)) in *)
     let assign_consts = assign_constants type_cxt2 (get_decls top_decls) in
     assign_consts %:% assign_rv %:% encode_control prog c.locals type_cxt2 rv c.apply
   | Some _ -> failwith "Found a module called MyIngress, but it wasn't a control module"
