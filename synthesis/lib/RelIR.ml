@@ -57,12 +57,12 @@ let print_schema schema =
                 
 
 type key_match =
-  | Int of int
+  | Int of Bigint.t
   | Range of {lo: int; hi : int}
 
 let print_key_match (km : key_match) : unit =
   match km with
-  | Int i -> Printf.printf "%i" i
+  | Int i -> Printf.printf "%s" (Bigint.to_string i)
   | Range r -> Printf.printf "[%i;%i]" r.lo r.hi
     
 type instance =
@@ -115,7 +115,7 @@ let satFD r dom rng : bool=
 let eval_acts_rel (fields : string list) (values_acts : (key_match list * action_seq) list) : Packet.t list =
   List.map values_acts
     ~f:(fun (values, acts) ->
-      let _ = Printf.printf "%d actions \n%!" (List.length acts) in
+      let () = Printf.printf "%d actions \n%!" (List.length acts) in
       let act = List.reduce_exn acts ~f:(%:%) in
       List.map values ~f:(function
           | Int x -> Ast.Int (x,0)
@@ -135,10 +135,10 @@ let extract (pkts : Packet.t list) (fields : string list) : key_match list list 
 (* Precondition: act_ids must only be actions, and in_ids and out_ids
    must only be field indices *)
 let satSemFD (r : instance) (t : schema) (act_ids : size list) (in_ids : size list) (out_fields : string list) (rng_ids : size list) : bool =
-  let _ = Printf.printf "in_ids ";
+  let () = Printf.printf "in_ids ";
           List.iter (in_ids) ~f:(Printf.printf "%i ");
           Printf.printf "\n%!" in
-  let _ = Printf.printf "act_ids ";
+  let () = Printf.printf "act_ids ";
           List.iter (act_ids) ~f:(Printf.printf "%i ");
           Printf.printf "\n%!" in
   let rows = List.zip_exn r.keys r.actions in
@@ -162,15 +162,15 @@ let rec evalRel (r : key_match list) (t : schema) (e : expr) =
      end
   | Plus (e,e') ->
      begin match evalRel r t e, evalRel r t e' with
-     | Int (x, sz), Int (y,_) -> Int (x + y, sz)
+     | Int (x, sz), Int (y,_) -> Int (Bigint.(x + y), sz)
      end
   | Times (e, e') ->
      begin match evalRel r t e, evalRel r t e' with
-     | Int (x, sz), Int (y,_) -> Int (x * y, sz)
+     | Int (x, sz), Int (y,_) -> Int (Bigint.(x * y), sz)
      end
   | Minus (e, e') ->
      begin match evalRel r t e, evalRel r t e' with
-     | Int (x, sz), Int (y,_) -> Int (x - y, sz)
+     | Int (x, sz), Int (y,_) -> Int (Bigint.(x - y), sz)
      end
   | _ -> failwith "IDK how to use tuples"
 
@@ -357,13 +357,13 @@ let cmd_equalable bound_vars (a1 : action) (a2 : action) : test option =
   let wp2 = symb_wp a2 ~fvs:(free_vars_of_cmd a1) in
   test_to_valuation wp1 >>= fun v1 ->
   test_to_valuation wp2 >>= fun v2 -> 
-  let _ = printf "wp1 = %s \n wp2 = %s\n%!" (string_of_test wp1) (string_of_test wp2) in
-  let _ =
+  let () = printf "wp1 = %s \n wp2 = %s\n%!" (string_of_test wp1) (string_of_test wp2) in
+  let () =
     Printf.printf "v1 = [\n%!";
     List.iter v1 ~f:(fun (x,e) -> Printf.printf "   %s |-> %s ,\n%!" x (string_of_expr e));
     Printf.printf "]\n%!"
   in
-  let _ =
+  let () =
     Printf.printf "v2 = [\n%!";
     List.iter v2 ~f:(fun (x,e) -> Printf.printf "%s |-> %s ,\n%!" x (string_of_expr e));
     Printf.printf "]\n%!"
@@ -408,7 +408,7 @@ let match_test (tbl : schema) (matches : key_match list) =
   List.fold2_exn tbl.keys matches ~init:True
     ~f:(fun acc (k, _, _)  m ->
       match m with
-      | Int i -> (Var (k, 2) %=% mkVInt (i,2)) %&% acc
+      | Int i -> (Var (k, 2) %=% Value(Int (i,2))) %&% acc
       | Range {lo; hi} -> (Var (k, 2) %>=% mkVInt (lo, 2)) %&%
                             (Var (k, 2) %<=% mkVInt (hi, 2)) %&%
                               acc)
@@ -446,7 +446,7 @@ let compute_candidate_map (log : schema) (phys : schema) :
       ((action_seq * ((test * action_seq) list)) list ) =
   list_cross log.actions
   |> List.map  ~f:(fun actseq ->
-      (actseq, List.dedup_and_sort (candidates phys actseq) ~compare))
+      (actseq, List.dedup_and_sort (candidates phys actseq) ~compare:Stdlib.compare))
            
 let one_table_synth
       ?cand_map:(cand_map=None)
@@ -465,7 +465,7 @@ let one_table_synth
     in
     let new_matches = List.map rlog.keys ~f:key_mapper in
     let search_space_big = List.map2_exn new_matches rlog.actions ~f:get_cands in
-    let _ =
+    let _ : unit Core.List.Or_unequal_lengths.t =
       List.iter2 rlog.actions search_space_big
         ~f:(fun l cs ->
           Printf.printf "logical action:\n   %s\ncan be mapped to any \
@@ -519,7 +519,7 @@ let dominating_vars (act_seq : action_set list) (keys : (string * size * size) l
     List.fold acts_seq ~init:[] ~f:(fun acc acts -> acc @ delta' acts key)
   in
   List.fold keys ~init:[] ~f:(fun acc k-> acc @ delta'' act_seq k)
-  |> List.dedup_and_sort ~compare
+  |> List.dedup_and_sort ~compare:Stdlib.compare
   
     
 let rec range lo hi =
@@ -528,8 +528,6 @@ let rec range lo hi =
   else if lo + 1 = hi
   then [lo]
   else lo :: range (lo + 1) hi
-
-
 
 (**************************** NORMALIZATION ***********************************)
 
@@ -579,7 +577,7 @@ let rec mk_random_instance n (table : schema) =
   if n = 0 then {keys = []; actions = []}
   else
     {
-      keys = [List.map table.keys ~f:(fun (_,lo,hi) -> Int (Random.int (hi+1) + lo))];
+      keys = [List.map table.keys ~f:(fun (_,lo,hi) -> Int (Random.int (hi+1) + lo |> Bigint.of_int_exn))];
       actions = [List.map table.actions ~f:random_elt]
     } |> append_instance (mk_random_instance (n-1) table)
                    

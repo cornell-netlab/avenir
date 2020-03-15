@@ -5,12 +5,17 @@ open Types
 open Ast
 open Manip
 
+let safe_name (d : Declaration.t) =
+  let module D = Declaration in
+  try Some (snd (D.name d))
+  with _ -> None
+
 (* Type lookup *)
 
-let rec lookup_type_width (type_ctx : TypeDeclaration.t list) (typ : Type.t) =
+let rec lookup_type_width (type_ctx : Declaration.t list) (typ : Type.t) =
   let open Expression in
   let open Type in
-  let open TypeDeclaration in
+  let open Declaration in
   match snd typ with
     | Bool -> Some 1
     | Error -> Some (-1)
@@ -39,18 +44,18 @@ let rec lookup_type_width (type_ctx : TypeDeclaration.t list) (typ : Type.t) =
           Some (List.fold (List.map fields ~f:(fun (_, fl) -> lookup_field_width_exn type_ctx (snd fl.name))) ~f:(+) ~init:0)
         | _ -> failwith ("lookup_type_width: 1 type not handled " 
                               ^ Sexp.to_string ([%sexp_of: Type.t] typ) ^ " "
-                              ^ Sexp.to_string ([%sexp_of: TypeDeclaration.t option] t))
+                              ^ Sexp.to_string ([%sexp_of: Declaration.t option] t))
       end
     | HeaderStack { header; size} -> Option.map (lookup_type_width type_ctx header) ~f:(fun w -> w * encode_expr_to_int size)
     | _ -> failwith ("lookup_type_width: 2 type not handled " ^ Sexp.to_string ([%sexp_of: Type.t] typ))
 
-and lookup_type_width_exn (type_ctx : TypeDeclaration.t list) typ : size =
+and lookup_type_width_exn (type_ctx : Declaration.t list) typ : size =
   match lookup_type_width type_ctx typ with
     | Some w -> w
     | None -> failwith ("lookup_type_width_exn: lookup failed")
 
 and gather_fields type_ctx =
-  let open TypeDeclaration in
+  let open Declaration in
   List.filter_map type_ctx ~f:(fun d -> match d with
                                      | (_, Header {fields;_}) -> Some fields
                                      | (_, Struct {fields;_}) -> Some fields
@@ -58,14 +63,14 @@ and gather_fields type_ctx =
   |> List.concat
 
 and check_typedef_widths type_ctx n =
-  let open TypeDeclaration in
+  let open Declaration in
   List.find_map type_ctx ~f:(fun d -> match d with
                                     | (_, TypeDef {name; typ_or_decl = Left t;_}) ->
                                         if n = snd name then Some t else None
                                     | _ -> None)
 
-and lookup_field_width (type_ctx : TypeDeclaration.t list) fn : size option =
-  let open TypeDeclaration in
+and lookup_field_width (type_ctx : Declaration.t list) fn : size option =
+  let open Declaration in
   match fn with
   | "ingress_port" -> Some 32 (* TODO: Is this right? *)
   | "parser_error" -> Some 1 (* TODO: Is this right? *)
@@ -76,8 +81,8 @@ and lookup_field_width (type_ctx : TypeDeclaration.t list) fn : size option =
       | Some (_, f) -> lookup_type_width type_ctx f.typ
       | None -> Option.bind (check_typedef_widths type_ctx fn) ~f:(lookup_type_width type_ctx)
 
-and lookup_field_width_exn (type_ctx : TypeDeclaration.t list) field : size =
-(* let _ = printf "field = %s\ntype_cxt = %s" field (Sexp.to_string ([%sexp_of: TypeDeclaration.t list] type_ctx)) in *)
+and lookup_field_width_exn (type_ctx : Declaration.t list) field : size =
+(* let _ = printf "field = %s\ntype_cxt = %s" field (Sexp.to_string ([%sexp_of: Declaration.t list] type_ctx)) in *)
 let last_field = List.last_exn (String.split field ~on:'.') in
 match lookup_field_width type_ctx last_field with
     | Some i -> i
@@ -182,10 +187,10 @@ let action_run_suffix = "_action_run()"
 let action_run_field members =
   string_of_memberlist members ^ action_run_suffix
 
-let rec encode_expression_to_value (type_ctx : TypeDeclaration.t list) (e : Expression.t) : expr =
+let rec encode_expression_to_value (type_ctx : Declaration.t list) (e : Expression.t) : expr =
   encode_expression_to_value_with_width (-1) type_ctx e
 
-and encode_expression_to_value_with_width width (type_ctx : TypeDeclaration.t list) (e : Expression.t) : expr =
+and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) (e : Expression.t) : expr =
   let module E= Expression in
   let unimplemented name =
     failwith ("[Unimplemented Expression->Value Encoding for " ^ name ^"] at " ^ Petr4.Info.to_string (fst e))
@@ -204,12 +209,12 @@ and encode_expression_to_value_with_width width (type_ctx : TypeDeclaration.t li
     op (encode_expression_to_value_with_width fw type_ctx e) (encode_expression_to_value_with_width fw' type_ctx e')
   in
   match snd e with
-  | E.True -> Value (Int (1, 1))
-  | E.False -> Value (Int (0, 1))
+  | E.True -> mkVInt(1, 1)
+  | E.False -> mkVInt(0, 1)
   | E.Int (_,i) ->
       begin match i.width_signed with
-        | Some (w, _) -> Value (Int (Bigint.to_int_exn i.value, w))
-        | None -> Value (Int (Bigint.to_int_exn i.value, width))
+        | Some (w, _) -> mkVInt(i.value |> Petr4.Bigint.to_int_exn, w)
+        | None -> mkVInt(i.value |> Petr4.Bigint.to_int_exn, width)
       end
   | E.Name (_,s) ->
     let w = get_width type_ctx e in
@@ -240,7 +245,7 @@ and encode_expression_to_value_with_width width (type_ctx : TypeDeclaration.t li
      end
   | _ -> unimplemented (ctor_name_expression e)
 
-and get_width (type_ctx : TypeDeclaration.t list) (e : Expression.t) : size =
+and get_width (type_ctx : Declaration.t list) (e : Expression.t) : size =
   let module E= Expression in
   match snd e with
     | E.True -> 1
@@ -260,30 +265,19 @@ and get_width (type_ctx : TypeDeclaration.t list) (e : Expression.t) : size =
       if w1 > 0 then w1 else w2
     | _ -> -1
 
-let get_decls : TopDeclaration.t list -> Declaration.t list =
-  let open TopDeclaration in 
-  List.filter_map
-    ~f:(fun top_decl -> match top_decl with
-        | TypeDeclaration _ -> None
-        | Declaration d -> Some d
-      )
-
 let get_type_decl_from_decl d =
   let open Declaration in
-  let open TypeDeclaration in
+  let open Declaration in
   match d with
     | (i, Constant c) -> Some (i, TypeDef { annotations = c.annotations; name = c.name; typ_or_decl = Left c.typ; })
-    | _ -> None
+    | _ -> Some d
 
-let get_type_decls : TopDeclaration.t list -> TypeDeclaration.t list =
-  let open TopDeclaration in 
+let get_type_decls : Declaration.t list -> Declaration.t list =
+  let open Declaration in 
   List.filter_map
-    ~f:(fun top_decl -> match top_decl with
-        | TypeDeclaration d -> Some d
-        | Declaration d -> get_type_decl_from_decl d
-      )
+    ~f:(fun top_decl -> get_type_decl_from_decl top_decl)
 
-let rec encode_expression_to_test (type_ctx : TypeDeclaration.t list) (e: Expression.t) : test =
+let rec encode_expression_to_test (type_ctx : Declaration.t list) (e: Expression.t) : test =
   let module E = Expression in
   let unimplemented (name : string) : test = 
     failwith ("[Unimplemented Expression->Value Encoding for " ^ name ^"] at " ^ Petr4.Info.to_string (fst e))
@@ -340,7 +334,7 @@ let rec encode_expression_to_test (type_ctx : TypeDeclaration.t list) (e: Expres
      begin match List.last members with
      | None -> unimplemented "Function Call with nothing to dispatch"
      | Some (_,"isValid") ->
-        Var (validity_bit members, 1) %=% Value(Int (1, 1))
+        Var (validity_bit members, 1) %=% mkVInt(1, 1)
         (* Var (string_of_memberlist members ^ "()", -1) %=% Value(Int (1, 1) ) *)
      | Some _ -> unimplemented ("FunctionCall for members " ^ string_of_memberlist members)
      end
@@ -358,9 +352,9 @@ let rec encode_expression_to_test (type_ctx : TypeDeclaration.t list) (e: Expres
 let lookup_exn (Program(top_decls) : program) (ctx : Declaration.t list) (ident : P4String.t) : Declaration.t =
   let find name =
     let module D = Declaration in 
-    List.find ~f:(fun d -> snd (D.name d) = snd name) in
+    List.find ~f:(fun d -> safe_name d = Some (snd name)) in
   match find ident ctx with
-  | None -> begin match find ident (get_decls top_decls) with
+  | None -> begin match find ident top_decls with
       | None -> failwith ("[Error: UseBeforeDef] Couldnt find " ^ snd ident ^ " from " ^ Petr4.Info.to_string (fst ident))
       | Some d -> d
     end
@@ -369,9 +363,9 @@ let lookup_exn (Program(top_decls) : program) (ctx : Declaration.t list) (ident 
 let lookup_string (Program(top_decls) : program) (ctx : Declaration.t list) (ident : string) : Declaration.t option =
   let find name =
     let module D = Declaration in 
-    List.find ~f:(fun d -> snd (D.name d) = name) in
+    List.find ~f:(fun d -> safe_name d = Some name) in
   match find ident ctx with
-  | None -> find ident (get_decls top_decls)
+  | None -> find ident top_decls
   | Some d -> Some d
 
 let lookup_string_exn (prog : program) (ctx : Declaration.t list) (ident : string) : Declaration.t =
@@ -424,7 +418,7 @@ let rec dispatch prog ctx type_ctx rv members =
 (* Returns a cmd and two bools. These bits correspond to the return and exit bit's respectively.
 False means that the command does not flip the bit, True means the cmd may or may not flip the bit. 
 If the bit is flipped, we have to either return or exit, and so we must insert an if to ensure this happens. *)
-and encode_statement prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t list) (rv : int) ((info, stmt) : Statement.t) : cmd * bool * bool =
+and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) ((info, stmt) : Statement.t) : cmd * bool * bool =
   let open Statement in
   let unimplemented name =
     failwith ("[Unimplemented Statement " ^ name ^"] at " ^ Petr4.Info.to_string info)
@@ -487,7 +481,7 @@ and dispatch_direct_app prog ((_, ident) : Type.t) (args : Argument.t list) =
 
 and dispatch_control (Program(top_decls) as prog : program) (ident : P4String.t) (args : Argument.t list) =
   let open Declaration in
-  match List.find (get_decls top_decls) ~f:(fun d -> snd (Declaration.name d) = snd ident) with
+  match List.find top_decls ~f:(fun d -> safe_name d = Some (snd ident)) with
   | None -> failwith ("Could not find module " ^ snd ident)
   | Some (_, Control c) ->
     (match List.zip (c.params) args with
@@ -511,10 +505,10 @@ and dispatch_control (Program(top_decls) as prog : program) (ident : P4String.t)
   | Some _ -> failwith ("Found a module called " ^ snd ident ^ ", but it wasn't a control module")
 
 
-and get_rel_variables (type_ctx : TypeDeclaration.t list) (param : Parameter.t) =
+and get_rel_variables (type_ctx : Declaration.t list) (param : Parameter.t) =
   let open Parameter in
   let open Type in
-  let open TypeDeclaration in
+  let open Declaration in
   let type_name t = match t with
                       | (_, TypeName t) -> t
                       | _ -> failwith "type_name: unhandled" in
@@ -529,7 +523,7 @@ and get_rel_variables (type_ctx : TypeDeclaration.t list) (param : Parameter.t) 
     | Some (_, Struct s) -> s.fields
     | _ -> failwith "get_rel_variables: unhandled"
 
-and assign_param (type_ctx : TypeDeclaration.t list) (param_arg : Parameter.t * Argument.t) =
+and assign_param (type_ctx : Declaration.t list) (param_arg : Parameter.t * Argument.t) =
   let open Argument in
   let open Direction in
   let open Expression in
@@ -556,15 +550,15 @@ and assign_param (type_ctx : TypeDeclaration.t list) (param_arg : Parameter.t * 
       end
     | _ -> failwith "Unhandled argument"
 
-and update_typ_ctx_from_param (param : Parameter.t) : TypeDeclaration.t =
+and update_typ_ctx_from_param (param : Parameter.t) : Declaration.t =
   let open Parameter in
-  let open TypeDeclaration in
+  let open Declaration in
   M "Gen", Header { annotations = [];
                    name = M "Gen", "Gen";
                    fields = [ M "Gen", { annotations = []; typ = (snd param).typ; name = (snd param).variable } ]
                   }
 
-and return_args (type_ctx : TypeDeclaration.t list) (param_arg : Parameter.t * Argument.t) =
+and return_args (type_ctx : Declaration.t list) (param_arg : Parameter.t * Argument.t) =
   let open Direction in
   let open Parameter in
   let open Argument in
@@ -584,23 +578,23 @@ and return_args (type_ctx : TypeDeclaration.t list) (param_arg : Parameter.t * A
       end
     | _ -> failwith "Unhandled argument"
 
-and encode_control prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t list) (rv:int) ( body : Block.t ) =
+and encode_control prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv:int) ( body : Block.t ) =
   encode_block prog ctx type_ctx rv body
 
-and encode_control3 prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t list) (rv:int) ( body : Block.t ) =
+and encode_control3 prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv:int) ( body : Block.t ) =
   encode_block3 prog ctx type_ctx rv body
 
-and encode_block : program -> Declaration.t list -> TypeDeclaration.t list -> int -> Block.t -> cmd =
+and encode_block : program -> Declaration.t list -> Declaration.t list -> int -> Block.t -> cmd =
   encode_action ~action_data:[]
 
-and encode_block3 : program -> Declaration.t list -> TypeDeclaration.t list -> int -> Block.t -> cmd * bool * bool =
+and encode_block3 : program -> Declaration.t list -> Declaration.t list -> int -> Block.t -> cmd * bool * bool =
   encode_action3 ~action_data:[]
 
-and encode_action prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t list) (rv:int) ( b : Block.t ) ~action_data : cmd =
+and encode_action prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv:int) ( b : Block.t ) ~action_data : cmd =
   fst3 (encode_action3 prog ctx type_ctx rv b ~action_data)
 
 (** Takes a block representing an action and the action_data variables, replacing them with controller holes *)
-and encode_action3 prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t list) (rv:int) ( (_,act) : Block.t ) ~action_data : cmd * bool * bool =
+and encode_action3 prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv:int) ( (_,act) : Block.t ) ~action_data : cmd * bool * bool =
  let open Block in
   let (c, rb, eb) = 
     List.fold act.statements ~init:(Skip, false, false)
@@ -616,13 +610,13 @@ and encode_action3 prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t
   in
   holify (List.map ~f:snd action_data) c, rb, eb
 
-and encode_switch prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t list) (expr : Expression.t) (rv : int) ( cases : Statement.switch_case list) : (test * cmd) list =
+and encode_switch prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : Expression.t) (rv : int) ( cases : Statement.switch_case list) : (test * cmd) list =
   let e, acs = encode_switch_expr prog ctx type_ctx expr in
   (List.fold_map cases ~f:(encode_switch_case prog ctx type_ctx e acs rv) ~init:True)
   |> snd |> List.filter_map ~f:(fun x -> x)
 
 
-and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t list) (e : Expression.t) : expr * Table.action_ref list =
+and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (e : Expression.t) : expr * Table.action_ref list =
   let dispList = dispatch_list e in
   match dispList with
   | [] -> failwith "[RuntimeException] Tried to encode an empty list of names"
@@ -638,7 +632,7 @@ and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : TypeDeclarati
     | _ -> failwith "Table not found"
 
 
- and encode_switch_case prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t list) (expr : expr)
+ and encode_switch_case prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : expr)
                       (ts : Table.action_ref list) (rv : int) (fall_test : test)
                       (case : Statement.switch_case) : test * ((test * cmd) option) =
     let open Statement in
@@ -662,8 +656,7 @@ and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : TypeDeclarati
           | Name _ -> failwith "encode_switch_case"
         end
 
-
-and assign_constants (type_ctx : TypeDeclaration.t list) (decl : Declaration.t list) =
+and assign_constants (type_ctx : Declaration.t list) (decl : Declaration.t list) =
   let es = List.filter_map decl
               ~f:(fun t -> match t with
                               | (_, Constant { name = n; typ = t; value = e}) ->
@@ -674,15 +667,17 @@ and assign_constants (type_ctx : TypeDeclaration.t list) (decl : Declaration.t l
 
 and encode_program (Program(top_decls) as prog : program ) =
   let open Declaration in
-  match List.find (get_decls top_decls) ~f:(fun d -> snd (Declaration.name d) = "MyIngress") with
+  match List.find top_decls ~f:(fun d -> match snd d with
+                                            | Control{name;_} -> snd name = "MyIngress"
+                                            | _ -> false) with
   | None -> failwith "Could not find control module MyIngress"
   | Some (_, Control c) ->
     let rv = get_return_value () in
     let assign_rv = Assign(return_bit rv, mkVInt(1, 1)) in
     let type_cxt = get_type_decls top_decls in
     let type_cxt2 = List.map c.params ~f:update_typ_ctx_from_param @ type_cxt in
-    (* let _ = printf "type_cxt\n%s\n" (Sexp.to_string ([%sexp_of: TypeDeclaration.t list] type_cxt)) in *)
-    let assign_consts = assign_constants type_cxt2 (get_decls top_decls) in
+    (* let _ = printf "type_cxt\n%s\n" (Sexp.to_string ([%sexp_of: Declaration.t list] type_cxt)) in *)
+    let assign_consts = assign_constants type_cxt2 top_decls in
     assign_consts %:% assign_rv %:% encode_control prog c.locals type_cxt2 rv c.apply
   | Some _ -> failwith "Found a module called MyIngress, but it wasn't a control module"
     
@@ -692,7 +687,7 @@ and encode_program (Program(top_decls) as prog : program ) =
   | info, x -> failwith ("[Unimplemented MatchKind " ^ x ^ "] Cannot handle match kind "
                    ^ x ^ " at " ^ Petr4.Info.to_string info )
  *)
-and encode_table prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t list) (rv : int) (name : P4String.t) (props : Table.property list) : cmd =
+and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) (name : P4String.t) (props : Table.property list) : cmd =
   let open Table in
   let p4keys, p4actions, p4customs = List.fold_left props ~init:([], [], [])
       ~f:(fun (acc_keys, acc_actions, acc_customs) prop ->
@@ -750,7 +745,7 @@ let apply_model_from_file (c : cmd) (model_file : string) : cmd =
       match parse_line line with
       | None -> c
       | Some (hole, data) ->
-         StringMap.singleton hole (Int (data, -1))
+         StringMap.singleton hole (mkInt (data, -1))
          |> fill_holes c)  
 
 (* P4-PARSING *)
@@ -766,7 +761,7 @@ let preprocess include_dirs p4file =
        ["-undef"; "-nostdinc"; "-E"; "-x"; "c"; p4file])) in 
   let in_chan = Unix.open_process_in cmd in
   let str = In_channel.input_all in_chan in 
-  let _ = Unix.close_process_in in_chan in
+  let _ : Core.Unix.Exit_or_signal.t = Unix.close_process_in in_chan in
   str
 
 let parse_p4 include_dirs p4_file verbose = 

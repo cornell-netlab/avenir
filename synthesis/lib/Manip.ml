@@ -339,7 +339,7 @@ let inits fvs sub =
       if List.exists fvs ~f:(fun (x,_) -> x = v)
       then (freshen v sz 0) :: vs
       else vs)
-  |> List.sort ~compare:(fun (u,_) (v,_) -> compare u v)
+  |> List.sort ~compare:(fun (u,_) (v,_) -> Stdlib.compare u v)
 
 let finals fvs sub =
   StringMap.fold sub ~init:[]
@@ -347,7 +347,7 @@ let finals fvs sub =
       if List.exists fvs ~f:(fun (x,_) -> x = v)
       then (freshen v sz i) :: vs
       else vs)
-  |> List.sort ~compare:(fun (u,_) (v,_) -> compare u v)
+  |> List.sort ~compare:(fun (u,_) (v,_) -> Stdlib.compare u v)
 
 let zip_eq_exn xs ys =
   List.fold2_exn xs ys ~init:True ~f:(fun acc x y -> acc %&% (Var x %=% Var y) )

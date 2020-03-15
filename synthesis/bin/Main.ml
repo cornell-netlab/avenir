@@ -11,6 +11,7 @@ module CheckAndSet = Motley.CheckAndSet
 module Parameters = Motley.Parameters
 module ProfData = Motley.ProfData
 module Problem = Motley.Problem
+module Tables = Motley.Tables
 
 
 let parse_file (filename : string) : Ast.cmd =
@@ -25,25 +26,29 @@ module Solver = struct
       +> anon ("logical" %: string)
       +> anon ("real" %: string)
       +> flag "-w" no_arg ~doc:"Do widening"
+      +> flag "-s" no_arg ~doc:"Do slicing optimization"
       +> flag "-g" (required int) ~doc:"max number of CEGIS reps"
       +> flag "-DEBUG" no_arg ~doc:"Print Debugging commands"
       +> flag "-i" no_arg ~doc:"Interactive Mode")
 
-  let run logical real widening gas debug interactive () =
+  let run logical real widening do_slice gas debug interactive () =
     let log = parse_file logical in
     let phys = parse_file real in
-    Synthesis.synthesize ~iter:0
-      Parameters.({widening;
-                   gas;
-                   debug;
-                   interactive})
-      None
-      (ProfData.zero ())      
-      Problem.({log; phys; log_inst = Motley.Tables.Instance.empty;
-                phys_inst = Motley.Tables.Instance.empty;
-                edits = [];
-                fvs = Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)})
-    |> ignore
+    let _ : Motley.Tables.Edit.t list = 
+      Synthesis.synthesize ~iter:0
+        Parameters.({widening;
+                     do_slice;
+                     gas;
+                     debug;
+                     interactive})
+        None
+        (ProfData.zero ())      
+        Problem.({log; phys; log_inst = Motley.Tables.Instance.empty;
+                  phys_inst = Motley.Tables.Instance.empty;
+                  log_edits = [];
+                  phys_edits = [];
+                  fvs = Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)}) in 
+    ()
 end
 
 
@@ -62,7 +67,7 @@ module Encoder = struct
       +> anon ("p4_file" %: string))
 
   let run include_dirs verbose p4_file () =    
-    ignore(Encode.encode_from_p4 include_dirs p4_file verbose)
+    ignore(Encode.encode_from_p4 include_dirs p4_file verbose : Ast.cmd)
 end
 
 let encode_cmd : Command.t =
@@ -146,7 +151,7 @@ module Bench = struct
    
 
   let run varsize num_tables max_inserts widening () =
-    Benchmark.reorder_benchmark varsize num_tables max_inserts widening
+    ignore(Benchmark.reorder_benchmark varsize num_tables max_inserts widening : Tables.Edit.t list)
 end
     
 
@@ -162,13 +167,14 @@ module ONF = struct
       empty       
       +> flag "-gas" (required int) ~doc:"how many cegis iterations?"
       +> flag "-w" no_arg ~doc:"perform widening"
+      +> flag "-s" no_arg ~doc:"perform slicing optimization"
       +> flag "-i" no_arg ~doc:"interactive mode"
       +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
       +> flag "-data" (required string) ~doc:"the input log" )
   
 
-  let run gas widening interactive debug data_fp () =
-    Benchmark.basic_onf_ipv4 Parameters.({widening;gas;interactive;debug}) data_fp |> ignore
+  let run gas widening do_slice interactive debug data_fp () =
+    ignore (Benchmark.basic_onf_ipv4 Parameters.({widening;do_slice;gas;interactive;debug}) data_fp : Tables.Edit.t list)
     (* Benchmark.onf_representative gas widening |> ignore *)
 end
     
@@ -187,7 +193,7 @@ module RunningExample = struct
   
 
   let run gas widening () =
-    Benchmark.running_example gas widening |> ignore
+    ignore (Benchmark.running_example gas widening : Motley.Tables.Edit.t list)
 end
     
 
@@ -206,7 +212,7 @@ module WeakestPrecondition = struct
 
   let run file z3 () =
     let cmd = parse_file file in
-    let _ = Printf.printf "PROGRAM: %s \n%!" (Ast.string_of_cmd cmd) in
+    let _ : unit = Printf.printf "PROGRAM: %s \n%!" (Ast.string_of_cmd cmd) in
     let wp = Synthesis.symb_wp cmd in
     if z3 then
       Printf.printf "wp: %s" (Ast.string_of_test wp)
@@ -229,7 +235,7 @@ module OFBench = struct
       +> flag "-gas" (optional int) ~doc:"how many cegis iterations?")
 
   let run classbench_file widening gas () =
-    Benchmark.of_to_pipe1 widening gas classbench_file () |> ignore
+    ignore(Benchmark.of_to_pipe1 widening gas classbench_file () : Tables.Edit.t list)
 end
     
 

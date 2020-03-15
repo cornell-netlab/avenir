@@ -21,7 +21,7 @@ let rec concatMap ?init:(init=None) ~f:(f: 'a -> 'b)  ~c:(c : 'b -> 'b -> 'b) (x
 
 (** Computes a random number not in the list supplied*)
 let random_int_nin domain =
-  let _ = Random.init ((Time_now.nanoseconds_since_unix_epoch ())
+  let _ : unit = Random.init ((Time_now.nanoseconds_since_unix_epoch ())
                        |> Base.Int63.to_int_trunc)
   in
   let max_list = List.fold_left domain ~init:(0) ~f:(fun oldmax curr -> max oldmax curr) in
@@ -97,7 +97,7 @@ let compile_dot ?(format="pdf") ?(engine="dot") ?(title=engine) data : string =
   let to_dot = Unix.open_process_out (sprintf "dot -T%s -o %s" format output_file) in
   Out_channel.output_string to_dot data;
   Out_channel.close to_dot;
-  ignore (Unix.close_process_out to_dot);
+  ignore (Unix.close_process_out to_dot : Core.Unix.Exit_or_signal.t);
   output_file
 
 (* let show_dot ?format ?title ?engine data : unit =
@@ -185,13 +185,13 @@ let bit_string_to_decimal bs  =
     match bs with
     | [] -> (String.chop_prefix_exn x' ~prefix:"0", r)
     | (b::bs') ->
-       let r = 2 * r + if b = '0' then 0 else 1 in
+       let r = 2 * r + if Stdlib.(=) b '0' then 0 else 1 in
        if r >= base
        then euc_div (x' ^ "1") (r - base) base bs'
        else euc_div (x' ^ "0") r base bs'
   in
   let rec loop result bs =
-    if bs = "0" then result else
+    if String.equal bs "0" then result else
       let (bs',r) = euc_div "" 0 10 (String.to_list bs) in
       
       loop (Printf.sprintf "%d%s" r result) bs'
@@ -201,4 +201,4 @@ let bit_string_to_decimal bs  =
   
     
       
-  
+let uncurry f (x,y) = f x y

@@ -1,3 +1,4 @@
+open Bignum
 open Core
 open Util
 open Ast
@@ -34,8 +35,6 @@ module Match = struct
 
 
   let mk_ipv6_match ipv6_str =
-    let bv_low = Bytes.make 16 '\x00' in
-    let bv_hi = Bytes.make 16 '\xff' in
     let (addr_str, prefix_len) =
       match String.lsplit2 ipv6_str ~on:'/' with
       | None -> (ipv6_str, 128)
@@ -59,66 +58,34 @@ module Match = struct
       in
       String.substr_replace_all exp_addr_str ~pattern:":" ~with_:""
     in
-    let bv_list = bytes_of_hex_string ("0x" ^ hex_addr) in
-    List.iteri bv_list ~f:(fun i byte ->
-        if i*8 >= prefix_len
-        then ()
-        else
-          (Bytes.set bv_low i byte;
-           Bytes.set bv_hi i byte);        
-      );
-    if bv_low = bv_hi then
-      Exact (BV bv_low)
+    let bv = Bigint.of_string ("0x" ^ hex_addr) in
+    if prefix_len = 128 then
+      Exact(Int(bv,128))
     else
-      Between (BV bv_low, BV bv_hi)
-    
-    (* List.iteri hextet_list ~f:(fun i hex_str ->
-     *     let hex_str = Printf.sprintf "%s%s" (String.make (4 - (String.length hex_str)) '0') hex_str in
-     *     let byte1_str = String.prefix hex_str 2 in
-     *     let byte2_str = String.suffix hex_str 2 in
-     *     assert (hex_str = byte1_str ^ byte2_str);
-     *     let char1_opt = Option.("0x" ^ byte1_str |> int_of_string_opt >>= Char.of_int) in
-     *     let char2_opt = Option.("0x" ^ byte2_str |> int_of_string_opt >>= Char.of_int) in
-     *     let char1, char2 =
-     *       match char1_opt,char2_opt with
-     *       | None,None -> Printf.sprintf "Couldn't find char for 0x%s nor 0x%s" byte1_str byte2_str |> failwith
-     *       | None,_ -> Printf.sprintf "Couldn't find char for 0x%s" byte1_str|> failwith
-     *       | _, None-> Printf.sprintf "Couldn't find char for 0x%s" byte2_str |> failwith
-     *       | Some c, Some c' -> c,c'
-     *     in
-     *     if 2*i*8 >= prefix_len
-     *     then ()
-     *     else
-     *       (Bytes.set bv_low (2*i) char1;
-     *        Bytes.set bv_hi (2*i) char1);        
-     * 
-     *     if 2*i*8 + 1 >= prefix_len
-     *     then ()
-     *     else
-     *       (Bytes.set bv_low (2*i+1) char2;
-     *        Bytes.set bv_hi (2*i+1) char2)
-     *   ); *)
-    
-    
-    let cap (m : t) (m' : t) =
-      match m, m' with
-      | Exact x, Exact y->
-         if veq x y then [m] else []
-      | Exact x, Between (lo, hi)
-        | Between (lo, hi), Exact x->
-         if vleq lo x && vleq x hi then
-           [m]
-         else
-           []
-      | Between (lo, hi), Between (lo', hi') ->
-         let lo'' = max lo lo' in
-         let hi'' = min hi hi' in
-         if veq lo'' hi'' then
-           [Exact lo'']
-         else if vleq lo'' hi'' then
-           [Between (lo'', hi'')]
-         else 
-           []
+      let mask = Bigint.of_string ("0b" ^ String.make (prefix_len/4) 'f' ^ String.make ((128 - prefix_len) / 4) '0' ) in    
+      let hi = Bigint.(((bv land mask) + (Bigint.shift_left Bigint.one (Int.(128 - prefix_len))) - Bigint.one)) in
+      let lo = Bigint.(bv land mask) in
+      Between (Int(lo,128), Int(hi,128)) 
+
+  let cap (m : t) (m' : t) =
+    match m, m' with
+    | Exact x, Exact y->
+       if veq x y then [m] else []
+    | Exact x, Between (lo, hi)
+      | Between (lo, hi), Exact x->
+       if vleq lo x && vleq x hi then
+         [m]
+       else
+         []
+    | Between (lo, hi), Between (lo', hi') ->
+       let lo'' = Stdlib.max lo lo' in
+       let hi'' = Stdlib.min hi hi' in
+       if veq lo'' hi'' then
+         [Exact lo'']
+       else if vleq lo'' hi'' then
+         [Between (lo'', hi'')]
+       else 
+         []
 
   let has_inter (m : t) (m' : t) : bool =
     match m, m' with
@@ -127,7 +94,7 @@ module Match = struct
       | Between(lo,hi), Exact(x)
       -> vleq lo x && vleq x hi
     | Between(lo, hi), Between(lo',hi')
-      -> max lo lo' <= min hi hi'
+      -> Stdlib.max lo lo' <= Stdlib.min hi hi'
                            
       
 
@@ -201,33 +168,54 @@ module Row = struct
        | Some ks -> Some (ks, data, act)
 
 
-                           
-                         
-  let remove_conflicts checker (params : Parameters.t) tbl_name keys (ms : Match.t list)  (rows : t list)  =
-    let prop = Match.list_to_test keys ms %=>%
-                 (List.fold rows ~init:False ~f:(fun acc (ms',_,_) -> acc %+% Match.list_to_test keys ms')) in
-    match fst (checker prop) with
-    | Some _ -> 
-       let rows' =
-         List.filter rows ~f:(fun ((ms', _,_)) ->
-             if List.fold2_exn ms ms' ~init:true ~f:(fun acc m m' -> acc && Match.is_subset m m')
-             then
-               let _ = if params.interactive then
-                         Printf.printf "- %s : %s" tbl_name (Match.list_to_string ms) in
-               false
-             else true
-           ) in
-       if rows = rows'
-       then None
-       else Some rows'
-    | None -> None             
+  let remove_conflicts _ _ _ _ _ _ = None
+  (* let remove_conflicts checker (params : Parameters.t) tbl_name keys (ms : Match.t list)  (rows : t list)  =
+   *   let prop = Match.list_to_test keys ms %=>%
+   *                (List.fold rows ~init:False ~f:(fun acc (ms',_,_) -> acc %+% Match.list_to_test keys ms')) in
+   *   match fst (checker prop) with
+   *   | Some _ -> 
+   *      let rows' =
+   *        List.filter rows ~f:(fun ((ms', _,_)) ->
+   *            if List.fold2_exn ms ms' ~init:true ~f:(fun acc m m' -> acc && Match.is_subset m m')
+   *            then
+   *              let _ = if params.interactive then
+   *                        Printf.printf "- %s : %s" tbl_name (Match.list_to_string ms) in
+   *              false
+   *            else true
+   *          ) in
+   *      if rows = rows'
+   *      then None
+   *      else Some rows'
+   *   | None -> None              *)
                          
 end
 
 module Edit = struct
-  type t = string * Row.t
-  let to_string (nm,(row) : t) =
-    Printf.sprintf "%s <++ %s" nm (Row.to_string row) 
+  type t = Add of string * Row.t
+         | Del of string * int
+                             
+  let to_string e =
+    match e with
+    | Add (nm, row) -> Printf.sprintf "%s <++ %s" nm (Row.to_string row)
+    | Del (nm, idx) -> Printf.sprintf "%s minus row %d" nm idx
+
+
+  let extract phys (m : value StringMap.t)  : t list =
+    StringMap.fold m ~init:([],[]) (*Deletions, additions*)
+      ~f:(fun ~key ~data acc ->
+        match String.chop_prefix key ~prefix:"?AddRowTo" with
+        | None -> acc
+        | Some tbl ->
+           if data |> get_int = Bigint.one then
+             let act =  match StringMap.find m (Printf.sprintf "?ActIn%s" tbl) with
+               | None -> failwith ""
+               | Some v -> get_int v |> Bigint.to_int_exn in 
+            match Row.mk_new_row m phys tbl None act with
+             | None -> failwith (Printf.sprintf "Couldn't make new row in table %s\n" tbl)
+             | Some row ->
+                (fst acc, Add (tbl, row) :: snd acc)
+           else acc)
+    |> uncurry (@)
                    
 end               
 
@@ -236,12 +224,19 @@ module Instance = struct
 
   let empty = StringMap.empty  
                  
-  let update (inst : t) ((tbl, row) : Edit.t) =
-    StringMap.update inst tbl
-      ~f:(fun rows_opt ->
-        match rows_opt with
-        | None -> [row]
-        | Some rows -> row::rows)
+  let update (inst : t) (e : Edit.t) =
+    match e with
+    | Add (tbl, row) ->
+       StringMap.update inst tbl
+         ~f:(fun rows_opt ->
+           match rows_opt with
+           | None -> [row]
+           | Some rows -> row::rows)
+    | Del (tbl, i) ->
+       StringMap.change inst tbl
+         ~f:(function
+           | None -> None
+           | Some rows -> List.filteri rows ~f:(fun j _ -> i <> j) |> Some)
       
   let rec update_list (inst : t) (edits : Edit.t list) =
     match edits with
@@ -249,27 +244,32 @@ module Instance = struct
     | (e::es) -> update_list (update inst e) es
 
 
+  let rec overwrite (old_inst : t) (new_inst : t) : t =
+    StringMap.fold new_inst ~init:old_inst
+      ~f:(fun ~key ~data acc -> StringMap.set acc ~key ~data)
+
+
   let size : t -> int =
     StringMap.fold ~init:0 ~f:(fun ~key:_ ~data -> (+) (List.length data))
                              
   let delete_hole i tbl = Hole(Printf.sprintf "?DeleteRow%dIn%s" i tbl, 1)    
 
-  let rec apply tag encode_tag ?cnt:(cnt=0) (inst : t) (prog : cmd) : (cmd * int) =
+  let rec apply ?no_miss:(no_miss = false) tag encode_tag ?cnt:(cnt=0) (inst : t) (prog : cmd) : (cmd * int) =
     match prog with
     | Skip 
       | Assign _
       | Assert _ 
       | Assume _ -> (prog, cnt)
     | Seq (c1,c2) ->
-       let (c1', cnt1) = apply tag encode_tag ~cnt inst c1 in
-       let (c2', cnt2) = apply tag encode_tag ~cnt:cnt1 inst c2 in
+       let (c1', cnt1) = apply ~no_miss tag encode_tag ~cnt inst c1 in
+       let (c2', cnt2) = apply ~no_miss tag encode_tag ~cnt:cnt1 inst c2 in
        (c1' %:% c2', cnt2)
     | While _ -> failwith "while loops not supported"
     | Select (typ, ss) ->
        let (ss, ss_cnt) =
          List.fold ss ~init:([],cnt)
            ~f:(fun (acc, cnt) (t, c) ->
-             let (c', cnt') = apply tag encode_tag ~cnt inst c in
+             let (c', cnt') = apply ~no_miss tag encode_tag ~cnt inst c in
              acc @ [(t,c')], cnt'
            ) in
        (mkSelect typ ss, ss_cnt)
@@ -310,10 +310,7 @@ module Instance = struct
          | `NoHoles -> []
        in
        let dflt_row =
-         let cond =
-           match tag with
-           | `WithHoles -> True (*add_row_hole %=% mkVInt (0,1)*)
-           | `NoHoles -> True in
+         let cond = if no_miss then False else True in
          [(cond, default)] in
        (selects @ holes @ dflt_row |> mkOrdered
        , cnt (*+ 1*))
@@ -371,10 +368,10 @@ module Instance = struct
                 | Hole(s,_) ->
                    begin match StringMap.find match_model s with
                    | None -> true
-                   | Some x when get_int x = 1 -> true
-                   | Some x when params.interactive ->
-                      Printf.printf "- %s : row %d\n%!" tbl_name i; false
-                   | Some x -> false
+                   | Some do_delete when get_int do_delete = Bigint.one -> 
+                      if params.interactive then Printf.printf "- %s : row %d\n%!" tbl_name i;
+                      false
+                   | Some x -> true
                    end
                 | _ -> true
               )
@@ -382,7 +379,8 @@ module Instance = struct
         
       )
 
-  let fixup_edit checker (params : Parameters.t) match_model (action_map : (Row.action_data * size) StringMap.t option) (phys : cmd) (pinst : t) : [`Ok of t | `Conflict of t] =
+  let fixup_edit checker (params : Parameters.t) (data : ProfData.t ref) match_model (action_map : (Row.action_data * size) StringMap.t option) (phys : cmd) (pinst : t) : [`Ok of t | `Conflict of t] =
+    let st = Time.now() in
     match action_map with
     | Some m -> StringMap.fold ~init:(`Ok pinst) m ~f:(fun ~key:tbl_name ~data:(act_data,act) ->
                     update_consistently checker params match_model phys tbl_name (Some act_data) act)
@@ -391,7 +389,7 @@ module Instance = struct
          StringMap.fold match_model ~init:[]
            ~f:(fun ~key ~data acc ->
              if String.is_substring key ~substring:"AddRowTo"
-                && data = Int(1,1)
+                && data = Int(Bigint.one,1)
              then (String.substr_replace_all key ~pattern:"?" ~with_:""
                    |> String.substr_replace_first ~pattern:"AddRowTo" ~with_:"")
                   :: acc
@@ -405,9 +403,10 @@ module Instance = struct
                      | None ->
                         Printf.sprintf "Couldn't Find var %s\n" str |> failwith
                      | Some v ->
-                        let act = get_int v in
+                        let act = get_int v |> Bigint.to_int_exn in
                         update_consistently checker params match_model phys tbl_name None act inst )
        in
+       data := {!data with fixup_time = Time.Span.(!data.fixup_time + Time.diff (Time.now ()) st)};
        out
          
          
