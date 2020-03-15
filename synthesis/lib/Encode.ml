@@ -419,7 +419,8 @@ let rec dispatch prog ctx type_ctx rv members =
     | x -> failwith ("unimplemented" ^ Sexp.to_string (sexp_of_t x))
 
 (* Returns a cmd and two bools. These bits correspond to the return and exit bit's respectively.
-False means that the command does not flip the bit, True means the cmd may or may not flip the bit. *)
+False means that the command does not flip the bit, True means the cmd may or may not flip the bit. 
+If the bit is flipped, we have to either return or exit, and so we must insert an if to ensure this happens. *)
 and encode_statement prog (ctx : Declaration.t list) (type_ctx : TypeDeclaration.t list) (rv : int) ((info, stmt) : Statement.t) : cmd * bool * bool =
   let open Statement in
   let unimplemented name =
@@ -540,7 +541,8 @@ and assign_param (type_ctx : TypeDeclaration.t list) (param_arg : Parameter.t * 
                               | (i, Name (ni, n)) -> (i, Name (ni, n ^ "." ^ snd f))
                               | _ -> failwith "HERE" in
       let val_assgn = List.map flds
-            ~f:(fun fld -> Assign(snd param.variable ^ "." ^ snd ((snd fld).name), encode_expression_to_value type_ctx (add_to_expr (snd fld).name value))) in
+            ~f:(fun fld -> Assign(snd param.variable ^ "." ^ snd ((snd fld).name)
+                                 , encode_expression_to_value type_ctx (add_to_expr (snd fld).name value))) in
       begin match param.direction with
         | Some (_, In)
         | None -> val_assgn
