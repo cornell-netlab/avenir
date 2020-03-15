@@ -311,15 +311,18 @@ let rec encode_expression_to_test (type_ctx : TypeDeclaration.t list) (e: Expres
     unop (encode_expression_to_test type_ctx arg)
   | E.BinaryOp {op; args=(l,r)} ->
     let open Op in
-    let to_value = encode_expression_to_value type_ctx in
+    let l_w = get_width type_ctx l in
+    let r_w = get_width type_ctx r in
+    let to_value_l = encode_expression_to_value_with_width r_w type_ctx in
+    let to_value_r = encode_expression_to_value_with_width l_w type_ctx in
     let to_test = encode_expression_to_test type_ctx in
     begin match snd op with
-      | Lt -> to_value l %<% to_value r
-      | Le -> !%(to_value r %<% to_value l)
-      | Gt -> to_value r %<% to_value l
-      | Ge -> !%(to_value l %<% to_value r)
-      | Eq -> to_value l %=% to_value r
-      | NotEq -> to_value l %<>% to_value r
+      | Lt -> to_value_l l %<% to_value_r r
+      | Le -> !%(to_value_r r %<% to_value_l l)
+      | Gt -> to_value_r r %<% to_value_l l
+      | Ge -> !%(to_value_l l %<% to_value_r r)
+      | Eq -> to_value_l l %=% to_value_r r
+      | NotEq -> to_value_l l %<>% to_value_r r
       (* homomorphic cases *)
       | And -> to_test l %&% to_test r
       | Or -> to_test l %+% to_test r
