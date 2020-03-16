@@ -157,10 +157,11 @@ let get_one_model_edit_no_widening
   let wp_phys_paths =
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
         let precs = if Option.is_none hints
-          then
-            wp_paths ~no_negations:true path (Packet.to_test ~fvs:problem.fvs pkt')
-            |> List.map ~f:snd
-          else [wp path True]
+                    then
+                      (* [wp ~no_negations:false path (Packet.to_test ~fvs:problem.fvs pkt')] *)
+                      wp_paths ~no_negations:false path (Packet.to_test ~fvs:problem.fvs pkt')
+                      |> List.map ~f:snd
+                    else [wp path True]
         in
         acc @ List.map precs ~f:(inj_l acts))
   in
@@ -173,7 +174,11 @@ let get_one_model_edit_no_widening
           let cdst = Time.now () in
           let condition = (Packet.to_test ~fvs:problem.fvs ~random_fill:false pkt %=>% wp_phys) in
           let c_dur = Time.diff (Time.now ()) cdst in
-          if params.debug then Printf.printf "Checking %s  => %s\n%!" (Packet.to_test ~fvs:problem.fvs ~random_fill:false pkt |> string_of_test) (string_of_test wp_phys);
+          if params.debug then
+            Printf.printf "Checking \n%s  \n=> \n%s\n%!"
+              (Packet.to_test ~fvs:problem.fvs ~random_fill:false pkt
+               |> string_of_test)
+              (string_of_test wp_phys);
           let h_st = Time.now() in
           if condition |> has_hole_test then
             let h_dur =  Time.diff (Time.now ()) h_st in

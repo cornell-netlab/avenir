@@ -160,7 +160,13 @@ let rec wp ?no_negations:(no_negations = false) c phi =
   (* doesn't require at any guard to be true *)
   | Select (Partial, []) -> True
   | Select (Partial, cmds) ->
-     concatMap cmds ~c:(%&%) ~f:guarded_wp
+     List.fold cmds ~init:True ~f:(fun wp_so_far (cond, act) ->
+         let act_wp = wp ~no_negations act phi in 
+         Printf.printf "Combining guard: %s  action: %s and accumulation %s\n%!==%s\n%!"
+           (string_of_test cond) (string_of_test act_wp) (string_of_test wp_so_far)
+           ((cond %=>% act_wp) %&% wp_so_far |> string_of_test);
+         ((cond %&% act_wp) %=>% wp_so_far)
+       )
 
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
@@ -286,8 +292,8 @@ let good_execs fvs c =
     | Seq (c1,c2) -> good_wp c1 %&% good_wp c2
     | Select(Total, _) -> failwith "Totality eludes me"
     | Select(Partial, ss) ->
-       List.fold ss ~init:(True)
-         ~f:(fun acc (t,c) -> acc %+% (t %&% good_wp (c)))
+       List.fold ss ~init:False
+         ~f:(fun cond (t,c) -> cond %+% (t %&% good_wp (c)))
     | Select(Ordered,  ss) ->
        List.fold ss ~init:(False,False)
          ~f:(fun (cond, misses) (t,c) ->
@@ -501,9 +507,7 @@ let rec fill_holes (c : cmd) subst =
   | Apply (n,keys, acts, dflt)
     -> Apply(n, keys
              , List.map acts ~f:(fun (scope, a) -> (scope, fill_holes a subst))
-             , fill_holes dflt subst)
-            
-
+             , fill_holes dflt subst)            
 
 let rec wp_paths ~no_negations c phi : (cmd * test) list =
   match c with
@@ -535,10 +539,11 @@ let rec wp_paths ~no_negations c phi : (cmd * test) list =
   (* doesn't require at any guard to be true *)
   | Select (Partial, []) -> [(Skip, True)]
   | Select (Partial, cmds) ->
-     let open List in
-     (cmds >>| fun (t,c) -> Assume t %:% c)
-     >>= flip (wp_paths ~no_negations) phi
-                  
+     List.fold cmds ~init:([]) ~f:(fun wp_so_far (cond, act) ->
+         List.fold (wp_paths ~no_negations act phi) ~init:wp_so_far         
+           ~f:(fun acc (trace, act_wp) ->
+             wp_so_far @ [ (Assert cond %:% trace, cond %&% act_wp)]))
+
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
      (* let open List in

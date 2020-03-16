@@ -28,7 +28,7 @@ type expr =
 
 let rec string_of_value (v : value) : string =
   match v with
-  | Int (i,x) -> Printf.sprintf "%s#%d" (Bigint.to_string i) x
+  | Int (i,x) -> Printf.sprintf "%s#%d" (Bigint.Hex.to_string i) x
 
 let veq v v' =
   match v,v' with
@@ -155,6 +155,9 @@ let rec mkAnd (t : test) (t' : test) =
         match t, t' with
         | True, x | x, True -> x
         | False, _ | _, False -> False
+        | Eq(Var x,u), Neg(Eq(Var y,v)) when x = y
+          -> if u = v then False
+             else Eq(Var x,u)
         | _, And ( t'', t''') -> (* left-associative *)
            mkAnd (mkAnd t t'') t'''
         | _ -> And (t, t')
@@ -249,6 +252,8 @@ let rec string_of_test t =
   | And (left, right) -> "(" ^ string_of_test left ^ "&&" ^ string_of_test right ^ ")"
   | Neg (Le(left, right)) ->
      Printf.sprintf "(%s < %s)" (string_of_expr right) (string_of_expr left)
+  | Neg(Eq(left,right)) ->
+     Printf.sprintf "(%s <> %s)" (string_of_expr left) (string_of_expr right)
   | Neg t ->
      "~(" ^ string_of_test t ^ ")"
 

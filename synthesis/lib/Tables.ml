@@ -97,6 +97,14 @@ module Match = struct
     | Between(lo, hi), Between(lo',hi')
       -> Stdlib.max lo lo' <= Stdlib.min hi hi'
 
+                                         
+  let has_inter_l (ms : t list) (ms' : t list) : bool =
+    if ms = [] && ms' = [] then false
+    else 
+      List.fold2_exn ms ms' ~init:true
+        ~f:(fun acc m m' -> acc && has_inter m m')
+                   
+    
   let is_subset (m : t) (m': t) : bool =
     match m, m' with
     | Exact i, Exact j -> veq i j
@@ -277,10 +285,30 @@ module Instance = struct
        (mkSelect typ ss, ss_cnt)
     | Apply (tbl, keys, acts, default) ->
        let actSize = max (log2(List.length acts)) 1 in
+       let rows = StringMap.find_multi inst tbl in
        let selects =
-         let rows = StringMap.find_multi inst tbl in
          List.foldi rows ~init:[]
            ~f:(fun i acc (matches, data, action) ->
+
+             let prev_tst =
+               if List.for_all matches ~f:(function | Exact _ -> true | _ -> false) then
+                 True
+               else
+                 let prev_rows =
+                   if i + 1 >= List.length rows then [] else
+                     List.sub rows ~pos:(i+1) ~len:(List.length rows - (i+1))
+                 in
+                 let overlapping_matches =
+                   List.filter_map prev_rows
+                     ~f:(fun (prev_ms,_,_) ->
+                       if Match.has_inter_l matches prev_ms
+                       then Some prev_ms
+                       else None
+                     )
+                 in
+                 List.fold overlapping_matches ~init:False
+                   ~f:(fun acc ms -> acc %+% Match.list_to_test keys ms )
+             in
              let tst = List.fold2_exn keys matches
                          ~init:True
                          ~f:(fun acc x m ->
@@ -294,9 +322,9 @@ module Instance = struct
              if action >= List.length acts then
                []
              else
-               (tst, (List.nth acts action
-                      |> Option.value ~default:([], default)
-                      |> bind_action_data data))
+               (tst %&% !%(prev_tst), (List.nth acts action
+                                         |> Option.value ~default:([], default)
+                                         |> bind_action_data data))
                :: acc)
        in
        let add_row_hole = Hole ("?AddRowTo" ^ tbl, 1) in
@@ -306,7 +334,7 @@ module Instance = struct
          | `WithHoles _ -> 
             List.mapi acts
               ~f:(fun i (scope, act) ->
-                (List.fold keys ~init:True
+                (List.fold keys ~init:True                      
                    ~f:(fun acc (x,sz) ->
                      acc %&% Match.holes encode_tag x sz))
                 %&% (add_row_hole %=% mkVInt (1,1))
@@ -315,9 +343,18 @@ module Instance = struct
          | `NoHoles -> []
        in
        let dflt_row =
-         let cond = if no_miss then False else True in
+         let cond = if no_miss
+                    then False
+                    else List.foldi rows ~init:(True)
+                           ~f:(fun i acc (ms,_,_) ->
+                             acc %&%
+                               !%(Match.list_to_test keys ms
+                                  %&% match tag with
+                                      | `WithHoles ds when List.exists ds ~f:((=) (tbl, i))
+                                        -> delete_hole i tbl %=% mkVInt(0,1)
+                                      | _ -> True)) in
          [(cond, default)] in
-       (selects @ holes @ dflt_row |> mkOrdered
+       (selects @ holes @ dflt_row |> mkPartial
        , cnt (*+ 1*))
 
 
