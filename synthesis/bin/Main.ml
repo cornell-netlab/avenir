@@ -179,6 +179,28 @@ module ONF = struct
 end
     
 
+module ONFReal = struct
+  let spec = Command.Spec.(
+      empty       
+      +> flag "-gas" (required int) ~doc:"how many cegis iterations?"
+      +> flag "-w" no_arg ~doc:"perform widening"
+      +> flag "-s" no_arg ~doc:"perform slicing optimization"
+      +> flag "-i" no_arg ~doc:"interactive mode"
+      +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
+      +> flag "-data" (required string) ~doc:"the input log" )
+  
+
+  let run gas widening do_slice interactive debug data_fp () =
+    ignore (Benchmark.basic_onf_ipv4_real Parameters.({widening;do_slice;gas;interactive;debug}) data_fp : Tables.Edit.t list)
+    (* Benchmark.onf_representative gas widening |> ignore *)
+end
+
+let onf_real : Command.t =
+  Command.basic_spec
+    ~summary: "Run the onf benchmark on the real p4 programs"
+    ONFReal.spec
+    ONFReal.run
+
 let onf : Command.t =
   Command.basic_spec
     ~summary: "Run the onf benchmark"
@@ -265,6 +287,7 @@ let main : Command.t =
     ; ("edit-synth", editSynth)
     ; ("bench", benchmark)
     ; ("onf", onf)
+    ; ("onf-real", onf_real)
     ; ("of", of_bench)
     ; ("ex", running_example)
     ; ("meta", meta)
