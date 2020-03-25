@@ -667,6 +667,51 @@ let basic_onf_ipv4 params filename =
   in
   measure params None problem (onos_to_edits filename)
 
+let basic_onf_ipv4_real params filename = 
+  let log =
+    sequence [
+        "class_id" %<-% mkVInt(0,32)
+      ; Apply("ipv6",
+              [("ipv6_dst", 128)],
+              [([("next_id",32)], "class_id"%<-% Var("next_id",32))],
+              Skip)
+      ;
+        mkOrdered [
+            Var("class_id",32) %=% mkVInt(1017,32), "out_port" %<-% mkVInt(17,9) ;
+            Var("class_id",32) %=% mkVInt(1018,32), "out_port" %<-% mkVInt(18,9) ;
+            Var("class_id",32) %=% mkVInt(1010,32), "out_port" %<-% mkVInt(10,9) ;
+            Var("class_id",32) %=% mkVInt(1012,32), "out_port" %<-% mkVInt(12,9) ;
+            Var("class_id",32) %=% mkVInt(1011,32), "out_port" %<-% mkVInt(11,9) ;
+            Var("class_id",32) %=% mkVInt(1008,32), "out_port" %<-% mkVInt(08,9) ;
+            Var("class_id",32) %=% mkVInt(1003,32), "out_port" %<-% mkVInt(03,9) ;
+            Var("class_id",32) %=% mkVInt(1019,32), "out_port" %<-% mkVInt(19,9) ;
+            True, "out_port" %<-% mkVInt(0,9)
+          ]
+      ] in
+  let phys =
+    Apply("l3_fwd"
+        , [ ("ipv6_dst", 128) (*; ("ipv4_src", 32); ("ipv4_proto", 16)*) ]
+        , [ ([("port",9)], "out_port"%<-% Var("port",9))]
+        , "out_port" %<-% mkVInt(0,9)) in
+  let fvs = [("ipv6_dst", 128); ("out_port", 9); (*("ipv4_src", 32); ("ipv4_proto", 16)*)] in
+  (* synthesize_edit  ~gas ~iter ~fvs p 
+   *   logical
+   *   physical
+   *   StringMap.empty
+   *   StringMap.empty
+   *   ("next", ([Exact (1,32)], [(1,9)],0))
+   * %> *)
+  let problem =
+    let open Problem in
+    { log; phys; fvs;
+      log_inst = StringMap.(set empty ~key:"ipv6" ~data:[]);
+      phys_inst = StringMap.(set empty ~key:"l3_fwd" ~data:[]);
+      log_edits = [];
+      phys_edits = []
+    }
+  in
+  measure params None problem (onos_to_edits filename)
+
 
 let parse_rule_to_update line =
   let columns = String.split line in columns 
