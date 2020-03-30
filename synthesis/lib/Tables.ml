@@ -4,9 +4,9 @@ open Util
 open Ast
 open Manip
 
+let (=) = Stdlib.(=)   
+   
 (* TYPES *)
-let (=) = Stdlib.(=)
-
 module Match = struct
   type t =
     | Exact of value
