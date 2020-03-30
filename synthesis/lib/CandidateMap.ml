@@ -45,12 +45,13 @@ let rec compute_cand_for_trace (tag : [`Exact | `Range]) (line: cmd) (pinst : In
 
                                      
 let apply_hints
+      tag
       typ
       (h_opt : (trace -> trace list) option)
       m
       pline pinst : (cmd * (Row.action_data * int) StringMap.t option) list =
   match h_opt with
-  | None -> [Instance.apply `WithHoles typ pinst pline |> fst, None]
+  | None -> [Instance.apply tag typ pinst pline |> fst, None]
   | Some h ->
      List.map (h m) ~f:(fun t -> (compute_cand_for_trace typ pline pinst t, Some t))
 

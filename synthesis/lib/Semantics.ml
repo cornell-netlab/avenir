@@ -212,3 +212,68 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
 let eval_act (act : cmd) (pkt : Packet.t) : Packet.t =
   match trace_eval_inst act Instance.empty ~wide:StringMap.empty (pkt, None) with
   | ((pkt, _), _ ,_ ,_) -> pkt
+
+
+
+
+
+let rec trace_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : ((string * int) list * Packet.t) list =
+  match c with
+  | Skip -> [[], pkt]
+  | Assume b ->
+     if check_test b (pkt, None)
+     then [[], pkt]
+     else []
+  | Assert b ->
+     if check_test b (pkt, None)
+     then failwith ("Assertion failure")
+     else [[],pkt]
+  | Assign (f,e) ->
+     [[],
+      eval_expr (pkt, None) e
+      |> Packet.set_field pkt f]
+  | Seq (c1,c2) ->
+     let nd_hits1 = trace_nd_hits c1 inst pkt in
+     List.fold nd_hits1 ~init:[] ~f:(fun acc (hits1, pkt') ->
+         let nd_hits2 = trace_nd_hits c2 inst pkt' in
+         List.map nd_hits2
+           ~f:(fun (hits2,pkt2) ->
+             (hits1 @ hits2), pkt2) @ acc
+       )
+  | Apply (t, ks, acts, def) ->
+     begin match StringMap.find inst t with
+     | None -> trace_nd_hits def inst pkt
+     | Some rules ->
+        List.foldi rules ~init:[] ~f:(fun i acc (ms, data, aid) ->
+            let cond = Match.list_to_test ks ms in
+            if check_test cond (pkt,None)
+            then List.map (trace_nd_hits (List.nth_exn acts aid |> bind_action_data data) inst pkt)
+                   ~f:(fun (hits, pkt') -> (t,i) :: hits, pkt')
+                 @ acc
+            else acc)
+     end
+  | Select(Partial, ss) ->
+     List.fold ss ~init:[] ~f:(fun acc (b,c) ->
+         if check_test b (pkt,None)
+         then trace_nd_hits c inst pkt
+              @ acc
+         else acc)
+
+  | Select(Ordered, ss) ->
+     List.find_map ss ~f:(fun (b,c) ->
+         if check_test b (pkt,None)
+         then Some (trace_nd_hits c inst pkt)
+         else None
+       )
+     |> Option.value ~default:[]
+
+  | Select(Total, _ ) -> failwith "Deprecated"
+  | While _ -> failwith "unsupported"
+                 
+let get_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : (string * int) list =
+  let open List in
+  dedup_and_sort ~compare:Stdlib.compare (trace_nd_hits c inst pkt >>= fst)
+  
+
+  
+                 

@@ -1,12 +1,12 @@
 open Core
-
+(* Timing data : lots of subsets, eq time in check valid time in impl time  *)
 type t = {
     log_inst_size : int;
     phys_inst_size : int;
     time : Time.Span.t;
     impl_time : Time.Span.t;
     check_valid_time : Time.Span.t;
-    eq_time : Time.Span.t;    
+    eq_time : Time.Span.t;
     make_vc_time: Time.Span.t;
     eq_num_z3_calls : int;
     model_search_time : Time.Span.t;
@@ -28,7 +28,7 @@ let headers =
    "time";
    "impl_time";
    "check_valid_time";
-   "eq_time";   
+   "eq_time";
    "make_vc_time";
    "eq_num_z3_calls";
    "model_search_time";
@@ -48,14 +48,15 @@ let headers =
 let header_string =
   List.reduce_exn headers ~f:(fun x y -> x ^ "," ^ y)
 
-let mean_tree_size data = List.fold (data.tree_sizes) ~init:0 ~f:((+)) / List.length (data.tree_sizes)
-let max_tree_size data = List.fold (data.tree_sizes) ~init:0 ~f:(max) 
+let mean_tree_size data =
+  if List.length data.tree_sizes = 0 then 0 else List.fold (data.tree_sizes) ~init:0 ~f:((+)) / List.length (data.tree_sizes)
+let max_tree_size data = List.fold (data.tree_sizes) ~init:0 ~f:(max)
 let min_tree_size data = List.fold (data.tree_sizes) ~init:(max_tree_size data) ~f:(min)
-    
-    
+
+
 let to_string (data : t) =
   Printf.sprintf "%d,%d,%f,%f,%f,%f,%f,%d,%f,%f,%f,%f,%f,%f,%d,%f,%f,%d,%d,%d"
-    data.log_inst_size 
+    data.log_inst_size
     data.phys_inst_size
     (data.time |> Time.Span.to_ms)
     (data.impl_time |> Time.Span.to_ms)
@@ -75,12 +76,12 @@ let to_string (data : t) =
     (mean_tree_size data)
     (min_tree_size data)
     (max_tree_size data)
-    
+
 
 let to_csv (dataset : t list) =
   Printf.sprintf "%s\n%s" header_string
     (List.fold dataset ~init:"" ~f:(fun acc dataline -> Printf.sprintf "%s%s\n" acc (to_string dataline)))
-  
+
 let zero _ : t ref =
   ref { log_inst_size = 0;
         phys_inst_size = 0;
@@ -101,4 +102,3 @@ let zero _ : t ref =
         search_wp_time = Time.Span.zero;
         tree_sizes = [];
     }
-    
