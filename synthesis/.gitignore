@@ -16,4 +16,4 @@ src/setup.ml
 _opam
 *.~
 motley
-
+query.smt
