@@ -150,9 +150,18 @@ let get_one_model_edit_no_widening
       (Printf.printf "Press enter to solve for CE input-output pair\n";
        ignore (In_channel.(input_char stdin) : char option))
   in
+  if params.debug then Printf.printf "Computing candidates\n%!";
   let cst = Time.now () in
   let cands = CandidateMap.apply_hints (`WithHoles deletions) `Exact hints actions problem.phys phys_edited in
   data := {!data with cand_time = Time.Span.(!data.cand_time +  Time.diff (Time.now ()) cst) };
+  let () =
+    if params.debug then begin
+        Printf.printf "Candidates:\n";
+        List.iter cands
+          ~f:(fun (cmd,_) -> Printf.printf "%s\n" (string_of_cmd cmd));
+        Printf.printf "-------------\n"
+      end
+  in
   let wp_st = Time.now () in
   let wp_phys_paths =
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
@@ -271,7 +280,6 @@ let rec solve_concrete
     data := {!data with model_search_time = Time.Span.(!data.model_search_time + Time.diff (Time.now()) st) };
     Edit.extract problem.phys model
 
-
 (* The truth of a slice implies the truth of the full programs when
  * the inserted rules are disjoint with every previous rule (i.e. no overlaps or deletions)
  * Here we only check that the rules are exact, which implies this property given the assumption that every insertion is reachable
@@ -329,7 +337,7 @@ let cegis ~iter
         then failwith ("Could not make progress on edits ")
         else loop
             { params with gas = params.gas - 1 }
-            { problem with phys_edits = pedits }
+            { problem with phys_edits = problem.phys_edits @ pedits }
     in
     match res with
     | `Yes ->

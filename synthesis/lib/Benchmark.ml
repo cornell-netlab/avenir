@@ -117,7 +117,7 @@ let reorder_benchmark varsize length max_inserts widening =
     Parameters.(
       { default with
         widening;
-        gas = 1000;
+        gas = 10;
 
     }) in
   let problem =

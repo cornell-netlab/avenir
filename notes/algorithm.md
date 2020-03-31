@@ -1,4 +1,3 @@
-3
 Command
 c ::=
     | Skip
@@ -351,10 +350,10 @@ modify the holes function in get_model as follows:
 holes(p, τ, χs)
 #### for t in tables(p), for i ∈ [0,|χs|)  ?Addᵢ(t) ∈ holes(p,τ, χs)
 #### for t ∈ tables(p), and 0 ≤ i < |τ(t)|,
-####### ∃ χ ∈ χs. nd-hits(̧(χ, p, τ, t, i)
+####### ∃ (in,out) ∈ χs. nd-hits(in, p, τ, t, i)
 ####### ⇒ ?Del(t,i) ∈ holes(p,n,τ)
 
-get_model'' p σ r χs =
+let get_model'' p σ r χs =
   let σ' = σ + holes(p, σ, χs) in
   SAT(⋀{in ⇒ wp(p σ', out) | (in,out) ∈ χs})
 
@@ -393,9 +392,9 @@ so  p (σ + ds + as) =χs= p (· + as) =χs= p σ'
 Conclude (by 1,2) that ∀ (in,out) ∈ χs, 〚p (σ + rs')〛in = out
 *================================*
 
-+—————————————————————————+
- reducing concurrent CEXs
-+—————————————————————————+
++——————————————————————————+
+| reducing concurrent CEXs |
++——————————————————————————+
 
 let cegis l p τ σ es χs =
   match l τ = p (σ + es) with
@@ -410,15 +409,47 @@ let cegis l p τ σ es χs =
           | sat es' → cegis l p τ σ (es + es') ({χ}∪χs)
 
 —–
-proof is identical to above, but es remains general.  intuitively,
-this lets you proceed unsafely, and then if you make a mistake you
-have a "healing" phase that lets you correct your mistakes.
+either l τ =χs= p (σ + es)
+or     ⋄(χ ∈ χs)
+
 —–
+
+
++————————————————————————+
+| Mutual recursion & DFS |
++————————————————————————+
+  
+let cegis l p τ σ es χs =
+  match l τ = p (σ + es) with
+  | Valid → success es
+  | Cex χ → solve l p τ σ es ({χ}∪χs) ⊤
+  
+and solve l p τ σ es χs φ =
+  if φ is unsat
+  then fail
+  else
+    match get_model'' l p τ σ es χs φ with
+      | none → fail
+      | some es' →
+         match cegis l p τ σ (es·es') χs with
+	 | fail → solve l p τ σ es χs (φ∧¬es')
+	 | success es'' → success es''
+
+let get_model'' p σ es χ@(pkt₀,pkt₁) φ =
+  let σ' = σ + rs + holes(p,1,σ) in
+  SAT(φ ∧ (pkt₀ ⇒ wp(p σ, pkt₁)))
+
+Note that we can un-lock-in our rules so far by making a recursive call
+to cegis l p τ (σ + es·es') [] χs φ.
+
+If we do finitely many of these "freedom steps" we're still guaranteed
+termination.
+
 
 
 +—————————————————+
 | Program Slicing |
-+————–————————————+
++—————————————————+
 
 sliceAdd(skip, τ, e) = skip
 sliceAdd(f:=e, τ, e) = f:=e
