@@ -422,8 +422,7 @@ or     ⋄(χ ∈ χs)
 let cegis l p τ σ es χs =
   match l τ = p (σ + es) with
   | Valid → success es
-  | Cex χ → solve l p τ σ es ({χ}∪χs) ⊤
-  
+  | Cex χ → solve l p τ σ es ({χ}∪χs) ⊤  
 and solve l p τ σ es χs φ =
   if φ is unsat
   then fail
@@ -437,15 +436,33 @@ and solve l p τ σ es χs φ =
 
 let get_model'' p σ es χ@(pkt₀,pkt₁) φ =
   let σ' = σ + rs + holes(p,1,σ) in
-  SAT(φ ∧ (pkt₀ ⇒ wp(p σ, pkt₁)))
+  SAT(φ ∧ (pkt₀ ⇒ wp(p σ', pkt₁)))
 
 Note that we can un-lock-in our rules so far by making a recursive call
 to cegis l p τ (σ + es·es') [] χs φ.
 
 If we do finitely many of these "freedom steps" we're still guaranteed
-termination.
+termination, so this would just be heuristic.
 
+We still need a recursion measure. There are an infinite number of
+sequences of edits, but there is a finite sequence of reachable edits,
+because once the entire domain of input packets is enumerated in a
+table the disjoint choice semantics prevent further edits from being
+reachable.
 
+In fact, for a given program p and instance τ, every infinite,
+nonrepeating, monotonic, sequence of edits es, has an index N > 0 such
+that p (σ + es[:N]) = p (σ + es) and further, all
+
+Lemma. get_model'' always returns a _reachable_, monotonic edit.
+
+Lemma. All sequences of reachable edits are finite.
+
+Lemma. Theres a finite number of solutions to every model.
+
+Theorem (Completeness).
+
+Proof. We explore all reachable sequences of edits.
 
 +—————————————————+
 | Program Slicing |
