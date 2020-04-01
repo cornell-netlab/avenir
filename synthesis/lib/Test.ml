@@ -596,8 +596,8 @@ let%test _ =
  *   let log_line =
  *     Apply("log"
  *         , [("dst", 2)]
- *         , ["out" %<-% mkVInt (0,2);
- *            "out" %<-% mkVInt (1,2);]
+ *         , [[], "out" %<-% mkVInt (0,2);
+ *            [], "out" %<-% mkVInt (1,2);]
  *         ,"out" %<-% mkVInt (0,2))
  *   in
  *   let phys_line =
@@ -609,15 +609,13 @@ let%test _ =
  *   in
  *   let log_inst =
  *     StringMap.of_alist_exn
- *       [("log", [ [mkVInt (0,2)], 0]) ]
+ *       [("log", [ [mkVInt (0,2)], [], 0]) ]
  *   in
  *   let phys_inst =
  *     StringMap.of_alist_exn
- *       [("phys", [ [mkVInt (0,2)], 0])] in
+ *       [("phys", [ ([mkVInt (0,2)], (, 0)])] in
  *   let edit = ("log", ([mkVInt (1,2)], 1)) in
  *   ignore (synthesize_edit log_line phys_line log_inst phys_inst edit); true *)
-
-
 
 let%test _ =
   (*

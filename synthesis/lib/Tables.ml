@@ -116,6 +116,7 @@ end
 
 module Row = struct
   type action_data = value list
+  (* Match expresssions, action data, action index*)
   type t = Match.t list * action_data * int
   let to_string ((mtchs, ad, actid) : t) =
     Printf.sprintf "%s ---(%s)---> %d"
@@ -230,7 +231,7 @@ module Edit = struct
 end
 
 module Instance = struct
-  type t = Row.t list StringMap.t
+  type t = Row.t list StringMap.t (* Keys are table names, Rows are table rows*)
 
   let empty = StringMap.empty
 
@@ -263,16 +264,18 @@ module Instance = struct
     StringMap.fold ~init:0 ~f:(fun ~key:_ ~data -> (+) (List.length data))
 
   let delete_hole i tbl = Hole(Printf.sprintf "?DeleteRow%dIn%s" i tbl, 1)
-  let add_row_hole tbl = Hole ("?AddRowTo" ^ tbl, 1)
-  let which_act_hole tbl actSize = Hole ("?ActIn" ^ tbl, actSize)
+  let add_row_hole tbl = Hole (Printf.sprintf "?AddRowTo%s" tbl, 1)
+  let which_act_hole tbl actSize =
+    assert (actSize > 0);
+    Hole (Printf.sprintf "?ActIn%s" tbl, actSize)
                         
 
-  let tbl_hole encode_tag keys tbl i actSize =
+  let tbl_hole encode_tag keys tbl row_hole act_hole i actSize =
     (List.fold keys ~init:True
        ~f:(fun acc (x,sz) ->
          acc %&% Match.holes encode_tag x sz))
-    %&% (add_row_hole tbl %=% mkVInt (1,1))
-    %&% (which_act_hole tbl actSize %=% mkVInt (i,actSize))
+    %&% (row_hole %=% mkVInt (1,1))
+    %&% (act_hole %=% mkVInt (i,actSize))
     
   let rec apply ?no_miss:(no_miss = false) tag encode_tag ?cnt:(cnt=0) (inst : t) (prog : cmd) : (cmd * int) =
     match prog with
@@ -295,6 +298,8 @@ module Instance = struct
        (mkSelect typ ss, ss_cnt)
     | Apply (tbl, keys, acts, default) ->
        let actSize = max (log2(List.length acts)) 1 in
+       let row_hole = add_row_hole tbl in
+       let act_hole = which_act_hole tbl actSize in
        let rows = StringMap.find_multi inst tbl in
        let selects =
          List.foldi rows ~init:[]
@@ -341,7 +346,7 @@ module Instance = struct
          | `WithHoles _ ->
             List.mapi acts
               ~f:(fun i (params, act) ->
-                tbl_hole encode_tag keys tbl i actSize,
+                tbl_hole encode_tag keys tbl row_hole act_hole i actSize,
                 holify (List.map params ~f:fst) act)
          | `NoHoles -> []
        in

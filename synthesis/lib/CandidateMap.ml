@@ -37,7 +37,9 @@ let rec compute_cand_for_trace (tag : [`Exact | `Range]) (line: cmd) (pinst : In
         then (*Assert (misses) %:%*) default
         else
           let actSize = max (log2(List.length acts)) 1 in
-          let cond = Instance.tbl_hole tag keys name act_idx actSize in
+          let row_hole = Instance.add_row_hole name in
+          let act_hole = Instance.which_act_hole name actSize in
+          let cond = Instance.tbl_hole tag keys name row_hole act_hole act_idx actSize in
           let (params, act) = List.nth_exn acts act_idx in
           let args = List.fold2_exn params data ~init:True
                        ~f:(fun acc param arg ->

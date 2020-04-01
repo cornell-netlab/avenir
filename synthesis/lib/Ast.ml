@@ -389,18 +389,22 @@ type cmd =
   | Seq of (cmd * cmd)
   | While of (test * cmd)
   | Select of (select_typ * ((test * cmd) list))
-  | Apply of (string * (string * size) list * (((string * size) list * cmd) list) * cmd)
+  | Apply of (string (*Table name*)
+              * (string * size) list (*Keys*)
+              * (((string * size) list * cmd) list) (*actions*)
+              * cmd) (*default action*)
 
-let clean_selects_list ss = 
-  List.rev ss
-  |> List.fold ~init:([], [])
-    ~f:(fun (acc,seen) (c,a) ->
-      if c = False || List.exists seen ~f:((=) c) then
-        (acc,seen)
-      else
-        ((c,a) :: acc, c :: seen)
-    )
-  |> fst
+let clean_selects_list =
+  List.filter ~f:(fun (c,a) -> c <> False)
+  (* List.rev ss
+   * |> List.fold ~init:([], [])
+   *   ~f:(fun (acc,seen) (c,a) ->
+   *     if c = False || List.exists seen ~f:((=) c) then
+   *       (acc,seen)
+   *     else
+   *       ((c,a) :: acc, c :: seen)
+   *   )
+   * |> fst *)
 
 let mkPartial ss =
   if not enable_smart_constructors then Select(Partial, ss) else

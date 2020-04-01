@@ -540,9 +540,12 @@ let rec wp_paths ~no_negations c phi : (cmd * test) list =
   | Select (Partial, []) -> [(Skip, True)]
   | Select (Partial, cmds) ->
      List.fold cmds ~init:([]) ~f:(fun wp_so_far (cond, act) ->
-         List.fold (wp_paths ~no_negations act phi) ~init:wp_so_far         
-           ~f:(fun acc (trace, act_wp) ->
-             wp_so_far @ [ (Assert cond %:% trace, cond %&% act_wp)]))
+         if has_hole_test cond then 
+           List.fold (wp_paths ~no_negations act phi) ~init:wp_so_far         
+             ~f:(fun acc (trace, act_wp) ->
+               wp_so_far @ [ (Assert cond %:% trace, cond %&% act_wp)])
+         else
+           wp_so_far)
 
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->

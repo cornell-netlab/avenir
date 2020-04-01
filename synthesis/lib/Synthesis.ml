@@ -169,12 +169,15 @@ let get_one_model_edit_no_widening
                     then
                       (* [wp ~no_negations:false path (Packet.to_test ~fvs:problem.fvs pkt')] *)
                       wp_paths ~no_negations:false path (Packet.to_test ~fvs:problem.fvs pkt')
-                      |> List.map ~f:snd
+                      |> List.filter_map ~f:(fun (_, cond) ->
+                             if has_hole_test cond then Some cond else None)
                     else [wp path True]
         in
         acc @ List.map precs ~f:(inj_l acts))
   in
   data := {!data with search_wp_time = Time.Span.(!data.search_wp_time + Time.diff (Time.now ()) wp_st)};
+  if params.debug then
+    Printf.printf "There are %d physical paths\n%!" (List.length wp_phys_paths);
   let model =
     List.find_map wp_phys_paths ~f:(fun (wp_phys, acts) ->
         if wp_phys = False then
@@ -189,20 +192,18 @@ let get_one_model_edit_no_widening
                |> string_of_test)
               (string_of_test wp_phys);
           let h_st = Time.now() in
-          if condition |> has_hole_test then
-            let h_dur =  Time.diff (Time.now ()) h_st in
-            let (res, dur) = check params `Sat condition in
-            data := {!data with
-                     model_holes_time = Time.Span.(!data.model_holes_time + h_dur);
-                     model_z3_time = Time.Span.(!data.model_z3_time + dur);
-                     model_z3_calls = !data.model_z3_calls + 1;
-                     model_cond_time = Time.Span.(!data.model_cond_time + c_dur)
-                    };
-            begin match res with
-              | None -> if params.debug then Printf.printf "no model\n%!";None
-              | Some model -> Some (model, acts)
-            end
-          else None
+          let h_dur =  Time.diff (Time.now ()) h_st in
+          let (res, dur) = check params `Sat condition in
+          data := {!data with
+                    model_holes_time = Time.Span.(!data.model_holes_time + h_dur);
+                    model_z3_time = Time.Span.(!data.model_z3_time + dur);
+                    model_z3_calls = !data.model_z3_calls + 1;
+                    model_cond_time = Time.Span.(!data.model_cond_time + c_dur)
+                  };
+          begin match res with
+          | None -> if params.debug then Printf.printf "no model\n%!";None
+          | Some model -> Some (model, acts)
+          end
       )
   in
   model

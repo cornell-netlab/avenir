@@ -38,7 +38,7 @@ let fastcx_gen data log e =
   | Edit.Del (_, _) -> failwith "unimplemented"
 
 let unreachable params log linst phys pinst (test : Ast.test) =
-  match check_valid params test with
+  match check_valid params (!%test) with
   | (Some x, _) ->
      let ((log_pkt,_), _,_,_) = trace_eval_inst log linst ~wide:Packet.empty (x, None) in
      let ((phys_pkt,_), _, _, _) = trace_eval_inst phys pinst ~wide:(Packet.empty) (x, None) in
