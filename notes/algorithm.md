@@ -435,14 +435,14 @@ and solve l p τ σ es χs φ =
 	 | success es'' → success es''
 
 let get_model'' p σ es χ@(pkt₀,pkt₁) φ =
-  let σ' = σ + rs + holes(p,1,σ) in
+  let σ' = σ + es + holes(p,1,σ) in
   SAT(φ ∧ (pkt₀ ⇒ wp(p σ', pkt₁)))
 
-Note that we can un-lock-in our rules so far by making a recursive call
-to cegis l p τ (σ + es·es') [] χs φ.
 
-If we do finitely many of these "freedom steps" we're still guaranteed
-termination, so this would just be heuristic.
+lexicographical measure (|Packet² ∖ χs|
+                        , we get closer to the maximum extension of es very time?
+			, |φ|)
+
 
 We still need a recursion measure. There are an infinite number of
 sequences of edits, but there is a finite sequence of reachable edits,
@@ -450,19 +450,31 @@ because once the entire domain of input packets is enumerated in a
 table the disjoint choice semantics prevent further edits from being
 reachable.
 
-In fact, for a given program p and instance τ, every infinite,
-nonrepeating, monotonic, sequence of edits es, has an index N > 0 such
-that p (σ + es[:N]) = p (σ + es) and further, all
+In fact, for a given program p and instance τ,
+every
+nonrepeating,
+monotonic,
+sequence of edits es,
+has an index N > 0 such that
+    p (σ + es[:N]) = p (σ + es)
 
-Lemma. get_model'' always returns a _reachable_, monotonic edit.
+Lemma. get_model'' always returns a not shadowed, monotonic edit.
 
-Lemma. All sequences of reachable edits are finite.
+Lemma. All sequences of nonrepeating edits are finite.
 
-Lemma. Theres a finite number of solutions to every model.
+Lemma. Theres a finite number of solutions to every query.
 
 Theorem (Completeness).
 
 Proof. We explore all reachable sequences of edits.
+
+Note that we can un-lock-in our rules so far by making a recursive call
+to
+  cegis l p τ      σ       (es · es') χs
+  cegis l p τ (σ + es·es')     []     χs
+
+If we do finitely many of these "freedom steps" we're still guaranteed
+termination, so this would just be heuristic.
 
 +—————————————————+
 | Program Slicing |
