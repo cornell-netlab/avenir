@@ -55,9 +55,9 @@ let min_tree_size data = List.fold (data.tree_sizes) ~init:(max_tree_size data) 
 
 
 let to_string (data : t) =
-  Printf.sprintf "%d,%d,%f,%f,%f,%f,%f,%d,%f,%f,%f,%f,%f,%f,%d,%f,%f,%d,%d,%d"
+  Printf.sprintf "%d,%f,%f,%f,%f,%f,%d,%f,%f,%f,%f,%f,%f"
     data.log_inst_size
-    data.phys_inst_size
+    (* data.phys_inst_size *)
     (data.time |> Time.Span.to_ms)
     (data.impl_time |> Time.Span.to_ms)
     (data.check_valid_time |> Time.Span.to_ms)
@@ -70,12 +70,12 @@ let to_string (data : t) =
     (data.model_cond_time |> Time.Span.to_ms)
     (data.model_holes_time |> Time.Span.to_ms)
     (data.interp_time |> Time.Span.to_ms)
-    data.model_z3_calls
-    (data.fixup_time |> Time.Span.to_ms)
-    (data.search_wp_time |> Time.Span.to_ms)
-    (mean_tree_size data)
-    (min_tree_size data)
-    (max_tree_size data)
+    (* data.model_z3_calls *)
+    (* (data.fixup_time |> Time.Span.to_ms)
+     * (data.search_wp_time |> Time.Span.to_ms)
+     * (mean_tree_size data)
+     * (min_tree_size data)
+     * (max_tree_size data) *)
 
 
 let to_csv (dataset : t list) =

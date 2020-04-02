@@ -8,9 +8,9 @@ open Tables
 module IntMap = Map.Make(Int)
 
 
-let rec run_experiment iter seq params hints problem =
+let rec run_experiment iter seq phys_seq params hints problem =
   match seq with
-  | [] -> []
+  | [] -> phys_seq
     | edit::edits ->
        (* Printf.printf "==== BENCHMARKING INSERTION OF (%s) =====\n%!"
         *   (string_of_edit edit); *)
@@ -18,7 +18,9 @@ let rec run_experiment iter seq params hints problem =
        let problem_inner = Problem.({problem with log_edits = edit}) in
        let pedits = synthesize ~iter params hints data problem_inner  in
        Printf.printf "%s\n%!" (ProfData.to_string !data);
-       run_experiment (iter + 1) edits
+       run_experiment (iter + 1)
+         edits
+         (phys_seq @ pedits)
          params
          hints
          Problem.({problem with log_inst = Instance.update_list problem.log_inst edit;
@@ -26,7 +28,7 @@ let rec run_experiment iter seq params hints problem =
                         
 let measure params hints problem insertions =
   Printf.printf "%s\n%!" ProfData.header_string;
-  run_experiment 0 insertions params hints problem
+  run_experiment 0 insertions [] params hints problem
 
                                             
 let permute l =

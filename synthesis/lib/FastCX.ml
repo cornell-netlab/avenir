@@ -42,6 +42,11 @@ let unreachable params log linst phys pinst (test : Ast.test) =
   | (Some x, _) ->
      let ((log_pkt,_), _,_,_) = trace_eval_inst log linst ~wide:Packet.empty (x, None) in
      let ((phys_pkt,_), _, _, _) = trace_eval_inst phys pinst ~wide:(Packet.empty) (x, None) in
+     if params.debug
+     then begin
+         Printf.printf "LOG :%s -> %s\n" (Packet.string__packet x) (Packet.string__packet log_pkt);
+         Printf.printf "PHYS:%s -> %s\n" (Packet.string__packet x) (Packet.string__packet phys_pkt)
+       end;
      if Packet.equal log_pkt phys_pkt
      then `Yes
      else `NoAndCE x

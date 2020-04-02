@@ -20,7 +20,19 @@ module Match = struct
   let to_test k m =
     match m with
     | Exact x -> Var k %=% Value(x)
-    | Between (lo, hi) -> (Value(lo) %<=% Var k) %&% (Var k %<=% Value(hi))
+    | Between (Int(lo,sz), Int(hi,sz')) when sz = sz'
+      -> (if lo <= Bigint.zero then
+             True
+         else
+           Value(Int(lo,sz)) %<=% Var k)
+         %&% (if Bigint.(hi >= (pow (of_int 2) (of_int sz) - one))
+              then True
+              else(Var k %<=% Value(Int(hi, sz))))
+    | Between (Int(lo,sz), Int(hi,sz')) ->
+       Printf.sprintf "Type error, %s#%d and %s#%d are of different sizes"
+         (Bigint.to_string lo) sz (Bigint.to_string hi) sz'
+       |> failwith
+         
 
   let holes encode_tag x sz =
     match encode_tag with
@@ -119,9 +131,14 @@ module Row = struct
   (* Match expresssions, action data, action index*)
   type t = Match.t list * action_data * int
   let to_string ((mtchs, ad, actid) : t) =
-    Printf.sprintf "%s ---(%s)---> %d"
-      (List.fold mtchs ~init:"" ~f:(fun acc m -> Printf.sprintf "%s, %s" acc (Match.to_string m)))
-      (List.fold ad ~init:"" ~f:(fun acc d -> Printf.sprintf "%s, %s" acc (string_of_value d)))
+    Printf.sprintf "%s,%s,%d"
+      ( List.map mtchs ~f:(Match.to_string)
+        |> List.reduce ~f:(Printf.sprintf "%s;%s")
+       |> Option.value ~default:""
+      )
+      (List.map ad ~f:(string_of_value)
+        |> List.reduce ~f:(Printf.sprintf "%s;%s")
+       |> Option.value ~default:"")
       actid
 
   let intersects (m1s, _,_ : t) (m2s, _, _ : t) : bool =
@@ -168,10 +185,10 @@ module Row = struct
                (* Printf.printf "Params for act %d :%s\n%!" act
                 *   (List.fold params ~init:"" ~f:(fun acc (p,_) -> Printf.sprintf "%s %s" acc p)); *)
                List.fold params ~init:[]
-                 ~f:(fun acc (p,_) ->
+                 ~f:(fun acc (p,sz) ->
                    match StringMap.find match_model p with
                    | None ->
-                      failwith ("Couldn't find " ^ p)
+                      acc @ [Int (Random.int (pow 2 sz) |> Bigint.of_int_exn, sz)]
                    | Some v -> acc @ [v]
                  )
        in
@@ -208,8 +225,8 @@ module Edit = struct
 
   let to_string e =
     match e with
-    | Add (nm, row) -> Printf.sprintf "%s <++ %s" nm (Row.to_string row)
-    | Del (nm, idx) -> Printf.sprintf "%s minus row %d" nm idx
+    | Add (nm, row) -> Printf.sprintf "ADD,%s,%s" nm (Row.to_string row)
+    | Del (nm, idx) -> Printf.sprintf "DEL,%s,%d" nm idx
 
   let extract phys (m : value StringMap.t)  : t list =
     StringMap.fold m ~init:([],[]) (*Deletions, additions*)
@@ -329,6 +346,7 @@ module Instance = struct
                            (acc %&% Match.to_test x m)
                            %&% match tag with
                                | `WithHoles ds ->
+                                  (* delete_hole i tbl %=% mkVInt(0,1) *)
                                   if List.exists ds ~f:((=) (tbl, i))
                                   then delete_hole i tbl %=% mkVInt(0,1)
                                   else True

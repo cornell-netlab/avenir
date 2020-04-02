@@ -570,16 +570,17 @@ let rec free_of_cmd typ (c:cmd) : (string * size) list =
         @ free_of_cmd typ action
         @ fvs
       )
-  | Apply (_,_,actions, default) ->
-     List.fold actions
-       ~init:(free_of_cmd typ default)
-       ~f:(fun acc (data, a) ->
-         acc @ (free_of_cmd typ a
+  | Apply (_,keys,actions, default) ->
+     keys
+     @ List.fold actions
+         ~init:(free_of_cmd typ default)
+         ~f:(fun acc (data, a) ->
+           acc @ (free_of_cmd typ a
                 |> List.filter ~f:(fun (x,_) ->
                        List.for_all (List.map data ~f:fst) ~f:((<>) x)
                      )
-               )
-       )
+                 )
+         )
   end
   |> dedup
 

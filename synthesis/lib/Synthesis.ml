@@ -85,7 +85,7 @@ let get_one_model_edit
   let pinst_edited = Instance.update_list problem.phys_inst problem.phys_edits in
   let (pkt',_), wide, trace, actions = trace_eval_inst ~wide:StringMap.empty problem.log linst_edited (pkt,None) in
   let deletions = compute_deletions pkt problem in
-  let st = Time.now () in
+ let st = Time.now () in
   let cands = CandidateMap.apply_hints (`WithHoles deletions) `Range hints actions problem.phys pinst_edited in
   let log_wp = wp trace True in
   let wp_phys_paths =
@@ -138,18 +138,23 @@ let get_one_model_edit_no_widening
   let (pkt',_), _, trace, actions = trace_eval_inst ~wide:StringMap.empty
       problem.log linst_edited (pkt,None) in
   let deletions = compute_deletions pkt problem in
-  assert (List.length deletions = 0);
+    if params.debug then
+    begin
+      Printf.printf "The following rules are deletable";
+      List.iter deletions
+        ~f:(fun (t,i) -> Printf.printf " %s[%d]" t i);
+      Printf.printf "\n--\n%!"
+    end;
   data := {!data with interp_time = Time.Span.(!data.interp_time + (Time.diff (Time.now ()) interp_st)) };
-
-  let () = if params.debug || params.interactive then
-      Printf.printf "CE input: %s \n%!CE TRACE: %s\nCE output: %s\n%!"
-        (Packet.string__packet pkt)
-        (string_of_cmd trace)
-        (Packet.string__packet pkt');
-    if params.interactive then
-      (Printf.printf "Press enter to solve for CE input-output pair\n";
-       ignore (In_channel.(input_char stdin) : char option))
-  in
+  (* let () = if params.debug || params.interactive then
+   *     Printf.printf "CE input: %s \n%!CE TRACE: %s\nCE output: %s\n%!"
+   *       (Packet.string__packet pkt)
+   *       (string_of_cmd trace)
+   *       (Packet.string__packet pkt');
+   *   if params.interactive then
+   *     (Printf.printf "Press enter to solve for CE input-output pair\n";
+   *      ignore (In_channel.(input_char stdin) : char option))
+   * in *)
   if params.debug then Printf.printf "Computing candidates\n%!";
   let cst = Time.now () in
   let cands = CandidateMap.apply_hints (`WithHoles deletions) `Exact hints actions problem.phys phys_edited in
@@ -167,10 +172,13 @@ let get_one_model_edit_no_widening
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
         let precs = if Option.is_none hints
                     then
-                      (* [wp ~no_negations:false path (Packet.to_test ~fvs:problem.fvs pkt')] *)
-                      wp_paths ~no_negations:false path (Packet.to_test ~fvs:problem.fvs pkt')
-                      |> List.filter_map ~f:(fun (_, cond) ->
-                             if has_hole_test cond then Some cond else None)
+                      if params.monotonic then
+                        Packet.to_test ~fvs:problem.fvs pkt'
+                        |> wp_paths ~no_negations:false params path
+                        |> List.filter_map ~f:(fun (_, cond) ->
+                               if has_hole_test cond then Some cond else None)
+                      else
+                        [wp ~no_negations:false path (Packet.to_test ~fvs:problem.fvs pkt')]
                     else [wp path True]
         in
         acc @ List.map precs ~f:(inj_l acts))
@@ -181,10 +189,13 @@ let get_one_model_edit_no_widening
   let model =
     List.find_map wp_phys_paths ~f:(fun (wp_phys, acts) ->
         if wp_phys = False then
-          None
+          begin
+            if params.debug then Printf.printf "Skipping because statically false\n%!";
+            None
+          end
         else
           let cdst = Time.now () in
-          let condition = (Packet.to_test ~fvs:problem.fvs ~random_fill:false pkt %=>% wp_phys) in
+          let condition = (Packet.to_test ~fvs:problem.fvs ~random_fill:true pkt %=>% wp_phys) in
           let c_dur = Time.diff (Time.now ()) cdst in
           if params.debug then
             Printf.printf "Checking \n%s  \n=> \n%s\n%!"
@@ -312,7 +323,7 @@ let cegis ~iter
   =
   let rec loop (params : Parameters.t) (problem : Problem.t) : (Edit.t list) option =
     if params.interactive then
-      (Printf.printf "Press enter to loop again\n%!";
+      (Printf.printf "Press enter to continue\n%!";
        ignore(Stdio.In_channel.(input_char stdin) : char option));
     if params.debug || params.interactive then
       Printf.printf "======================= LOOP (%d, %d) =======================\n%!%s\n%!" (iter) (params.gas) (Problem.to_string problem);
@@ -329,9 +340,9 @@ let cegis ~iter
     let imp_dur = Time.(diff (now()) imp_st) in
     data := {!data with impl_time = Time.Span.(!data.impl_time + imp_dur)};
     let do_cex counter =
-      if params.interactive then
-        (Printf.printf "Press enter to resolve counterexample\n%!";
-         ignore(Stdio.In_channel.(input_char stdin) : char option));
+      (* if params.interactive then
+       *   (Printf.printf "Press enter to resolve counterexample\n%!";
+       *    ignore(Stdio.In_channel.(input_char stdin) : char option)); *)
       if params.gas = 0 then failwith "RAN OUT OF GAS" else
         let pedits = solve_concrete ~packet:(Some counter) data params hints problem in
         if List.length pedits = 0
@@ -342,12 +353,12 @@ let cegis ~iter
     in
     match res with
     | `Yes ->
-      if params.do_slice && not (slice_conclusive params data problem)
-      then
-        match implements params data problem with
-        | `Yes -> Some problem.phys_edits
-        | `NoAndCE counter -> do_cex counter
-      else Some problem.phys_edits
+       if params.do_slice && not (slice_conclusive params data problem)
+       then
+         match implements params data problem with
+         | `Yes -> Some problem.phys_edits
+         | `NoAndCE counter -> do_cex counter
+       else Some problem.phys_edits
     | `NoAndCE counter -> do_cex counter
   in
   loop params problem

@@ -146,26 +146,25 @@ let rec wp ?no_negations:(no_negations = false) c phi =
   | Seq (firstdo, thendo) ->
     wp ~no_negations firstdo (wp ~no_negations thendo phi)
   | Assign (field, value) ->
-     (* Printf.printf "replacing %s with %s in %s \n" field (string_of_expr value) (string_of_test phi); *)
-     substitute phi (StringMap.singleton field value)
+     let phi' = substitute phi (StringMap.singleton field value) in
+     (* Printf.printf "replacing %s with %s in %s \n to get %s \n" field (string_of_expr value) (string_of_test phi) (string_of_test phi'); *)
+     phi'
   | Assert t -> t %&% phi
   | Assume t -> t %=>% phi
               
   (* requires at least one guard to be true *)
   | Select (Total, []) -> True
-  | Select (Total, cmds) ->
-    concatMap cmds ~c:(%+%) ~f:fst 
-    %&% concatMap cmds ~c:(%&%) ~f:guarded_wp
-    
+  | Select (Total, cmds) -> failwith "total is unsupported
+"
   (* doesn't require at any guard to be true *)
   | Select (Partial, []) -> True
   | Select (Partial, cmds) ->
-     List.fold cmds ~init:True ~f:(fun wp_so_far (cond, act) ->
+     List.fold cmds ~init:False ~f:(fun wp_so_far (cond, act) ->
          let act_wp = wp ~no_negations act phi in 
-         Printf.printf "Combining guard: %s  action: %s and accumulation %s\n%!==%s\n%!"
-           (string_of_test cond) (string_of_test act_wp) (string_of_test wp_so_far)
-           ((cond %=>% act_wp) %&% wp_so_far |> string_of_test);
-         ((cond %&% act_wp) %=>% wp_so_far)
+         (* Printf.printf "Combining guard: %s  action: %s and accumulation %s\n%!==%s\n%!"
+          *   (string_of_test cond) (string_of_test act_wp) (string_of_test wp_so_far)
+          *   ((cond %&% act_wp) %+% wp_so_far |> string_of_test); *)
+         (cond %&% act_wp) %+% wp_so_far
        )
 
   (* negates the previous conditions *)
@@ -182,7 +181,7 @@ let rec wp ?no_negations:(no_negations = false) c phi =
     |> fst
 
   | Apply (_, _, acts, dflt)
-    -> failwith "wp of while is no good"
+    -> failwith "wp of apply is no good"
   (* concatMap acts ~f:(fun (scope, a) ->
        *      wp ~no_negations (holify (List.map scope ~f:fst) a) phi) ~c:(mkAnd) ~init:(Some True)
        * %&% wp ~no_negations dflt phi *)
@@ -509,13 +508,13 @@ let rec fill_holes (c : cmd) subst =
              , List.map acts ~f:(fun (scope, a) -> (scope, fill_holes a subst))
              , fill_holes dflt subst)            
 
-let rec wp_paths ~no_negations c phi : (cmd * test) list =
+let rec wp_paths ~no_negations (params : Parameters.t) c phi : (cmd * test) list =
   match c with
   | Skip -> [(c, phi)]
   | Seq (c1, c2) ->
-     List.map (wp_paths ~no_negations c2 phi)
+     List.map (wp_paths ~no_negations params c2 phi)
        ~f:(fun (trace2, phi) ->
-         List.map (wp_paths ~no_negations c1 phi)
+         List.map (wp_paths ~no_negations params c1 phi)
            ~f:(fun (trace1, phi') ->
              (trace1 %:% trace2, phi')
            ) 
@@ -533,15 +532,15 @@ let rec wp_paths ~no_negations c phi : (cmd * test) list =
   | Select (Total, cmds) ->
      let open List in
      (cmds >>| fun (t,c) -> Assert t %:% c)
-     >>= flip (wp_paths ~no_negations) phi
+     >>= flip (wp_paths ~no_negations params) phi
 
                   
   (* doesn't require at any guard to be true *)
   | Select (Partial, []) -> [(Skip, True)]
   | Select (Partial, cmds) ->
      List.fold cmds ~init:([]) ~f:(fun wp_so_far (cond, act) ->
-         if has_hole_test cond then 
-           List.fold (wp_paths ~no_negations act phi) ~init:wp_so_far         
+         if params.monotonic && has_hole_test cond then 
+           List.fold (wp_paths ~no_negations params act phi) ~init:wp_so_far         
              ~f:(fun acc (trace, act_wp) ->
                wp_so_far @ [ (Assert cond %:% trace, cond %&% act_wp)])
          else
@@ -553,7 +552,7 @@ let rec wp_paths ~no_negations c phi : (cmd * test) list =
       * (cmds >>| fun (t,c) -> Assume t %:% c)
       * >>= Fun.flip wp_paths phi *)
      List.fold cmds ~init:([], False) ~f:(fun (wp_so_far, prev_conds) (cond, act) ->
-         List.fold (wp_paths ~no_negations act phi) ~init:wp_so_far         
+         List.fold (wp_paths ~no_negations params act phi) ~init:wp_so_far         
            ~f:(fun acc (trace, act_wp) ->
              let misses = if no_negations then True else !%(prev_conds) in
              acc @[(Assert (cond %&% misses) %:% trace, cond %&% misses %&% act_wp)]), prev_conds %+% cond)
@@ -561,7 +560,7 @@ let rec wp_paths ~no_negations c phi : (cmd * test) list =
 
   | Apply (_, _, acts, dflt) ->
      let open List in
-     (dflt :: List.map ~f:(fun (sc, a) -> holify (List.map sc ~f:fst) a) acts) >>= flip (wp_paths ~no_negations) phi
+     (dflt :: List.map ~f:(fun (sc, a) -> holify (List.map sc ~f:fst) a) acts) >>= flip (wp_paths ~no_negations params) phi
   | While _ ->
      failwith "[Error] loops must be unrolled\n%!"
 

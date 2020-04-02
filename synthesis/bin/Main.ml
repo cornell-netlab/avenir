@@ -12,6 +12,7 @@ module Parameters = Motley.Parameters
 module ProfData = Motley.ProfData
 module Problem = Motley.Problem
 module Tables = Motley.Tables
+module Runtime = Motley.Runtime
 
 
 let parse_file (filename : string) : Ast.cmd =
@@ -25,32 +26,47 @@ module Solver = struct
       empty
       +> anon ("logical" %: string)
       +> anon ("real" %: string)
+      +> anon ("logical_edits" %: string)
+      +> flag "-p" no_arg ~doc:"Print synthesized program"
       +> flag "-w" no_arg ~doc:"Do widening"
       +> flag "-s" no_arg ~doc:"Do slicing optimization"
+      +> flag "-m" no_arg ~doc:"Prune rows with no holes"
       +> flag "-g" (required int) ~doc:"max number of CEGIS reps"
       +> flag "-DEBUG" no_arg ~doc:"Print Debugging commands"
       +> flag "-i" no_arg ~doc:"Interactive Mode"
       +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly")
 
-  let run logical real widening do_slice gas debug interactive fastcx () =
+  let run logical real logical_edits print_res widening do_slice monotonic gas debug interactive fastcx () =
     let log = parse_file logical in
     let phys = parse_file real in
-    let _ : Motley.Tables.Edit.t list =
+    let log_edits = Runtime.parse logical_edits in
+    let phys_edits =
       Synthesis.synthesize ~iter:0
         Parameters.({widening;
                      do_slice;
                      gas;
                      debug;
+                     monotonic;
                      interactive;
                      fastcx})
         None
         (ProfData.zero ())
         Problem.({log; phys; log_inst = Motley.Tables.Instance.empty;
                   phys_inst = Motley.Tables.Instance.empty;
-                  log_edits = [];
+                  log_edits = log_edits;
                   phys_edits = [];
-                  fvs = Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)}) in
-    ()
+                  fvs =
+                    List.dedup_and_sort ~compare:Stdlib.compare
+                    Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)})
+    in
+    if not debug && not interactive && print_res
+    then
+      begin
+        let synth_inst = Tables.Instance.(update_list empty phys_edits) in
+        Printf.printf "Synthesized Program (%d edits made)\n%!" (List.length phys_edits);
+        Printf.printf "%s\n%!" (Tables.Instance.apply `NoHoles `Exact synth_inst phys |> fst |> Ast.string_of_cmd)
+      end
+    else ()
 end
 
 
@@ -170,15 +186,24 @@ module ONF = struct
       +> flag "-gas" (required int) ~doc:"how many cegis iterations?"
       +> flag "-w" no_arg ~doc:"perform widening"
       +> flag "-s" no_arg ~doc:"perform slicing optimization"
+      +> flag "-m" no_arg ~doc:"eliminate non-hole branches"
       +> flag "-i" no_arg ~doc:"interactive mode"
+      +> flag "-p" no_arg ~doc:"show_result_at_end"
       +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
       +> flag "-data" (required string) ~doc:"the input log"
       +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly")
 
 
-  let run gas widening do_slice interactive debug data_fp fastcx () =
-    ignore (Benchmark.basic_onf_ipv4 Parameters.({widening;do_slice;gas;interactive;debug;fastcx}) data_fp : Tables.Edit.t list)
-    (* Benchmark.onf_representative gas widening |> ignore *)
+  let run gas widening do_slice monotonic interactive print debug data_fp fastcx () =
+    let res = Benchmark.basic_onf_ipv4
+              Parameters.({widening;do_slice;gas;monotonic;interactive;debug;fastcx})
+              data_fp
+    in
+    if print then
+      List.iter res ~f:(fun edit ->
+          Tables.Edit.to_string edit
+          |> Printf.printf "%s\n%!"
+        )
 end
 
 
