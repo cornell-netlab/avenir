@@ -17,3 +17,6 @@ _opam
 *.~
 motley
 query.smt
+**/*.o
+**/*.cmx
+**/*.cmi
