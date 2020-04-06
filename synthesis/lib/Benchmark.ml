@@ -128,6 +128,8 @@ let reorder_benchmark varsize length max_inserts widening =
       log_inst; phys_inst;
       log_edits = [];
       phys_edits = [];
+      cexs = [];
+      model_space = True
     } in
   measure params (Some (List.return))  problem insertion_sequence
 
@@ -664,7 +666,9 @@ let basic_onf_ipv4 params filename =
       log_inst = StringMap.(set empty ~key:"ipv6" ~data:[]);
       phys_inst = StringMap.(set empty ~key:"l3_fwd" ~data:[]);
       log_edits = [];
-      phys_edits = []
+      phys_edits = [];
+      cexs = [];
+      model_space = True
     }
   in
   measure params None problem (onos_to_edits filename)
@@ -718,7 +722,9 @@ let running_example gas widening =
      phys_inst = StringMap.empty;
      log_edits = [Add ("dst_table", ([Exact (mkInt(1,2))], [mkInt(2,2)], 0))];
      phys_edits = [];
-     fvs = ["src", 2; "dst", 2; "smac", 2; "dmac", 2; "out", 2 ]
+     fvs = ["src", 2; "dst", 2; "smac", 2; "dmac", 2; "out", 2 ];
+     cexs = [];
+     model_space = True
     }
   in
   synthesize ~iter:1
@@ -904,7 +910,9 @@ let onf_representative gas widening =
      phys_inst = Instance.empty;
      log_edits = [Add("next", ([Match.Exact(mkInt(1,32))], [mkInt(1,9)], 0))];
      phys_edits = [];
-     fvs
+     fvs;
+     cexs = [];
+      model_space = True
     }
   in
   synthesize ~iter:1
@@ -1052,6 +1060,8 @@ let of_to_pipe1 widening gas fp () =
                           log_inst = StringMap.empty; phys_inst = StringMap.empty;
                           log_edits = [];
                           phys_edits = [];
-                          fvs}) in
+                          fvs;
+                          cexs = [];
+                          model_space = True}) in
   measure params None problem pipe_insertions
 

@@ -260,32 +260,25 @@ let check (params : Parameters.t) typ test =
          then match Z3.Solver.get_model mySolver with
               | None -> None
               | Some m ->
-                 if params.debug then Printf.printf "SAT: %s \n%!" (Z3.Model.to_string m);
+                 if params.debug then
+                   Printf.printf "SAT: %s \n%!" (Z3.Model.to_string m);
+                 let m' = mkMotleyModel m in
+                 if params.debug then
+                   Printf.printf "==\n %s \n%!" (string_of_map m');
+
                  Some (mkMotleyModel m)
          else None in
        response, model , dur in
      match response, model, dur  with  
      | UNSATISFIABLE, _, _ ->
-        (* Printf.printf "UNSAT\n%!"; *)
-        (* begin match typ with
-         * | `Valid -> (None,dur)
-         * | `Sat -> (Z3.Solver.pop mySolver 1;
-         *            (None, dur))
-         * end *)
         None, dur
      | UNKNOWN,_,_ ->
-        (* Printf.printf "UNKNOWN:\n \t%s \n%!" (Z3.Solver.get_reason_unknown mySolver); *)
-        (* Z3.Solver.pop mySolver 1; *)
         (None, dur)
      | SATISFIABLE, model, dur ->
         match model with 
         | Some model ->
-           (* Printf.printf "SAT: %s \n%!" (Z3.Model.to_string m);
-            * let model = mkMotleyModel m in *)
-           (* Z3.Solver.pop mySolver 1; *)
            (Some model, dur)
         | None ->
-           (* Z3.Solver.pop mySolver 1; *)
            (None, dur)
 
 (* Checks SMT Query for validity. Returns None (VALID) or Some model (Counter Example) *)          

@@ -258,9 +258,11 @@ let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
     | None  -> if params.debug then Printf.printf "++++++++++valid+++++++++++++\n%!";
       `Yes
     | Some x ->
-      let pce = Packet.from_CE x |> Packet.un_SSA in
+      let pce = Packet.extract_inout_ce x in
       if params.debug || params.interactive then
-        Printf.printf "----------invalid----------------\n%! CE = %s\n%!" (Packet.string__packet pce)
+        Printf.printf "----------invalid----------------\n%! CE_in = %s\n CE_out = %s\n%!"
+          (Packet.string__packet (fst pce))
+          (Packet.string__packet (snd pce))
     ; `NoAndCE pce
   in
   data := {!data with
@@ -328,12 +330,12 @@ let cegis ~iter
     if params.debug || params.interactive then
       Printf.printf "======================= LOOP (%d, %d) =======================\n%!%s\n%!" (iter) (params.gas) (Problem.to_string problem);
     let imp_st = Time.now () in (* update data after setting time start  *)
-    let res = (if params.fastcx
-               then
-                 ( if params.debug then Printf.printf "getting fast cx\n";
-                   List.hd_exn problem.log_edits
-                   |> get_cex params data problem.log problem.log_inst problem.phys problem.phys_inst)
-               else (if params.do_slice
+    let res = ((* if params.fastcx
+                * then
+                *   ( if params.debug then Printf.printf "getting fast cx\n";
+                *     List.hd_exn problem.log_edits
+                *     |> get_cex params data problem.log problem.log_inst problem.phys problem.phys_inst)
+                * else *) (if params.do_slice
                      then implements params data (slice params data problem)
                      else implements params data problem)) in
     let params = {params with fastcx = false} in
@@ -357,9 +359,9 @@ let cegis ~iter
        then
          match implements params data problem with
          | `Yes -> Some problem.phys_edits
-         | `NoAndCE counter -> do_cex counter
+         | `NoAndCE counter -> do_cex (fst counter)
        else Some problem.phys_edits
-    | `NoAndCE counter -> do_cex counter
+    | `NoAndCE counter -> do_cex (fst counter)
   in
   loop params problem
 
@@ -377,3 +379,61 @@ let synthesize ~iter (params : Parameters.t) (hints : (CandidateMap.trace -> Can
            phys_inst_size = Instance.size problem.phys_inst;
            time = Time.diff stop start};
   pedits_out
+
+
+
+(* A Reimplementation of the core algorithm using the math from the paper *)
+let negate_model : value StringMap.t -> test =
+  StringMap.fold
+    ~init:True
+    ~f:(fun ~key ~data:(Int(i,sz)) acc ->
+      acc %&%
+        (Hole(key, sz) %=% Value(Int(i,sz)))
+    )
+  
+let get_model params data (problem : Problem.t) : (value StringMap.t option * Time.Span.t) =
+  let deletions = [] in
+  let (phys,_) = Instance.apply ~no_miss:false ~cnt:0 (`WithHoles deletions) `Exact
+               problem.phys_inst problem.phys in
+  let (in_pkt, out_pkt) = List.hd_exn problem.cexs in
+  let fvs = List.(free_vars_of_cmd phys
+                  |> filter ~f:(fun x -> exists problem.fvs ~f:(Stdlib.(=) x))) in
+  let in_pkt_form = Packet.to_test in_pkt ~fvs in
+  let out_pkt_form = Packet.to_test out_pkt ~fvs in
+  check params `Sat (problem.model_space %&%
+                (in_pkt_form %=>% wp phys out_pkt_form))
+
+  
+let rec cegis_math params data problem =
+  match implements params data problem with
+  | `Yes -> Some problem.phys_edits
+  | `NoAndCE counter ->
+     let f c = Packet.equal (fst counter) (fst c)
+            && Packet.equal (snd counter) (snd c) in
+     if List.exists ~f problem.cexs then
+       Printf.sprintf "Duplicated counter example. IN: %s -------> OUT: %s"
+         (fst counter |> Packet.string__packet)
+         (snd counter |> Packet.string__packet)
+       |> failwith
+     else
+       solve_math params data
+         ({problem with
+            cexs = counter :: problem.cexs;
+            model_space = True })
+    
+and solve_math params data problem =
+  match check params `Sat problem.model_space with
+  | None,_ -> None
+  | Some _,_ ->
+     match get_model params data problem with
+     | None, _ -> None
+     | Some model,_ ->
+        let es = Edit.extract problem.phys model in
+        match cegis_math params data ({problem with phys_edits = problem.phys_edits @ es}) with
+        | None -> solve_math params data
+                    {problem with
+                      model_space = problem.model_space
+                                    %&% negate_model model}
+        | Some es -> Some es
+
+                       

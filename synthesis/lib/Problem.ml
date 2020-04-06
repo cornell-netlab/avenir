@@ -11,6 +11,8 @@ type t =
     phys_inst : Instance.t;
     log_edits : Edit.t list;
     phys_edits : Edit.t list;
+    cexs: (Packet.t * Packet.t) list;
+    model_space : test;
     fvs : (string * int) list 
   }
 

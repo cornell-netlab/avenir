@@ -41,7 +41,7 @@ module Solver = struct
     let phys = parse_file real in
     let log_edits = Runtime.parse logical_edits in
     let phys_edits =
-      Synthesis.synthesize ~iter:0
+      Synthesis.cegis_math
         Parameters.({widening;
                      do_slice;
                      gas;
@@ -49,24 +49,28 @@ module Solver = struct
                      monotonic;
                      interactive;
                      fastcx})
-        None
         (ProfData.zero ())
         Problem.({log; phys; log_inst = Motley.Tables.Instance.empty;
                   phys_inst = Motley.Tables.Instance.empty;
                   log_edits = log_edits;
                   phys_edits = [];
+                  cexs = [];
+                  model_space = True;
                   fvs =
                     List.dedup_and_sort ~compare:Stdlib.compare
                     Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)})
     in
-    if not debug && not interactive && print_res
-    then
-      begin
-        let synth_inst = Tables.Instance.(update_list empty phys_edits) in
-        Printf.printf "Synthesized Program (%d edits made)\n%!" (List.length phys_edits);
-        Printf.printf "%s\n%!" (Tables.Instance.apply `NoHoles `Exact synth_inst phys |> fst |> Ast.string_of_cmd)
-      end
-    else ()
+    match phys_edits with
+    | None -> Printf.printf "Failed\n%!"
+    | Some phys_edits ->
+       if not debug && not interactive && print_res
+       then
+         begin
+           let synth_inst = Tables.Instance.(update_list empty phys_edits) in
+           Printf.printf "Synthesized Program (%d edits made)\n%!" (List.length phys_edits);
+           Printf.printf "%s\n%!" (Tables.Instance.apply `NoHoles `Exact synth_inst phys |> fst |> Ast.string_of_cmd)
+         end
+       else ()
 end
 
 

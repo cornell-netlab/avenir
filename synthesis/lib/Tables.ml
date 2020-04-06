@@ -364,8 +364,10 @@ module Instance = struct
          | `WithHoles _ ->
             List.mapi acts
               ~f:(fun i (params, act) ->
-                tbl_hole encode_tag keys tbl row_hole act_hole i actSize,
-                holify (List.map params ~f:fst) act)
+                (tbl_hole encode_tag keys tbl row_hole act_hole i actSize
+                 %&% List.fold selects ~init:True
+                       ~f:(fun acc (cond, _) -> acc %&% !%(cond))
+                , holify (List.map params ~f:fst) act))
          | `NoHoles -> []
        in
        let dflt_row =

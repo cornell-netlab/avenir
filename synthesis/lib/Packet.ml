@@ -18,7 +18,11 @@ let get_val (pkt : t) (field : string) : value =
   match StringMap.find pkt field with
     | None -> failwith ("UseBeforeDef error " ^ field ^ " packet is " ^ string__packet pkt)
     | Some v -> v     
-              
+
+
+let get_val_opt (pkt : t) (field : string) : value option =
+  StringMap.find pkt field
+  
 let rec set_field_of_expr (pkt : t) (field : string) (e : expr) : t =
   let binop op e e'=
     let eVal = get_val (set_field_of_expr pkt field e) field in
@@ -115,7 +119,31 @@ let un_SSA (pkt : t) : t =
            StringMap.set acc_pkt ~key:(key') ~data
          else acc_pkt
     )
-                 
+
+let extract_inout_ce (model : value StringMap.t) : (t * t) =
+  StringMap.fold model
+    ~init:((empty, empty), StringMap.empty)
+    ~f:(fun ~key ~data (((in_pkt, out_pkt), counter) as acc) ->
+      if String.is_substring key ~substring:"phys_" then acc else
+      match String.rsplit2 key ~on:'$' with
+      | None -> Printf.sprintf "Couldn't find index for %s" key |> failwith
+      | Some (v, idx_s) ->
+         let idx = int_of_string idx_s in
+         let in_pkt' = if idx = 0 then
+                         set_field in_pkt v data
+                       else in_pkt in
+         let out_pkt', counter' =
+           match StringMap.find counter v with
+           | Some idx' when idx' >= idx ->
+              (out_pkt, counter)
+           | _ ->
+              (set_field out_pkt v data,
+               StringMap.set counter v idx) in
+         ((in_pkt', out_pkt'), counter')
+    )
+  |> fst
+
+  
         
 let mk_packet_from_list (assoc : (string * value) list) : t =
   List.fold assoc ~init:empty
