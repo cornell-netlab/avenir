@@ -1,6 +1,7 @@
 open Core
 open Ast
 open Util
+open Packet
 
 let rec expr_to_term expr : Smtlib.term =
   match expr with
@@ -25,28 +26,21 @@ let rec test_to_term test : Smtlib.term =
                       (Smtlib.implies (test_to_term t2) (test_to_term t1))
   | Neg t -> Smtlib.not_ (test_to_term t)
 
-let rec term_to_exp term : Ast.expr =
-  match
+let rec model_to_packet (lst : (Smtlib.identifier * Smtlib.term) list) : Packet.t =
+  let name_vals : (string * value) list = (List.map
+    ~f:(fun (Id id, x) ->
+      (match x with
+      | Int i -> let value = Int (Bigint.of_int i, Int.max_value) in id, value
+      | _ -> raise (Failure "not a supported model")))
+    lst) in StringMap.of_alist_exn name_vals
 
-let rec term_to_test term : Ast.test =
-  match term with
-  | String s ->
-  | Int i ->
-  | BitVec (n, w) ->
-  | BitVec64 i64 ->
-  | Const id -> (match id with
-      | Id "true" -> True
-      | Id "false" -> False
-    )
-  | App (id, ts) -> (match ts with
-  | [e1, e2] -> 
-  |
-  |)
-  | Let (s, t1, t2) ->
-
-    let toZ3String test = test_to_term test |> Smtlib.term_to_sexp |> Smtlib.sexp_to_string
+let toZ3String test = test_to_term test |> Smtlib.term_to_sexp |> Smtlib.sexp_to_string
 
 let prover = Smtlib.make_solver "/usr/bin/z3"
+
+let mkValue (num, size) : Ast.value = Int(num, size)
+
+let none_pkt = StringMap.of_alist_exn [("", mkValue (Bigint.zero, Int.min_value))]
 
 let check (params : Parameters.t) typ (test : Ast.test) =
   let open Smtlib in
@@ -57,5 +51,6 @@ let check (params : Parameters.t) typ (test : Ast.test) =
   let dur = Time.(diff (now()) st) in
   let model =
     if response = Sat then
-      get_model prover
-    else [] in (model, dur)
+      model_to_packet (get_model prover)
+    else none_pkt
+  in (model, dur)

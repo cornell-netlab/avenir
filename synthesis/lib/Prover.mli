@@ -1,6 +1,7 @@
 open Ast
 open Util
 open Core
+open Packet
 
 (*
  * Interface to Z3
@@ -17,7 +18,7 @@ open Core
 val check : Parameters.t ->
 [< `Sat | `Valid ] ->
 test ->
-(Smtlib.identifier * Smtlib.term) list * Time.Span.t
+Packet.t  * Time.Span.t
 
 (*Converts an ast test into an SMT-lib string. Assumes `Sat is intended*)
 val toZ3String : test -> string
