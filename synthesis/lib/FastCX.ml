@@ -37,11 +37,9 @@ let fastcx_gen data log e =
     wp prefix phi
   | Edit.Del (_, _) -> failwith "unimplemented"
 
-let mkValue (num, size) : Ast.value = Int(num, size)
-let none_pkt = StringMap.of_alist_exn [("", mkValue (Bigint.zero, Int.min_value))]
 let unreachable params log linst phys pinst (test : Ast.test) =
   match check params `Valid (!%test) with
-  | (x, _) ->
+  | (Some x, _) ->
      let ((log_pkt,_), _,_,_) = trace_eval_inst log linst ~wide:Packet.empty (x, None) in
      let ((phys_pkt,_), _, _, _) = trace_eval_inst phys pinst ~wide:(Packet.empty) (x, None) in
      if params.debug
@@ -49,9 +47,10 @@ let unreachable params log linst phys pinst (test : Ast.test) =
          Printf.printf "LOG :%s -> %s\n" (Packet.string__packet x) (Packet.string__packet log_pkt);
          Printf.printf "PHYS:%s -> %s\n" (Packet.string__packet x) (Packet.string__packet phys_pkt)
        end;
-     if (Packet.equal none_pkt x || Packet.equal log_pkt phys_pkt)
+     if Packet.equal log_pkt phys_pkt
      then `Yes
      else `NoAndCE x
+  | (None, _) -> `Yes
 
 let get_cex params data log linst phys pinst e =
   fastcx_gen data log e

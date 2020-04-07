@@ -21,26 +21,22 @@ let rec test_to_term test : Smtlib.term =
   | And (t1, t2) -> Smtlib.and_ (test_to_term t1) (test_to_term t2)
   | Or (t1, t2) -> Smtlib.or_ (test_to_term t1) (test_to_term t2)
   | Impl (t1, t2) -> Smtlib.implies (test_to_term t1) (test_to_term t2)
-  | Iff (t1, t2) -> Smtlib.and_
-                      (Smtlib.implies (test_to_term t1) (test_to_term t2))
-                      (Smtlib.implies (test_to_term t2) (test_to_term t1))
+  | Iff (t1, t2) -> Smtlib.equals (test_to_term t2) (test_to_term t1)
   | Neg t -> Smtlib.not_ (test_to_term t)
 
 let rec model_to_packet (lst : (Smtlib.identifier * Smtlib.term) list) : Packet.t =
   let name_vals : (string * value) list = (List.map
-    ~f:(fun (Id id, x) ->
-      (match x with
-      | Int i -> let value = Int (Bigint.of_int i, Int.max_value) in id, value
-      | _ -> raise (Failure "not a supported model")))
-    lst) in StringMap.of_alist_exn name_vals
+                                             ~f:(fun (Id id, x) ->
+                                                 (match x with
+                                                  | Int i -> let value =
+                                                               Int (Bigint.of_int i, Int.max_value) in id, value
+                                                  | _ -> raise (Failure "not a supported model")))                                             lst)
+                                             in StringMap.of_alist_exn name_vals
 
 let toZ3String test = test_to_term test |> Smtlib.term_to_sexp |> Smtlib.sexp_to_string
 
 let prover = Smtlib.make_solver "/usr/bin/z3"
 
-let mkValue (num, size) : Ast.value = Int(num, size)
-
-let none_pkt = StringMap.of_alist_exn [("", mkValue (Bigint.zero, Int.min_value))]
 
 let check (params : Parameters.t) typ (test : Ast.test) =
   let open Smtlib in
@@ -51,6 +47,6 @@ let check (params : Parameters.t) typ (test : Ast.test) =
   let dur = Time.(diff (now()) st) in
   let model =
     if response = Sat then
-      model_to_packet (get_model prover)
-    else none_pkt
+      Some (model_to_packet (get_model prover))
+    else None
   in (model, dur)
