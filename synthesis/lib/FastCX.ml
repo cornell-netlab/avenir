@@ -6,7 +6,7 @@ open Prover
 open Parameters
 open Semantics
 open Packet
-   
+
 let rec one_some (table: string) (lst : ((test * cmd) list)) : Ast.cmd option =
   let processed = List.map lst ~f:(fun (b, c) -> (b, truncated table c)) in
   let elim = List.filter processed ~f:(fun (b,c) -> if c = None then false else true) in
@@ -38,8 +38,8 @@ let fastcx_gen data log e =
   | Edit.Del (_, _) -> failwith "unimplemented"
 
 let unreachable params log linst phys pinst (test : Ast.test) =
-  match check_valid params (!%test) with
-  | (Some x, _) ->
+  match check params `Valid (!%test) with
+  | (x, _) ->
      let ((log_pkt,_), _,_,_) = trace_eval_inst log linst ~wide:Packet.empty (x, None) in
      let ((phys_pkt,_), _, _, _) = trace_eval_inst phys pinst ~wide:(Packet.empty) (x, None) in
      if params.debug
@@ -50,7 +50,7 @@ let unreachable params log linst phys pinst (test : Ast.test) =
      if Packet.equal log_pkt phys_pkt
      then `Yes
      else `NoAndCE x
-  | (None, _) -> `Yes
+  | ([], _) -> `Yes
 
 let get_cex params data log linst phys pinst e =
   fastcx_gen data log e
