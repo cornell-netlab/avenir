@@ -592,6 +592,7 @@ let%test _ =
                      log_inst; phys_inst;
                      log_edits; phys_edits;
                      cexs = [];
+                     attempts = [];
                      model_space = True}) : Tables.Edit.t list);
   true
 

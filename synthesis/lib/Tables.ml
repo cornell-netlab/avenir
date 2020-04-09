@@ -235,10 +235,15 @@ module Edit = struct
         | None -> acc
         | Some tbl ->
            if data |> get_int = Bigint.one then
-             let act =  match StringMap.find m (Printf.sprintf "?ActIn%s" tbl) with
-               | None -> failwith ""
+             let actin_vname =  (Printf.sprintf "?ActIn%s" tbl)  in
+             let act = match StringMap.find m actin_vname with
+               | None ->
+                  Printf.printf "WARNING:: Couldn't find %s even though I found %s to be true\n%!"
+                    actin_vname
+                    key;
+                  failwith ""
                | Some v -> get_int v |> Bigint.to_int_exn in
-            match Row.mk_new_row m phys tbl None act with
+             match Row.mk_new_row m phys tbl None act with
              | None -> failwith (Printf.sprintf "Couldn't make new row in table %s\n" tbl)
              | Some row ->
                 (fst acc, Add (tbl, row) :: snd acc)
@@ -321,24 +326,24 @@ module Instance = struct
        let selects =
          List.foldi rows ~init:[]
            ~f:(fun i acc (matches, data, action) ->
-             let prev_tst =
-               if List.for_all matches ~f:(function | Exact _ -> true | _ -> false) then
-                 False
-               else
-                 let prev_rows =
-                   if i + 1 >= List.length rows then [] else
-                     List.sub rows ~pos:(i+1) ~len:(List.length rows - (i+1))
-                 in
-                 let overlapping_matches =
-                   List.filter_map prev_rows
-                     ~f:(fun (prev_ms,_,_) ->
-                       if Match.has_inter_l matches prev_ms
-                       then Some prev_ms
-                       else None
-                     )
-                 in
-                 List.fold overlapping_matches ~init:False
-                   ~f:(fun acc ms -> acc %+% Match.list_to_test keys ms )
+             let prev_tst = False
+               (* if List.for_all matches ~f:(function | Exact _ -> true | _ -> false) then
+                *   False
+                * else
+                *   let prev_rows =
+                *     if i + 1 >= List.length rows then [] else
+                *       List.sub rows ~pos:(i+1) ~len:(List.length rows - (i+1))
+                *   in
+                *   let overlapping_matches =
+                *     List.filter_map prev_rows
+                *       ~f:(fun (prev_ms,_,_) ->
+                *         if Match.has_inter_l matches prev_ms
+                *         then Some prev_ms
+                *         else None
+                *       )
+                *   in
+                *   List.fold overlapping_matches ~init:False
+                *     ~f:(fun acc ms -> acc %+% Match.list_to_test keys ms ) *)
              in
              let tst = List.fold2_exn keys matches
                          ~init:True
@@ -382,7 +387,7 @@ module Instance = struct
                                         -> delete_hole i tbl %=% mkVInt(0,1)
                                       | _ -> True)) in
          [(cond, default)] in
-       (selects @ holes @ dflt_row |> mkPartial
+       (selects @ holes @ dflt_row |> (*mkPartial*) mkOrdered
        , cnt (*+ 1*))
 
 

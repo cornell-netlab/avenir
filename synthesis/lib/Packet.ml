@@ -8,21 +8,23 @@ type t = value StringMap.t
 
 type located = t * (int option)
 
+
 let string__packet (p : t) =
   (StringMap.fold ~f:(fun ~key:k ~data:v acc -> acc ^ k ^ "," ^ (string_of_value v) ^ ",") p ~init:"(") ^ ")"
 
 let set_field (pkt : t) (field : string) (v : value) : t  =
+  (* Printf.printf "Setting %s to %s;\n" (field) (string_of_value v); *)
   StringMap.set pkt ~key:field ~data:v
-    
+
 let get_val (pkt : t) (field : string) : value =
   match StringMap.find pkt field with
     | None -> failwith ("UseBeforeDef error " ^ field ^ " packet is " ^ string__packet pkt)
-    | Some v -> v     
+    | Some v -> v
 
 
 let get_val_opt (pkt : t) (field : string) : value option =
   StringMap.find pkt field
-  
+
 let rec set_field_of_expr (pkt : t) (field : string) (e : expr) : t =
   let binop op e e'=
     let eVal = get_val (set_field_of_expr pkt field e) field in
@@ -39,8 +41,8 @@ let rec set_field_of_expr (pkt : t) (field : string) (e : expr) : t =
   | Plus  (e, e') -> binop add_values e e'
   | Times (e, e') -> binop multiply_values e e'
   | Minus (e, e') -> binop subtract_values e e'
-   
-                
+
+
 
 let init_field_to_random bound pkt (f,sz) =
   set_field pkt f (Int (Random.int bound |> Bigint.of_int_exn, sz))
@@ -48,7 +50,7 @@ let init_field_to_random bound pkt (f,sz) =
 let rec init_field_to_value_in (values : value list) pkt (f, sz) =
   match values with
   | [] -> init_field_to_random 10000000 pkt (f,sz)
-  | _ -> 
+  | _ ->
      let i = Random.int (List.length values) in
      let vi = List.nth_exn values i in
      if size_of_value vi = sz then
@@ -57,6 +59,7 @@ let rec init_field_to_value_in (values : value list) pkt (f, sz) =
        init_field_to_value_in (List.filter values ~f:(fun x -> x <> vi)) pkt (f, sz)
 
 let to_test ?fvs:(fvs = []) ?random_fill:(random_fill=false) (pkt : t) =
+  (* let random_fill = false in *)
   List.fold fvs ~init:True
     ~f:(fun acc (x,sz) ->
       acc %&% (
@@ -64,7 +67,7 @@ let to_test ?fvs:(fvs = []) ?random_fill:(random_fill=false) (pkt : t) =
           | None ->
              if random_fill then
                Var(x,sz) %=% mkVInt(Random.int (pow 2 sz),sz)
-             else                  
+             else
                True
           | Some v ->
              Var(x, sz) %=% Value(v)))
@@ -78,12 +81,32 @@ let test_of_wide ?fvs:(fvs = []) wide =
          then Var (key, sz) %=% mkVInt(lo,sz)
          else (mkVInt(lo, sz) %<=% Var(key,sz)) %&% (Var (key, sz) %<=% mkVInt(hi,sz))
         ) %&% test
-      else ( test ))    
-   
+      else ( test ))
+
 let empty = StringMap.empty
 
+
+
+let make ?fvs:(fvs = None) (store : value StringMap.t) : t =
+  (* let fvs = None in *)
+  match fvs with
+  | None -> store
+  | Some fvs ->
+     List.fold fvs ~init:empty
+       ~f:(fun acc (var_nm, sz) ->
+         match StringMap.find store var_nm with
+         | Some v ->
+            (* Printf.printf "Found %s setting it to %s\n%!" var_nm (string_of_value v); *)
+            StringMap.set acc ~key:var_nm ~data:v
+         | None ->
+            Printf.printf "Missed %s setting it to ranodm value\n%!" var_nm;
+            init_field_to_random (pow 2 sz) acc (var_nm, sz)
+       )
+
+
+
 let equal (pkt:t) (pkt':t) = StringMap.equal (=) pkt pkt'
-                                                                                          
+
 let generate ?bound:(bound=10000000) ?values:(values=([] : value list))  (vars : (string * size) list) =
   match values with
   | [] ->
@@ -96,7 +119,7 @@ let symbolize str =
   if is_symbolic str then str else
     str ^ "_SYMBOLIC"
 let unsymbolize = String.substr_replace_all ~pattern:"_SYMBOLIC" ~with_:""
-              
+
 let from_CE (model : value StringMap.t) : t =
   StringMap.fold model ~init:empty
     ~f:(fun ~key ~data pkt ->
@@ -143,8 +166,8 @@ let extract_inout_ce (model : value StringMap.t) : (t * t) =
     )
   |> fst
 
-  
-        
+
+
 let mk_packet_from_list (assoc : (string * value) list) : t =
   List.fold assoc ~init:empty
     ~f:(fun pkt (f, v) -> set_field pkt f v)

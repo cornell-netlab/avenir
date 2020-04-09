@@ -6,7 +6,6 @@ open Prover
 open Manip
 open Util
 open Tables
-open FastCX
 
 
 (* let symbolize x = x ^ "_SYMBOLIC" *)
@@ -234,11 +233,8 @@ let symb_wp ?fvs:(fvs=[]) cmd =
   |> symbolic_pkt
   |> wp cmd
 
-let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
-  (* let _ = Printf.printf "IMPLEMENTS on\n%!    ";
-   *         List.iter fvs ~f:(fun (x,_) -> Printf.printf " %s" x);
-   *         Printf.printf "\n%!" *)
-  (* in *)
+let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t)
+  : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
   let u_log,_ = problem.log |> (Instance.update_list problem.log_inst problem.log_edits
                                 |> Instance.apply ~no_miss:params.do_slice `NoHoles `Exact)
   in
@@ -258,18 +254,24 @@ let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
     | None  -> if params.debug then Printf.printf "++++++++++valid+++++++++++++\n%!";
       `Yes
     | Some x ->
-      let pce = Packet.extract_inout_ce x in
-      if params.debug || params.interactive then
-        Printf.printf "----------invalid----------------\n%! CE_in = %s\n CE_out = %s\n%!"
-          (Packet.string__packet (fst pce))
-          (Packet.string__packet (snd pce))
-    ; `NoAndCE pce
+       let in_pkt, out_pkt = Packet.extract_inout_ce x in
+       let remake = Packet.make ~fvs:(Some problem.fvs) in
+       let in_pkt' = remake in_pkt in
+       let out_pkt'
+         = if Packet.equal in_pkt in_pkt'
+           then eval_cmd problem.log (Problem.extract_log_edited_instance problem) in_pkt
+           else out_pkt in
+       if params.debug || params.interactive then
+         Printf.printf "----------invalid----------------\n%! CE_in = %s\n CE_out = %s\n%!"
+           (Packet.string__packet in_pkt')
+           (Packet.string__packet out_pkt')
+       ; `NoAndCE (in_pkt', out_pkt')
   in
   data := {!data with
-           eq_time = Time.Span.(!data.eq_time + z3time);
-           eq_num_z3_calls = !data.eq_num_z3_calls + 1;
-           make_vc_time = Time.Span.(!data.make_vc_time + mk_cond_time);
-           tree_sizes = num_nodes_in_test condition :: !data.tree_sizes
+            eq_time = Time.Span.(!data.eq_time + z3time);
+            eq_num_z3_calls = !data.eq_num_z3_calls + 1;
+            make_vc_time = Time.Span.(!data.make_vc_time + mk_cond_time);
+            tree_sizes = num_nodes_in_test condition :: !data.tree_sizes
           };
   pkt_opt
 
@@ -383,57 +385,131 @@ let synthesize ~iter (params : Parameters.t) (hints : (CandidateMap.trace -> Can
 
 
 (* A Reimplementation of the core algorithm using the math from the paper *)
-let negate_model : value StringMap.t -> test =
-  StringMap.fold
-    ~init:True
-    ~f:(fun ~key ~data:(Int(i,sz)) acc ->
-      acc %&%
-        (Hole(key, sz) %=% Value(Int(i,sz)))
+let negate_model (model : value StringMap.t) : test =
+  !%( StringMap.fold model
+        ~init:True
+        ~f:(fun ~key ~data:(Int(i,sz)) acc ->
+          acc %&%
+            (Hole(key, sz) %=% Value(Int(i,sz))))
     )
-  
-let get_model params data (problem : Problem.t) : (value StringMap.t option * Time.Span.t) =
+
+
+let complete_model (holes : (string * size) list) (model : value StringMap.t) : value StringMap.t =
+  model
+  (* let bound_vars = StringMap.keys model in
+   * let unbound_vars = List.filter holes
+   *                      ~f:(fun (x,_) ->
+   *                        List.for_all bound_vars ~f:((<>) x)) in
+   * List.fold unbound_vars ~init:model
+   *   ~f:(fun acc (key,sz) ->
+   *     let data =
+   *       Int (Bigint.random Bigint.(pow (of_int 2) (of_int sz)), sz)
+   *     in
+   *     StringMap.set acc ~key ~data
+   *   ) *)
+
+
+let get_model (params : Parameters.t) data (problem : Problem.t) : (value StringMap.t option * Time.Span.t) =
+  let (in_pkt, out_pkt) = List.hd_exn problem.cexs in
   let deletions = [] in
   let (phys,_) = Instance.apply ~no_miss:false ~cnt:0 (`WithHoles deletions) `Exact
-               problem.phys_inst problem.phys in
-  let (in_pkt, out_pkt) = List.hd_exn problem.cexs in
+                   (Instance.update_list problem.phys_inst problem.phys_edits)
+                   problem.phys in
   let fvs = List.(free_vars_of_cmd phys
                   |> filter ~f:(fun x -> exists problem.fvs ~f:(Stdlib.(=) x))) in
+  (* let fvs = problem.fvs in *)
   let in_pkt_form = Packet.to_test in_pkt ~fvs in
   let out_pkt_form = Packet.to_test out_pkt ~fvs in
-  check params `Sat (problem.model_space %&%
-                (in_pkt_form %=>% wp phys out_pkt_form))
+  let spec = in_pkt_form %=>% wp phys out_pkt_form in
+  let condition = problem.model_space %&%  spec in
+  if params.debug then
+    Printf.printf "phys to check\n--\nInput:%s\n--\n%s\n--\nOutput:%s\n--\nWP:\n%s--\n%!"
+      (Packet.string__packet in_pkt)
+      (string_of_cmd phys)
+      (Packet.string__packet out_pkt)
+      ("OMITTED" (*string_of_test spec*));
+  let model, dur = check params `Sat condition in
+  if params.interactive then
+    ignore(Stdio.In_channel.(input_char stdin) : char option);
+  (Option.(model >>| complete_model (holes_of_test condition)),
+   dur)
 
-  
-let rec cegis_math params data problem =
-  match implements params data problem with
+
+
+let get_cex (params : Parameters.t) data (problem : Problem.t)
+    : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
+  if params.fastcx then
+    match FastCX.get_cex params data problem with
+    | `Yes -> `Yes
+    | `NotFound -> implements params data problem
+    | `NoAndCE counter -> `NoAndCE counter
+  else
+    let hits_phys_edits =
+      FastCX.hits_list_pred
+        data
+        problem.phys
+        problem.phys_inst
+        problem.phys_edits
+    in
+    match
+      {problem with phys = Assume hits_phys_edits %:% problem.phys}
+      |> implements params data
+    with
+    | `NoAndCE counter -> `NoAndCE counter
+    | `Yes ->
+       {problem with phys = Assume !%(hits_phys_edits) %:% problem.phys}
+       |> implements params data
+    (* implements params data problem     *)
+
+let rec cegis_math params data (problem : Problem.t) =
+  let attempt = Instance.apply ~no_miss:false ~cnt:0 `NoHoles `Exact
+                  (Instance.update_list problem.phys_inst problem.phys_edits)
+                  problem.phys |> fst in
+  assert (List.for_all problem.attempts ~f:((<>) attempt));
+  let problem = {problem with attempts = attempt :: problem.attempts} in
+  match get_cex params data problem with
   | `Yes -> Some problem.phys_edits
   | `NoAndCE counter ->
-     let f c = Packet.equal (fst counter) (fst c)
-            && Packet.equal (snd counter) (snd c) in
-     if List.exists ~f problem.cexs then
-       Printf.sprintf "Duplicated counter example. IN: %s -------> OUT: %s"
-         (fst counter |> Packet.string__packet)
-         (snd counter |> Packet.string__packet)
-       |> failwith
+     let params = {params with fastcx = false} in
+     let f = liftPair ~f:Packet.equal ~combine:(&&) counter in
+     if List.exists ~f problem.cexs then begin
+         Printf.eprintf "Duplicated counter example. IN: %s -------> OUT: %s\n%!"
+           (fst counter |> Packet.string__packet)
+           (snd counter |> Packet.string__packet);
+         None
+       end
      else
        solve_math params data
          ({problem with
             cexs = counter :: problem.cexs;
             model_space = True })
-    
+
 and solve_math params data problem =
+  (* if params.debug then
+   *   Printf.printf "+Model Space+\n%!"; *)
   match check params `Sat problem.model_space with
-  | None,_ -> None
+  | None,_ ->
+     Printf.printf "Exhausted the Space\n%!";
+     None
   | Some _,_ ->
      match get_model params data problem with
-     | None, _ -> None
+     | None, _ ->
+        if params.debug || params.interactive then
+          Printf.printf "No model could be found\n%!";
+        if params.interactive then
+        ignore(Stdio.In_channel.(input_char stdin) : char option);
+        None
      | Some model,_ ->
         let es = Edit.extract problem.phys model in
-        match cegis_math params data ({problem with phys_edits = problem.phys_edits @ es}) with
-        | None -> solve_math params data
-                    {problem with
-                      model_space = problem.model_space
-                                    %&% negate_model model}
+        match
+          cegis_math params data
+            ({problem with phys_edits = problem.phys_edits @ es})
+        with
+        | None ->
+           let model_space = problem.model_space %&% negate_model model in
+           (* if params.debug || params.interactive then
+            *   Printf.printf "Backtracking with\n%s\nadded to\n%s\n%!" (string_of_test (negate_model model)) (string_of_test problem.model_space); *)
+           if params.interactive then
+             ignore(Stdio.In_channel.(input_char stdin) : char option);
+           solve_math params data { problem with model_space }
         | Some es -> Some es
-
-                       

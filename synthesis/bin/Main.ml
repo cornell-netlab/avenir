@@ -55,6 +55,7 @@ module Solver = struct
                   log_edits = log_edits;
                   phys_edits = [];
                   cexs = [];
+                  attempts = [];
                   model_space = True;
                   fvs =
                     List.dedup_and_sort ~compare:Stdlib.compare
@@ -63,7 +64,7 @@ module Solver = struct
     match phys_edits with
     | None -> Printf.printf "Failed\n%!"
     | Some phys_edits ->
-       if not debug && not interactive && print_res
+       if print_res
        then
          begin
            let synth_inst = Tables.Instance.(update_list empty phys_edits) in

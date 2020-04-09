@@ -685,3 +685,45 @@ Proceed by induction on the structure of l, leaving pkt general.
 
 
 		       
++-------------------------------------------+
+|  Equivalence classes of edits             |
+|         in a context p & τ                |
++-------------------------------------------+
+
+Given a program p and an instantiation τ, we can think about
+equivalence classes of edits -- this is useful when we want to bubble
+up conclusions from recursive calls.
+
+For instance, if I explore the wrong path, say
+
++———————————+
+|  LOGICAL  |
++———————————+
+| x#2 | y#2 |
++———————————+
+| 0   | 0   |
+| *   | nop |
++———————————+
+
+
+We get to a point where we can synthesize this mofo:
++———————————+
+| PHYSICAL  |
++———————————+
+| x#2 | y#2 |
++———————————+
+| 1   | 1   |
+| 2   | 2   |
+| 3   | 3   |
+| 0   | 0   |
++———————————+
+
+WE get a counter example:
+     x = 1
+     y = 2
+and we can't handle it,
+
+So, we'll conclude that
+¬(?AddToPHYSICAL = 1
+   ∧ ?x = 0 ∧ ?y = 1)
+
