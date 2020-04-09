@@ -473,7 +473,8 @@ let rec cegis_math params data (problem : Problem.t) =
      let params = {params with fastcx = false} in
      let f = liftPair ~f:Packet.equal ~combine:(&&) counter in
      if List.exists ~f problem.cexs then begin
-         Printf.eprintf "Duplicated counter example. IN: %s -------> OUT: %s\n%!"
+         if params.debug then
+           Printf.eprintf "Duplicated counter example. IN: %s -------> OUT: %s\n%!"
            (fst counter |> Packet.string__packet)
            (snd counter |> Packet.string__packet);
          None

@@ -145,7 +145,6 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
        | Skip ->
           (pkt_loc, wide, cmd, StringMap.empty)
        | Assign (f, e) ->
-          Printf.printf "Assignment:\n%!";
           ((Packet.set_field_of_expr pkt f e, loc_opt),
            widening_assignment wide f e,
            cmd, StringMap.empty)

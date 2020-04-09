@@ -99,7 +99,7 @@ let make ?fvs:(fvs = None) (store : value StringMap.t) : t =
             (* Printf.printf "Found %s setting it to %s\n%!" var_nm (string_of_value v); *)
             StringMap.set acc ~key:var_nm ~data:v
          | None ->
-            Printf.printf "Missed %s setting it to ranodm value\n%!" var_nm;
+            (* Printf.printf "Missed %s setting it to ranodm value\n%!" var_nm; *)
             init_field_to_random (pow 2 sz) acc (var_nm, sz)
        )
 
