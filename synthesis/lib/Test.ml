@@ -588,7 +588,12 @@ let%test _ =
            None
            (ProfData.zero ())
            Problem.({fvs=[("dst",2); ("out",2); ("x", 2)];
-                     log; phys; log_inst; phys_inst; log_edits; phys_edits}) : Tables.Edit.t list);
+                     log; phys;
+                     log_inst; phys_inst;
+                     log_edits; phys_edits;
+                     cexs = [];
+                     attempts = [];
+                     model_space = True}) : Tables.Edit.t list);
   true
 
     

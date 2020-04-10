@@ -41,7 +41,7 @@ module Solver = struct
     let phys = parse_file real in
     let log_edits = Runtime.parse logical_edits in
     let phys_edits =
-      Synthesis.synthesize ~iter:0
+      Synthesis.cegis_math
         Parameters.({widening;
                      do_slice;
                      gas;
@@ -49,24 +49,29 @@ module Solver = struct
                      monotonic;
                      interactive;
                      fastcx})
-        None
         (ProfData.zero ())
         Problem.({log; phys; log_inst = Motley.Tables.Instance.empty;
                   phys_inst = Motley.Tables.Instance.empty;
                   log_edits = log_edits;
                   phys_edits = [];
+                  cexs = [];
+                  attempts = [];
+                  model_space = True;
                   fvs =
                     List.dedup_and_sort ~compare:Stdlib.compare
                     Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)})
     in
-    if not debug && not interactive && print_res
-    then
-      begin
-        let synth_inst = Tables.Instance.(update_list empty phys_edits) in
-        Printf.printf "Synthesized Program (%d edits made)\n%!" (List.length phys_edits);
-        Printf.printf "%s\n%!" (Tables.Instance.apply `NoHoles `Exact synth_inst phys |> fst |> Ast.string_of_cmd)
-      end
-    else ()
+    match phys_edits with
+    | None -> Printf.printf "Failed\n%!"
+    | Some phys_edits ->
+       if print_res
+       then
+         begin
+           let synth_inst = Tables.Instance.(update_list empty phys_edits) in
+           Printf.printf "Synthesized Program (%d edits made)\n%!" (List.length phys_edits);
+           Printf.printf "%s\n%!" (Tables.Instance.apply `NoHoles `Exact synth_inst phys |> fst |> Ast.string_of_cmd)
+         end
+       else ()
 end
 
 
@@ -94,68 +99,71 @@ let encode_cmd : Command.t =
     Encoder.spec
     Encoder.run
 
-
-module EditCheck = struct
+module RunTest = struct
   let spec = Command.Spec.(
       empty
-      +> flag "-d" no_arg ~doc:"dry-run-mode: Output the instrumented programs"
-      +> flag "-n" (required int) ~doc:"The number of concrete edits"
-      +> flag "-t" (required string) ~doc:"The logical table to edit"
-      +> anon ("logical" %: string)
-      +> anon ("concrete" %: string))
+      +> anon ("test_file" %: string)
+      +> flag "-w" no_arg ~doc:"Do widening"
+      +> flag "-s" no_arg ~doc:"Do slicing optimization"
+      +> flag "-m" no_arg ~doc:"Prune rows with no holes"
+      +> flag "-g" (required int) ~doc:"max number of CEGIS reps"
+      +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly")
 
 
-  let run (_:bool) _ _ _ _ () =
-    Printf.printf "deprecated"
-    (* let log_cmd = parse_file logical_fp in
-     * let real_cmd = parse_file concrete_fp in
-     * if d then begin
-     *     Printf.printf "Logical: \n %s \n%!" (Ast.string_of_cmd (Synthesis.base_translation log_cmd));
-     *     Printf.printf "Real : \n %s \n %!" (Ast.string_of_cmd (Synthesis.base_translation real_cmd));
-     *     Printf.printf "ADD1 to Logical:\n %s\n%!" (Ast.string_of_cmd (snd (Synthesis.add_symbolic_row name log_cmd)));
-     *     Printf.printf "ADD<N to Concrete:\n %s \n%!" (Ast.string_of_cmd (Synthesis.concretely_instrument n real_cmd))
-     *   end else ignore(Synthesis.check_add n name log_cmd real_cmd) *)
+  let run test_file widening do_slice monotonic gas fastcx () =
+    Printf.printf "Failed Tests:\n";
+    In_channel.read_lines test_file
+    |> List.iter
+         ~f:(fun line ->
+           match String.split line ~on:',' with
+           | [log_str;phys_str;edits_str] ->
+              let log = parse_file log_str in
+              let phys = parse_file phys_str in
+              let log_edits = Runtime.parse edits_str in
+              let params = Parameters.({widening;
+                                        do_slice;
+                                        gas;
+                                        monotonic;
+                                        fastcx;
+                                        debug = false;
+                                        interactive = false
+                                        }) in
+              let problem = Problem.({log; phys;
+                                      log_inst = Motley.Tables.Instance.empty;
+                                      phys_inst = Motley.Tables.Instance.empty;
+                                      log_edits;
+                                      phys_edits = [];
+                                      cexs = [];
+                                      attempts = [];
+                                      model_space = True;
+                                      fvs =
+                                        List.dedup_and_sort ~compare:Stdlib.compare
+                                          Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)}) in
+              let data = ProfData.zero () in
+              begin
+                try
+                     match Synthesis.cegis_math params data problem with
+                     | Some _  -> ()
+                     | None ->
+                        Printf.printf " ✗✗ %s\n" line
+                with _ ->
+                  Printf.printf " ✗✗  %s |---> Threw an exception\n" line
+
+
+              end
+           | _ ->
+              Printf.sprintf "Cannot recognize string %s" line
+              |> failwith
+         )
+
 end
 
-let editCheck : Command.t =
+let runtest_cmd : Command.t =
   Command.basic_spec
-    ~summary: "Check whether there exist `n` outputs that implement an edit"
-    EditCheck.spec
-    EditCheck.run
+    ~summary:"Run the tests "
+    RunTest.spec
+    RunTest.run
 
-module EditSynth = struct
-  let spec = Command.Spec.(
-      empty
-      +> flag "-d" no_arg ~doc:"dry-run-mode: Output the Z3 query"
-      +> flag "-n" (required int) ~doc:"The number of functions"
-      +> flag "-t" (required string) ~doc:"The logical table to edit"
-      +> anon ("logical" %: string)
-      +> anon ("concrete" %: string))
-
-
-  let run (_:bool) _ _ _ _ () =
-    Printf.printf "deprecated"
-    (* let log_cmd = parse_file logical_fp in
-     * let real_cmd = parse_file concrete_fp in
-     * if d then begin
-     *     let open Ast in
-     *     let open Synthesis in
-     *     let (_, logAdd1_cmd) = add_symbolic_row name log_cmd in
-     *     Printf.printf "Logical: \n %s \n%!" (string_of_cmd (base_translation log_cmd));
-     *     Printf.printf "Real : \n %s \n %!" (string_of_cmd (base_translation real_cmd));
-     *     Printf.printf "ADD1 to Logical:\n %s\n%!" (string_of_cmd logAdd1_cmd);
-     *     Printf.printf "ADD<N to Concrete:\n %s \n%!"
-     *       (string_of_cmd (edit_synth_real_inst ~numFs ~setSize:1 real_cmd))
-     *   end
-     * else
-     *   ignore(Synthesis.synth_add numFs name log_cmd real_cmd) *)
-end
-
-let editSynth : Command.t =
-  Command.basic_spec
-    ~summary: "Produce a function that transforms edits"
-    EditSynth.spec
-    EditSynth.run
 
 
 
@@ -289,8 +297,7 @@ let main : Command.t =
     ~summary:"Invokes the specified Motley Command"
     [ ("synth", synthesize_cmd)
     ; ("encode-p4", encode_cmd)
-    ; ("edit-check", editCheck)
-    ; ("edit-synth", editSynth)
+    ; ("runtest", runtest_cmd)
     ; ("bench", benchmark)
     ; ("onf", onf)
     ; ("of", of_bench)

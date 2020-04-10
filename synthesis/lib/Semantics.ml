@@ -14,7 +14,7 @@ let rec eval_expr (pkt_loc : Packet.located) ( e : expr ) : value =
   | Times (e, e') -> binop multiply_values e e'
   | Minus (e, e') -> binop subtract_values e e'
 
-                   
+
 let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   let binopt op a b = op (check_test a pkt_loc) (check_test b pkt_loc) in
   let binope op e e' = op (eval_expr pkt_loc e) (eval_expr pkt_loc e') in
@@ -31,7 +31,7 @@ let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
 
 
 let rec find_match ?idx:(idx = 0) pkt_loc ss ~default:default =
-  match ss with 
+  match ss with
   | [] -> default ()
   | (cond, action) :: rest ->
      if check_test cond pkt_loc then
@@ -58,7 +58,7 @@ let rec wide_eval wide (e : expr) =
                   let (loy, hiy) = wide_eval wide y in
                   (subtract_values lox hiy, subtract_values hix loy)
 
-                                                   
+
 let widening_assignment (wide : (value*value) StringMap.t) f e : (value * value) StringMap.t =
   StringMap.set wide ~key:f ~data:(wide_eval wide e)
 
@@ -101,14 +101,14 @@ let rec widening_test pkt wide t =
      else let vlu = StringMap.find_exn pkt v in
           StringMap.set wide v (vlu, vlu)
   | _ -> failwith "dont know how to handle that kind of test"
-          
+
 let widening_match pkt wide matches =
   (* Printf.printf "WIDENING A MATCH\n"; *)
   List.fold matches
     ~init:wide
     ~f:(fun acc ((key,_), m)  ->
       let open Match in
-      match m with 
+      match m with
       | Exact (v) ->
          StringMap.set acc ~key ~data:(v,v)
       | Between (lo, hi) ->
@@ -124,7 +124,7 @@ let action_to_execute pkt wide keys (rows : Row.t list ) =
   List.fold rows ~init:(True,None,None)
     ~f:(fun rst (matches, data, action) ->
       match rst  with
-      | (missed, _, None) -> 
+      | (missed, _, None) ->
          let cond = Match.list_to_test keys matches in
          if check_test cond pkt
          then
@@ -134,8 +134,8 @@ let action_to_execute pkt wide keys (rows : Row.t list ) =
            (missed %&% !%(cond), Some wide, None)
       | (_, _, _) -> rst
     )
-    
-                                                             
+
+
 let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(wide = StringMap.empty) *) (pkt_loc : Packet.located)
         : (Packet.located * (value * value) StringMap.t * cmd * (value list * int) StringMap.t) =
   let (pkt, loc_opt) = pkt_loc in
@@ -184,7 +184,7 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
        | Apply (name, keys, actions, default) ->
 
           begin match StringMap.find inst name with
-          | None -> trace_eval_inst ~gas ~wide default inst pkt_loc 
+          | None -> trace_eval_inst ~gas ~wide default inst pkt_loc
           | Some rules ->
              begin
                (* Printf.printf "Widening a match! %s\n" (Packet.test_of_wide wide |> string_of_test); *)
@@ -203,14 +203,18 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
           failwith "Cannot process while loops"
                    (* if check_test cond pkt_loc then
                     *   trace_eval ~gas:(gas-1) (Seq(body,cmd)) pkt_loc
-                    * else 
+                    * else
                     *   Some (pkt_loc, []) *)
 
 
 
-                 
+
 let eval_act (act : cmd) (pkt : Packet.t) : Packet.t =
   match trace_eval_inst act Instance.empty ~wide:StringMap.empty (pkt, None) with
+  | ((pkt, _), _ ,_ ,_) -> pkt
+
+let eval_cmd (cmd : cmd) (inst : Instance.t) (pkt : Packet.t) : Packet.t =
+  match trace_eval_inst cmd inst ~wide:StringMap.empty (pkt, None) with
   | ((pkt, _), _ ,_ ,_) -> pkt
 
 
@@ -269,11 +273,7 @@ let rec trace_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : ((string 
 
   | Select(Total, _ ) -> failwith "Deprecated"
   | While _ -> failwith "unsupported"
-                 
+
 let get_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : (string * int) list =
   let open List in
   dedup_and_sort ~compare:Stdlib.compare (trace_nd_hits c inst pkt >>= fst)
-  
-
-  
-                 
