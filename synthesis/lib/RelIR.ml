@@ -8,7 +8,7 @@ open Prover
 open Packet
 open Synthesis
 open Util
-              
+
 type field = string
 
 type action = cmd
@@ -16,24 +16,24 @@ type action_set = action list
 type action_seq = action list
 
 let print_action (a : action) : unit = Printf.printf "%s" (string_of_cmd a)
-                         
+
 type condition =
   | SemFD of {act : size list;
               inputs : size list;
               outputs : string list;
               range : size list
              }
-  | FD of size list * size list   
+  | FD of size list * size list
   | Test of test
 
 let string_of_ilist = List.fold ~init:"" ~f:(Printf.sprintf "%s %i")
-              
+
 let string_of_condition =
   function
   | Test t -> string_of_test t
   | FD (dom, rng) ->
      Printf.sprintf "(%s) -> (%s)"
-       (string_of_ilist dom)       
+       (string_of_ilist dom)
        (string_of_ilist rng)
   | SemFD {act; inputs; outputs; range} ->
      Printf.sprintf "[|%s|](%s).(%s) -> %s"
@@ -41,10 +41,10 @@ let string_of_condition =
        (string_of_ilist inputs)
        (List.reduce_exn outputs ~f:(fun a b -> a ^ " " ^ b))
        (string_of_ilist range)
-     
-                    
-                         
-type schema = 
+
+
+
+type schema =
   { keys : (field * size * size) list; (* name, min, max *)
     actions : action_set list;
     constraints : condition list
@@ -54,7 +54,7 @@ let print_schema schema =
   Printf.printf " |  ";
   List.iteri schema.actions ~f:(fun i _ -> Printf.printf "%d " i);
   Printf.printf "\n%!"
-                
+
 
 type key_match =
   | Int of Bigint.t
@@ -64,7 +64,7 @@ let print_key_match (km : key_match) : unit =
   match km with
   | Int i -> Printf.printf "%s" (Bigint.to_string i)
   | Range r -> Printf.printf "[%i;%i]" r.lo r.hi
-    
+
 type instance =
   { keys : key_match list list;
     actions : action_seq list
@@ -81,15 +81,15 @@ let print_instance (r : instance) : unit =
       Printf.printf "\n%!"
     );
   Printf.printf "------------------------------------------/\n%!"
-      
+
 
 
 let ids_to_fields (t : schema) (ids : size list) : string list =
-  List.map ids ~f:(fun idx -> 
+  List.map ids ~f:(fun idx ->
       let (a,_,_) = List.nth_exn t.keys idx in
       a
     )
-                
+
 let well_formed (r : instance) : bool =
   List.length r.keys = List.length r.actions
 
@@ -107,11 +107,11 @@ let does_induce_function dom rng : bool =
        ~f:(fun ((dom1, rng1), (dom2, rng2)) ->
          dom1 = dom2 && rng1 <> rng2)
   |> not
-           
+
 let satFD r dom rng : bool=
   let rows = List.zip_exn r.keys r.actions in
   does_induce_function (proj rows dom) (proj rows rng)
-  
+
 let eval_acts_rel (fields : string list) (values_acts : (key_match list * action_seq) list) : Packet.t list =
   List.map values_acts
     ~f:(fun (values, acts) ->
@@ -121,7 +121,7 @@ let eval_acts_rel (fields : string list) (values_acts : (key_match list * action
           | Int x -> Ast.Int (x,0)
           | Range _ -> failwith "Can't Handle Ranges")
       |> List.zip_exn fields
-      |> Packet.mk_packet_from_list 
+      |> Packet.mk_packet_from_list
       |> Semantics.eval_act act
     )
 
@@ -131,7 +131,7 @@ let extract (pkts : Packet.t list) (fields : string list) : key_match list list 
       List.map fields
         ~f:(fun f -> match Packet.get_val pkt f with
                      | Ast.Int (f,_) -> Int f))
-    
+
 (* Precondition: act_ids must only be actions, and in_ids and out_ids
    must only be field indices *)
 let satSemFD (r : instance) (t : schema) (act_ids : size list) (in_ids : size list) (out_fields : string list) (rng_ids : size list) : bool =
@@ -147,10 +147,10 @@ let satSemFD (r : instance) (t : schema) (act_ids : size list) (in_ids : size li
   let rng = proj rows rng_ids in
   let image = eval_acts_rel fields values_acts in
   let dom = extract image out_fields in
-  does_induce_function dom rng 
-  
-                       
-let rec evalRel (r : key_match list) (t : schema) (e : expr) =   
+  does_induce_function dom rng
+
+
+let rec evalRel (r : key_match list) (t : schema) (e : expr) =
   match e with
   | Value v -> v
   | Var (name, sz) ->
@@ -186,8 +186,8 @@ let rec satOneRow keys t b  =
   | Iff  (a, b) -> satOneRow keys t (a %=>% b) && satOneRow keys t (b %=>% a)
   | Eq (x, y) -> evalRel keys t x = evalRel keys t y
   | Le (x, y) -> evalRel keys t x = evalRel keys t y
-                         
-                  
+
+
 let satisfies (r : instance) (t : schema) : bool =
   let satOne (r : instance) t c =
     match c with
@@ -201,7 +201,7 @@ let satisfies (r : instance) (t : schema) : bool =
   in
   List.fold t.constraints ~init:true
     ~f:(fun acc c -> if satOne r t c then acc else( Printf.printf "Violated %s\n%!" (string_of_condition c); false))
-    
+
 let is_inst_of (r : instance) (table : schema) : bool =
   if List.exists r.keys
          ~f:(fun row_keys ->
@@ -214,7 +214,7 @@ let is_inst_of (r : instance) (table : schema) : bool =
     | Some (i,_) -> (Printf.printf "acts %d are incorrect length, must be %d \n%!"
                        (i) (List.length table.keys)
                 ; false)
-    | None -> 
+    | None ->
        (if List.fold r.actions ~init:true
             ~f:(fun rslt act_row ->
               List.foldi act_row ~init:true
@@ -225,19 +225,19 @@ let is_inst_of (r : instance) (table : schema) : bool =
         then true
         else (Printf.printf "theres an unknown action in the table!"; false))
        && satisfies r table
-                    
-                         
+
+
 let inject_keys (tbl_log : schema) (tbl_phys : schema) (key_log : key_match list) : key_match list =
   List.fold tbl_phys.keys ~init:[]
     ~f:(fun  acc_row (name, lo, hi) ->
-      acc_row @ 
+      acc_row @
         [match List.findi tbl_log.keys ~f:(fun _ (name', _, _) -> name = name') with
          | None -> Range {lo; hi}
          | Some (idx', _) ->
             List.nth_exn key_log idx'
         ]
     )
-  
+
 
 let rec list_cross (cols : 'a list list) : 'a list list  =
   match cols with
@@ -247,9 +247,9 @@ let rec list_cross (cols : 'a list list) : 'a list list  =
      list_cross cols
      |> List.cartesian_product col
      |> List.map ~f:(fun (act, row) -> act :: row)
-                            
-     
-              
+
+
+
   (* List.fold cols ~init:[]
    *   ~f:(fun rst col ->
    *     List.map col ~f:(fun act ->
@@ -262,7 +262,7 @@ let rec list_cross (cols : 'a list list) : 'a list list  =
    *   ) *)
 
 let sym_diff u v =
-  let open List in 
+  let open List in
   let not_contain lst (str, _) = for_all lst ~f:(fun (str',_) -> str <> str') in
   let unotv = filter u ~f:(not_contain v) in
   let vnotu = filter v ~f:(not_contain u) in
@@ -271,10 +271,10 @@ let sym_diff u v =
 let group_by_keys u v =
   List.merge u v ~compare:(fun (f,_) (g,_) -> Stdlib.compare f g)
   |> List.group ~break:(fun (f,_) (g,_) -> f <> g)
-  
-       
-                   
-(* PRE: Assume valuations are functions *)                 
+
+
+
+(* PRE: Assume valuations are functions *)
 let combine_valuations u v =
   let open Option in
   let rec reduce_group = function
@@ -293,7 +293,7 @@ let combine_valuations u v =
   |> List.fold ~init:(Some [])
        ~f:(fun acc_opt grp -> liftO2 mkCons (reduce_group grp) acc_opt)
   >>| List.unordered_append (sym_diff u v)
-       
+
 let rec test_to_valuation (t : test) : (string * expr) list option =
   match t with
   | True -> Some []
@@ -312,14 +312,14 @@ let rec test_to_valuation (t : test) : (string * expr) list option =
         else if is_symbolic y then Some [(x, e1)]
         else failwith (Printf.sprintf "Don't know how to handle %s = %s \
                                       since one side is not a symbolic variable" x y)
-                       
+
      | e,Var (x,_) | Var (x,_), e -> Some [(x, e)]
      | _ -> failwith (Printf.sprintf "Don't know how to handle %s = %s \
                                       since one side is not a variable"
                         (string_of_expr e1)
                         (string_of_expr e2))
      end
-  | Impl _ | Iff _ 
+  | Impl _ | Iff _
     | Or _ -> failwith "cannot convert a disjunction/implication/iff into a valuation"
   | Neg _ -> failwith "cannot convert a negation into a valuation"
   | Le _ -> failwith "cannot convert a <= into a valuation"
@@ -340,8 +340,8 @@ let compute_eq_cond (u : (string * expr) list option) (v : (string * expr) list 
                   else e %=% e'))
   | _, _ -> False
 
-                           
-  
+
+
 
 
 let cmd_equal (a1 : action) (a2 : action) : bool =
@@ -349,14 +349,14 @@ let cmd_equal (a1 : action) (a2 : action) : bool =
   let wp2 = symb_wp a2 ~fvs:(free_vars_of_cmd a1) in
   Printf.printf "Checking whether %s == %s\n%!" (string_of_cmd a1) (string_of_cmd a2);
   check_valid Parameters.default (wp1 %<=>% wp2) |> fst |> Option.is_none
-  
-              
+
+
 let cmd_equalable bound_vars (a1 : action) (a2 : action) : test option =
   let open Option in
   let wp1 = symb_wp a1 ~fvs:(free_vars_of_cmd a2) in
   let wp2 = symb_wp a2 ~fvs:(free_vars_of_cmd a1) in
   test_to_valuation wp1 >>= fun v1 ->
-  test_to_valuation wp2 >>= fun v2 -> 
+  test_to_valuation wp2 >>= fun v2 ->
   let () = printf "wp1 = %s \n wp2 = %s\n%!" (string_of_test wp1) (string_of_test wp2) in
   let () =
     Printf.printf "v1 = [\n%!";
@@ -373,8 +373,8 @@ let cmd_equalable bound_vars (a1 : action) (a2 : action) : test option =
     (string_of_cmd a1)
     (string_of_cmd a2)
     (string_of_test condition);
-  holify_test bound_vars condition |> check Parameters.default `Sat |> fst >>= const (Some condition)
-    
+  holify_test bound_vars condition |> check Parameters.default |> fst >>= const (Some condition)
+
 let candidates (phys : schema) (log_row : action_seq) : (test * action_seq) list =
   let all_phys_rows = list_cross phys.actions in
   let key_fields = List.map ~f:(fun (x,_,_) -> x) phys.keys in
@@ -412,18 +412,18 @@ let match_test (tbl : schema) (matches : key_match list) =
       | Range {lo; hi} -> (Var (k, 2) %>=% mkVInt (lo, 2)) %&%
                             (Var (k, 2) %<=% mkVInt (hi, 2)) %&%
                               acc)
-    
+
 
 let check_keys_sat_cond phys_tbl phys_matches (cond, act) =
   let open Option in
-  check Parameters.default `Sat (match_test phys_tbl phys_matches %=>% cond) |> fst >>| const act
+  check Parameters.default (match_test phys_tbl phys_matches %=>% cond) |> fst >>| const act
 
-    
+
 let cands_for_row  (phys_tbl : schema) (phys_matches : key_match list) (log_acts : action_seq)  =
   candidates phys_tbl log_acts
   |> List.filter_map ~f:(check_keys_sat_cond phys_tbl phys_matches)
-  
-                           
+
+
 let rec flatten (alts_for_inst : action_seq list list) : action_seq list list =
   match alts_for_inst with
   | [] -> []
@@ -447,7 +447,7 @@ let compute_candidate_map (log : schema) (phys : schema) :
   list_cross log.actions
   |> List.map  ~f:(fun actseq ->
       (actseq, List.dedup_and_sort (candidates phys actseq) ~compare:Stdlib.compare))
-           
+
 let one_table_synth
       ?cand_map:(cand_map=None)
       (tbl_log : schema) (tbl_phys : schema) (rlog : instance)
@@ -470,7 +470,7 @@ let one_table_synth
         ~f:(fun l cs ->
           Printf.printf "logical action:\n   %s\ncan be mapped to any \
                          of the following:\n%!" (string_of_cmd (List.reduce_exn l ~f:(%:%)));
-          List.iter cs ~f:(fun c -> 
+          List.iter cs ~f:(fun c ->
               Printf.printf "\t%s\n%!" (string_of_cmd (List.reduce_exn c ~f:(%:%)))
             )
         )
@@ -494,7 +494,7 @@ let one_table_synth
     (print_schema tbl_log;
      print_instance rlog;
      failwith "Precondition Failure: above has to be a well-formed instance of tbl_log")
-             
+
 
 
 let dominating_vars (act_seq : action_set list) (keys : (string * size * size) list) : (string * size * size) list =
@@ -520,8 +520,8 @@ let dominating_vars (act_seq : action_set list) (keys : (string * size * size) l
   in
   List.fold keys ~init:[] ~f:(fun acc k-> acc @ delta'' act_seq k)
   |> List.dedup_and_sort ~compare:Stdlib.compare
-  
-    
+
+
 let rec range lo hi =
   if lo >= hi
   then []
@@ -557,12 +557,12 @@ let compose_schemas (s : schema) (t : schema) : schema =
     actions = s.actions @ t.actions;
     constraints = [s_is_table; st_is_table; comp_is_decomp]
   }
-    
-(*************************** END NORMALIZATION *******************************)                   
+
+(*************************** END NORMALIZATION *******************************)
 
 
 
-                   
+
 
 (* TESTS *)
 let append_instance (s : instance) (t : instance) =
@@ -572,7 +572,7 @@ let append_instance (s : instance) (t : instance) =
   }
 let random_elt lst = Random.int (List.length lst)
                      |> List.nth_exn lst
-    
+
 let rec mk_random_instance n (table : schema) =
   if n = 0 then {keys = []; actions = []}
   else
@@ -580,15 +580,15 @@ let rec mk_random_instance n (table : schema) =
       keys = [List.map table.keys ~f:(fun (_,lo,hi) -> Int (Random.int (hi+1) + lo |> Bigint.of_int_exn))];
       actions = [List.map table.actions ~f:random_elt]
     } |> append_instance (mk_random_instance (n-1) table)
-                   
+
 let rec generate_valid_instance ?n:(n = 10) ~table =
   let instance = mk_random_instance n table in
   if satisfies instance table
   then instance
   else generate_valid_instance ~n ~table
 
-let rec qc ~reps ~size f ~table = 
-  if reps = 0 then true else     
+let rec qc ~reps ~size f ~table =
+  if reps = 0 then true else
     let inst = generate_valid_instance ~n:size ~table in
     if f inst
     then
@@ -597,11 +597,11 @@ let rec qc ~reps ~size f ~table =
       (Printf.printf "Counter Example. The following cannot be mapped\n%!"
       ; print_instance inst
       ; false)
-        
+
 (* let%test _ =
  *   let log_schema =
  *     { keys = [("x", 0, 2);
- *               ("y", 0, 3)               
+ *               ("y", 0, 3)
  *              ];
  *       actions = [
  *           ["op" %<-% Value (Int (1,2));
@@ -615,7 +615,7 @@ let rec qc ~reps ~size f ~table =
  *   in
  *   let phys_schema =
  *      { keys = [("x", 0, 2);
- *               ("y", 0, 2)               
+ *               ("y", 0, 2)
  *              ];
  *       actions = [
  *           ["op" %<-% Value (Int (1,2));
@@ -625,7 +625,7 @@ let rec qc ~reps ~size f ~table =
  *            "op" %<-% Value (Int (0,2))]
  *         ];
  *       constraints = [FD([0;1],[2;3])]
- *      } 
+ *      }
  *  in
  *   let log_rel = (\* op = x *\)
  *     { keys =
@@ -642,11 +642,11 @@ let rec qc ~reps ~size f ~table =
  *         ]
  *     } in
  *   one_table_synth log_schema phys_schema log_rel
- * 
+ *
  * let%test _ =
  *   let phys_schema =
  *     { keys = [("x", 0, 2);
- *               ("y", 0, 3)               
+ *               ("y", 0, 3)
  *              ];
  *       actions = [
  *           ["op" %<-% Value (Int (1,2));
@@ -660,7 +660,7 @@ let rec qc ~reps ~size f ~table =
  *   in
  *   let log_schema =
  *     { keys = [("x", 0, 2);
- *               ("y", 0, 2)               
+ *               ("y", 0, 2)
  *              ];
  *       actions = [
  *           ["op" %<-% Value (Int (1,2));
@@ -670,7 +670,7 @@ let rec qc ~reps ~size f ~table =
  *            "op" %<-% Value (Int (0,2))]
  *         ];
  *       constraints = [FD([0;1],[2;3])]
- *     } 
+ *     }
  *   in
  *   let log_rel = (\* op = x *\)
  *     { keys =
@@ -687,12 +687,12 @@ let rec qc ~reps ~size f ~table =
  *         ]
  *     } in
  *   one_table_synth log_schema phys_schema log_rel
- *                   
- * 
+ *
+ *
  * let%test _ =
  *   let phys_schema =
  *     { keys = [("src", 0, 2);
- *               ("x0", 0, 2)               
+ *               ("x0", 0, 2)
  *              ];
  *       actions = [
  *           ["x1" %<-% Value (Int (1,2));
@@ -713,7 +713,7 @@ let rec qc ~reps ~size f ~table =
  *   in
  *   let log_schema =
  *     { keys = [("src", 0, 2);
- *               ("x0", 0, 2)               
+ *               ("x0", 0, 2)
  *              ];
  *       actions =
  *         [["x1" %<-% Value (Int (1,2));
@@ -731,7 +731,7 @@ let rec qc ~reps ~size f ~table =
  *           "dst" %<-% Value (Int (4,2))
  *         ]];
  *       constraints = [FD([0;1],[2;3])]
- *     } 
+ *     }
  *   in
  *   let log_rel = (\* op = x *\)
  *     { keys =
@@ -750,12 +750,12 @@ let rec qc ~reps ~size f ~table =
  *   one_table_synth log_schema phys_schema log_rel
  *   && not ((one_table_synth log_schema phys_schema)
  *           |> qc ~reps:20 ~size:2 ~table:log_schema)
- *         
- * 
+ *
+ *
  * let%test _ =
  *   let phys_schema =
  *     { keys = [("src", 0, 2);
- *               ("y", 0, 2)               
+ *               ("y", 0, 2)
  *              ];
  *       actions = [
  *           [ "x1" %<-% Var ("y", 2);
@@ -773,7 +773,7 @@ let rec qc ~reps ~size f ~table =
  *   in
  *   let log_schema =
  *     { keys = [("src", 0, 2);
- *               ("y", 0, 2)               
+ *               ("y", 0, 2)
  *              ];
  *       actions =
  *         [[  "x1" %<-% mkVInt (0,2);
@@ -787,9 +787,9 @@ let rec qc ~reps ~size f ~table =
  *          ]
  *         ];
  *       constraints = [FD([0;1],[2;3])]
- *     } 
+ *     }
  *   in
- *   let log_rel_succeed = 
+ *   let log_rel_succeed =
  *     { keys =
  *         [ [Int 0; Int 1];
  *           [Int 1; Int 1];
@@ -821,7 +821,7 @@ let rec qc ~reps ~size f ~table =
  *   && not (one_table_synth log_schema phys_schema log_rel_fail) *)
 
 
-       
+
 (*** Andy's Examples ***)
 let keyify = List.map ~f:(fun x -> (x, 0, 3))
 let actify = List.map ~f:(fun x ->
@@ -849,7 +849,7 @@ let d = ["r";"s";"t"]
  *   | None -> true
  *   | Some t ->
  *      Printf.printf ("Implementable With %s\n%!") (string_of_test t); false *)
-          
+
 (* let%test _ =
  *   let a_to_c = { keys = keyify a; actions = actify c; constraints = [] } in
  *   let b_to_d = { keys = keyify b; actions = actify d; constraints = [] } in
@@ -884,4 +884,3 @@ let d = ["r";"s";"t"]
  *   let cand_map = compute_candidate_map log a_to_bcd |> Some in
  *   one_table_synth log a_to_bcd ~cand_map
  *   |> qc ~reps:2 ~size:2 ~table:log *)
-  

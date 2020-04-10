@@ -43,19 +43,64 @@ let rec model_to_packet (lst : (Smtlib.identifier * Smtlib.term) list) : Packet.
                                                   | _ -> raise (Failure "not a supported model")))                                             lst)
   in StringMap.of_alist_exn name_vals
 
-let toZ3String styp test = test_to_term styp test |> Smtlib.term_to_sexp |> Smtlib.sexp_to_string
+let toZ3String test = test_to_term test `Sat |> Smtlib.term_to_sexp |> Smtlib.sexp_to_string
 
 let prover = Smtlib.make_solver "/usr/bin/z3"
 
-let check (params : Parameters.t) typ (test : Ast.test) =
+let check (params : Parameters.t) (test : Ast.test) =
   let open Smtlib in
   let vars : term list = List.map (free_vars_of_test test) ~f:(fun (id, i) -> Bind (Id id, BitVecSort i)) in
   let st = Time.now() in
-  let response = match typ with
-    |`Sat -> assert_ prover (forall_ vars (test_to_term test `Sat));
-      check_sat_using (UFBV : tactic) prover
-    |`Valid -> assert_ prover (not_ (test_to_term test `Valid));
-      check_sat_using (QFBV : tactic) prover in
+  let response = assert_ prover (forall_ vars (test_to_term test `Sat));
+    check_sat_using (UFBV : tactic) prover in
+  let dur = Time.(diff (now()) st) in
+  let model =
+    if response = Sat then
+      Some (model_to_packet (get_model prover))
+    else None
+  in (model, dur)
+
+let check_valid params test =
+  let open Smtlib in
+  let st = Time.now() in
+  let response = assert_ prover (not_ (test_to_term test `Valid));
+    check_sat_using (QFBV : tactic) prover in
+  let dur = Time.(diff (now()) st) in
+  let model =
+    if response = Sat then
+      Some (model_to_packet (get_model prover))
+    else None
+  in (model, dur)
+
+let check_min (params : Parameters.t) (test : Ast.test) =
+  let open Smtlib in
+  let st = Time.now() in
+  let vars : term list = List.map (free_vars_of_test test) ~f:(fun (id, i) -> Bind (Id id, BitVecSort i)) in
+  let holes = holes_of_test test in
+  let constraints =
+    List.fold holes
+      ~init:[]
+      ~f:(fun acc (hi, sz) ->
+          if String.is_suffix hi ~suffix:"_hi"
+          then
+            let hivar = String.rev hi |> String.substr_replace_first ~pattern:"ih_" ~with_:"" |> String.rev in
+            List.fold holes
+              ~init:acc
+              ~f:(fun acc' (lo, sz) ->
+                  if String.is_suffix lo ~suffix:"_lo"
+                  then
+                    let lovar = String.rev lo |> String.substr_replace_first ~pattern:"ol_" ~with_:"" |> String.rev in
+                    if hivar = lovar
+                    then acc @ [(Minus(Hole(hi,sz), Hole(lo,sz)))]
+                    else acc'
+                  else acc'
+                )
+          else acc
+        ) in
+  let ranges = List.map constraints ~f:(fun e -> expr_to_term  e `Sat) in
+  let response = assert_ prover (forall_ vars (test_to_term test `Sat));
+    List.iter ranges ~f:(fun t -> minimize prover t);
+    check_sat_using (UFBV : tactic) prover in
   let dur = Time.(diff (now()) st) in
   let model =
     if response = Sat then

@@ -15,8 +15,13 @@ open Packet
  * if the `MinSat constructor is passed, then the difference between h_lo and h_hi is minimized
  * Prints debugging and interactive messages according to the flags in the parameters record
 *)
-val check : Parameters.t -> [> `Valid | `Sat ] -> test -> ((value StringMap.t) option * Time.Span.t)
+val check : Parameters.t  -> test -> ((value StringMap.t) option * Time.Span.t)
 
+(* Checks SMT Query for validity. equivalent to check with `Valid *)
+val check_valid : Parameters.t -> test -> ((value StringMap.t) option * Time.Span.t)
+
+(* Checks SMT Query for validity. equivalent to check with `MinSat *)
+val check_min : Parameters.t -> test -> ((value StringMap.t) option * Time.Span.t)
 
 (*Converts an ast test into an SMT-lib string. Assumes `Sat is intended*)
 val toZ3String : test -> string

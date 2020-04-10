@@ -111,7 +111,7 @@ let get_one_model_edit
             (if params.debug then Printf.printf "no holes, so skipping\n%!";
              None)
           else
-            let (res, time) = check params `MinSat (log_wp %=>% wp_phys) in
+            let (res, time) = check_min params (log_wp %=>% wp_phys) in
             data := {!data with
                      model_z3_time = Time.Span.(!data.model_z3_time + time);
                      model_z3_calls = !data.model_z3_calls + 1};
@@ -204,7 +204,7 @@ let get_one_model_edit_no_widening
               (string_of_test wp_phys);
           let h_st = Time.now() in
           let h_dur =  Time.diff (Time.now ()) h_st in
-          let (res, dur) = check params `Sat condition in
+          let (res, dur) = check params condition in
           data := {!data with
                     model_holes_time = Time.Span.(!data.model_holes_time + h_dur);
                     model_z3_time = Time.Span.(!data.model_z3_time + dur);
@@ -251,7 +251,7 @@ let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   let nd_mk_cond = Time.now () in
   let mk_cond_time = Time.diff nd_mk_cond st_mk_cond in
   let cv_st = Time.now () in
-  let model_opt, z3time = check params `Valid condition in
+  let model_opt, z3time = check_valid params condition in
   let cv_nd = Time.now () in
   data := {!data with check_valid_time = Time.Span.(!data.check_valid_time + Time.diff cv_nd cv_st)};
   let pkt_opt = match model_opt with
