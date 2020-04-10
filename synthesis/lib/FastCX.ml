@@ -66,7 +66,7 @@ let unreachable params (problem : Problem.t) (test : Ast.test) =
        end;
      if Packet.equal log_pkt phys_pkt
      then `NotFound
-     else `NoAndCE (Packet.make x,log_pkt)
+     else `NoAndCE (in_pkt,log_pkt)
   | (None, _) -> `Yes
 
 let get_cex params data (problem : Problem.t) =

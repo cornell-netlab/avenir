@@ -16,7 +16,7 @@ let rec run_experiment iter seq phys_seq params hints problem =
         *   (string_of_edit edit); *)
        let data = ProfData.zero () in
        let problem_inner = Problem.({problem with log_edits = edit}) in
-       let pedits = synthesize ~iter params hints data problem_inner  in
+       let pedits = cegis_math params data problem_inner |> Option.value_exn  in
        Printf.printf "%s\n%!" (ProfData.to_string !data);
        run_experiment (iter + 1)
          edits
@@ -120,7 +120,6 @@ let reorder_benchmark varsize length max_inserts widening =
       { default with
         widening;
         gas = 10;
-
     }) in
   let problem =
     let open Problem in

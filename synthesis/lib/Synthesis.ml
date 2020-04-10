@@ -440,9 +440,17 @@ let get_cex (params : Parameters.t) data (problem : Problem.t)
     : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
   if params.fastcx then
     match FastCX.get_cex params data problem with
-    | `Yes -> `Yes
-    | `NotFound -> implements params data problem
-    | `NoAndCE counter -> `NoAndCE counter
+    | `Yes ->
+       if params.debug then
+         Printf.printf "New rule is not reachable\n%!";
+       `Yes
+    | `NotFound ->
+       if params.debug then
+         Printf.printf "No cex to be found rapidly, check full equivalence\n%!";
+       implements params data problem
+    | `NoAndCE counter ->
+
+       `NoAndCE counter
   else
     let hits_phys_edits =
       FastCX.hits_list_pred
@@ -459,7 +467,7 @@ let get_cex (params : Parameters.t) data (problem : Problem.t)
     | `Yes ->
        {problem with phys = Assume !%(hits_phys_edits) %:% problem.phys}
        |> implements params data
-    (* implements params data problem     *)
+    (* implements params data problem *)
 
 let rec cegis_math params data (problem : Problem.t) =
   let attempt = Instance.apply ~no_miss:false ~cnt:0 `NoHoles `Exact

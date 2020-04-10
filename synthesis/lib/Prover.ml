@@ -195,6 +195,12 @@ let parse_results holes results =
        (Z3.Solver.SATISFIABLE, Some model)
   else (Z3.Solver.UNSATISFIABLE, None)
 
+let serial_check holes solver_str =
+  Core.Out_channel.write_all "query.smt" ~data:(Printf.sprintf "%s\n(get-model)" solver_str);
+  (* Printf.printf "OPTIMAL SOLVER :\n %s \n\n%!" (Z3.Optimize.to_string solver); *)
+  try Shell.run_full "/usr/bin/z3" ["-smt2";"query.smt" ]|> parse_results holes
+  with _ -> (Z3.Solver.UNSATISFIABLE, None)
+
 (*Check MaxSMT*)
 let check_opt (test : test ) =
   let solver = Z3.Optimize.mk_opt context in
@@ -225,59 +231,49 @@ let check_opt (test : test ) =
   List.iter constraints ~f:(fun e ->
       ignore (Z3.Optimize.minimize solver e : Z3.Optimize.handle)
     );
-  Core.Out_channel.write_all "query.smt" ~data:(Printf.sprintf "%s\n(get-model)" (Z3.Optimize.to_string solver));
-  (* Printf.printf "OPTIMAL SOLVER :\n %s \n\n%!" (Z3.Optimize.to_string solver); *)
-  try Shell.run_full "/usr/bin/z3" ["-smt2";"query.smt" ]|> parse_results holes
-  with _ -> (Z3.Solver.UNSATISFIABLE, None)
-
-
-
+  serial_check holes (Z3.Optimize.to_string solver)
 
 (*
  Checks SMT query. Returns either None (UNSAT) or SAT (model map)
 *)
 let check (params : Parameters.t) typ test =
   (* let mySolver = solver () in *)
-  let response,model, dur = match typ with
-    | `MinSat -> let r, m = check_opt test in r, m,  Time.Span.zero
-    | _ ->
-       let mySolver = match typ with
-         | `Valid -> vdsolver ()
-         | `Sat -> satsolver ()
-         | _ -> failwith "impossible"
-       in
-       let st = Time.now() in
-       let () = Z3.Solver.push mySolver;
-                initSolver typ mySolver context test in
-       (* let () = if params.debug then Printf.printf "SOLVER:\n%s\n%!" (Z3.Solver.to_string mySolver) in*)
-       let response = Z3.Solver.check mySolver [] in
-       let dur = Time.(diff (now()) st) in
-       (* let _ = Printf.printf "Motley formula:\n%s\nZ3 formula:\n%s\n" (string_of_test test) (Z3.Solver.to_string mySolver) in *)
-       let model =
-         if response = SATISFIABLE
-         then match Z3.Solver.get_model mySolver with
-              | None -> None
-              | Some m ->
-                 (* if params.debug then
-                  *   Printf.printf "SAT: %s \n%!" (Z3.Model.to_string m); *)
-                 let m' = mkMotleyModel m in
-                 (* if params.debug then
-                  *   Printf.printf "==\n %s \n%!" (string_of_map m'); *)
-                 Some m'
-
-         else None in
-       response, model , dur in
-     match response, model, dur  with
-     | UNSATISFIABLE, _, _ ->
-        None, dur
-     | UNKNOWN,_,_ ->
-        (None, dur)
-     | SATISFIABLE, model, dur ->
-        match model with
-        | Some model ->
-           (Some model, dur)
-        | None ->
-           (None, dur)
+  match typ with
+  | `MinSat -> let r, m = check_opt test in m,  Time.Span.zero
+  | _ ->
+     let mySolver, consts = match typ with
+       | `Valid -> vdsolver (), free_vars_of_test test
+       | `Sat -> satsolver (), holes_of_test test
+       | _ -> failwith "impossible"
+     in
+     let st = Time.now() in
+     let () = Z3.Solver.push mySolver;
+              initSolver typ mySolver context test in
+     let slvr_string = Printf.sprintf "%s\n(check-sat)\n" (Z3.Solver.to_string mySolver) in
+     let () = if params.debug then
+                Printf.printf "SOLVER:\n%s\n%!" slvr_string in
+     let response, model =
+       serial_check consts slvr_string
+     in
+     if params.debug then
+       Printf.printf "Solved\n%!";
+     let dur = Time.(diff (now()) st) in
+     (* let model =
+      *   if response = Z3.Solver.SATISFIABLE
+        *   then match Z3.Solver.get_model mySolver with
+        *        | None ->
+        *           if params.debug then
+        *             Printf.printf "UNSAT\n%!";
+        *           None
+        *        | Some m ->
+        *           if params.debug then
+        *             Printf.printf "SAT: %s \n%!" (Z3.Model.to_string m);
+        *           let m' = mkMotleyModel m in
+        *           (\* if params.debug then
+        *            *   Printf.printf "==\n %s \n%!" (string_of_map m'); *\)
+        *           Some m'
+        *   else None in *)
+     model, dur
 
 (* Checks SMT Query for validity. Returns None (VALID) or Some model (Counter Example) *)
 let check_valid params test = check params `Valid test
