@@ -251,7 +251,7 @@ let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   let nd_mk_cond = Time.now () in
   let mk_cond_time = Time.diff nd_mk_cond st_mk_cond in
   let cv_st = Time.now () in
-  let model_opt, z3time = check_valid params condition in
+  let model_opt, z3time = check params `Valid condition in
   let cv_nd = Time.now () in
   data := {!data with check_valid_time = Time.Span.(!data.check_valid_time + Time.diff cv_nd cv_st)};
   let pkt_opt = match model_opt with
