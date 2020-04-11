@@ -400,48 +400,48 @@ let test_trace p_string expected_trace =
 
                             (* TESTING Formula Construction *)
 
-let%test _ =
-  let ctx = context in
-  let t = (!%( (Var ("x",8) %=% mkVInt (5,8)) %+% ((Var ("x",8) %=% mkVInt (3,8)) %&% (Var ("z",8) %=% mkVInt (6,8))))
-           %+% !%( (Var ("x",8) %=% Hole ("hole0",8)) %+% (Var ("y",8) %=% Hole ("hole1",8)))) in
-  let exp_fvs = [("x", 8); ("z",8) ; ("y",8)] in
-  let indices = mk_deBruijn (List.map ~f:fst (free_vars_of_test t)) in
-  let get = StringMap.find indices in
-  let z3test = mkZ3Test [] t ctx indices (free_vars_of_test t) in
-  let expz3string = "(let ((a!1 (not (or (= (:var 2) #x05) (and (= (:var 2) #x03) (= (:var 1) #x06))))))\n  (or a!1 (not (or (= (:var 2) hole0) (= (:var 0) hole1)))))" in
-  let qform = bind_vars `All ctx exp_fvs z3test in
-  let exp_qform_string ="(forall ((x (_ BitVec 8)) (z (_ BitVec 8)) (y (_ BitVec 8)))\n  (let ((a!1 (not (or (= x #x05) (and (= x #x03) (= z #x06))))))\n    (or a!1 (not (or (= x hole0) (= y hole1))))))" in
-  let success = free_vars_of_test t = exp_fvs
-                &&  get "x" = Some 2 && get "y" = Some 0 && get "z" = Some 1
-                && String.strip(Z3.Expr.to_string z3test) = String.strip(expz3string)
-                && String.strip(Z3.Expr.to_string qform) = String.strip (exp_qform_string)
-  in
-  if success then success else (
-    Printf.printf "FAILED TEST (deBruijn) -----\n%!";
-    Printf.printf "DE_BRUIJN :\n%!";
-    StringMap.iteri indices ~f:(fun ~key ~data ->
-        Printf.printf "\t %s -> %d\n%!" key data;
-      );
-    Printf.printf "Z3STRING:\n%s\n\n%!EXPECTED:\n%s\n\n%!" (Z3.Expr.to_string qform) exp_qform_string;
-    Printf.printf "----------------------------\n%!";
-    success )
-
-    
-let%test _ =
-  let t = (!%( (Var ("x",8) %=% mkVInt (5,8)) %+% ((Var ("x",8) %=% mkVInt (3,8)) %&% (Var ("z",8) %=% mkVInt (6,8))))
-           %+% !%( (Var ("x",8) %=% Hole ("hole0",8)) %+% (Var ("y",8) %=% Hole ("hole1",8)))) in
-  let (r,_) = check Parameters.default `Sat t in
-  let (r',_) = check Parameters.default `Sat t in
-  r = None (* i.e. is unsat *)
-  && r = r'
-           
-let%test _ = (* Test deBruijn Indices*)
-  let vars = ["x"; "y"; "z"] in
-  let indices = mk_deBruijn vars in
-  let get = StringMap.find indices in
-  match get "x", get "y", get "z" with
-  | Some xi, Some yi, Some zi -> xi = 2 && yi = 1 && zi = 0
-  | _, _, _ -> false
+(* let%test _ =
+ *   let ctx = context in
+ *   let t = (!%( (Var ("x",8) %=% mkVInt (5,8)) %+% ((Var ("x",8) %=% mkVInt (3,8)) %&% (Var ("z",8) %=% mkVInt (6,8))))
+ *            %+% !%( (Var ("x",8) %=% Hole ("hole0",8)) %+% (Var ("y",8) %=% Hole ("hole1",8)))) in
+ *   let exp_fvs = [("x", 8); ("z",8) ; ("y",8)] in
+ *   let indices = mk_deBruijn (List.map ~f:fst (free_vars_of_test t)) in
+ *   let get = StringMap.find indices in
+ *   let z3test = mkZ3Test [] t ctx indices (free_vars_of_test t) in
+ *   let expz3string = "(let ((a!1 (not (or (= (:var 2) #x05) (and (= (:var 2) #x03) (= (:var 1) #x06))))))\n  (or a!1 (not (or (= (:var 2) hole0) (= (:var 0) hole1)))))" in
+ *   let qform = bind_vars `All ctx exp_fvs z3test in
+ *   let exp_qform_string ="(forall ((x (_ BitVec 8)) (z (_ BitVec 8)) (y (_ BitVec 8)))\n  (let ((a!1 (not (or (= x #x05) (and (= x #x03) (= z #x06))))))\n    (or a!1 (not (or (= x hole0) (= y hole1))))))" in
+ *   let success = free_vars_of_test t = exp_fvs
+ *                 &&  get "x" = Some 2 && get "y" = Some 0 && get "z" = Some 1
+ *                 && String.strip(Z3.Expr.to_string z3test) = String.strip(expz3string)
+ *                 && String.strip(Z3.Expr.to_string qform) = String.strip (exp_qform_string)
+ *   in
+ *   if success then success else (
+ *     Printf.printf "FAILED TEST (deBruijn) -----\n%!";
+ *     Printf.printf "DE_BRUIJN :\n%!";
+ *     StringMap.iteri indices ~f:(fun ~key ~data ->
+ *         Printf.printf "\t %s -> %d\n%!" key data;
+ *       );
+ *     Printf.printf "Z3STRING:\n%s\n\n%!EXPECTED:\n%s\n\n%!" (Z3.Expr.to_string qform) exp_qform_string;
+ *     Printf.printf "----------------------------\n%!";
+ *     success )
+ * 
+ *     
+ * let%test _ =
+ *   let t = (!%( (Var ("x",8) %=% mkVInt (5,8)) %+% ((Var ("x",8) %=% mkVInt (3,8)) %&% (Var ("z",8) %=% mkVInt (6,8))))
+ *            %+% !%( (Var ("x",8) %=% Hole ("hole0",8)) %+% (Var ("y",8) %=% Hole ("hole1",8)))) in
+ *   let (r,_) = check Parameters.default `Sat t in
+ *   let (r',_) = check Parameters.default `Sat t in
+ *   r = None (\* i.e. is unsat *\)
+ *   && r = r'
+ *            
+ * let%test _ = (\* Test deBruijn Indices*\)
+ *   let vars = ["x"; "y"; "z"] in
+ *   let indices = mk_deBruijn vars in
+ *   let get = StringMap.find indices in
+ *   match get "x", get "y", get "z" with
+ *   | Some xi, Some yi, Some zi -> xi = 2 && yi = 1 && zi = 0
+ *   | _, _, _ -> false *)
            
            
 (* TESTING WELL-FORMEDNESS CONDITIONS *)
@@ -588,7 +588,12 @@ let%test _ =
            None
            (ProfData.zero ())
            Problem.({fvs=[("dst",2); ("out",2); ("x", 2)];
-                     log; phys; log_inst; phys_inst; log_edits; phys_edits}) : Tables.Edit.t list);
+                     log; phys;
+                     log_inst; phys_inst;
+                     log_edits; phys_edits;
+                     cexs = [];
+                     attempts = [];
+                     model_space = True}) : Tables.Edit.t list);
   true
 
     
@@ -596,8 +601,8 @@ let%test _ =
  *   let log_line =
  *     Apply("log"
  *         , [("dst", 2)]
- *         , ["out" %<-% mkVInt (0,2);
- *            "out" %<-% mkVInt (1,2);]
+ *         , [[], "out" %<-% mkVInt (0,2);
+ *            [], "out" %<-% mkVInt (1,2);]
  *         ,"out" %<-% mkVInt (0,2))
  *   in
  *   let phys_line =
@@ -609,15 +614,13 @@ let%test _ =
  *   in
  *   let log_inst =
  *     StringMap.of_alist_exn
- *       [("log", [ [mkVInt (0,2)], 0]) ]
+ *       [("log", [ [mkVInt (0,2)], [], 0]) ]
  *   in
  *   let phys_inst =
  *     StringMap.of_alist_exn
- *       [("phys", [ [mkVInt (0,2)], 0])] in
+ *       [("phys", [ ([mkVInt (0,2)], (, 0)])] in
  *   let edit = ("log", ([mkVInt (1,2)], 1)) in
  *   ignore (synthesize_edit log_line phys_line log_inst phys_inst edit); true *)
-
-
 
 let%test _ =
   (*

@@ -7,14 +7,16 @@ type t =
     do_slice : bool;
     gas : int;
     debug: bool;
+    monotonic: bool;
     interactive : bool;
+    fastcx : bool;
   }
 
 let default =
   { widening = false;
     do_slice = false;
     gas = 1000;
-    debug = true;
-    interactive = false }  
-
-
+    debug = false;
+    monotonic = false;
+    interactive = false;
+    fastcx = false }

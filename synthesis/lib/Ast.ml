@@ -28,7 +28,7 @@ type expr =
 
 let rec string_of_value (v : value) : string =
   match v with
-  | Int (i,x) -> Printf.sprintf "%s#%d" (Bigint.to_string i) x
+  | Int (i,x) -> Printf.sprintf "%s#%d" (Bigint.Hex.to_string i) x
 
 let veq v v' =
   match v,v' with
@@ -155,6 +155,9 @@ let rec mkAnd (t : test) (t' : test) =
         match t, t' with
         | True, x | x, True -> x
         | False, _ | _, False -> False
+        | Eq(Var x,u), Neg(Eq(Var y,v)) when x = y
+          -> if u = v then False
+             else Eq(Var x,u)
         | _, And ( t'', t''') -> (* left-associative *)
            mkAnd (mkAnd t t'') t'''
         | _ -> And (t, t')
@@ -249,6 +252,8 @@ let rec string_of_test t =
   | And (left, right) -> "(" ^ string_of_test left ^ "&&" ^ string_of_test right ^ ")"
   | Neg (Le(left, right)) ->
      Printf.sprintf "(%s < %s)" (string_of_expr right) (string_of_expr left)
+  | Neg(Eq(left,right)) ->
+     Printf.sprintf "(%s <> %s)" (string_of_expr left) (string_of_expr right)
   | Neg t ->
      "~(" ^ string_of_test t ^ ")"
 
@@ -384,18 +389,22 @@ type cmd =
   | Seq of (cmd * cmd)
   | While of (test * cmd)
   | Select of (select_typ * ((test * cmd) list))
-  | Apply of (string * (string * size) list * (((string * size) list * cmd) list) * cmd)
+  | Apply of (string (*Table name*)
+              * (string * size) list (*Keys*)
+              * (((string * size) list * cmd) list) (*actions*)
+              * cmd) (*default action*)
 
-let clean_selects_list ss = 
-  List.rev ss
-  |> List.fold ~init:([], [])
-    ~f:(fun (acc,seen) (c,a) ->
-      if c = False || List.exists seen ~f:((=) c) then
-        (acc,seen)
-      else
-        ((c,a) :: acc, c :: seen)
-    )
-  |> fst
+let clean_selects_list =
+  List.filter ~f:(fun (c,a) -> c <> False)
+  (* List.rev ss
+   * |> List.fold ~init:([], [])
+   *   ~f:(fun (acc,seen) (c,a) ->
+   *     if c = False || List.exists seen ~f:((=) c) then
+   *       (acc,seen)
+   *     else
+   *       ((c,a) :: acc, c :: seen)
+   *   )
+   * |> fst *)
 
 let mkPartial ss =
   if not enable_smart_constructors then Select(Partial, ss) else
@@ -561,16 +570,17 @@ let rec free_of_cmd typ (c:cmd) : (string * size) list =
         @ free_of_cmd typ action
         @ fvs
       )
-  | Apply (_,_,actions, default) ->
-     List.fold actions
-       ~init:(free_of_cmd typ default)
-       ~f:(fun acc (data, a) ->
-         acc @ (free_of_cmd typ a
+  | Apply (_,keys,actions, default) ->
+     keys
+     @ List.fold actions
+         ~init:(free_of_cmd typ default)
+         ~f:(fun acc (data, a) ->
+           acc @ (free_of_cmd typ a
                 |> List.filter ~f:(fun (x,_) ->
                        List.for_all (List.map data ~f:fst) ~f:((<>) x)
                      )
-               )
-       )
+                 )
+         )
   end
   |> dedup
 
