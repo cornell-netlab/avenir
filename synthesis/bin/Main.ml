@@ -187,11 +187,15 @@ module ONFReal = struct
       +> flag "-s" no_arg ~doc:"perform slicing optimization"
       +> flag "-i" no_arg ~doc:"interactive mode"
       +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
-      +> flag "-data" (required string) ~doc:"the input log" )
+      +> flag "-data" (required string) ~doc:"the input log" 
+      +> anon ("p4file1" %: string)
+      +> anon ("p4file2" %: string)
+      +> flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
+      +> flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file" )
   
 
-  let run gas widening do_slice interactive debug data_fp () =
-    ignore (Benchmark.basic_onf_ipv4_real Parameters.({widening;do_slice;gas;interactive;debug}) data_fp : Tables.Edit.t list)
+  let run gas widening do_slice interactive debug data_fp logical_p4 physical_p4 logical_inc physical_inc() =
+    ignore (Benchmark.basic_onf_ipv4_real Parameters.({widening;do_slice;gas;interactive;debug}) data_fp logical_p4 physical_p4 logical_inc physical_inc : Tables.Edit.t list)
     (* Benchmark.onf_representative gas widening |> ignore *)
 end
 

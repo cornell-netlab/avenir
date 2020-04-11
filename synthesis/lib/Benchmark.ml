@@ -667,8 +667,9 @@ let basic_onf_ipv4 params filename =
   in
   measure params None problem (onos_to_edits filename)
 
-let basic_onf_ipv4_real params filename = 
-  let log =
+let basic_onf_ipv4_real params data_file log_p4 phys_p4 log_inc phys_inc = 
+        
+  (* let log =
     sequence [
         "class_id" %<-% mkVInt(0,32)
       ; Apply("ipv6",
@@ -687,12 +688,28 @@ let basic_onf_ipv4_real params filename =
             Var("class_id",32) %=% mkVInt(1019,32), "out_port" %<-% mkVInt(19,9) ;
             True, "out_port" %<-% mkVInt(0,9)
           ]
-      ] in
-  let phys =
-    Apply("l3_fwd"
+      ] in *)
+  let log = Encode.encode_from_p4 log_inc log_p4 false in
+  let phys = Encode.encode_from_p4 phys_inc phys_p4 false in
+  let open Match in
+  let max32 = Bigint.(of_int_exn 32 ** of_int_exn 2 - one) in
+  let log_ins = StringMap.(set empty
+                             ~key:"simple"
+                             ~data:[[Exact(mkInt(1017, 32))], [mkInt(17, 9)], 0;
+                                    [Exact(mkInt(1018, 32))], [mkInt(18, 9)], 0;
+                                    [Exact(mkInt(1010, 32))], [mkInt(10, 9)], 0;
+                                    [Exact(mkInt(1012, 32))], [mkInt(12, 9)], 0;
+                                    [Exact(mkInt(1011, 32))], [mkInt(11, 9)], 0;
+                                    [Exact(mkInt(1008, 32))], [mkInt(08, 9)], 0;
+                                    [Exact(mkInt(1003, 32))], [mkInt(03, 9)], 0;
+                                    [Exact(mkInt(1019, 32))], [mkInt(19, 9)], 0;
+                                    [Between(mkInt(0, 32), Int(max32,32))], [mkInt(0, 9)], 0])
+  in
+  (* let phys =
+     Apply("l3_fwd"
         , [ ("ipv6_dst", 128) (*; ("ipv4_src", 32); ("ipv4_proto", 16)*) ]
         , [ ([("port",9)], "out_port"%<-% Var("port",9))]
-        , "out_port" %<-% mkVInt(0,9)) in
+        , "out_port" %<-% mkVInt(0,9))  in *)
   let fvs = [("ipv6_dst", 128); ("out_port", 9); (*("ipv4_src", 32); ("ipv4_proto", 16)*)] in
   (* synthesize_edit  ~gas ~iter ~fvs p 
    *   logical
@@ -704,13 +721,13 @@ let basic_onf_ipv4_real params filename =
   let problem =
     let open Problem in
     { log; phys; fvs;
-      log_inst = StringMap.(set empty ~key:"ipv6" ~data:[]);
+      log_inst = log_ins; (* StringMap.(set empty ~key:"ipv6" ~data:[]); *)
       phys_inst = StringMap.(set empty ~key:"l3_fwd" ~data:[]);
       log_edits = [];
       phys_edits = []
     }
   in
-  measure params None problem (onos_to_edits filename)
+  measure params None problem (onos_to_edits data_file)
 
 
 let parse_rule_to_update line =
