@@ -221,17 +221,19 @@ module ONFReal = struct
       +> flag "-gas" (required int) ~doc:"how many cegis iterations?"
       +> flag "-w" no_arg ~doc:"perform widening"
       +> flag "-s" no_arg ~doc:"perform slicing optimization"
+      +> flag "-m" no_arg ~doc:"eliminate non-hole branches"
       +> flag "-i" no_arg ~doc:"interactive mode"
       +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
       +> flag "-data" (required string) ~doc:"the input log" 
+      +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly" 
       +> anon ("p4file1" %: string)
       +> anon ("p4file2" %: string)
       +> flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
       +> flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file" )
   
 
-  let run gas widening do_slice interactive debug data_fp logical_p4 physical_p4 logical_inc physical_inc() =
-    ignore (Benchmark.basic_onf_ipv4_real Parameters.({widening;do_slice;gas;interactive;debug}) data_fp logical_p4 physical_p4 logical_inc physical_inc : Tables.Edit.t list)
+  let run gas widening do_slice monotonic interactive debug data_fp fastcx logical_p4 physical_p4 logical_inc physical_inc() =
+          ignore (Benchmark.basic_onf_ipv4_real Parameters.({widening;do_slice;gas;monotonic;interactive;debug;fastcx}) data_fp logical_p4 physical_p4 logical_inc physical_inc : Tables.Edit.t list)
     (* Benchmark.onf_representative gas widening |> ignore *)
 end
 

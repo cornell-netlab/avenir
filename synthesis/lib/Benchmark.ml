@@ -731,7 +731,10 @@ let basic_onf_ipv4_real params data_file log_p4 phys_p4 log_inc phys_inc =
       log_inst = log_ins; (* StringMap.(set empty ~key:"ipv6" ~data:[]); *)
       phys_inst = StringMap.(set empty ~key:"l3_fwd" ~data:[]);
       log_edits = [];
-      phys_edits = []
+      phys_edits = [];
+      attempts = [];
+      cexs = [];
+      model_space = True;
     }
   in
   measure params None problem (onos_to_edits data_file)
