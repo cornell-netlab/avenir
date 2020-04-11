@@ -1,0 +1,128 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# Remotely pushes bits to a remote node and installs ONOS on it.
+# -----------------------------------------------------------------------------
+
+function _usage () {
+cat << _EOF_
+usage:
+ $(basename $0) [-fn] [-m] <settings> [node]
+
+flags:
+- -f            : forces uninstall of currently installed ONOS
+- -u            : don't install onos.conf upstart configuration file
+- -i            : don't install /etc/init.d/onos script (also used by onos.conf)
+- -s            : don't install onos.service systemd configuration file
+- -n            : don't try to start ONOS
+- -m <settings> : pass <settings> XML file to remote maven installation
+
+options:
+- [node] : remote node to install ONOS on.
+
+summary:
+ Remotely pushes bits to a remote node and installs ONOS on it.
+
+ The -u should be used on upstart-based systems.
+
+ If [node] is not specified the default target is \$OCI.
+
+_EOF_
+}
+
+[ "$1" = "-h" ] && _usage && exit 0
+
+[ ! -d "$ONOS_ROOT" ] && echo "ONOS_ROOT is not defined" >&2 && exit 1
+. $ONOS_ROOT/tools/build/envDefaults
+
+onos-check-bits
+
+while getopts fnvm: o; do
+    case "$o" in
+        f) uninstall=true;;
+        u) noupstart=true; noinitd=true; nosysd=true;;
+        i) noinitd=true; nosysd=true;;
+        s) nosysd=true;;
+        n) nostart=true;;
+        m) mvn_settings=$OPTARG;;
+        v) upgrade=true;;
+    esac
+done
+let OPC=$OPTIND-1
+shift $OPC
+
+# If the -f was given, attempt uninstall first.
+[ -n "$uninstall" ] && onos-uninstall ${1:-$OCI}
+
+node=${1:-$OCI}
+remote=$ONOS_USER@$node
+remote_scp=$ONOS_USER@[$node]
+
+$(dirname $0)/onos-push-bits $node
+
+[ ! -z "$mvn_settings" ] && scp -q $mvn_settings $remote_scp:/tmp/settings.xml
+
+ssh -tt $remote "
+    [ -z "$upgrade" ] && [ -d $ONOS_INSTALL_DIR/bin ] && echo \"ONOS is already installed\" && exit 1
+
+    # Prepare a landing zone and unroll the bits
+    sudo mkdir -p $ONOS_INSTALL_DIR && sudo chown ${ONOS_USER}:${ONOS_GROUP} $ONOS_INSTALL_DIR
+    tar zxmf /tmp/$ONOS_BITS.tar.gz -C $ONOS_INSTALL_DIR --strip-components=1
+
+    # Make a link to the log file directory and make a home for auxiliaries
+    ln -s $ONOS_INSTALL_DIR/$KARAF_DIST/data/log /opt/onos/log
+    ln -s $ONOS_INSTALL_DIR/$KARAF_DIST /opt/onos/karaf
+    mkdir $ONOS_INSTALL_DIR/var
+    mkdir $ONOS_INSTALL_DIR/config
+
+    # Install the configuration file(s) and set up options for debugging
+    [ -n $noupstart ] && sudo cp $ONOS_INSTALL_DIR/init/onos.conf /etc/init/onos.conf
+    [ -n $noinitd ] && sudo cp $ONOS_INSTALL_DIR/init/onos.initd /etc/init.d/onos
+    [ -n $nosysd ] && sudo cp $ONOS_INSTALL_DIR/init/onos.service /etc/systemd/system/onos.service
+
+    echo 'export ONOS_OPTS=debug' > $ONOS_INSTALL_DIR/options
+
+    if [ ! -z "$ONOS_YOURKIT" ]; then
+        sudo apt-get install unzip
+        cd /tmp
+        wget -N https://www.yourkit.com/download/YourKit-JavaProfiler-${ONOS_YOURKIT}.zip
+        unzip -o YourKit-JavaProfiler-${ONOS_YOURKIT}.zip
+        rm YourKit-JavaProfiler-${ONOS_YOURKIT}.zip
+        mv /tmp/YourKit-JavaProfiler-$(echo $ONOS_YOURKIT | sed 's/\(.*\)-.*/\1/')/bin/linux-x86-64/libyjpagent.so $ONOS_INSTALL_DIR/libyjpagent.so
+        echo -e 'export JAVA_OPTS="${JAVA_OPTS:--agentpath:$ONOS_INSTALL_DIR/libyjpagent.so}=listen=all"' >> $ONOS_INSTALL_DIR/options
+    fi
+
+    # Set up correct user to run onos-service
+    echo 'export ONOS_USER=$ONOS_USER' >> $ONOS_INSTALL_DIR/options
+
+    # If the upgrade flag is set, append ".upgrade" to the version string.
+    if [ ! -z "$upgrade" ]
+    then
+        echo '.upgrade' >> $ONOS_INSTALL_DIR/VERSION
+    fi
+
+    # Remove any previous Open Networking Foundation bits from ~/.m2 repo.
+    rm -fr ~/.m2/repository/org/onosproject
+
+    [ ! -z $mvn_settings ] && cp /tmp/settings.xml ~/.m2/settings.xml
+
+    # Drop log level for the console
+    echo 'log4j.logger.org.apache.sshd = WARN' \
+        >> $ONOS_INSTALL_DIR/$KARAF_DIST/etc/org.ops4j.pax.logging.cfg
+
+    # remove verbose bundle detail from log layout
+    echo 'log4j.appender.out.layout.ConversionPattern=%d{ISO8601} | %-5.5p | %-16.16t | %-32.32c{1} | %X{bundle.id} | %m%n' \
+        >> $ONOS_INSTALL_DIR/$KARAF_DIST/etc/org.ops4j.pax.logging.cfg
+
+    # Set up and enable the ONOS service on systemd-based systems
+    sudo systemctl daemon-reload && sudo systemctl enable onos.service || true
+
+"
+
+# Configure the ONOS installation
+onos-config $node
+
+# Upload the shared cluster key if present
+[ -f "$ONOS_CLUSTER_KEY_FILE" ] && onos-push-cluster-key $1
+
+# Unless -n option was given, attempt to ignite the ONOS service.
+[ -z "$nostart" ] && onos-service $node start || true

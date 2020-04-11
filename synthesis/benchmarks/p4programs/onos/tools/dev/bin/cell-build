@@ -1,0 +1,64 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# Tool to perform a cell-based remote bazel build using a borrowed test cell.
+# -----------------------------------------------------------------------------
+
+# Check environment
+[ -z "$OCN" ] && echo "Cell environment not established" && exit 1
+
+runTests=false
+useCache=false
+noBuild=false
+
+while getopts b:cnt?h o; do
+    case "$o" in
+        b) branch=$OPTARG;;
+        c) useCache=true;;
+        n) noBuild=true;;
+        t) runTests=true;;
+        *) echo "usage: cell-build [-b branch] [-cnt] [commitHash]" >&2; exit 1;;
+    esac
+done
+
+let OPC=$OPTIND-1
+shift $OPC
+
+! git status &>/dev/null && echo "Not in a git workspace. Exiting..." && exit $?
+
+# Check arguments and environment
+branch=${branch:-origin/master}
+baseCommit=$(git log -n 1 --pretty=format:"%H" $branch)
+
+# Create a patch file
+git diff $baseCommit > /tmp/$baseCommit.patch
+
+# Copy patch file to the remote build machine
+scp /tmp/$baseCommit.patch $ONOS_USER@[$OCN]:/tmp
+
+ssh -t -t $ONOS_USER@$OCN "
+    source ~/.bash_aliases
+    cd \$ONOS_ROOT
+
+    # Clean-up the workspace and stash away any changes.
+    git clean -f
+    git stash
+
+    # Make sure the remote build machine is on the same commit hash as the local one
+    remoteCommit=\$(git log -n 1 | head -n1 | cut -d\  -f2)
+    if [ \"\$remoteCommit\" != \"$baseCommit\" ]; then
+        git checkout master
+        git pull --no-stat
+        git checkout $baseCommit
+    fi
+
+    # Apply the patch if necessary
+    [ -s /tmp/$baseCommit.patch ] && git apply /tmp/$baseCommit.patch
+
+    # Promote the common bazelrc file to enable running against the cells cache
+    [ $useCache = true ] && cp ~/.bazelrc .bazelrc
+
+    # Run the build (neutralizing known environment mutations in SSH sessions)
+    set -e
+    [ $noBuild = false ] && SHLVL=1 SSH_CLIENT=0 SSH_CONNECTION=0 bazel build onos
+    [ $runTests = true ] && bazel query 'tests(//...)' | SHLVL=1 SSH_CLIENT=0 SSH_CONNECTION=0 xargs bazel test || true
+"

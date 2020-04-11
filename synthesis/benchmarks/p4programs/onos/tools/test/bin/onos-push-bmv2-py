@@ -1,0 +1,19 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# Remotely pushes bmv2 custom mininet script to a remote mininet test machine.
+# -----------------------------------------------------------------------------
+
+set -e
+
+[ ! -d "$ONOS_ROOT" ] && echo "ONOS_ROOT is not defined" >&2 && exit 1
+. $ONOS_ROOT/tools/build/envDefaults
+
+node=${1:-$OCN}
+user=$ONOS_WEB_USER
+pass=$ONOS_WEB_PASS
+
+ssh -tt $ONOS_USER@$node "
+    mkdir -p /tmp/bmv2_py
+    sudo rm -rf /tmp/bmv2_py/*
+"
+scp -qr $ONOS_ROOT/tools/dev/mininet/bmv2.py $ONOS_USER@[$node]:/tmp/bmv2_py

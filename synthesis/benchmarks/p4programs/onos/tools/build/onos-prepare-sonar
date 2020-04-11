@@ -1,0 +1,325 @@
+#!/usr/bin/env python
+
+"""
+This script prepares this ONOS directory so that the Sonar Scanner can be run.
+  - Build ONOS
+  - Run coverage tests on a per module basis, stage surefire-reports and jacoco.exec
+  - Generate sonar-project.properties file
+"""
+
+import os
+import sys
+import fnmatch
+
+from shutil import copy, rmtree
+from subprocess import check_output, STDOUT, CalledProcessError
+
+ONOS_VERSION = ''
+
+GENFILES = 'bazel-genfiles'
+BIN = 'bazel-bin'
+
+SONAR_PROJECT = GENFILES + '/sonar-project'
+SUREFIRE_REPORTS = 'surefire-reports'
+SONAR_PROPERTIES_FILE_NAME = SONAR_PROJECT + '/sonar-project.properties'
+
+# Template for the sonar properties file
+ROOT_TEMPLATE = '''# Auto-generated properties file
+sonar.projectKey=%(key)s
+sonar.projectName=%(name)s
+sonar.projectVersion=%(version)s
+
+sonar.sourceEncoding=UTF-8
+sonar.java.target = 1.8
+sonar.java.source = 1.8
+sonar.language=java
+
+sonar.junit.reportsPath = surefire-reports
+sonar.jacoco.reportPath = jacoco.exec
+
+sonar.modules=%(modules)s
+
+'''
+
+
+def split_target(target):
+    path, module = target.split(':', 2)
+    path = path.replace('//', '', 1)
+    return path, module
+
+
+def run_command(cmd):
+    output = check_output(cmd).rstrip()
+    return output.split('\n') if output else []
+
+
+def run_command_with_stderr(cmd):
+    output = check_output(cmd, stderr=STDOUT).rstrip()
+    return output.split('\n') if output else []
+
+
+def make_dirs(path):
+    try:
+        os.makedirs(path)
+    except OSError:
+        pass
+
+
+def find_bazel_project():
+    return os.path.basename(os.getcwd())
+
+
+def find_bazel_classes_directory(module_name, path):
+    bazel_bin_marker = "bazel-bin:"
+    bazel_bin_dir = ""
+    info = run_command(["bazel", "info"])
+    for bin_dir in info:
+        if bin_dir.startswith(bazel_bin_marker):
+            bazel_bin_dir = bin_dir.replace(bazel_bin_marker, "")
+            break
+    return bazel_bin_dir
+
+
+def capture_surefire_reports(module_path):
+    matches = []
+    for root, dirnames, filenames in os.walk('bazel-testlogs/' + module_path + '/src/test/java'):
+        for filename in fnmatch.filter(filenames, '*.xml'):
+            source_path = os.path.join(root, filename)
+            matches.append(source_path)
+
+            destination_path = \
+                SONAR_PROJECT + "/" + module_path + "/" + SUREFIRE_REPORTS + "/TEST-" + \
+                source_path.replace("bazel-testlogs/", "")\
+                .replace("/test.xml", "test.xml")\
+                .replace(module_path, "")\
+                .replace("/src/test/java/", "")\
+                .replace("/", ".")
+            make_dirs(path=os.path.dirname(destination_path))
+            copy(source_path, destination_path)
+
+
+def capture_jacoco(module_path):
+    source_path = '/tmp/jacoco.exec'
+    destination_path = \
+        SONAR_PROJECT + "/" + module_path
+    make_dirs(path=os.path.dirname(destination_path))
+    copy(source_path, destination_path)
+
+
+def capture_sources(module_path):
+    source_path = module_path + '/src'
+    destination_path = SONAR_PROJECT + "/" + module_path + '/src'
+    os.symlink(os.getcwd() + '/' + source_path, destination_path)
+
+
+def capture_classes(module_name, path):
+    # module name: onos-core-net
+    # path: core/net
+
+    base_project_dir = os.getcwd() + "/" + SONAR_PROJECT + "/" + path + "/"
+    base_bin_dir = os.getcwd() + "/" + BIN + "/" + path + "/lib" + module_name
+    jar_file_path = base_bin_dir + ".jar"
+    test_jar_file_path = base_bin_dir + "-tests.jar"
+    classes_directory = base_project_dir + "classes"
+    test_classes_directory = base_project_dir + "test-classes"
+
+    make_dirs(classes_directory)
+    current_directory = os.getcwd()
+    os.chdir(classes_directory)
+    run_command(["jar", "xvf", jar_file_path])
+
+    make_dirs(test_classes_directory)
+    os.chdir(test_classes_directory)
+    run_command(["jar", "xvf", test_jar_file_path])
+
+    os.chdir(current_directory)
+
+
+"""
+    Writes out the properties for a given module and stages the files needed by the scanner.
+"""
+
+
+def write_module(target, out):
+    path, module_name = split_target(target)
+    query = 'labels(srcs, "%s-native")' % target
+    tests_query = 'labels(srcs, "%s-tests")' % target
+
+    # get rid of previous data
+    try:
+        os.remove('/tmp/jacoco.exec')
+    except OSError:
+        pass
+
+    try:
+        # Find all the test targets in this package
+        coverage_target_query = "attr(name, .*-coverage, tests(//" + path + ":*))"
+        coverage_targets_result = run_command(["bazel", "query", coverage_target_query])
+
+        # Find the test targets that are coverage targets
+        run_coverage_command = ['bazel', 'test']
+        for coverage_target in coverage_targets_result:
+            run_coverage_command.append(str(coverage_target))
+    except CalledProcessError:
+        print "Error querying test files for target " + target
+        return
+
+    try:
+        # Use bazel to run all the coverage targets
+        run_coverage_command.append('--cache_test_results=no')
+        run_command(run_coverage_command)
+
+        # Find the source files used by the base library
+        sources = run_command(['bazel', 'query', query])
+
+        # Find the source files used by the tests
+        test_sources = run_command(['bazel', 'query', tests_query])
+    except CalledProcessError as exc:
+        print "Error running test files for target " + target
+        raise exc
+
+    if not os.path.exists('/tmp/jacoco.exec'):
+        # No coverage data was produced, make an empty one
+        open('/tmp/jacoco.exec', 'a').close()
+
+    # Filter out non-Java files
+    sources = \
+        [source_file for source_file in sources if "package-info" not in source_file and ".java" in source_file]
+    test_sources = \
+        [test_source_file for test_source_file in test_sources
+         if "package-info" not in test_source_file and ".java" in test_source_file]
+
+    # Adjust source file paths to be relative to the root
+    sources_filtered = []
+    for source in sources:
+        sources_filtered.append(source.replace('//' + path + ':', "", 1))
+
+    test_sources_filtered = []
+    for test_source in test_sources:
+        test_sources_filtered.append(test_source.replace('//' + path + ':', "", 1))
+
+    # create a CSL of all the source files for use in the properties file
+    sources_csl = ",".join(sources_filtered).replace("//", "").replace(":", "/")
+
+    # create a CSL of all the test source files for use in the properties file
+    test_sources_csl = ",".join(test_sources_filtered).replace("//", "").replace(":", "/")
+
+    # Write out the properties for this package
+    out.write('%s.sonar.projectBaseDir=%s\n' % (module_name, path))
+    out.write('%(name)s.sonar.projectName=%(name)s\n' % {'name': module_name})
+    out.write('%s.sonar.sources=%s\n' % (module_name, sources_csl))
+    out.write('%s.sonar.tests=%s\n' % (module_name, test_sources_csl))
+    out.write('%s.sonar.java.binaries = classes\n' % module_name)
+    out.write('%s.sonar.java.test.binaries = test-classes\n' % module_name)
+
+    # Get the dependencies for this package using bazel
+    deps_files = run_command_with_stderr(['bazel', 'build', '%s-tests-gen-deps' % target])
+
+    dep_file = ""
+    for source_file in deps_files:
+        if source_file.endswith(".txt"):
+            dep_file = source_file.strip()
+
+    libraries = []
+    with open(dep_file, 'r') as read_files:
+        lines = read_files.readline().split(',')
+
+        external_base_path = os.path.realpath(
+            os.path.realpath("bazel-" + find_bazel_project() + "/external") + "/../../..")
+        for line in lines:
+            library_file_name = line
+            if line.startswith("external"):
+                library_file_name = external_base_path + "/" + library_file_name
+            else:
+                library_file_name = os.getcwd() + "/" + library_file_name
+            libraries.append(library_file_name)
+
+    out.write('%s.sonar.java.libraries = %s\n' % (module_name, ",".join(libraries)))
+
+    # Capture files needed by the scanner into the staging area
+    capture_surefire_reports(path)
+    capture_jacoco(path)
+    capture_sources(path)
+    capture_classes(module_name, path)
+
+
+'''
+    Extracts the ONOS version string from the bazel variables.
+'''
+
+
+def _extract_onos_version():
+    bazel_vars_path = os.getcwd() + "/tools/build/bazel/variables.bzl"
+    with open(bazel_vars_path, 'r') as bazel_vars_file:
+        for bazel_var in bazel_vars_file.readlines():
+            if "ONOS_VERSION" in bazel_var:
+                return bazel_var.replace(" ", "").replace('ONOS_VERSION="', '').replace('"', '')
+
+
+def _main():
+    global ONOS_ROOT, ONOS_VERSION, targets
+    debug = False
+    if len(sys.argv) > 1:
+        debug = True
+
+    # Change to $ONOS_ROOT
+    ONOS_ROOT = os.environ['ONOS_ROOT']
+    if ONOS_ROOT:
+        os.chdir(ONOS_ROOT)
+
+    # extract the ONOS version string
+    ONOS_VERSION = _extract_onos_version()
+
+    # build ONOS
+    run_command(["bazel", "build", "onos"])
+
+    # find the test targets to get coverage for
+    if debug:
+        # Use a predefined list of targets for debugging
+        targets = ['//core/net:onos-core-net', '//utils/misc:onlab-misc']
+    else:
+        # Query all onos OSGi jar file rules with tests from bazel
+        targets = run_command(["bazel", "query", "attr('name', '.*-tests-gen', '//...')"])
+        targets = [target.replace("-tests-gen-deps", "") for target in targets]
+
+    # Filter out targets without any tests in them
+    targets_with_tests = []
+    for target in targets:
+        colon = target.find(':')
+        base_target = target[0:colon]
+        target_query_result = run_command(['bazel', 'query', 'tests(' + base_target + ':*)'])
+        for result_line in target_query_result:
+            if "src/test" in result_line:
+                targets_with_tests.append(target)
+                break
+    targets = targets_with_tests
+
+    # Clear out any old results
+    rmtree(SONAR_PROJECT, True)
+
+    # make a directory for the new results
+    make_dirs(SONAR_PROJECT)
+
+    # fill in the template for the sonar properties
+    sonar_parameters = {
+        'name': 'onos',
+        'key': 'org.onosproject:onos',
+        'version': ONOS_VERSION,
+        'jacoco': '/tmp/jacoco.exec',
+        'reports': 'surefire-reports',
+        'modules': ','.join([split_target(t)[1] for t in targets])
+    }
+    if debug:
+        sonar_parameters["key"] = 'org.onosproject:onos-test-sonar'
+        sonar_parameters["name"] = 'onos-test-sonar'
+
+    # Write the sonar properties file
+    with open(SONAR_PROPERTIES_FILE_NAME, 'w') as out:
+        out.write(ROOT_TEMPLATE % sonar_parameters)
+        for target in targets:
+            print "Processing coverage for target " + target
+            write_module(target, out)
+
+
+if __name__ == "__main__":
+    _main()

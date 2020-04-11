@@ -1,0 +1,103 @@
+{
+  "type": "object",
+  "title": "hosts",
+  "required": [
+    "hosts"
+  ],
+  "properties": {
+    "hosts": {
+      "type": "array",
+      "xml": {
+        "name": "hosts",
+        "wrapped": true
+      },
+      "items": {
+        "type": "object",
+        "title": "host",
+        "required": [
+          "id",
+          "mac",
+          "vlan",
+          "ipAddresses",
+          "location"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "46:E4:3C:A4:17:C8/-1"
+          },
+          "mac": {
+            "type": "string",
+            "example": "46:E4:3C:A4:17:C8"
+          },
+          "vlan": {
+            "type": "string",
+            "example": "-1"
+          },
+          "ipAddresses": {
+            "type": "array",
+            "xml": {
+              "name": "hosts",
+              "wrapped": true
+            },
+            "items": {
+              "type": "string",
+              "example": "127.0.0.1"
+            }
+          },
+          "locations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "title": "location",
+              "required": [
+                "elementId",
+                "port"
+              ],
+              "properties": {
+                "elementId": {
+                  "type": "string",
+                  "example": "of:0000000000000002"
+                },
+                "port": {
+                  "type": "string",
+                  "example": "3"
+                }
+              }
+            }
+          },
+          "auxLocations": {
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "title": "location",
+              "required": [
+                "elementId",
+                "port"
+              ],
+              "properties": {
+                "elementId": {
+                  "type": "string",
+                  "example": "of:0000000000000003"
+                },
+                "port": {
+                  "type": "string",
+                  "example": "4"
+                }
+              }
+            }
+          },
+          "innerVlan": {
+            "type": "string",
+            "example": "-1"
+          },
+          "outerTpid": {
+            "type": "string",
+            "example": "unknown"
+          }
+        }
+      }
+    }
+  }
+}

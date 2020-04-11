@@ -1,0 +1,39 @@
+<!--
+  ~ Copyright 2017-present Open Networking Foundation
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+<scenario name="yang-live-compile" description="Live YANG compilation">
+    <group name="YANG-Live-Compile">
+        <step name="Activate-YANG-Runtime" exec="onos ${OC1} app activate org.onosproject.yang"/>
+        <step name="Pre-Cleanup-YANG-Model" exec="onos ${OC1} app uninstall l3vpn" env="~"/>
+        <step name="Check-YANG-Runtime" exec="onos-check-apps ${OC1} gui,drivers,yang includes"
+              requires="Activate-YANG-Runtime"/>
+        <step name="Compile-YANG-Model" exec="onos-compile-yang ${OC1} ${ONOS_ROOT}/tools/test/configs/yang"
+              requires="Check-YANG-Runtime,Pre-Cleanup-YANG-Model"/>
+
+        <group name="Verify-YANG-Models" requires="Compile-YANG-Model">
+            <parallel var="${OC#}">
+                <step name="Verify-Model-Registration-${#}"
+                      exec="onos ${OC#} models | grep l3vpn"/>
+                <step name="Verify-Model-Component-${#}"
+                      exec="onos-check-component ${OC#} yang.YangModelRegistrator ACTIVE"/>
+                <step name="Verify-YANG-Apps-${#}"
+                      exec="onos-check-apps ${OC#} gui,drivers,yang,l3vpn includes"/>
+            </parallel>
+        </group>
+
+        <step name="Cleanup-YANG-Model" exec="onos ${OC1} app uninstall l3vpn"
+              requires="Verify-YANG-Models"/>
+    </group>
+</scenario>

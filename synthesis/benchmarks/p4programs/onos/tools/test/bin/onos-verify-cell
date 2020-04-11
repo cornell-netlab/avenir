@@ -1,0 +1,23 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# Verifies connectivity to each node in ONOS cell.
+# -----------------------------------------------------------------------------
+
+[ ! -d "$ONOS_ROOT" ] && echo "ONOS_ROOT is not defined" >&2 && exit 1
+. $ONOS_ROOT/tools/build/envDefaults
+
+let err=0
+
+for node in $OCT $OCN $(env | sort | egrep "^OC[C]*[0-9]+" | cut -d= -f2 | sort -u); do
+    for i in {1..18}; do
+        printf "%s: " $node; ssh -n -q -o StrictHostKeyChecking=no -o PasswordAuthentication=no -o ConnectTimeout=10 $ONOS_USER@$node hostname
+        if [ $? -eq 0 ]; then
+            let err=0
+            break
+        fi
+        let err=1+$err
+    done
+    if [ $err -ne 0 ]; then
+        exit 1
+    fi
+done

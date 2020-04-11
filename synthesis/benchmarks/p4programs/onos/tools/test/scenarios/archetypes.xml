@@ -1,0 +1,114 @@
+<!--
+  ~ Copyright 2015-present Open Networking Foundation
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+<scenario name="archetypes" description="ONOS archetypes test">
+    <group name="Archetypes" cwd="${WORKSPACE}/tmp/test-app">
+        <step name="Clean-Up" cwd="${WORKSPACE}/tmp" env="~"
+              exec="rm -r test-app"/>
+
+        <step name="Create-App" cwd="${WORKSPACE}/tmp" requires="^"
+              exec="onos-create-app app org.test.app test-app 1.2.3 org.test.app -DinteractiveMode=false"/>
+        <step name="Build-App" requires="Create-App" exec="mvn clean install"/>
+        <step name="Install-App" requires="^"
+              exec="onos-app ${OCI} install! target/test-app-1.2.3.oar"/>
+        <group name="Verify-App"
+            requires="Install-App" delay="5" >
+            <parallel var="${OC#}">
+                <step name="Verify-App-${#}"
+                      exec="onos ${OC#} scr:info org.test.app.AppComponent"/>
+            </parallel>
+        </group>
+
+        <step name="Create-App-CLI-Overlay" requires="Install-App"
+              exec="onos-create-app cli org.test.app test-app 1.2.3 org.test.app -DinteractiveMode=false"/>
+        <step name="Build-App-With-CLI" requires="^"
+              exec="mvn clean install"/>
+        <step name="Reinstall-App-With-CLI" requires="^,~Verify-App"
+              exec="onos-app ${OCI} reinstall! target/test-app-1.2.3.oar"/>
+        <group name="Verify-CLI"
+            requires="Reinstall-App-With-CLI" delay="2" >
+            <parallel var="${OC#}">
+                <step name="Verify-CLI-${#}"
+                      exec="onos ${OC#} sample" include="Hello World"/>
+            </parallel>
+        </group>
+
+        <step name="Create-App-UI-Overlay" requires="Reinstall-App-With-CLI"
+              exec="onos-create-app ui org.test.app test-app 1.2.3 org.test.app -DinteractiveMode=false"/>
+        <step name="Build-App-With-UI" requires="^"
+              exec="mvn clean install"/>
+        <step name="Reinstall-App-With-UI" requires="^,~Verify-CLI"
+              exec="onos-app ${OCI} reinstall! target/test-app-1.2.3.oar"/>
+        <group name="Verify-UI"
+            requires="Reinstall-App-With-UI" delay="2" >
+            <parallel var="${OC#}">
+                <step name="Verify-UI-${#}"
+                      exec="onos-check-views ${OC#} id=sample"/>
+            </parallel>
+        </group>
+
+        <step name="Create-App-UI-Table-Overlay" requires="Reinstall-App-With-UI"
+              exec="onos-create-app uitab org.test.app test-app 1.2.3 org.test.app -DinteractiveMode=false"/>
+        <step name="Build-App-With-UI-Table" requires="^"
+              exec="mvn clean install"/>
+        <step name="Reinstall-App-With-UI-Table" requires="^,~Verify-UI"
+              exec="onos-app ${OCI} reinstall! target/test-app-1.2.3.oar"/>
+        <group name="Verify-UI-Table"
+            requires="Reinstall-App-With-UI-Table" delay="2" >
+            <parallel var="${OC#}">
+                <step name="Verify-UI-Table-${#}"
+                      exec="onos-check-views ${OC#} id=sample"/>
+            </parallel>
+        </group>
+
+        <step name="Create-App-UI-Topo-Overlay" requires="Reinstall-App-With-UI-Table"
+              exec="onos-create-app uitopo org.test.app test-app 1.2.3 org.test.app -DinteractiveMode=false"/>
+        <step name="Build-App-With-UI-Topo" requires="^"
+              exec="mvn clean install"/>
+        <step name="Reinstall-App-With-UI-Topo" requires="^,~Verify-UI-Table"
+              exec="onos-app ${OCI} reinstall! target/test-app-1.2.3.oar"/>
+        <group name="Verify-UI-Topo"
+            requires="Reinstall-App-With-UI-Topo" delay="2" >
+            <parallel var="${OC#}">
+                <step name="Verify-UI-Topo-${#}"
+                      exec="onos-check-views ${OC#} id=sample"/>
+            </parallel>
+        </group>
+
+        <step name="Create-REST-Overlay" requires="Verify-UI-Topo"
+              exec="onos-create-app rest org.test.app test-app 1.2.3 org.test.app -DinteractiveMode=false"/>
+        <step name="Build-REST-App" requires="^"
+              exec="mvn clean install"/>
+        <step name="Install-REST-App" requires="^,~Verify-UI-Topo"
+              exec="onos-app ${OCI} reinstall! target/test-app-1.2.3.oar"/>
+        <group name="Verify-REST" requires="Install-REST-App" delay="2" >
+            <parallel var="${OC#}">
+                <step name="Verify-REST-CLI-${#}"
+                      exec="onos ${OC#} sample" include="Hello World"/>
+                <step name="Verify-REST-App-${#}"
+                      exec="curl-with-retry http://${OC#}:8181/onos/test-app/sample"
+                      include="{&quot;hello&quot;:&quot;world&quot;}"/>
+            </parallel>
+        </group>
+
+        <step name="Uninstall-App" requires="Verify-REST"
+              exec="onos-app ${OCI} uninstall org.foo.app"/>
+
+        <parallel var="${OC#}">
+            <step name="Archetypes-Check-Logs-${#}" requires="Uninstall-App"
+                  exec="onos-check-logs ${OC#}"/>
+        </parallel>
+    </group>
+</scenario>

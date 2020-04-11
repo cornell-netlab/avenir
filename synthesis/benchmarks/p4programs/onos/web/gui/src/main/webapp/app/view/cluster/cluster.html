@@ -1,0 +1,60 @@
+<!-- Cluster partial HTML -->
+<div id="ov-cluster">
+    <div class="tabular-header">
+        <h2>
+            {{lion('title_cluster_nodes')}}
+            ({{tableData.length}} {{lion('total')}})
+        </h2>
+        <div class="ctrl-btns">
+            <div class="refresh" ng-class="{active: autoRefresh}"
+                 icon icon-size="42" icon-id="refresh"
+                 tooltip tt-msg="autoRefreshTip"
+                 ng-click="toggleRefresh()"></div>
+        </div>
+    </div>
+
+    <div class="summary-list" onos-table-resize>
+        <div class="table-header" onos-sortable-header>
+            <table>
+                <tr>
+                    <td colId="_iconid_state" class="table-icon"
+                        col-width="84px" sortable> {{lion('active')}} </td>
+                    <td colId="_iconid_started" class="table-icon"
+                        col-width="90px" sortable> {{lion('started')}} </td>
+                    <td colId="id" sortable> {{lion('node_id')}} </td>
+                    <td colId="ip" sortable> {{lion('ip_address')}} </td>
+                    <td colId="tcp" sortable> {{lion('tcp_port')}} </td>
+                    <td colId="updated" sortable> {{lion('last_updated')}} </td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="table-body">
+            <table onos-flash-changes id-prop="id">
+                <tr ng-if="!tableData.length" class="no-data">
+                    <td colspan="5">
+                        {{annots.no_rows_msg}}
+                    </td>
+                </tr>
+
+                <tr ng-repeat="node in tableData track by $index"
+                    ng-click="selectCallback($event, node)"
+                    ng-class="{selected: node.id === selId}"
+                    ng-repeat-complete row-id="{{node.id}}">
+                    <td class="table-icon">
+                        <div icon icon-id="{{node._iconid_state}}"></div>
+                    </td>
+                    <td class="table-icon">
+                        <div icon icon-id="{{node._iconid_started}}"></div>
+                    </td>
+                    <td>{{node.id}}</td>
+                    <td>{{node.ip}}</td>
+                    <td>{{node.tcp}}</td>
+                    <td>{{node.updated}}</td>
+                </tr>
+            </table>
+        </div>
+
+    </div>
+    <cluster-details-panel></cluster-details-panel>
+</div>

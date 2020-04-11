@@ -1,0 +1,58 @@
+description: "Chassis config for leaf 1"
+chassis {
+  platform: PLT_P4_SOFT_SWITCH
+  name: "Leaf 1 - Wedge100BF"
+}
+nodes {
+  id: 1
+  slot: 1
+  index: 1
+}
+singleton_ports {
+  id: 128
+  name: "1/0"
+  slot: 1
+  port: 1
+  speed_bps: 100000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+    autoneg: TRI_STATE_FALSE
+  }
+  node: 1
+}
+singleton_ports {
+  id: 136
+  name: "2/0"
+  slot: 1
+  port: 2
+  speed_bps: 100000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+    autoneg: TRI_STATE_FALSE
+  }
+  node: 1
+}
+singleton_ports {
+  id: 144
+  name: "3/0"
+  slot: 1
+  port: 3
+  speed_bps: 100000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+    autoneg: TRI_STATE_FALSE
+  }
+  node: 1
+}
+singleton_ports {
+  id: 152
+  name: "4/0"
+  slot: 1
+  port: 4
+  speed_bps: 40000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+    autoneg: TRI_STATE_TRUE
+  }
+  node: 1
+}

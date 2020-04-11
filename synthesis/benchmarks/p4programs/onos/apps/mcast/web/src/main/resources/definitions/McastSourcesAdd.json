@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "title": "sources",
+  "required": [
+    "sources"
+  ],
+  "properties": {
+    "sources": {
+      "type": "array",
+      "xml": {
+        "name": "sources",
+        "wrapped": true
+      },
+      "items": {
+        "type": "string",
+        "example": "00:CC:00:00:00:02/None",
+        "description": "A host source for the route"
+      },
+      "description": "Host source for the route"
+    }
+  }
+}

@@ -1,0 +1,39 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# Changes ONOS version in POM files, and other release artifacts.
+# -----------------------------------------------------------------------------
+
+set -e
+
+[ ! -d "$ONOS_ROOT" ] && echo "ONOS_ROOT is not defined" >&2 && exit 1
+. $ONOS_ROOT/tools/build/envDefaults
+
+export NEW_VERSION=$1
+[ -z "$NEW_VERSION" ] && echo "New ONOS version not specified" && exit 1
+
+export NEW_VERSION_SHORT=${NEW_VERSION%-SNAPSHOT}
+
+cd $ONOS_ROOT
+
+# Augment the version in envDefaults, onos.py and archetypes test
+sed -i".VERBACK" -E "s/ONOS_VERSION:-[^$]*/ONOS_VERSION:-$NEW_VERSION_SHORT./" $ONOS_ROOT/tools/build/envDefaults
+sed -i".VERBACK" -E "s/features\/.*\/xml/features\/$NEW_VERSION\/xml/" $ONOS_ROOT/tools/dev/mininet/onos.py
+sed -i".VERBACK" -E "s/ -Dversion=.*\"/ -Dversion=$NEW_VERSION\"/" $ONOS_ROOT/tools/test/bin/onos-archetypes-test
+sed -i".VERBACK" -E "s/ONOS_POM_VERSION=.*\"/ONOS_POM_VERSION=\"$NEW_VERSION\"/" $ONOS_ROOT/tools/build/envDefaults
+
+# Augment fallback version in VersionManager
+sed -i".VERBACK" -E "s/Version\.version\(\"[^\"]*\"\)/Version.version(\"$NEW_VERSION\")/" \
+   $ONOS_ROOT/core/net/src/main/java/org/onosproject/core/impl/VersionManager.java
+
+# Augment the version in archetypes tree.
+mvn -q -B -f tools/package/archetypes/pom.xml versions:set -DnewVersion=$NEW_VERSION versions:commit
+for atype in api bundle cli rest ui ui2 uitab uitopo; do
+    meta="tools/package/archetypes/$atype/src/main/resources/META-INF/maven/archetype-metadata.xml"
+    sed -i".VERBACK" -E "1,/<defaultValue>/s/<defaultValue>[^<]*</<defaultValue>$NEW_VERSION</g" $meta
+done
+sed -i".VERBACK" -E "s/-DarchetypeVersion=[^\"]*/-DarchetypeVersion=$NEW_VERSION/g" $ONOS_ROOT/tools/test/bin/onos-archetypes-test
+
+# Version the bazel artifacts
+sed -i".VERBACK" -E "s/ONOS_VERSION.*/ONOS_VERSION = \"$NEW_VERSION\"/" tools/build/bazel/variables.bzl
+
+find . -name "*.VERBACK" | xargs rm -f

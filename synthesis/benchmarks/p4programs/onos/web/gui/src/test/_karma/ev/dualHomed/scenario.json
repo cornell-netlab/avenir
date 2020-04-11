@@ -1,0 +1,26 @@
+{
+  "comments": [
+    "Single Host connected to two devices (Dual-Homed)."
+  ],
+  "title": "Dual-Homed Scenario",
+  "params": {
+    "lastAuto": 0
+  },
+  "description": [
+    "Simple sequence of events...",
+    "",
+    "1. add instance",
+    "2. add device [205]",
+    "3. add device [206]",
+    "4. add link [205] --> [206]",
+    "5. add link [206] --> [205]",
+    "6. add host (to [206])",
+    "7. update device [205]",
+    "8. update device [206]",
+    "9. move host (to include [205])",
+    "10. remove host",
+    "11. update device [206",
+    "12. add host (to [206])",
+    "13. update host"
+  ]
+}

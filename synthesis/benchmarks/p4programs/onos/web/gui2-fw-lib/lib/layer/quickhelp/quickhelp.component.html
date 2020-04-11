@@ -1,0 +1,72 @@
+<!--
+~ Copyright 2019-present Open Networking Foundation
+~
+~ Licensed under the Apache License, Version 2.0 (the "License");
+~ you may not use this file except in compliance with the License.
+~ You may obtain a copy of the License at
+~
+~     http://www.apache.org/licenses/LICENSE-2.0
+~
+~ Unless required by applicable law or agreed to in writing, software
+~ distributed under the License is distributed on an "AS IS" BASIS,
+~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+~ See the License for the specific language governing permissions and
+~ limitations under the License.
+-->
+<div id="quickhelp" [@quickHelpState]="ks.quickHelpShown">
+    <div class="help" *ngIf="ks.quickHelpShown">
+        <p class="title">{{lionFn("qh_title")}}</p>
+        <!-- TODO: drive this through the keys service keyHandler -->
+        <table class="qhrow">
+            <tr>
+                <td class="key">&#92;</td>
+                <td class="desc">{{lionFn("qh_hint_show_hide_qh")}}</td>
+            </tr>
+            <tr>
+                <td class="key">/</td>
+                <td class="desc">{{lionFn("qh_hint_show_hide_qh")}}</td>
+            </tr>
+            <tr>
+                <td class="key">Esc</td>
+                <td class="desc">{{lionFn("qh_hint_esc")}}</td>
+            </tr>
+            <tr>
+                <td class="key">T</td>
+                <td class="desc">{{lionFn("qh_hint_t")}}</td>
+            </tr>
+        </table>
+        <hr class="qhrowsep">
+        <table class="qhrow">
+            <tr *ngFor="let vk of viewKeys; i as index">
+                <ng-container *ngFor="let vkrow of vk">
+                    <td class="key">{{vkrow.keystroke}}</td>
+                    <td class="desc">{{vkrow.text}}</td>
+                </ng-container>
+            </tr>
+        </table>
+        <hr class="qhrowsep">
+        <div class="qhrow">
+            <table class="qh-r4-c0">
+                <tr>
+                    <td class="key">{{lionFnTopo("click")}}</td>
+                    <td class="desc">{{lionFnTopo("qh_gest_click")}}</td>
+                </tr>
+                <tr>
+                    <td class="key">{{lionFnTopo("shift_click")}}</td>
+                    <td class="desc">{{lionFnTopo("qh_gest_shift_click")}}</td>
+                </tr>
+                <tr>
+                    <td class="key">{{lionFnTopo("drag")}}</td>
+                    <td class="desc">{{lionFnTopo("qh_gest_drag")}}</td>
+                </tr>
+                <tr>
+                    <td class="key">{{lionFnTopo("cmd_scroll")}}</td>
+                    <td class="desc">{{lionFnTopo("qh_gest_cmd_scroll")}}</td>
+                </tr>
+                <tr>
+                    <td class="key" y="48">{{lionFnTopo("drag")}}</td>
+                    <td class="desc" y="48" x="74.84375">{{lionFnTopo("qh_gest_cmd_drag")}}</tr>
+            </table>
+        </div>
+    </div>
+</div>

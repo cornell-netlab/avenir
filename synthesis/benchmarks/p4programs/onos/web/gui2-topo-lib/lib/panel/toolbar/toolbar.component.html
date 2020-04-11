@@ -1,0 +1,88 @@
+<!--
+~ Copyright 2018-present Open Networking Foundation
+~
+~ Licensed under the Apache License, Version 2.0 (the "License");
+~ you may not use this file except in compliance with the License.
+~ You may obtain a copy of the License at
+~
+~     http://www.apache.org/licenses/LICENSE-2.0
+~
+~ Unless required by applicable law or agreed to in writing, software
+~ distributed under the License is distributed on an "AS IS" BASIS,
+~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+~ See the License for the specific language governing permissions and
+~ limitations under the License.
+-->
+<div id="toolbar-topo2-toolbar" class="floatpanel toolbar" [@toolbarState]="on"
+     style="opacity: 1; left: 0px; width: 286px; top: auto; bottom: 10px;">
+    <div class="tbar-arrow" (click)="on =! on">
+        <onos-icon [iconSize]="10" [iconId]="on?'triangleLeft':'triangleRight'"></onos-icon>
+    </div>
+    <div class="tbar-row ctrl-btns">
+        <div class="toggleButton" id="toolbar-topo2-toolbar-topo2-instance-tog" (click)="buttonClicked('instance-tog')">
+            <onos-icon [iconSize]="25" iconId="m_uiAttached" [toolTip]="lionFn('tbtt_tog_instances')" [classes]="['toggleButton', instancesVisible?'selected':'']"></onos-icon>
+        </div>
+        <div class="toggleButton" id="toolbar-topo2-toolbar-topo2-summary-tog" (click)="buttonClicked('summary-tog')">
+            <onos-icon [iconSize]="25" iconId="m_summary" [toolTip]="lionFn('tbtt_tog_summary')" [classes]="['toggleButton', summaryVisible?'selected':'']"></onos-icon>
+        </div>
+        <div class="toggleButton" id="toolbar-topo2-toolbar-details-tog" (click)="buttonClicked('details-tog')">
+            <onos-icon [iconSize]="25" iconId="m_details" [toolTip]="lionFn('tbtt_tog_use_detail')" [classes]="['toggleButton', detailsVisible?'selected':'']"></onos-icon>
+        </div>
+        <div class="separator"></div>
+        <div class="toggleButton" id="toolbar-topo2-toolbar-hosts-tog" (click)="buttonClicked('hosts-tog')">
+            <onos-icon [iconSize]="25" iconId="m_endstation" [toolTip]="lionFn('tbtt_tog_host')" [classes]="['toggleButton', hostsVisible?'selected':'']"></onos-icon>
+        </div>
+        <div class="toggleButton" id="toolbar-topo2-toolbar-offline-tog" (click)="buttonClicked('offline-tog')">
+            <onos-icon [iconSize]="25" iconId="m_switch" [toolTip]="lionFn('tbtt_tog_offline')" classes="toggleButton selected"></onos-icon>
+        </div>
+        <div class="toggleButton" id="toolbar-topo2-toolbar-topo2-ports-tog" (click)="buttonClicked('ports-tog')">
+            <onos-icon [iconSize]="25" iconId="m_ports" [toolTip]="lionFn('tbtt_tog_porthi')" classes="toggleButton selected" [classes]="['toggleButton', portsVisible?'selected':'']"></onos-icon>
+        </div>
+        <div class="toggleButton" id="toolbar-topo2-toolbar-topo2-bkgrnd-tog" (click)="buttonClicked('bkgrnd-tog')">
+            <onos-icon [iconSize]="25" iconId="m_map" [toolTip]="lionFn('tbtt_tog_map')" classes="toggleButton selected" [classes]="['toggleButton', backgroundVisible?'selected':'']"></onos-icon>
+        </div>
+        <div class="toggleButton" id="toolbar-topo2-toolbar-topo2-bkgrnd-sel" (click)="buttonClicked('bkgrnd-sel')">
+            <onos-icon [iconSize]="25" iconId="m_selectMap" [toolTip]="lionFn('tbtt_sel_map')" classes="button"></onos-icon>
+        </div>
+    </div>
+    <br>
+    <div class="tbar-row">
+        <div class="button" id="toolbar-topo2-toolbar-topo2-cycleLabels-btn" (click)="buttonClicked('cycleLabels-btn')">
+            <onos-icon [iconSize]="25" iconId="m_cycleLabels" [toolTip]="lionFn('tbtt_cyc_dev_labs')" classes="button"></onos-icon>
+        </div>
+        <div class="button" id="toolbar-topo2-toolbar-topo2-resetZoom-btn" (click)="buttonClicked('resetZoom-btn')">
+            <onos-icon [iconSize]="25" iconId="m_resetZoom" [toolTip]="lionFn('tbtt_reset_zoom')" classes="button"></onos-icon>
+        </div>
+        <div class="separator"></div>
+        <div class="button" id="toolbar-topo2-toolbar-topo2-eqMaster-btn" (click)="buttonClicked('eqMaster-btn')">
+            <onos-icon [iconSize]="25" iconId="m_eqMaster" [toolTip]="lionFn('tbtt_eq_master')" classes="button"></onos-icon>
+        </div>
+        <div class="separator"></div>
+        <div class="radioSet" id="toolbar-topo2-traffic">
+            <div class="radioButton selected" id="toolbar-topo2-cancel-traffic" (click)="buttonClicked('cancel-traffic')">
+                <onos-icon [iconSize]="25" iconId="m_unknown" [toolTip]="lionFn('tr_btn_cancel_monitoring')" classes="radioButton selected"></onos-icon>
+            </div>
+            <div class="radioButton" id="toolbar-topo2-all-traffic" (click)="buttonClicked('all-traffic')">
+                <onos-icon [iconSize]="25" iconId="m_allTraffic" [toolTip]="lionFn('tr_btn_show_related_traffic')" classes="radioButton selected"></onos-icon>
+            </div>
+        </div>
+        <div class="separator"></div>
+        <div class="button" id="toolbar-topo2-toolbar-topo2-quickhelp" (click)="buttonClicked('quickhelp-btn')">
+            <onos-icon [iconSize]="25" iconId="query" [toolTip]="lionFn('qh_title')" classes="button"></onos-icon>
+        </div>
+        <div class="button" id="toolbar-topo2-toolbar-topo2-cycleGrid-btn" (click)="buttonClicked('cycleGridDisplay-btn')">
+            <onos-icon [iconSize]="25" iconId="m_cycleGridDisplay" [toolTip]="lionFn('tbtt_cyc_grid_display')" classes="button"></onos-icon>
+        </div>
+    </div>
+    <div class="tbar-row">
+        <div class="button" id="toolbar-topo2-toolbar-topo2-layout-default" (click)="buttonClicked('layout-default-btn')">
+            <onos-icon iconSize="25" iconId="m_fiberSwitch" toolTip="Default (force-based) layout" classes="button"></onos-icon>
+        </div>
+        <div class="button" id="toolbar-topo2-toolbar-topo2-layout-access" (click)="buttonClicked('layout-access-btn')">
+            <onos-icon iconSize="25" iconId="m_disjointPaths" toolTip="Access layout - separate service leafs" classes="button"></onos-icon>
+        </div>
+        <div class="button" id="toolbar-topo2-toolbar-topo2-alarms-tog" (click)="buttonClicked('alarms-tog')">
+            <onos-icon iconSize="25" iconId="clock" toolTip="Toggle Alarms display" classes="button" [classes]="['toggleButton', alarmsVisible?'selected':'']"></onos-icon>
+        </div>
+    </div>
+</div>

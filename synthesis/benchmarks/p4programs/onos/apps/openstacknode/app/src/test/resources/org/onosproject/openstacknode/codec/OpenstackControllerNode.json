@@ -1,0 +1,22 @@
+{
+  "hostname": "controller",
+  "type": "CONTROLLER",
+  "managementIp": "172.16.130.10",
+  "keystoneConfig": {
+    "endpoint": "172.16.130.10:35357/v2.0",
+    "authentication": {
+      "version": "v2.0",
+      "protocol": "HTTP",
+      "project": "admin",
+      "username": "admin",
+      "password": "nova",
+      "perspective": "PUBLIC"
+    }
+  },
+  "neutronConfig": {
+    "useMetadataProxy": true,
+    "metadataProxySecret": "onos",
+    "novaMetadataIp": "172.16.130.10",
+    "novaMetadataPort": 8775
+  }
+}

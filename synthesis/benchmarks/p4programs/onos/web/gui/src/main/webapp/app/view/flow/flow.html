@@ -1,0 +1,137 @@
+<!-- Flow partial HTML -->
+<div id="ov-flow">
+    <div class="tabular-header">
+        <h2>
+           {{lion('title_flows')}}{{devId || "(No device selected)"}}
+            ({{tableData.length}} {{lion('total')}})
+        </h2>
+
+        <div class="ctrl-btns">
+            <div class="refresh" ng-class="{active: autoRefresh}"
+                 icon icon-size="42" icon-id="refresh"
+                 tooltip tt-msg="autoRefreshTip"
+                 ng-click="toggleRefresh()"></div>
+
+            <div class="separator"></div>
+
+            <span ng-if="brief">
+            <div class="active"
+                 icon icon-id="plus" icon-size="42"
+                 tooltip tt-msg="detailTip"
+                 ng-click="briefToggle()"> </div>
+            </span>
+
+            <span ng-if="!brief">
+            <div class="active"
+                 icon icon-id="minus" icon-size="42"
+                 tooltip tt-msg="briefTip"
+                 ng-click="briefToggle()"> </div>
+            </span>
+
+            <div class="separator"></div>
+
+            <div class="active"
+                 icon icon-id="deviceTable" icon-size="42"
+                 tooltip tt-msg="deviceTip"
+                 ng-click="nav('device')"></div>
+
+            <div class="current-view"
+                 icon icon-id="flowTable" icon-size="42"></div>
+
+            <div class="active"
+                 icon icon-id="portTable" icon-size="42"
+                 tooltip tt-msg="portTip"
+                 ng-click="nav('port')"></div>
+
+            <div class="active"
+                 icon icon-id="groupTable" icon-size="42"
+                 tooltip tt-msg="groupTip"
+                 ng-click="nav('group')"></div>
+
+            <div class="active"
+                 icon icon-id="meterTable" icon-size="42"
+                 tooltip tt-msg="meterTip"
+                 ng-click="nav('meter')"></div>
+
+            <div class="active"
+                 icon icon-id="pipeconfTable" icon-size="42"
+                 tooltip tt-msg="pipeconfTip"
+                 ng-click="nav('pipeconf')"></div>
+
+        </div>
+
+        <div class="search">
+            <input type="text" ng-model="queryTxt" placeholder="Search"/>
+            <select ng-model="queryBy">
+                <option value="" disabled>Search By</option>
+                <option value="$">All Fields</option>
+                <!--<option value="id">Flow ID</option>-->
+                <option value="priority">Priority</option>
+                <option value="tableName">Table Name</option>
+                <option value="selector">Selector</option>
+                <option value="treatment">Treatment</option>
+                <option value="appName">App Name</option>
+            </select>
+        </div>
+
+    </div>
+
+    <div class="summary-list" onos-table-resize>
+        <div class="table-header" onos-sortable-header>
+            <table>
+                <tr>
+                    <!--<td colId="id" col-width="180px" sortable>Flow ID </td>-->
+                    <td colId="state" col-width="100px" sortable>{{lion('state')}}</td>
+                    <!--<td class="right" colId="bytes" col-width="90px" sortable> Bytes </td>-->
+                    <td class="right" colId="packets" col-width="90px" sortable>{{lion('packets')}}</td>
+                    <td class="right" colId="duration" col-width="90px" sortable>{{lion('duration')}}</td>
+                    <td colId="priority" col-width="80px" sortable>{{lion('priority')}}</td>
+                    <td colId="tableName" col-width="120px" sortable>{{lion('tableName')}}</td>
+                    <td colId="selector" sortable>{{lion('selector')}}  </td>
+                    <td colId="treatment" sortable>{{lion('treatment')}}  </td>
+                    <td colId="appName" sortable>{{lion('appName')}}  </td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="table-body">
+            <table onos-flash-changes id-prop="id">
+                <tr ng-if="!tableData.length" class="no-data">
+                    <td colspan="10">
+                        {{annots.no_rows_msg}}
+                    </td>
+                </tr>
+
+                <tr ng-repeat-start="flow in tableData | filter:queryFilter track by $index"
+                    ng-click="selectCallback($event, flow)"
+                    ng-class="{selected: flow.id === selId}"
+                    ng-repeat-complete row-id="{{flow.id}}">
+
+                    <!--<td>{{flow.id}}</td>-->
+                    <td>{{flow.state}}</td>
+                    <!--<td class="right">{{flow.bytes}}</td>-->
+                    <td class="right">{{flow.packets}}</td>
+                    <td class="right">{{flow.duration}}</td>
+                    <td>{{flow.priority}}</td>
+                    <td>{{flow.tableName}}</td>
+                    <td>{{flow.selector_c}}</td>
+                    <td>{{flow.treatment_c}}</td>
+                    <td>{{flow.appName}}</td>
+                </tr>
+                <tr ng-click="selectCallback($event, flow)"
+                    ng-class="{selected: flow.id === selId}"
+                    row-id="{{flow.id}}" ng-hide="brief">
+                    <td class="selector" colspan="8" >{{flow.selector}} </td>
+                </tr>
+                <tr ng-click="selectCallback($event, flow)"
+                    ng-class="{selected: flow.id === selId}"
+                    row-id="{{flow.id}}" ng-hide="brief" ng-repeat-end>
+                    <td class="treatment" colspan="8">{{flow.treatment}}</td>
+                </tr>
+            </table>
+        </div>
+
+    </div>
+    <flow-details-panel></flow-details-panel>
+
+</div>

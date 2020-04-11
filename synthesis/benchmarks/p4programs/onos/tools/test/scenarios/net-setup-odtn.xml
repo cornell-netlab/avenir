@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+<!--
+  ~ Copyright 2015-present Open Networking Foundation
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+<scenario name="net-setup-odtn" description="ODTN network setup steps">
+  <group name="ODTN-Net-Setup">
+    <!-- Clean -->
+    <step name="ODTN-Net-Setup.Wipe-Out-Data-Before" exec="onos-wipe-out"/>
+    <!-- Make sure that there is no data in the system -->
+    <step name="ODTN-Net-Setup.Initial-Summary-Check" requires="~ODTN-Net-Setup.Wipe-Out-Data-Before" exec="onos-check-summary ${OC1} [0-9]* 0 0 0"/>
+    <step name="ODTN-Net-Setup.Activate-Apps" exec="onos ${OC1} app activate odtn-service" requires="ODTN-Net-Setup.Initial-Summary-Check" delay="30" />
+    <group name="ODTN-Net-Setup.Verify-Apps" requires="ODTN-Net-Setup.Activate-Apps" delay="30">
+      <parallel var="${OC#}">
+        <step name="Check-Apps-${#}" exec="onos-check-apps ${OC#} optical-model,yang,config,configsync,faultmanagement,netconf,configsync-netconf,drivers,drivers.netconf,drivers.optical,restconf,protocols.restconfserver,odtn-api,drivers.odtn-driver,odtn-service,models.tapi,models.ietf,models.openconfig,models.openconfig-infinera,models.openconfig-odtn includes" requires="ODTN-Net-Setup.Activate-Apps"/>
+      </parallel>
+    </group>
+    <group name="ODTN-Net-Setup.Tapi-context" requires="ODTN-Net-Setup.Verify-Apps">
+      <parallel var="${OC#}">
+        <step name="ODTN-Net-Setup.Tapi-context-${#}" exec="${ONOS_SCENARIOS}/odtn/checkUntilSucc.sh ${ONOS_SCENARIOS}/bin/execute-tapi-context-get-call.py+${OC#}+empty"/>
+      </parallel>
+    </group>
+    <!-- Verify empty connectivity service -->
+    <step name="ODTN-Net-Setup.Tapi-connectivity" requires="ODTN-Net-Setup.Tapi-context" exec="${ONOS_SCENARIOS}/odtn/checkUntilSucc.sh ${ONOS_SCENARIOS}/bin/execute-tapi-post-call.py+${OC1}+tapi-connectivity:get-connectivity-service-list+empty"/>
+    <group name="ODTN-Net-Setup.Verify-Logs-1" requires="ODTN-Net-Setup.Tapi-connectivity">
+      <parallel var="${OC#}">
+        <step name="Check-Logs-Odtn-Setup-1-${#}" exec="onos-check-logs ${OC#}"/>
+      </parallel>
+    </group>
+    <!-- include 2 or more docker emulators to setup the network for phase 1.0-->
+    <group name="ODTN-Net-Setup.Init-network" requires="ODTN-Net-Setup.Verify-Logs-1">
+      <step name="ODTN-Net-Setup.Start-emulators" exec="docker-compose -f ${HOME}/emulator/docker-compose.yaml up -d"/>
+      <step name="ODTN-Net-Setup.Generate-cfg-files" requires="ODTN-Net-Setup.Start-emulators" exec="${ONOS_SCENARIOS}/odtn/createNetCfg.sh"/>
+      <step name="ODTN-Net-Setup.Put-nodes" requires="ODTN-Net-Setup.Generate-cfg-files" exec="onos-netcfg ${OC1} /tmp/odtn/openconfig-devices.json"/>
+      <group name="ODTN-Net-Setup.Wait-nodes" requires="ODTN-Net-Setup.Put-nodes">
+        <parallel var="${OC#}">
+          <step name="ODTN-Net-Setup.Wait-node-${#}" exec="${ONOS_SCENARIOS}/odtn/checkNetInit.sh device ${OC#}"/>
+          <step name="ODTN-Net-Setup.Wait-port-${#}" exec="${ONOS_SCENARIOS}/odtn/checkNetInit.sh port ${OC#}" requires="ODTN-Net-Setup.Wait-node-${#}"/>
+        </parallel>
+      </group>
+      <group name="ODTN-Net-Setup.Verify-Logs-2" requires="ODTN-Net-Setup.Wait-nodes">
+        <parallel var="${OC#}">
+          <step name="Check-Logs-Odtn-Setup-2-${#}" exec="onos-check-logs ${OC#}"/>
+        </parallel>
+      </group>
+      <step name="ODTN-Net-Setup.Put-links" requires="ODTN-Net-Setup.Verify-Logs-2" exec="onos-netcfg ${OC1} /tmp/odtn/openconfig-device-link.json"/>
+      <group name="ODTN-Net-Setup.Wait-links" requires="ODTN-Net-Setup.Put-links" delay="30">
+        <parallel var="${OC#}">
+          <step name="ODTN-Net-Setup.Wait-link-${#}" exec="${ONOS_SCENARIOS}/odtn/checkNetInit.sh link ${OC#}"/>
+        </parallel>
+      </group>
+    </group>
+    <!-- check logs to verify -->
+    <group name="ODTN-Net-Setup.Verify-Logs-3" requires="ODTN-Net-Setup.Wait-links">
+      <parallel var="${OC#}">
+        <step name="Check-Logs-Odtn-Setup-3-${#}" exec="onos-check-logs ${OC#}"/>
+      </parallel>
+    </group>
+  </group>
+</scenario>

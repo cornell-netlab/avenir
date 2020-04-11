@@ -1,0 +1,33 @@
+proto_library(
+    name = "p4runtime_proto",
+    srcs = ["p4/v1/p4runtime.proto"],
+    deps = [
+        ":p4info_proto",
+        ":p4data_proto",
+        "@com_github_googleapis//:status_proto",
+        "@com_google_protobuf//:any_proto",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+proto_library(
+    name = "p4data_proto",
+    srcs = ["p4/v1/p4data.proto"],
+    visibility = ["//visibility:public"],
+)
+
+proto_library(
+    name = "p4types_proto",
+    srcs = ["p4/config/v1/p4types.proto"],
+    visibility = ["//visibility:public"],
+)
+
+proto_library(
+    name = "p4info_proto",
+    srcs = ["p4/config/v1/p4info.proto"],
+    deps = [
+        ":p4types_proto",
+        "@com_google_protobuf//:any_proto"
+    ],
+    visibility = ["//visibility:public"],
+)
