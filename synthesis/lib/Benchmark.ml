@@ -238,9 +238,9 @@ let local_metadata_egress_spec_at_punt_match = "local_metadata.egress_spec_at_pu
 let local_metadata_egress_spec_at_punt_match = Var(local_metadata_egress_spec_at_punt_match, 9)
 
     
-let onos_to_edits filename =
+let onos_to_edits filename tbl_nm =
   let lines = In_channel.read_lines filename in
-  let make_edit tbl_nm data : Edit.t =
+  let make_edit data : Edit.t =
     match data with
     | [ts; "ADD"; _; ipv6; id] ->
        Add (tbl_nm, ([Match.mk_ipv6_match ipv6], [Int(Bigint.of_string id, 32)], 0))
@@ -254,7 +254,7 @@ let onos_to_edits filename =
   let edits =
     List.map lines ~f:(fun line ->
         [String.split line ~on:','
-         |> make_edit "ipv6"]
+         |> make_edit]
       ) in
   edits
 
@@ -672,7 +672,7 @@ let basic_onf_ipv4 params filename =
       model_space = True
     }
   in
-  measure params None problem (onos_to_edits filename)
+  measure params None problem (onos_to_edits filename "ipv6")
 
 let basic_onf_ipv4_real params data_file log_p4 phys_p4 log_inc phys_inc = 
         
@@ -699,18 +699,22 @@ let basic_onf_ipv4_real params data_file log_p4 phys_p4 log_inc phys_inc =
   let log = Encode.encode_from_p4 log_inc log_p4 false in
   let phys = Encode.encode_from_p4 phys_inc phys_p4 false in
   let open Match in
-  let max32 = Bigint.(of_int_exn 32 ** of_int_exn 2 - one) in
-  let log_ins = StringMap.(set empty
-                             ~key:"simple"
-                             ~data:[[Exact(mkInt(1017, 32))], [mkInt(17, 9)], 0;
-                                    [Exact(mkInt(1018, 32))], [mkInt(18, 9)], 0;
-                                    [Exact(mkInt(1010, 32))], [mkInt(10, 9)], 0;
-                                    [Exact(mkInt(1012, 32))], [mkInt(12, 9)], 0;
-                                    [Exact(mkInt(1011, 32))], [mkInt(11, 9)], 0;
-                                    [Exact(mkInt(1008, 32))], [mkInt(08, 9)], 0;
-                                    [Exact(mkInt(1003, 32))], [mkInt(03, 9)], 0;
-                                    [Exact(mkInt(1019, 32))], [mkInt(19, 9)], 0;
-                                    [Between(mkInt(0, 32), Int(max32,32))], [mkInt(0, 9)], 0])
+  let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in
+  let log_ins = StringMap.(of_alist_exn
+                            ["simple", [[Exact(mkInt(1017, 32))], [mkInt(17, 9)], 0;
+                                        [Exact(mkInt(1018, 32))], [mkInt(18, 9)], 0;
+                                        [Exact(mkInt(1010, 32))], [mkInt(10, 9)], 0;
+                                        [Exact(mkInt(1012, 32))], [mkInt(12, 9)], 0;
+                                        [Exact(mkInt(1011, 32))], [mkInt(11, 9)], 0;
+                                        [Exact(mkInt(1008, 32))], [mkInt(08, 9)], 0;
+                                        [Exact(mkInt(1003, 32))], [mkInt(03, 9)], 0;
+                                        [Exact(mkInt(1019, 32))], [mkInt(19, 9)], 0;
+                                        [Between(mkInt(0, 32), Int(maxN 32,32))], [mkInt(0, 9)], 0];
+                             "fwd_classifier", [ [Between(mkInt(0, 9), Int(maxN 9, 9));
+                                                  Between(mkInt(0, 48), Int(maxN 48, 48));
+                                                  Between(mkInt(0, 16), Int(maxN 16, 16));
+                                                  Between(mkInt(0, 16), Int(maxN 16, 16))],
+                                               [mkInt(4, 3)], 0]]) 
   in
   (* let phys =
      Apply("l3_fwd"
@@ -737,7 +741,7 @@ let basic_onf_ipv4_real params data_file log_p4 phys_p4 log_inc phys_inc =
       model_space = True;
     }
   in
-  measure params None problem (onos_to_edits data_file)
+  measure params None problem (onos_to_edits data_file "routing_v6")
 
 
 let parse_rule_to_update line =
