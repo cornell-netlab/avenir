@@ -22,26 +22,26 @@ let quantify expr etyp styp =
 
 let reset b = false
 
-let rec expr_to_term expr styp : Smtlib.term =
+let rec expr_to_term_help expr styp : Smtlib.term =
   match expr with
   | Value (Int (num, sz)) -> Smtlib.bv (Bigint.to_int_exn num) sz
   | Var (v, sz) -> quantify v "var" styp
   | Hole (h, sz) -> quantify h "hole" styp
-  | Plus (e1, e2) -> Smtlib.add (expr_to_term e1 styp) (expr_to_term e2 styp)
-  | Times (e1, e2) -> Smtlib.mul (expr_to_term e1 styp) (expr_to_term e2 styp)
-  | Minus (e1, e2) -> Smtlib.sub (expr_to_term e1 styp) (expr_to_term e2 styp)
+  | Plus (e1, e2) -> Smtlib.add (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
+  | Times (e1, e2) -> Smtlib.mul (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
+  | Minus (e1, e2) -> Smtlib.sub (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
 
-let rec test_to_term test styp : Smtlib.term =
+let rec test_to_term_help test styp : Smtlib.term =
   match test with
   | True -> Smtlib.bool_to_term true
   | False -> Smtlib.bool_to_term false
-  | Eq (e1, e2) -> Smtlib.equals (expr_to_term e1 styp) (expr_to_term e2 styp)
-  | Le (e1, e2) -> Smtlib.lte (expr_to_term e1 styp) (expr_to_term e2 styp)
-  | And (t1, t2) -> Smtlib.and_ (test_to_term t1 styp) (test_to_term t2 styp)
-  | Or (t1, t2) -> Smtlib.or_ (test_to_term t1 styp) (test_to_term t2 styp)
-  | Impl (t1, t2) -> Smtlib.implies (test_to_term t1 styp) (test_to_term t2 styp)
-  | Iff (t1, t2) -> Smtlib.equals (test_to_term t2 styp) (test_to_term t1 styp)
-  | Neg t -> Smtlib.not_ (test_to_term t styp)
+  | Eq (e1, e2) -> Smtlib.equals (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
+  | Le (e1, e2) -> Smtlib.lte (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
+  | And (t1, t2) -> Smtlib.and_ (test_to_term_help t1 styp) (test_to_term_help t2 styp)
+  | Or (t1, t2) -> Smtlib.or_ (test_to_term_help t1 styp) (test_to_term_help t2 styp)
+  | Impl (t1, t2) -> Smtlib.implies (test_to_term_help t1 styp) (test_to_term_help t2 styp)
+  | Iff (t1, t2) -> Smtlib.equals (test_to_term_help t2 styp) (test_to_term_help t1 styp)
+  | Neg t -> Smtlib.not_ (test_to_term_help t styp)
 
 let rec model_to_packet (lst : (Smtlib.identifier * Smtlib.term) list) : Packet.t =
   let name_vals : (string * value) list = (List.map lst
@@ -52,11 +52,11 @@ let rec model_to_packet (lst : (Smtlib.identifier * Smtlib.term) list) : Packet.
                                                   | _ -> raise (Failure "not a supported model"))))
   in StringMap.of_alist_exn name_vals
 
-let toZ3String test = test_to_term test `Sat |> Smtlib.term_to_sexp |> Smtlib.sexp_to_string
+let toZ3String test = test_to_term_help test `Sat |> Smtlib.term_to_sexp |> Smtlib.sexp_to_string
 
-let expr_to_term_debug e styp = expr_str e; let res = expr_to_term e styp in debug res; res
+let expr_to_term e styp d = if d then (expr_str e; let res = expr_to_term_help e styp in debug res; res) else expr_to_term_help e styp
 
-let test_to_term_debug test styp = test_str test; let res = test_to_term test styp in debug res; res
+let test_to_term test styp d = if d then (test_str test; let res = test_to_term_help test styp in debug res; res) else test_to_term_help test styp
 
 let declares = String.Hash_set.create ()
 
@@ -66,7 +66,7 @@ let check (params : Parameters.t) (test : Ast.test) =
   let st = Time.now() in
   let holes = holes_of_test test in
   let () = List.iter holes ~f:(fun (id, i) -> if (Hash_set.mem declares id) then () else declare_const prover (Id id) (BitVecSort i); Hash_set.add declares id) in
-  let response = assert_ prover (forall_ vars (test_to_term_debug test `Sat));
+  let response = assert_ prover (forall_ vars (test_to_term test `Sat params.debug));
     check_sat_using (UFBV : tactic) prover in
   let dur = Time.(diff (now()) st) in
   let model =
@@ -80,7 +80,7 @@ let check_valid (params : Parameters.t) (test : Ast.test) =
   let vars = free_vars_of_test test in
   let () = List.iter vars ~f:(fun (id, i) -> if (Hash_set.mem declares id) then () else declare_const prover (Id id) (BitVecSort i); Hash_set.add declares id) in
   let st = Time.now() in
-  let response = assert_ prover (not_ (test_to_term_debug test `Valid));
+  let response = assert_ prover (not_ (test_to_term test `Valid params.debug));
     check_sat_using (QFBV : tactic) prover in
   let dur = Time.(diff (now()) st) in
   let model =
@@ -114,9 +114,9 @@ let check_min (params : Parameters.t) (test : Ast.test) =
                 )
           else acc
         ) in
-  let ranges = List.map constraints ~f:(fun e -> expr_to_term_debug e `Sat) in
+  let ranges = List.map constraints ~f:(fun e -> expr_to_term e `Sat params.debug) in
   let () = List.iter holes ~f:(fun (id, i) -> if (Hash_set.mem declares id) then () else declare_const prover (Id id) (BitVecSort i); Hash_set.add declares id) in
-  let response = assert_ prover (forall_ vars (test_to_term_debug test `Sat));
+  let response = assert_ prover (forall_ vars (test_to_term test `Sat params.debug));
     List.iter ranges ~f:(fun t -> minimize prover t);
     check_sat_using (UFBV : tactic) prover in
   let dur = Time.(diff (now()) st) in

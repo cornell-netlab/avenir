@@ -20,7 +20,7 @@ val check : Parameters.t  -> test -> ((value StringMap.t) option * Time.Span.t)
 (* Checks SMT Query for validity. equivalent to check with `Valid *)
 val check_valid : Parameters.t -> test -> ((value StringMap.t) option * Time.Span.t)
 
-(* Checks SMT Query for validity. equivalent to check with `MinSat *)
+(* Checks SMT Query, with holes minimized. equivalent to check with `MinSat *)
 val check_min : Parameters.t -> test -> ((value StringMap.t) option * Time.Span.t)
 
 (*Converts an ast test into an SMT-lib string. Assumes `Sat is intended*)
