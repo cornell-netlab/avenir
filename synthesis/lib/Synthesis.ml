@@ -428,7 +428,7 @@ let get_model (params : Parameters.t) data (problem : Problem.t) : (value String
       (string_of_cmd phys)
       (Packet.string__packet out_pkt)
       ("OMITTED" (*string_of_test spec*));
-  let model, dur = check params `Sat condition in
+  let model, dur = check params condition in
   if params.interactive then
     ignore(Stdio.In_channel.(input_char stdin) : char option);
   (Option.(model >>| complete_model (holes_of_test condition)),
@@ -496,7 +496,7 @@ let rec cegis_math params data (problem : Problem.t) =
 and solve_math params data problem =
   (* if params.debug then
    *   Printf.printf "+Model Space+\n%!"; *)
-  match check params `Sat problem.model_space with
+  match check params problem.model_space with
   | None,_ ->
      Printf.printf "Exhausted the Space\n%!";
      None
