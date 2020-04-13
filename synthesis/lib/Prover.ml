@@ -48,7 +48,7 @@ let rec model_to_packet (lst : (Smtlib.identifier * Smtlib.term) list) : Packet.
                                              ~f:(fun (Id id, x) ->
                                                  (match x with
                                                   | Smtlib.Int i -> let value =
-                                                               Int (Bigint.of_int i, Int.max_value) in id, value
+                                                                      Int (Bigint.of_int i, Int.max_value) in id, value
                                                   | _ -> raise (Failure "not a supported model"))))
   in StringMap.of_alist_exn name_vals
 
