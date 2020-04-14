@@ -300,12 +300,19 @@ let rec solve_concrete
  * the inserted rules are disjoint with every previous rule (i.e. no overlaps or deletions)
  * Here we only check that the rules are exact, which implies this property given the assumption that every insertion is reachable
 *)
-let slice_conclusive _ _ (problem : Problem.t) =
-  List.length problem.phys_edits > 0 &&
-  List.for_all (problem.log_edits @ problem.phys_edits)
-    ~f:(function | Add (_, (ms, _,_)) ->
-        List.for_all ms ~f:(function | Exact _ -> true | _ -> false) (* need to check disjointness with previous rows here *)
-                 | Del _ -> false)
+let slice_conclusive (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
+  let st = Time.now () in
+  let res =
+    FastCX.(hits_list_pred data problem.log problem.log_inst problem.log_edits
+            %<=>% hits_list_pred data problem.phys problem.phys_inst problem.phys_edits)
+    |> check params `Valid
+    |> fst
+    |> Option.is_none
+  in
+  let nd = Time.now () in
+  data := {!data with check_sliceable_time = Time.(Span.(!data.check_sliceable_time + diff nd st))};
+  res
+
 
 let slice (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
   if params.debug then
@@ -409,7 +416,7 @@ let complete_model (holes : (string * size) list) (model : value StringMap.t) : 
    *   ) *)
 
 
-let get_model (params : Parameters.t) data (problem : Problem.t) : (value StringMap.t option * Time.Span.t) =
+let get_model (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (value StringMap.t option) =
   let (in_pkt, out_pkt) = List.hd_exn problem.cexs in
   let deletions = [] in
   let (phys,_) = Instance.apply ~no_miss:false ~cnt:0 (`WithHoles deletions) `Exact
@@ -420,54 +427,77 @@ let get_model (params : Parameters.t) data (problem : Problem.t) : (value String
   (* let fvs = problem.fvs in *)
   let in_pkt_form = Packet.to_test in_pkt ~fvs in
   let out_pkt_form = Packet.to_test out_pkt ~fvs in
-  let spec = in_pkt_form %=>% wp phys out_pkt_form in
-  let condition = problem.model_space %&%  spec in
-  if params.debug then
-    Printf.printf "phys to check\n--\nInput:%s\n--\n%s\n--\nOutput:%s\n--\nWP:\n%s--\n%!"
-      (Packet.string__packet in_pkt)
-      (string_of_cmd phys)
-      (Packet.string__packet out_pkt)
-      ("OMITTED" (*string_of_test spec*));
-  let model, dur = check params `Sat condition in
+  let wp_list =
+    if params.monotonic then
+      wp_paths ~no_negations:false params phys out_pkt_form |> List.map ~f:snd
+    else
+      [wp phys out_pkt_form]
+  in
+  let model =
+    List.find_map wp_list
+      ~f:(fun pkt ->
+        let spec = in_pkt_form %=>% wp phys out_pkt_form in
+        let condition = problem.model_space %&%  spec in
+        if params.debug then
+          Printf.printf "phys to check\n--\nInput:%s\n--\n%s\n--\nOutput:%s\n--\nWP:\n%s--\n%!"
+            (Packet.string__packet in_pkt)
+            (string_of_cmd phys)
+            (Packet.string__packet out_pkt)
+            ("OMITTED" (*string_of_test spec*));
+        let model, dur = check params `Sat condition in
+        data := {!data with
+                  model_z3_time = Time.(Span.(!data.model_z3_time + dur));
+                  tree_sizes = num_nodes_in_test condition :: !data.tree_sizes ;
+                };
+        Option.(model >>| complete_model (holes_of_test condition))
+      )
+  in
   if params.interactive then
     ignore(Stdio.In_channel.(input_char stdin) : char option);
-  (Option.(model >>| complete_model (holes_of_test condition)),
-   dur)
+  model
 
 
 
 let get_cex (params : Parameters.t) data (problem : Problem.t)
     : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
-  if params.fastcx then
-    match FastCX.get_cex params data problem with
-    | `Yes ->
-       if params.debug then
-         Printf.printf "New rule is not reachable\n%!";
-       `Yes
-    | `NotFound ->
-       if params.debug then
-         Printf.printf "No cex to be found rapidly, check full equivalence\n%!";
-       implements params data problem
-    | `NoAndCE counter ->
-
-       `NoAndCE counter
+  if params.fastcx then begin
+      match FastCX.get_cex params data problem with
+      | `Yes ->
+         if params.debug then
+           Printf.printf "New rule is not reachable\n%!";
+         `Yes
+      | `NotFound ->
+         if params.debug then
+           Printf.printf "No cex to be found rapidly, check full equivalence\n%!";
+         implements params data problem
+      | `NoAndCE counter ->
+         `NoAndCE counter
+    end
   else
-    let hits_phys_edits =
-      FastCX.hits_list_pred
-        data
-        problem.phys
-        problem.phys_inst
-        problem.phys_edits
-    in
-    match
-      {problem with phys = Assume hits_phys_edits %:% problem.phys}
-      |> implements params data
-    with
-    | `NoAndCE counter -> `NoAndCE counter
-    | `Yes ->
-       {problem with phys = Assume !%(hits_phys_edits) %:% problem.phys}
-       |> implements params data
-    (* implements params data problem *)
+    if params.do_slice then
+      match implements params data (slice params data problem) with
+      | `NoAndCE counter -> `NoAndCE counter
+      | `Yes when slice_conclusive params data problem -> `Yes
+      | `Yes -> implements params data problem
+    else
+      implements params data problem
+
+      (* let hits_phys_edits =
+       *   FastCX.hits_list_pred
+       *     data
+       *     problem.phys
+       *     problem.phys_inst
+       *     problem.phys_edits
+       * in *)
+      (* match
+       *   {problem with phys = Assume hits_phys_edits %:% problem.phys}
+       *   |> implements params data
+       * with
+       * | `NoAndCE counter -> `NoAndCE counter
+       * | `Yes ->
+       *    {problem with phys = Assume !%(hits_phys_edits) %:% problem.phys}
+       *    |> implements params data *)
+
 
 let rec cegis_math params data (problem : Problem.t) =
   let attempt = Instance.apply ~no_miss:false ~cnt:0 `NoHoles `Exact
@@ -475,7 +505,11 @@ let rec cegis_math params data (problem : Problem.t) =
                   problem.phys |> fst in
   assert (List.for_all problem.attempts ~f:((<>) attempt));
   let problem = {problem with attempts = attempt :: problem.attempts} in
-  match get_cex params data problem with
+  let st = Time.now () in
+  let cex = get_cex params data problem in
+  let nd = Time.now() in
+  data := {!data with impl_time = Time.(Span.(!data.impl_time + diff nd st))};
+  match cex with
   | `Yes -> Some problem.phys_edits
   | `NoAndCE counter ->
      let params = {params with fastcx = false} in
@@ -496,29 +530,39 @@ let rec cegis_math params data (problem : Problem.t) =
 and solve_math params data problem =
   (* if params.debug then
    *   Printf.printf "+Model Space+\n%!"; *)
-  match check params `Sat problem.model_space with
-  | None,_ ->
-     Printf.printf "Exhausted the Space\n%!";
-     None
-  | Some _,_ ->
-     match get_model params data problem with
-     | None, _ ->
-        if params.debug || params.interactive then
-          Printf.printf "No model could be found\n%!";
-        if params.interactive then
-        ignore(Stdio.In_channel.(input_char stdin) : char option);
-        None
-     | Some model,_ ->
-        let es = Edit.extract problem.phys model in
-        match
-          cegis_math params data
-            ({problem with phys_edits = problem.phys_edits @ es})
-        with
-        | None ->
-           let model_space = problem.model_space %&% negate_model model in
-           (* if params.debug || params.interactive then
-            *   Printf.printf "Backtracking with\n%s\nadded to\n%s\n%!" (string_of_test (negate_model model)) (string_of_test problem.model_space); *)
-           if params.interactive then
-             ignore(Stdio.In_channel.(input_char stdin) : char option);
-           solve_math params data { problem with model_space }
-        | Some es -> Some es
+  if problem.model_space = True
+     || (check params `Sat problem.model_space|> fst |> Option.is_some)
+  then begin
+      let st = Time.now () in
+      let model_opt = get_model params data problem in
+      let nd = Time.now () in
+      data := {!data with
+                model_search_time =
+                  Time.(Span.(!data.model_search_time + diff nd st))};
+      match model_opt with
+      | None ->
+         if params.debug || params.interactive then
+           Printf.printf "No model could be found\n%!";
+         if params.interactive then
+           ignore(Stdio.In_channel.(input_char stdin) : char option);
+         None
+      | Some model ->
+         let es = Edit.extract problem.phys model in
+         match
+           cegis_math params data
+             ({problem with phys_edits = problem.phys_edits @ es})
+         with
+         | None ->
+            let model_space = problem.model_space %&% negate_model model in
+            (* if params.debug || params.interactive then
+             *   Printf.printf "Backtracking with\n%s\nadded to\n%s\n%!" (string_of_test (negate_model model)) (string_of_test problem.model_space); *)
+            if params.interactive then
+              ignore(Stdio.In_channel.(input_char stdin) : char option);
+            data := {!data with num_backtracks = !data.num_backtracks + 1};
+            solve_math params data { problem with model_space }
+         | Some es -> Some es
+    end
+  else begin
+      Printf.printf "Exhausted the Space\n%!";
+      None
+    end

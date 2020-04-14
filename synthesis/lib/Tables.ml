@@ -326,24 +326,24 @@ module Instance = struct
        let selects =
          List.foldi rows ~init:[]
            ~f:(fun i acc (matches, data, action) ->
-             let prev_tst = False
-               (* if List.for_all matches ~f:(function | Exact _ -> true | _ -> false) then
-                *   False
-                * else
-                *   let prev_rows =
-                *     if i + 1 >= List.length rows then [] else
-                *       List.sub rows ~pos:(i+1) ~len:(List.length rows - (i+1))
-                *   in
-                *   let overlapping_matches =
-                *     List.filter_map prev_rows
-                *       ~f:(fun (prev_ms,_,_) ->
-                *         if Match.has_inter_l matches prev_ms
-                *         then Some prev_ms
-                *         else None
-                *       )
-                *   in
-                *   List.fold overlapping_matches ~init:False
-                *     ~f:(fun acc ms -> acc %+% Match.list_to_test keys ms ) *)
+             let prev_tst =
+               if List.for_all matches ~f:(function | Exact _ -> true | _ -> false) then
+                 False
+               else
+                 let prev_rows =
+                   if i + 1 >= List.length rows then [] else
+                     List.sub rows ~pos:(i+1) ~len:(List.length rows - (i+1))
+                 in
+                 let overlapping_matches =
+                   List.filter_map prev_rows
+                     ~f:(fun (prev_ms,_,_) ->
+                       if Match.has_inter_l matches prev_ms
+                       then Some prev_ms
+                       else None
+                     )
+                 in
+                 List.fold overlapping_matches ~init:False
+                   ~f:(fun acc ms -> acc %+% Match.list_to_test keys ms )
              in
              let tst = List.fold2_exn keys matches
                          ~init:True
@@ -387,7 +387,7 @@ module Instance = struct
                                         -> delete_hole i tbl %=% mkVInt(0,1)
                                       | _ -> True)) in
          [(cond, default)] in
-       (selects @ holes @ dflt_row |> (*mkPartial*) mkOrdered
+       (selects @ holes @ dflt_row |> mkPartial (*mkOrdered*)
        , cnt (*+ 1*))
 
 

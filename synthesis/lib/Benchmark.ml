@@ -8,7 +8,7 @@ open Tables
 module IntMap = Map.Make(Int)
 
 
-let rec run_experiment iter seq phys_seq params hints problem =
+let rec run_experiment iter seq phys_seq params hints (problem : Problem.t) =
   match seq with
   | [] -> phys_seq
     | edit::edits ->
@@ -16,7 +16,13 @@ let rec run_experiment iter seq phys_seq params hints problem =
         *   (string_of_edit edit); *)
        let data = ProfData.zero () in
        let problem_inner = Problem.({problem with log_edits = edit}) in
+       let st = Time.now () in
        let pedits = cegis_math params data problem_inner |> Option.value_exn  in
+       let nd = Time.now () in
+       data := {!data with log_inst_size = Instance.size problem.log_inst;
+                           phys_inst_size = Instance.size problem.phys_inst;
+                           time = Time.diff nd st;
+               };
        Printf.printf "%s\n%!" (ProfData.to_string !data);
        run_experiment (iter + 1)
          edits
