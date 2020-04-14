@@ -7,21 +7,14 @@ open Packet
  * Interface to Z3
  *)
 
-(*
- * Checks a formula .
- * Returns either None or Some model as well as the time it took to check.
- * if the `Sat constructor is passed, the formula is checked as satisfiable and the BITVEC solver is used.
- * if the `Valid constructor is passed, then the formula is negated and the QFBV solver is used.
- * if the `MinSat constructor is passed, then the difference between h_lo and h_hi is minimized
- * Prints debugging and interactive messages according to the flags in the parameters record
-*)
-val check : Parameters.t  -> test -> ((value StringMap.t) option * Time.Span.t)
+(* Checks a formula as satisfiable. *)
+val check_sat : Parameters.t  -> test -> ((value StringMap.t) option * Time.Span.t)
 
-(* Checks SMT Query for validity. equivalent to check with `Valid *)
+(* Checks SMT Query for validity. *)
 val check_valid : Parameters.t -> test -> ((value StringMap.t) option * Time.Span.t)
 
-(* Checks SMT Query, with holes minimized. equivalent to check with `MinSat *)
+(* Checks SMT Query as satisfiable, with the difference between h_lo and h_hi minimized. *)
 val check_min : Parameters.t -> test -> ((value StringMap.t) option * Time.Span.t)
 
-(*Converts an ast test into an SMT-lib string. Assumes `Sat is intended*)
+(*Converts an AST test into an SMT-lib string. Assumes [check_sat] is intended. *)
 val toZ3String : test -> string

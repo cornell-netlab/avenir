@@ -203,7 +203,7 @@ let get_one_model_edit_no_widening
               (string_of_test wp_phys);
           let h_st = Time.now() in
           let h_dur =  Time.diff (Time.now ()) h_st in
-          let (res, dur) = check params condition in
+          let (res, dur) = check_sat params condition in
           data := {!data with
                     model_holes_time = Time.Span.(!data.model_holes_time + h_dur);
                     model_z3_time = Time.Span.(!data.model_z3_time + dur);
@@ -428,7 +428,7 @@ let get_model (params : Parameters.t) data (problem : Problem.t) : (value String
       (string_of_cmd phys)
       (Packet.string__packet out_pkt)
       ("OMITTED" (*string_of_test spec*));
-  let model, dur = check params condition in
+  let model, dur = check_sat params condition in
   if params.interactive then
     ignore(Stdio.In_channel.(input_char stdin) : char option);
   (Option.(model >>| complete_model (holes_of_test condition)),
@@ -496,7 +496,7 @@ let rec cegis_math params data (problem : Problem.t) =
 and solve_math params data problem =
   (* if params.debug then
    *   Printf.printf "+Model Space+\n%!"; *)
-  match check params problem.model_space with
+  match check_sat params problem.model_space with
   | None,_ ->
      Printf.printf "Exhausted the Space\n%!";
      None

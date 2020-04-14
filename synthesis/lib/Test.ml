@@ -15,7 +15,7 @@ let print_test_neq ~got:got ~exp:exp =
   Printf.printf "GOT: \n%s\n" (string_of_test got);
   Printf.printf "------------------\n"
 
-            
+
 let alphanum = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
 
 let rec generate_random_string length =
@@ -23,17 +23,17 @@ let rec generate_random_string length =
     let max = String.length alphanum in
     String.sub alphanum ~pos:(Random.int max) ~len:1
     ^ generate_random_string (length - 1)
-    
-            
+
+
 let generate_random_expr1 size =
   match Random.int 3 with
   | 0 -> Value (Int (Random.int 256 |> Bigint.of_int_exn, 8))
   | 1 -> Var (generate_random_string size, 8)
   | 2 -> Hole (generate_random_string size, 8)
   | _ -> failwith "generated random integer larger than 2"
-          
+
 let rec generate_random_test size =
-  if size = 0 then if Random.int 1 = 1 then False else True else 
+  if size = 0 then if Random.int 1 = 1 then False else True else
   let size' = size - 1 in
   match Random.int 7 with
   | 0 -> True
@@ -53,7 +53,7 @@ let generate_random_select_type _ =
   | _ -> failwith "generated random integer larger than 6"
 
 let rec generate_random_cmd size =
-  if size = 0 then Skip else 
+  if size = 0 then Skip else
   let size' = size - 1 in
   match Random.int 6 with
   | 0 -> Skip
@@ -63,28 +63,28 @@ let rec generate_random_cmd size =
   | 4 -> Seq (generate_random_cmd size', generate_random_cmd size')
   | 5 -> While (generate_random_test size', generate_random_cmd size')
   | 6 -> let rec loop n =
-           if n = 0 then [] else 
+           if n = 0 then [] else
            (generate_random_test size', generate_random_cmd size') :: loop (n-1)
          in
          mkSelect (generate_random_select_type ()) (loop (1 + Random.int 4 ))
   | _ -> failwith "Should Not generate number larger than 5"
-    
+
 
 let loop_body =
   mkSelect Partial
     [ Var ("pkt",8) %=% mkVInt (3,8) , ("pkt" %<-% mkVInt (6, 8)) %:% ("loc" %<-% mkVInt (10,8))
-    ; Var ("pkt",8) %=% mkVInt (4,8) , ("pkt" %<-% mkVInt (2, 8)) %:% ("loc" %<-% mkVInt (11,8))]       
-    
+    ; Var ("pkt",8) %=% mkVInt (4,8) , ("pkt" %<-% mkVInt (2, 8)) %:% ("loc" %<-% mkVInt (11,8))]
+
 let simple_test =
   "h" %<-% Var ("Ingress",8) %:%
     mkWhile (Var ("h",8) %<>% Var ("Egress",8)) loop_body
-   
+
 let test1 = string_of_cmd simple_test
-                
+
 let test2 = wp ("h" %<-% Var ("Ingress",8)) True
 
 (* let complete_test_with_drop_location_no_holes =
- *   While(!%(LocEq 1) %&% !%(LocEq (-1)), 
+ *   While(!%(LocEq 1) %&% !%(LocEq (-1)),
  *         mkPartial
  *           [ LocEq 0 %&% (Var ("pkt",8) %=% Value (Int (42,8))) ,  SetLoc 1 %:% ("pkt" %<-% Value (Int (47,8)))
  *           ; LocEq 0 %&% !%(Var ("pkt",8) %=% Value (Int (42,8))), SetLoc (-1) ]
@@ -95,13 +95,13 @@ let test2 = wp ("h" %<-% Var ("Ingress",8)) True
  *   let pkt_gets h = "pkt" %<-% Hole (h,8) in
  *   SetLoc 0 %:%
  *   While(!%(LocEq 1) %&% !%(LocEq (-1)),
- *         mkPartial 
+ *         mkPartial
  *           [ LocEq 0 %&% (pkt_eq "_0")  , SetLoc 1 %:% pkt_gets "_1"
  *           ; LocEq 0 %&% !%(pkt_eq "_0"), SetLoc (-1)]
  *        ) *)
 
 
-             
+
 let%test _ = (* Testing unrolling *)
   unroll 1 simple_test = "h" %<-% Var ("Ingress",8) %:%
                           mkSelect Partial [Var ("h",8) %<>% Var ("Egress",8) , loop_body]
@@ -114,7 +114,7 @@ let%test _ = (* One unroll works *)
   let input = ("h" %<-% Var ("Ingress",8)) %:% mkWhile cond loop_body in
   unroll 1 input
   = ("h" %<-% Var ("Ingress",8)) %:%  mkSelect Partial [cond , loop_body %:% Skip]
-  
+
 
 let%test _ = (*Sequencing unrolls works*)
   let cond = Var ("h",8) %<>% Var ("Egress",8) in
@@ -136,9 +136,9 @@ let%test _ =
   let got = mkVInt (7,8) %=% Var ("x",8) in
   if exp = got then true else
     (print_test_neq ~got ~exp;false)
-  
-      
-      
+
+
+
 
 (* Weakest precondition testing *)
 let%test _ = (*Skip behaves well *)
@@ -154,17 +154,17 @@ let%test _ = (* Assign behaves well with integers *)
        ~exp:(mkVInt (7,8) %=% Var ("g",8))
        ~got:(wp prog (Var ("h",8) %=% Var ("g",8)))
     ; false)
-  
-    
-    
+
+
+
 
 let%test _ = (* Assign behaves well with variables *)
   let prog = "h" %<-% Var ("hgets",8) in
   let wphEQ x = wp prog (Var ("h",8) %=% x) in
-  Var ("hgets",8) %=% mkVInt (7,8) = wphEQ (mkVInt (7,8)) 
+  Var ("hgets",8) %=% mkVInt (7,8) = wphEQ (mkVInt (7,8))
   && Var ("hgets",8) %=% Var ("g",8) = wphEQ (Var ("g",8))
 
-  
+
 let%test _ =
   let prog = mkSelect Total [
                  Var ("h",8) %=% Var ("g",8), "g" %<-% mkVInt (8,8)
@@ -173,7 +173,7 @@ let%test _ =
   let exp  = Var ("h",8) %=% Var ("g",8) in
   (if prec <> exp then print_test_neq ~got:prec ~exp:exp);
   prec = exp
-  
+
 let%test _ = (* wp behaves well with selects *)
   let prog = mkSelect Total [ Var ("h",8) %=%  Var ("g",8) , "g" %<-% mkVInt (8,8)
                             ; Var ("h",8) %=%  mkVInt (99,8)  , "h" %<-% mkVInt (4,8)
@@ -195,7 +195,7 @@ let%test _ = (* wp behaves well with selects *)
   comp = exp
 
 
-           
+
 let%test _ = (* wp behaves well with sequence *)
   let prog = ("h" %<-% mkVInt (10,8)) %:% ("h" %<-% mkVInt (80,8)) in
   let cond = Var ("h",8) %=% Var ("g",8) in
@@ -323,7 +323,7 @@ let%test _ =
  *         false)
  *   in
  *   loop 100 *)
-  
+
 
 
                            (* TEST GRAPH GENERATION *)
@@ -369,9 +369,9 @@ let%test _ =
  *     Printf.printf "----------------------- \n%!";
  *     false
  *   end *)
-    
-    
-  
+
+
+
                            (* TESTING SEMANTICS *)
 
 let test_trace p_string expected_trace =
@@ -380,7 +380,7 @@ let test_trace p_string expected_trace =
   let loc = Some 0 in
   match trace_eval_inst p Instance.empty ~wide:StringMap.empty (pkt, loc) with
   | _, tr,_ ,_ -> tr = expected_trace
-  
+
 
 (* let%test _ = test_trace
  *                "loc:=0; loc:=0"
@@ -425,16 +425,16 @@ let test_trace p_string expected_trace =
  *     Printf.printf "Z3STRING:\n%s\n\n%!EXPECTED:\n%s\n\n%!" (Z3.Expr.to_string qform) exp_qform_string;
  *     Printf.printf "----------------------------\n%!";
  *     success )
- * 
- *     
+ *
+ *
  * let%test _ =
  *   let t = (!%( (Var ("x",8) %=% mkVInt (5,8)) %+% ((Var ("x",8) %=% mkVInt (3,8)) %&% (Var ("z",8) %=% mkVInt (6,8))))
  *            %+% !%( (Var ("x",8) %=% Hole ("hole0",8)) %+% (Var ("y",8) %=% Hole ("hole1",8)))) in
- *   let (r,_) = check Parameters.default `Sat t in
- *   let (r',_) = check Parameters.default `Sat t in
+ *   let (r,_) = check_sat Parameters.default `Sat t in
+ *   let (r',_) = check_sat Parameters.default `Sat t in
  *   r = None (\* i.e. is unsat *\)
  *   && r = r'
- *            
+ *
  * let%test _ = (\* Test deBruijn Indices*\)
  *   let vars = ["x"; "y"; "z"] in
  *   let indices = mk_deBruijn vars in
@@ -442,11 +442,11 @@ let test_trace p_string expected_trace =
  *   match get "x", get "y", get "z" with
  *   | Some xi, Some yi, Some zi -> xi = 2 && yi = 1 && zi = 0
  *   | _, _, _ -> false *)
-           
-           
+
+
 (* TESTING WELL-FORMEDNESS CONDITIONS *)
 (* let%test _ = (\* [no_nesting] accepts programs that have no nesting *\)
- *     [ Skip 
+ *     [ Skip
  *     ; SetLoc 8
  *     ; Assert (LocEq 9 %&% (Var ("x",8) %=% mkVInt (100,8)))
  *     ; Seq (Skip, Seq(SetLoc 100, "x" %<-% mkVInt (200,8))) ]
@@ -488,14 +488,14 @@ let test_trace p_string expected_trace =
  *     ; (Hole ("_0",8) %=% mkVInt (100,8),  Assign ("x", mkVInt (100,8)))
  *     ; (Neg(Neg(Hole ("_0",8) %=% mkVInt (99,8))), Skip)
  *     ; (Neg(And(Neg (Hole ("_0",8) %=% mkVInt (99,8)), True)), Skip)]
- * 
- * 
+ *
+ *
  * let%test _ = (\* [no_negated_holes] rejects programs with negated holes]*\)
  *   not (no_negated_holes [(Neg (Hole ("_8",8) %=% mkVInt (100,8)), Skip)])
  *   && not (no_negated_holes [(True, Assert (Hole ("_8",8) %<>% mkVInt (99,8)))])
  *   && not (no_negated_holes [(Neg (Neg (And (Hole ("_8",8) %<>% mkVInt (99,8), True))), Skip)])
- *                                          
- *)     
+ *
+ *)
  (*  testing FOR CEGIS PROCEDURE *)
 
 (* let%test _ =
@@ -545,7 +545,7 @@ let test_trace p_string expected_trace =
  *     (string_of_map model)
  *     (string_of_cmd (fixup real model)) ;
  *   true *)
-  
+
 
 
 let%test _ =
@@ -596,7 +596,7 @@ let%test _ =
                      model_space = True}) : Tables.Edit.t list);
   true
 
-    
+
 (* let%test _ =
  *   let log_line =
  *     Apply("log"
@@ -610,7 +610,7 @@ let%test _ =
  *         , [("dst", 2)]
  *         , ["out" %<-% mkVInt (0,2);
  *            "out" %<-% mkVInt (1,2);]
- *         ,"out" %<-% mkVInt (0,2))    
+ *         ,"out" %<-% mkVInt (0,2))
  *   in
  *   let log_inst =
  *     StringMap.of_alist_exn
@@ -655,6 +655,4 @@ fi
         Var("src",2) %=% mkVInt(1,2) %&% (Var("dst",1) %=% mkVInt(0,2)), "dst" %<-% mkVInt(0,2)
       ]
   in
-  true 
-  
-  
+  true

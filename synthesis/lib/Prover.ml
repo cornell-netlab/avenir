@@ -14,19 +14,17 @@ let expr_str test = let res = Ast.string_of_expr test in Printf.printf "%s"res
 let quantify expr etyp styp =
   match styp with
   | `Valid -> (match etyp with
-      | "var" -> Smtlib.const expr
+      | `Var -> Smtlib.const expr
       | _ -> raise (Failure "not allowed here"))
   | `Sat -> (match etyp with
-      | "hole" -> Smtlib.const expr
+      | `Hole -> Smtlib.const expr
       | _ -> String expr)
-
-let reset b = false
 
 let rec expr_to_term_help expr styp : Smtlib.term =
   match expr with
   | Value (Int (num, sz)) -> Smtlib.bv (Bigint.to_int_exn num) sz
-  | Var (v, sz) -> quantify v "var" styp
-  | Hole (h, sz) -> quantify h "hole" styp
+  | Var (v, sz) -> quantify v `Var styp
+  | Hole (h, sz) -> quantify h `Hole styp
   | Plus (e1, e2) -> Smtlib.add (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
   | Times (e1, e2) -> Smtlib.mul (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
   | Minus (e1, e2) -> Smtlib.sub (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
@@ -60,9 +58,9 @@ let test_to_term test styp d = if d then (test_str test; let res = test_to_term_
 
 let declares = String.Hash_set.create ()
 
-let check (params : Parameters.t) (test : Ast.test) =
+let check_sat (params : Parameters.t) (test : Ast.test) =
   let open Smtlib in
-  let vars : term list = List.map (free_vars_of_test test) ~f:(fun (id, i) -> Bind (Id id, BitVecSort i)) in
+  let vars : term list = List.map (free_vars_of_test test) ~f:(fun (id, i) -> (Bind (Id id, BitVecSort i))) in
   let st = Time.now() in
   let holes = holes_of_test test in
   let () = List.iter holes ~f:(fun (id, i) -> if (Hash_set.mem declares id) then () else declare_const prover (Id id) (BitVecSort i); Hash_set.add declares id) in
