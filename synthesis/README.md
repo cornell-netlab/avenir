@@ -3,7 +3,7 @@
 + First make sure you have `opam` installed. Then in the `synthesis` directory, run
 
 ```
-opam switch create . ocaml-base-compiler.4.07.1
+opam switch create . ocaml-base-compiler.4.09.0
 ```
 
 to install the correct version of ocaml. Be sure to type `eval $(opam
