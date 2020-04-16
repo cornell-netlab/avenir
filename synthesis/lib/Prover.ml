@@ -196,9 +196,9 @@ let parse_results holes results =
   else (Z3.Solver.UNSATISFIABLE, None)
 
 let serial_check holes solver_str =
-  Core.Out_channel.write_all "query.smt" ~data:(Printf.sprintf "%s\n(get-model)" solver_str);
+  Core.Out_channel.write_all "/dev/shm/query.smt" ~data:(Printf.sprintf "%s\n(get-model)" solver_str);
   (* Printf.printf "OPTIMAL SOLVER :\n %s \n\n%!" (Z3.Optimize.to_string solver); *)
-  try Shell.run_full "/usr/bin/z3" ["-smt2";"query.smt" ]|> parse_results holes
+  try Shell.run_full "/usr/bin/z3" ["-smt2";"/dev/shm/query.smt" ] |> parse_results holes
   with _ -> (Z3.Solver.UNSATISFIABLE, None)
 
 (*Check MaxSMT*)
