@@ -2,6 +2,7 @@ open Core
 open Ast
 open Util
 open Packet
+open Z3
 
 let debug term = let res = Smtlib.term_to_sexp term |> Smtlib.sexp_to_string
   in Printf.printf "%s"res
@@ -17,9 +18,16 @@ let quantify expr etyp styp =
       | _ -> raise (Failure "not allowed here"))
   | `Sat -> Smtlib.const expr
 
+let parse_val str =
+  let hexstring = "0" ^ String.chop_prefix_exn str ~prefix:"#" in
+  Int (Bigint.of_string hexstring,
+       if String.is_substring hexstring ~substring:"x"
+       then (String.length str - 2) * 4
+       else String.length hexstring - 2)
+
 let rec expr_to_term_help expr styp : Smtlib.term =
   match expr with
-  | Value (Int (num, sz)) -> Smtlib.bv (Bigint.to_int_exn num) sz
+  | Value (Int (num, sz)) -> Smtlib.bbv (num) sz
   | Var (v, sz) -> quantify v `Var styp
   | Hole (h, sz) -> quantify h `Hole styp
   | Plus (e1, e2) -> Smtlib.add
@@ -61,6 +69,8 @@ let rec model_to_packet (lst : (Smtlib.identifier * Smtlib.term) list) =
     (List.map lst ~f:(fun (Id id, x) -> (match x with
          | Smtlib.BitVec (n, w) -> let value =
                                      Int (Bigint.of_int n, w) in id, value
+         | Smtlib.BigBitVec (n, w) -> let value =
+                                     Int (n, w) in id, value
          | Smtlib.Int i -> let value =
                              Int (Bigint.of_int i, Int.max_value) in id, value
          | _ -> raise (Failure "not a supported model"))))
