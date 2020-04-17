@@ -6,8 +6,6 @@ open Core
 open Ast
 open Util
 
-let string_of_map m =
-  StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value v) ^ ") " ^ acc)) m ~init:""
 
 let rec mkZ3Value (rhoVars : (string * size) list) (v : expr) ctx (deBruijn : int StringMap.t) (quantified : (string * size) list) : Z3.Expr.expr =
   (* let () = Printf.printf "building z3 value for %s\n%!" (string_of_expr v) in *)
@@ -250,13 +248,13 @@ let check (params : Parameters.t) typ test =
      let () = Z3.Solver.push mySolver;
               initSolver typ mySolver context test in
      let slvr_string = Printf.sprintf "%s\n(check-sat)\n" (Z3.Solver.to_string mySolver) in
-     let () = if params.debug then
-                Printf.printf "SOLVER:\n%s\n%!" slvr_string in
+     (* let () = if params.debug then
+      *            Printf.printf "SOLVER:\n%s\n%!" slvr_string in *)
      let response, model =
        serial_check consts slvr_string
      in
-     if params.debug then
-       Printf.printf "Solved\n%!";
+     (* if params.debug then
+      *   Printf.printf "Solved\n%!"; *)
      let dur = Time.(diff (now()) st) in
      (* let model =
       *   if response = Z3.Solver.SATISFIABLE
@@ -281,12 +279,11 @@ let check_valid params test = check params `Valid test
 let rec all_agree (vs :  (string * size) list) =
   match vs with
   | [] -> true
-  | ((v,sz)::vs) -> if List.exists vs ~f:(fun (v',sz') ->
-                           if v = v' && sz <> sz' then
-                             (Printf.printf "[ERROR] %s found with multiple sizes %d & %d" v sz sz';
-                              true)
-                           else
-                             false
-                         )
-                    then false
-                    else all_agree vs
+  | ((v,sz)::vs) ->
+    not (List.exists vs ~f:(fun (v',sz') ->
+             if v = v' && sz <> sz' then
+               (Printf.printf "[ERROR] %s found with multiple sizes %d & %d" v sz sz';
+                true)
+             else
+               false
+      )) &&  all_agree vs

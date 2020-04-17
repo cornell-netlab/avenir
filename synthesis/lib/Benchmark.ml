@@ -11,26 +11,26 @@ module IntMap = Map.Make(Int)
 let rec run_experiment iter seq phys_seq params hints (problem : Problem.t) =
   match seq with
   | [] -> phys_seq
-    | edit::edits ->
-       (* Printf.printf "==== BENCHMARKING INSERTION OF (%s) =====\n%!"
-        *   (string_of_edit edit); *)
-       let data = ProfData.zero () in
-       let problem_inner = Problem.({problem with log_edits = edit}) in
-       let st = Time.now () in
-       let pedits = cegis_math params data problem_inner |> Option.value_exn  in
-       let nd = Time.now () in
-       data := {!data with log_inst_size = Instance.size problem.log_inst;
-                           phys_inst_size = Instance.size problem.phys_inst;
-                           time = Time.diff nd st;
-               };
-       Printf.printf "%s\n%!" (ProfData.to_string !data);
-       run_experiment (iter + 1)
-         edits
-         (phys_seq @ pedits)
-         params
-         hints
-         Problem.({problem with log_inst = Instance.update_list problem.log_inst edit;
-                                phys_inst = Instance.update_list problem.phys_inst pedits})
+  | edit::edits ->
+     (* Printf.printf "==== BENCHMARKING INSERTION OF (%s) =====\n%!"
+      *   (string_of_edit edit); *)
+     let data = ProfData.zero () in
+     let problem_inner = Problem.(replace_log_edits problem edit) in
+     let st = Time.now () in
+     let pedits = cegis_math params data problem_inner |> Option.value_exn  in
+     let nd = Time.now () in
+     data := {!data with log_inst_size = Problem.log_inst problem |> Instance.size ;
+                         phys_inst_size = Problem.phys_inst problem |> Instance.size;
+                         time = Time.diff nd st;
+             };
+     Printf.printf "%s\n%!" (ProfData.to_string !data);
+     run_experiment (iter + 1)
+       edits
+       (phys_seq @ pedits)
+       params
+       hints
+       Problem.(apply_edits_to_log problem edit
+                |> flip apply_edits_to_phys pedits)
                         
 let measure params hints problem insertions =
   Printf.printf "%s\n%!" ProfData.header_string;
@@ -127,17 +127,8 @@ let reorder_benchmark varsize length max_inserts widening =
         widening;
         gas = 10;
     }) in
-  let problem =
-    let open Problem in
-    { log; phys; fvs;
-      log_inst; phys_inst;
-      log_edits = [];
-      phys_edits = [];
-      cexs = [];
-      attempts = [];
-      model_space = True
-    } in
-  measure params (Some (List.return))  problem insertion_sequence
+  let problem = Problem.make ~log ~phys ~fvs ~log_inst ~phys_inst ~log_edits:[] in
+  measure params (Some (List.return)) problem insertion_sequence
 
 
 
@@ -667,16 +658,10 @@ let basic_onf_ipv4 params filename =
    *   ("next", ([Exact (1,32)], [(1,9)],0))
    * %> *)
   let problem =
-    let open Problem in
-    { log; phys; fvs;
-      log_inst = StringMap.(set empty ~key:"ipv6" ~data:[]);
-      phys_inst = StringMap.(set empty ~key:"l3_fwd" ~data:[]);
-      log_edits = [];
-      phys_edits = [];
-      attempts = [];
-      cexs = [];
-      model_space = True
-    }
+    Problem.make ~log ~phys ~fvs
+      ~log_inst:StringMap.(set empty ~key:"ipv6" ~data:[])
+      ~log_edits:[]
+      ~phys_inst:StringMap.(set empty ~key:"l3_fwd" ~data:[])
   in
   measure params None problem (onos_to_edits filename)
 
@@ -721,20 +706,14 @@ let running_example gas widening =
   in
   let params = Parameters.({default with widening; gas}) in
   let problem  =
-    let open Problem in
-    {log; phys;
-     log_inst = StringMap.of_alist_exn [("src_table", [([Match.Exact (mkInt(0,2))], [mkInt(1,2)], 0)
-                                                      ;([Match.Exact (mkInt(1,2))], [mkInt(2,2)], 1)])
-                                      ; ("dst_table", [([Match.Exact (mkInt(0,2))], [mkInt(1,2)], 0)])];
-     phys_inst = StringMap.empty;
-     log_edits = [Add ("dst_table", ([Exact (mkInt(1,2))], [mkInt(2,2)], 0))];
-     phys_edits = [];
-     attempts = [];
-     fvs = ["src", 2; "dst", 2; "smac", 2; "dmac", 2; "out", 2 ];
-     cexs = [];
-     model_space = True
-    }
-  in
+    Problem.make ~log ~phys
+      ~fvs:["src", 2; "dst", 2; "smac", 2; "dmac", 2; "out", 2 ]
+      ~log_inst:StringMap.(of_alist_exn
+                             [("src_table", [([Match.Exact (mkInt(0,2))], [mkInt(1,2)], 0)
+                                            ;([Match.Exact (mkInt(1,2))], [mkInt(2,2)], 1)])
+                             ; ("dst_table", [([Match.Exact (mkInt(0,2))], [mkInt(1,2)], 0)])])
+      ~log_edits:[Add ("dst_table", ([Exact (mkInt(1,2))], [mkInt(2,2)], 0))]
+      ~phys_inst:StringMap.empty in
   synthesize ~iter:1
     params
     None
@@ -906,23 +885,18 @@ let onf_representative gas widening =
   in
   let params = Parameters.({default with widening; gas}) in
   let problem =
-    let open Problem in
-    {log  = init_metadata %:% logical;
-     phys = init_metadata %:% physical;
-     log_inst = StringMap.of_alist_exn
-                  [ ("my_station_table", [ ([Match.Between(mkInt(0,9), mkInt(pow 2 9,9));
-                                             Match.Between(mkInt(0,48), mkInt(pow 2 48,48));
-                                             Match.Between(mkInt(0, 16), mkInt(pow 2 16, 16))], [mkInt(2, 2)], 0 ) ])
-                  ; ("ipv4_dst", [([Match.Exact(mkInt(1, 32))], [mkInt(1,32)], 0)])
-                  ];
-     phys_inst = Instance.empty;
-     log_edits = [Add("next", ([Match.Exact(mkInt(1,32))], [mkInt(1,9)], 0))];
-     phys_edits = [];
-     attempts = [];
-     fvs;
-     cexs = [];
-      model_space = True
-    }
+    Problem.make
+      ~log:(init_metadata %:% logical)
+      ~phys:(init_metadata %:% physical)
+      ~fvs
+      ~log_inst:StringMap.(of_alist_exn
+                             [ ("my_station_table", [ ([Match.Between(mkInt(0,9), mkInt(pow 2 9,9));
+                                                        Match.Between(mkInt(0,48), mkInt(pow 2 48,48));
+                                                        Match.Between(mkInt(0, 16), mkInt(pow 2 16, 16))], [mkInt(2, 2)], 0 ) ])
+                             ; ("ipv4_dst", [([Match.Exact(mkInt(1, 32))], [mkInt(1,32)], 0)])
+                             ])
+      ~log_edits:[Add("next", ([Match.Exact(mkInt(1,32))], [mkInt(1,9)], 0))]
+      ~phys_inst:Instance.empty
   in
   synthesize ~iter:1
     params
@@ -1065,13 +1039,11 @@ let of_to_pipe1 widening gas fp () =
   (* let of_insertions = parse_classbench fp |> generate_edits in *)
   let pipe_insertions = parse_classbench fp |> generate_pipe1_edits in
   let params = Parameters.({default with widening; gas}) in
-  let problem = Problem.({log = pipe; phys = of_table;
-                          log_inst = StringMap.empty; phys_inst = StringMap.empty;
-                          log_edits = [];
-                          phys_edits = [];
-                          fvs;
-                          cexs = [];
-                          attempts = [];
-                          model_space = True}) in
+  let problem = Problem.make ~fvs
+                  ~log:pipe
+                  ~phys:of_table
+                  ~log_inst:StringMap.empty
+                  ~phys_inst:StringMap.empty
+                  ~log_edits: []
+  in
   measure params None problem pipe_insertions
-

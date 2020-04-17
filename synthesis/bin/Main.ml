@@ -50,16 +50,12 @@ module Solver = struct
                      interactive;
                      fastcx})
         (ProfData.zero ())
-        Problem.({log; phys; log_inst = Motley.Tables.Instance.empty;
-                  phys_inst = Motley.Tables.Instance.empty;
-                  log_edits = log_edits;
-                  phys_edits = [];
-                  cexs = [];
-                  attempts = [];
-                  model_space = True;
-                  fvs =
-                    List.dedup_and_sort ~compare:Stdlib.compare
-                    Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)})
+        (Problem.make ~log ~phys
+           ~log_inst:Motley.Tables.Instance.empty
+           ~phys_inst:Motley.Tables.Instance.empty
+           ~log_edits
+           ~fvs:(List.dedup_and_sort ~compare:Stdlib.compare
+                   Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)))
     in
     match phys_edits with
     | None -> Printf.printf "Failed\n%!"
@@ -128,17 +124,11 @@ module RunTest = struct
                                         debug = false;
                                         interactive = false
                                         }) in
-              let problem = Problem.({log; phys;
-                                      log_inst = Motley.Tables.Instance.empty;
-                                      phys_inst = Motley.Tables.Instance.empty;
-                                      log_edits;
-                                      phys_edits = [];
-                                      cexs = [];
-                                      attempts = [];
-                                      model_space = True;
-                                      fvs =
-                                        List.dedup_and_sort ~compare:Stdlib.compare
-                                          Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)}) in
+              let problem = Problem.make ~log ~phys ~log_edits
+                              ~log_inst:Motley.Tables.Instance.empty
+                              ~phys_inst:Motley.Tables.Instance.empty
+                              ~fvs:(List.dedup_and_sort ~compare:Stdlib.compare
+                                      Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)) in
               let data = ProfData.zero () in
               begin
                 try

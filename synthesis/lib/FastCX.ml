@@ -45,21 +45,17 @@ let hits_list_pred data prog inst edits =
 let unreachable params (problem : Problem.t) (test : Ast.test) =
   match check_valid params (!%test) with
   | (Some x, _) ->
-     let in_pkt = Packet.make x ~fvs:(Some problem.fvs) in
-     let eval p i = trace_eval_inst p i ~wide:Packet.empty (in_pkt, None) in
-     let ((log_pkt,_), _,_,_) = Instance.update_list problem.log_inst problem.log_edits
-                                |> eval problem.log in
-     let ((phys_pkt,_), _, _, _) = Instance.update_list problem.phys_inst problem.phys_edits
-                                   |> eval problem.phys in
+     let open Problem in
+     let in_pkt = Packet.make x ~fvs:(fvs problem |> Some) in
+     let log  = log_gcl_program problem in
+     let phys = phys_gcl_program problem in
+     let log_pkt = eval_act log in_pkt in
+     let phys_pkt = eval_act phys in_pkt in
      if params.debug
      then begin
-         let u_log,_ = problem.log |> (Instance.update_list problem.log_inst problem.log_edits
-                                       |> Instance.apply ~no_miss:params.do_slice `NoHoles `Exact)
-         in
-         let u_rea,_ = problem.phys |> Instance.apply `NoHoles `Exact (Instance.update_list problem.phys_inst problem.phys_edits) in
          if params.debug then
            Printf.printf "-------------------------------------------\n%s \n???====?=====????\n %s\n-------------------------------------\n%!"
-             (string_of_cmd u_log) (string_of_cmd u_rea);
+             (string_of_cmd log) (string_of_cmd phys);
 
          Printf.printf "LOG :%s -> %s\n" (Packet.string__packet in_pkt) (Packet.string__packet log_pkt);
          Printf.printf "PHYS:%s -> %s\n" (Packet.string__packet in_pkt) (Packet.string__packet phys_pkt)
@@ -70,6 +66,7 @@ let unreachable params (problem : Problem.t) (test : Ast.test) =
   | (None, _) -> `Yes
 
 let get_cex params data (problem : Problem.t) =
-  let e = problem.log_edits |> List.hd_exn in
-  hits_pred data problem.log problem.log_inst problem.log_edits e
+  let open Problem in
+  let e = Problem.log_edits problem |> List.hd_exn in
+  hits_pred data (log problem) (log_inst problem) (log_edits problem) e
   |> unreachable params problem

@@ -204,4 +204,3 @@ let bit_string_to_decimal bs  =
 let uncurry f (x,y) = f x y
 let liftPair ~f ~combine (x1,x2) (y1,y2) =
   combine (f x1 x2) (f y1 y2)
-  
