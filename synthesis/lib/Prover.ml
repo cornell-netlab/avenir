@@ -92,9 +92,9 @@ let vars_to_term vars d = let open Smtlib in if d
         List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i)))
   else List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i))
 
+let prover = Smtlib.make_solver "/usr/bin/z3"
 let check_sat (params : Parameters.t) (test : Ast.test) =
   let open Smtlib in
-  let prover = make_solver "/usr/bin/z3" in
   let vars = vars_to_term (free_vars_of_test test) params.debug in
   let st = Time.now() in
   let holes = holes_of_test test |> List.dedup_and_sort
@@ -113,7 +113,6 @@ let check_sat (params : Parameters.t) (test : Ast.test) =
 
 let check_valid (params : Parameters.t) (test : Ast.test) =
   let open Smtlib in
-  let prover = make_solver "/usr/bin/z3" in
   let vars = free_vars_of_test test |> List.dedup_and_sort
                ~compare:(fun (idx, x) (idy, y) -> Stdlib.compare idx idy) in
   let () = List.iter vars
@@ -130,7 +129,6 @@ let check_valid (params : Parameters.t) (test : Ast.test) =
 
 let check_min (params : Parameters.t) (test : Ast.test) =
   let open Smtlib in
-  let prover = make_solver "/usr/bin/z3" in
   let st = Time.now() in
   let vars = List.map (free_vars_of_test test)
       ~f:(fun (id, i) -> (Id id, BitVecSort i)) in
