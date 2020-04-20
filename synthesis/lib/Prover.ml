@@ -18,13 +18,6 @@ let quantify expr etyp styp =
       | _ -> raise (Failure "not allowed here"))
   | `Sat -> Smtlib.const expr
 
-let parse_val str =
-  let hexstring = "0" ^ String.chop_prefix_exn str ~prefix:"#" in
-  Int (Bigint.of_string hexstring,
-       if String.is_substring hexstring ~substring:"x"
-       then (String.length str - 2) * 4
-       else String.length hexstring - 2)
-
 let rec expr_to_term_help expr styp : Smtlib.term =
   match expr with
   | Value (Int (num, sz)) -> Smtlib.bbv (num) sz
