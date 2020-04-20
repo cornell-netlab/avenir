@@ -23,13 +23,13 @@ let rec expr_to_term_help expr styp : Smtlib.term =
   | Value (Int (num, sz)) -> Smtlib.bbv (num) sz
   | Var (v, sz) -> quantify v `Var styp
   | Hole (h, sz) -> quantify h `Hole styp
-  | Plus (e1, e2) -> Smtlib.add
+  | Plus (e1, e2) -> Smtlib.bvadd
                        (expr_to_term_help e1 styp)
                        (expr_to_term_help e2 styp)
-  | Times (e1, e2) -> Smtlib.mul
+  | Times (e1, e2) -> Smtlib.bvmul
                         (expr_to_term_help e1 styp)
                         (expr_to_term_help e2 styp)
-  | Minus (e1, e2) -> Smtlib.sub
+  | Minus (e1, e2) -> Smtlib.bvsub
                         (expr_to_term_help e1 styp)
                         (expr_to_term_help e2 styp)
 
@@ -40,7 +40,7 @@ let rec test_to_term_help test styp : Smtlib.term =
   | Eq (e1, e2) -> Smtlib.equals
                      (expr_to_term_help e1 styp)
                      (expr_to_term_help e2 styp)
-  | Le (e1, e2) -> Smtlib.lte
+  | Le (e1, e2) -> Smtlib.bvule
                      (expr_to_term_help e1 styp)
                      (expr_to_term_help e2 styp)
   | And (t1, t2) -> Smtlib.and_
