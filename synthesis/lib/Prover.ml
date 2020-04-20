@@ -5,11 +5,11 @@ open Packet
 open Z3
 
 let debug term = let res = Smtlib.term_to_sexp term |> Smtlib.sexp_to_string
-  in Printf.printf "%s"res
+  in Printf.printf "TERM: %s"res
 
-let test_str test = let res = Ast.string_of_test test in Printf.printf "%s"res
+let test_str test = let res = Ast.string_of_test test in Printf.printf "TEST: %s"res
 
-let expr_str test = let res = Ast.string_of_expr test in Printf.printf "%s"res
+let expr_str test = let res = Ast.string_of_expr test in Printf.printf "EXPR: %s"res
 
 let quantify expr etyp styp =
   match styp with
@@ -81,7 +81,7 @@ let test_to_term test styp d = if d
   else test_to_term_help test styp
 
 let vars_to_term vars d = let open Smtlib in if d
-  then (List.iter vars ~f:(fun (id, i) -> Printf.printf "%s %d" id i);
+  then (List.iter vars ~f:(fun (id, i) -> Printf.printf "VAR: %s %d" id i);
         List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i)))
   else List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i))
 

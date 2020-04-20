@@ -134,7 +134,22 @@ type test =
   | Iff of (test * test)
   | Neg of test       
 
-
+let rec string_of_test t =
+  match t with
+  | True -> "true"
+  | False -> "false"
+  | Eq (left, right) -> string_of_expr left ^ " = " ^ string_of_expr right
+  | Le (left, right) -> string_of_expr left ^ " <= " ^ string_of_expr right
+  | Impl (assum, conseq) -> "(" ^ string_of_test assum ^ " ==> " ^ string_of_test conseq ^ ")\n"
+  | Iff (left, right) -> "(" ^ string_of_test left ^ " <==> " ^ string_of_test right ^ ")\n"
+  | Or (left, right) -> "(" ^ string_of_test left ^ "\n || " ^ string_of_test right ^ ")"
+  | And (left, right) -> "(" ^ string_of_test left ^ "&&" ^ string_of_test right ^ ")"
+  | Neg (Le(left, right)) ->
+     Printf.sprintf "(%s < %s)" (string_of_expr right) (string_of_expr left)
+  | Neg(Eq(left,right)) ->
+     Printf.sprintf "(%s <> %s)" (string_of_expr left) (string_of_expr right)
+  | Neg t ->
+     "~(" ^ string_of_test t ^ ")"
 
 let rec mkOr (t : test) (t' : test) : test =
   if enable_smart_constructors then begin
@@ -240,22 +255,6 @@ let mkIff lhs rhs =
   else Iff(lhs, rhs)
 let (%<=>%) = mkIff
 
-let rec string_of_test t =
-  match t with
-  | True -> "true"
-  | False -> "false"
-  | Eq (left, right) -> string_of_expr left ^ " = " ^ string_of_expr right
-  | Le (left, right) -> string_of_expr left ^ " <= " ^ string_of_expr right
-  | Impl (assum, conseq) -> "(" ^ string_of_test assum ^ " ==> " ^ string_of_test conseq ^ ")\n"
-  | Iff (left, right) -> "(" ^ string_of_test left ^ " <==> " ^ string_of_test right ^ ")\n"
-  | Or (left, right) -> "(" ^ string_of_test left ^ "\n || " ^ string_of_test right ^ ")"
-  | And (left, right) -> "(" ^ string_of_test left ^ "&&" ^ string_of_test right ^ ")"
-  | Neg (Le(left, right)) ->
-     Printf.sprintf "(%s < %s)" (string_of_expr right) (string_of_expr left)
-  | Neg(Eq(left,right)) ->
-     Printf.sprintf "(%s <> %s)" (string_of_expr left) (string_of_expr right)
-  | Neg t ->
-     "~(" ^ string_of_test t ^ ")"
 
 let rec sexp_string_of_test t =
   let binop opname left right recfun : string=
@@ -394,8 +393,8 @@ type cmd =
               * (((string * size) list * cmd) list) (*actions*)
               * cmd) (*default action*)
 
-let clean_selects_list =
-  List.filter ~f:(fun (c,a) -> c <> False)
+let clean_selects_list ss = ss
+  (* List.filter ~f:(fun (c,a) -> c <> False) *)
   (* List.rev ss
    * |> List.fold ~init:([], [])
    *   ~f:(fun (acc,seen) (c,a) ->
@@ -406,7 +405,7 @@ let clean_selects_list =
    *   )
    * |> fst *)
 
-let mkPartial ss =
+let mkPartial ss = 
   if not enable_smart_constructors then Select(Partial, ss) else
   let selects = clean_selects_list ss in
   if List.length selects = 0 then
@@ -684,3 +683,15 @@ let rec get_schema_of_table name phys =
     -> if name = name' then Some (ks,acts,def) else None
   | While (_, c) -> get_schema_of_table name c
                  
+
+let rec get_tables_actsizes = function
+  | Skip | Assume _ | Assert _ | Assign _ -> []
+  | Seq (c1,c2) -> get_tables_actsizes c1 @ get_tables_actsizes c2
+  | Select(_,cs) ->
+     List.fold cs ~init:[] ~f:(fun acc (_,c) -> acc @ get_tables_actsizes c)
+  | Apply(tbl, _,acts,_) -> [tbl, List.length acts]
+  | While(_,c) -> get_tables_actsizes c
+
+
+let string_of_map m =
+  StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value v) ^ ") " ^ acc)) m ~init:""
