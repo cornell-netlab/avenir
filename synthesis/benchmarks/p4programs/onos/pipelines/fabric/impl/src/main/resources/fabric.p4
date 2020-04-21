@@ -17,7 +17,7 @@
 // ADDED
 
 #ifndef WITH_IPV6
-#defined WITH_IPV6
+#define WITH_IPV6
 #endif
 
 #ifndef WITH_SIMPLE_NEXT

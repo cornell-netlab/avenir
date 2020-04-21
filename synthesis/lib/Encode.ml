@@ -499,6 +499,7 @@ and dispatch_control (Program(top_decls) as prog : program) (ident : P4String.t)
                       ~f:(fun assgn prog -> prog %:% assgn ) in
         let added_r = List.fold r ~init:(added_b)
                       ~f:(fun assgn prog -> assgn %:% prog ) in
+        let x = printf "dispatch_control %s END" (String.concat ~sep:"\n" (List.map r ~f:string_of_cmd)) in
         assign_rv %:% added_r, false, eb
       | Unequal_lengths -> failwith "Parameters and arguments don't match")
   | Some (_, ExternFunction _) -> Skip, false, false
@@ -562,6 +563,7 @@ and return_args (type_ctx : Declaration.t list) (param_arg : Parameter.t * Argum
   let open Direction in
   let open Parameter in
   let open Argument in
+  let open Expression in
   let param = snd (fst param_arg) in
   let arg = snd (snd param_arg) in
   match arg with
@@ -572,9 +574,16 @@ and return_args (type_ctx : Declaration.t list) (param_arg : Parameter.t * Argum
         | Some (_, Out) -> []
         | Some (_, InOut) ->
           let n = dispatch_list value in
-          let w = lookup_type_width_exn type_ctx param.typ in
-          let val_assgn = Assign (string_of_memberlist n, Var(snd param.variable, w)) in
-          [Assign(validity_bit_no_removal n, Var(validity_bit_no_removal [param.variable], 1)); val_assgn]
+          (*let w = lookup_type_width_exn type_ctx param.typ in
+          let val_assgn = Assign (string_of_memberlist n, Var(snd param.variable, w)) in *)
+          let flds = get_rel_variables type_ctx (fst param_arg) in
+          let add_to_expr f v = match v with
+                              | (i, Name (ni, n)) -> (i, Name (ni, n ^ "." ^ snd f))
+                              | _ -> failwith "HERE" in
+          let val_assgn = List.map flds
+            ~f:(fun fld -> Assign(snd param.variable ^ "." ^ snd ((snd fld).name)
+                                 , encode_expression_to_value type_ctx (add_to_expr (snd fld).name value))) in
+          Assign(validity_bit_no_removal n, Var(validity_bit_no_removal [param.variable], 1)) :: val_assgn
       end
     | _ -> failwith "Unhandled argument"
 

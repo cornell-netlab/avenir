@@ -7,7 +7,7 @@ let (<) = Stdlib.(<)
 let (<=) = Stdlib.(<=)
 let (<>) = Stdlib.(<>)
 
-let enable_smart_constructors = true
+let enable_smart_constructors = false (* true *)
 
 type size = int
 
