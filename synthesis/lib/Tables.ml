@@ -490,10 +490,8 @@ module Instance = struct
                         let act = get_int v |> Bigint.to_int_exn in
                         update_consistently checker params match_model phys tbl_name None act inst )
        in
-       data := {!data with fixup_time = Time.Span.(!data.fixup_time + Time.diff (Time.now ()) st)};
+       ProfData.update_time !data.fixup_time st;
        out
-
-
 end
 
                     (* END TYPES *)

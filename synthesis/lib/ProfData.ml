@@ -1,26 +1,26 @@
 open Core
 (* Timing data : lots of subsets, eq time in check valid time in impl time  *)
 type t = {
-    log_inst_size : int;
-    phys_inst_size : int;
-    time : Time.Span.t;
-    impl_time : Time.Span.t;
-    check_valid_time : Time.Span.t;
-    eq_time : Time.Span.t;
-    make_vc_time: Time.Span.t;
-    check_sliceable_time : Time.Span.t;
-    eq_num_z3_calls : int;
-    model_search_time : Time.Span.t;
-    cand_time : Time.Span.t;
-    model_z3_time : Time.Span.t;
-    model_cond_time : Time.Span.t;
-    model_holes_time : Time.Span.t;
-    interp_time : Time.Span.t;
-    model_z3_calls: int;
-    fixup_time : Time.Span.t;
-    search_wp_time: Time.Span.t;
-    num_backtracks : int;
-    tree_sizes: int list;
+    log_inst_size : int ref;
+    phys_inst_size : int ref;
+    time : Time.Span.t ref;
+    impl_time : Time.Span.t ref;
+    check_valid_time : Time.Span.t ref;
+    eq_time : Time.Span.t ref;
+    make_vc_time: Time.Span.t ref;
+    check_sliceable_time : Time.Span.t ref;
+    eq_num_z3_calls : int ref;
+    model_search_time : Time.Span.t ref;
+    cand_time : Time.Span.t ref;
+    model_z3_time : Time.Span.t ref;
+    model_cond_time : Time.Span.t ref;
+    model_holes_time : Time.Span.t ref;
+    interp_time : Time.Span.t ref;
+    model_z3_calls: int ref;
+    fixup_time : Time.Span.t ref;
+    search_wp_time: Time.Span.t ref;
+    num_backtracks : int ref;
+    tree_sizes: int list ref;
   }
 
 
@@ -54,26 +54,28 @@ let header_string =
   List.reduce_exn headers ~f:(fun x y -> x ^ "," ^ y)
 
 let mean_tree_size data =
-  if List.length data.tree_sizes = 0 then 0 else List.fold (data.tree_sizes) ~init:0 ~f:((+)) / List.length (data.tree_sizes)
-let max_tree_size data = List.fold (data.tree_sizes) ~init:0 ~f:(max)
-let min_tree_size data = List.fold (data.tree_sizes) ~init:(max_tree_size data) ~f:(min)
+  if List.length !(data.tree_sizes) = 0
+  then 0
+  else List.fold !(data.tree_sizes) ~init:0 ~f:((+)) / List.length !(data.tree_sizes)
+let max_tree_size data = List.fold !(data.tree_sizes) ~init:0 ~f:(max)
+let min_tree_size data = List.fold !(data.tree_sizes) ~init:(max_tree_size data) ~f:(min)
 
 
 let to_string (data : t) =
   Printf.sprintf "%d,%f,%f,%f,%f,%f,%f,%d,%f,%f,%d"
-    data.log_inst_size
+    !(data.log_inst_size)
     (* data.phys_inst_size *)
-    (data.time |> Time.Span.to_ms)
-    (data.impl_time |> Time.Span.to_ms)
-    (data.check_valid_time |> Time.Span.to_ms)
-    (data.eq_time |> Time.Span.to_ms)
-    (data.make_vc_time |> Time.Span.to_ms)
-    (data.check_sliceable_time |> Time.Span.to_ms)
-    data.eq_num_z3_calls
-    (data.model_search_time |> Time.Span.to_ms)
+    (!(data.time) |> Time.Span.to_ms)
+    (!(data.impl_time) |> Time.Span.to_ms)
+    (!(data.check_valid_time) |> Time.Span.to_ms)
+    (!(data.eq_time) |> Time.Span.to_ms)
+    (!(data.make_vc_time) |> Time.Span.to_ms)
+    (!(data.check_sliceable_time) |> Time.Span.to_ms)
+    !(data.eq_num_z3_calls)
+    (!(data.model_search_time) |> Time.Span.to_ms)
     (* (data.cand_time |> Time.Span.to_ms) *)
-    (data.model_z3_time |> Time.Span.to_ms)
-    (data.num_backtracks)
+    (!(data.model_z3_time) |> Time.Span.to_ms)
+    (!(data.num_backtracks))
     (* (data.model_cond_time |> Time.Span.to_ms)
      * (data.model_holes_time |> Time.Span.to_ms)
      * (data.interp_time |> Time.Span.to_ms) *)
@@ -90,24 +92,37 @@ let to_csv (dataset : t list) =
     (List.fold dataset ~init:"" ~f:(fun acc dataline -> Printf.sprintf "%s%s\n" acc (to_string dataline)))
 
 let zero _ : t ref =
-  ref { log_inst_size = 0;
-        phys_inst_size = 0;
-        time = Time.Span.zero;
-        impl_time = Time.Span.zero;
-        check_valid_time = Time.Span.zero;
-        eq_time = Time.Span.zero;
-        make_vc_time = Time.Span.zero;
-        check_sliceable_time = Time.Span.zero;
-        eq_num_z3_calls = 0;
-        model_search_time = Time.Span.zero;
-        cand_time = Time.Span.zero;
-        model_z3_time = Time.Span.zero;
-        model_cond_time = Time.Span.zero;
-        model_holes_time = Time.Span.zero;
-        interp_time = Time.Span.zero;
-        model_z3_calls = 0;
-        fixup_time = Time.Span.zero;
-        search_wp_time = Time.Span.zero;
-        num_backtracks = 0;
-        tree_sizes = [];
+  ref { log_inst_size = ref 0;
+        phys_inst_size = ref 0;
+        time = ref Time.Span.zero;
+        impl_time = ref Time.Span.zero;
+        check_valid_time = ref Time.Span.zero;
+        eq_time = ref Time.Span.zero;
+        make_vc_time = ref Time.Span.zero;
+        check_sliceable_time = ref Time.Span.zero;
+        eq_num_z3_calls = ref 0;
+        model_search_time = ref Time.Span.zero;
+        cand_time = ref Time.Span.zero;
+        model_z3_time =  ref Time.Span.zero;
+        model_cond_time = ref Time.Span.zero;
+        model_holes_time = ref Time.Span.zero;
+        interp_time = ref Time.Span.zero;
+        model_z3_calls = ref 0;
+        fixup_time = ref Time.Span.zero;
+        search_wp_time = ref Time.Span.zero;
+        num_backtracks = ref 0;
+        tree_sizes = ref [];
     }
+
+let update_time_val acc time =
+  let open Time in
+  let open Span in
+  acc := !acc + time
+
+let update_time acc ?end_time:(end_time = Time.now()) start_time =
+  let open Time in
+  let open Span in
+  Time.diff end_time start_time
+  |> update_time_val acc
+
+let incr acc = acc := !acc + 1

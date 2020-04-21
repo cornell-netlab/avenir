@@ -18,11 +18,9 @@ let rec run_experiment iter seq phys_seq params hints (problem : Problem.t) =
      let problem_inner = Problem.(replace_log_edits problem edit) in
      let st = Time.now () in
      let pedits = cegis_math params data problem_inner |> Option.value_exn  in
-     let nd = Time.now () in
-     data := {!data with log_inst_size = Problem.log_inst problem |> Instance.size ;
-                         phys_inst_size = Problem.phys_inst problem |> Instance.size;
-                         time = Time.diff nd st;
-             };
+     !data.time := Time.(diff (now()) st);
+     !data.log_inst_size :=  Problem.log_inst problem |> Instance.size ;
+     !data.phys_inst_size := Problem.phys_inst problem |> Instance.size;
      Printf.printf "%s\n%!" (ProfData.to_string !data);
      run_experiment (iter + 1)
        edits
