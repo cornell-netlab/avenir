@@ -27,7 +27,7 @@ val phys_inst : t -> Instance.t
 val phys_edits : t -> Edit.t list
 val phys_gcl_program : t -> cmd
 val phys_edited_instance : t -> Instance.t
-val phys_gcl_holes: t -> (string * int) list -> [< `Exact | `Range] -> cmd
+val phys_gcl_holes: t -> [`NoHoles | `OnlyHoles | `WithHoles of (string * int) list] -> [< `Exact | `Range] -> cmd
 
 
 val slice : t -> t

@@ -59,8 +59,8 @@ let phys_edited_instance (p : t) : Instance.t =
   Instance.update_list p.phys_inst p.phys_edits
 let phys_gcl_program (p : t) : cmd = gcl_prog phys_edited_instance p p.phys
 
-let phys_gcl_holes (p : t) deletions tag : cmd =
-  Instance.apply ~no_miss:false (`WithHoles deletions) tag (phys_edited_instance p) p.phys
+let phys_gcl_holes (p : t) dels tag : cmd =
+  Instance.apply ~no_miss:false dels tag (phys_edited_instance p) p.phys
   |> fst
 
 let slice (p : t) : t =
@@ -100,7 +100,7 @@ let apply_edits_to_log (p : t) (e : Edit.t list) : t =
   {p with log_inst = Instance.update_list p.log_inst e}
 
 let apply_edits_to_phys (p : t) (e : Edit.t list) : t =
-  {p with phys_inst = Instance.update_list p.log_inst e}
+  {p with phys_inst = Instance.update_list p.phys_inst e}
 
 let update_phys (p : t) (phys : cmd) : t = {p with phys}
 

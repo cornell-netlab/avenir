@@ -306,7 +306,7 @@ module Instance = struct
     %&% (row_hole %=% mkVInt (1,1))
     %&% (act_hole %=% mkVInt (i,actSize))
     
-  let rec apply ?no_miss:(no_miss = false) tag encode_tag ?cnt:(cnt=0) (inst : t) (prog : cmd) : (cmd * int) =
+  let rec apply ?no_miss:(no_miss = false) (tag : [< `NoHoles | `OnlyHoles | `WithHoles of (string * int) list]) encode_tag ?cnt:(cnt=0) (inst : t) (prog : cmd) : (cmd * int) =
     match prog with
     | Skip
       | Assign _
@@ -331,56 +331,59 @@ module Instance = struct
        let act_hole = which_act_hole tbl actSize in
        let rows = StringMap.find_multi inst tbl in
        let selects =
-         List.foldi rows ~init:[]
-           ~f:(fun i acc (matches, data, action) ->
-             let prev_tst =
-               if List.for_all matches ~f:(function | Exact _ -> true | _ -> false) then
-                 False
-               else
-                 let prev_rows =
-                   if i + 1 >= List.length rows then [] else
-                     List.sub rows ~pos:(i+1) ~len:(List.length rows - (i+1))
-                 in
-                 let overlapping_matches =
-                   List.filter_map prev_rows
-                     ~f:(fun (prev_ms,_,_) ->
-                       if Match.has_inter_l matches prev_ms
-                       then Some prev_ms
-                       else None
-                     )
-                 in
-                 List.fold overlapping_matches ~init:False
-                   ~f:(fun acc ms -> acc %+% Match.list_to_test keys ms )
-             in
-             let tst = Match.list_to_test keys matches
-                       %&% match tag with
-                           | `WithHoles ds ->
-                              (* delete_hole i tbl %=% mkVInt(0,1) *)
-                              if List.exists ds ~f:((=) (tbl, i))
+         match tag with
+         | `OnlyHoles -> []
+         | _ ->
+            List.foldi rows ~init:[]
+              ~f:(fun i acc (matches, data, action) ->
+                let prev_tst =
+                  if List.for_all matches ~f:(function | Exact _ -> true | _ -> false) then
+                    False
+                  else
+                    let prev_rows =
+                      if i + 1 >= List.length rows then [] else
+                        List.sub rows ~pos:(i+1) ~len:(List.length rows - (i+1))
+                    in
+                    let overlapping_matches =
+                      List.filter_map prev_rows
+                        ~f:(fun (prev_ms,_,_) ->
+                          if Match.has_inter_l matches prev_ms
+                          then Some prev_ms
+                          else None
+                        )
+                    in
+                    List.fold overlapping_matches ~init:False
+                      ~f:(fun acc ms -> acc %+% Match.list_to_test keys ms )
+                in
+                let tst = Match.list_to_test keys matches
+                          %&% match tag with
+                              | `WithHoles ds ->
+                                 (* delete_hole i tbl %=% mkVInt(0,1) *)
+                                 if List.exists ds ~f:((=) (tbl, i))
                               then delete_hole i tbl %=% mkVInt(0,1)
-                              else True
-                           | `NoHoles -> True in
-             if action >= List.length acts then
-               acc
-             else begin
-                 let cond = tst %&% !%(prev_tst) in
-                 (* if params.debug then Printf.printf "[%s] Adding %s\n%!" tbl (string_of_test cond); *)
-                 (cond, (List.nth acts action
-                                         |> Option.value ~default:([], default)
-                                         |> bind_action_data data))
-                 :: acc
-               end)
+                                 else True
+                              | _ -> True in
+                if action >= List.length acts then
+                  acc
+                else begin
+                    let cond = tst %&% !%(prev_tst) in
+                    (* if params.debug then Printf.printf "[%s] Adding %s\n%!" tbl (string_of_test cond); *)
+                    (cond, (List.nth acts action
+                            |> Option.value ~default:([], default)
+                            |> bind_action_data data))
+                    :: acc
+                  end)
        in
        let holes =
          match tag with
-         | `WithHoles _ ->
+         | `NoHoles -> []
+         | _  ->
             List.mapi acts
               ~f:(fun i (params, act) ->
                 (tbl_hole encode_tag keys tbl row_hole act_hole i actSize
                  %&% List.fold selects ~init:True
                        ~f:(fun acc (cond, _) -> acc %&% !%(cond))
                 , holify (List.map params ~f:fst) act))
-         | `NoHoles -> []
        in
        let dflt_row =
          let cond = if no_miss
@@ -395,7 +398,11 @@ module Instance = struct
                                           -> delete_hole i tbl %=% mkVInt(0,1)
                                         | _ -> True)) in
          [(cond, default)] in
-       let tbl_select = selects @ holes @ dflt_row |> (*mkPartial*) mkOrdered in
+       let mk_select = match tag with
+         | `OnlyHoles -> mkPartial
+         | _ -> mkOrdered
+       in
+       let tbl_select = selects @ holes @ dflt_row |>  mk_select in
        (* Printf.printf "TABLE %s: \n %s\n%!" tbl (string_of_cmd tbl_select); *)
        (tbl_select, cnt)
 

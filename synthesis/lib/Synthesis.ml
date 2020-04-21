@@ -253,8 +253,8 @@ let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
        let in_pkt, out_pkt = Packet.extract_inout_ce x in
        let remake = Packet.make ~fvs:(Problem.fvs problem |> Some) in
        let in_pkt' = remake in_pkt in
-       let out_pkt'
-         = eval_act (Problem.log_gcl_program problem) in_pkt in
+       let out_pkt' = out_pkt in
+         (* = eval_act (Problem.log_gcl_program problem) in_pkt in *)
        if params.debug || params.interactive then
          Printf.printf "----------invalid----------------\n%! CE_in = %s\n CE_out = %s\n%!"
            (Packet.string__packet in_pkt')
@@ -394,7 +394,7 @@ let complete_model (holes : (string * size) list) (model : value StringMap.t) : 
 let get_model (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (value StringMap.t option) =
   let (in_pkt, out_pkt) = Problem.cexs problem |> List.hd_exn in
   let deletions = [] in
-  let phys = Problem.phys_gcl_holes problem deletions `Exact in
+  let phys = Problem.phys_gcl_holes problem (if params.monotonic then `OnlyHoles else `WithHoles deletions) `Exact in
   let fvs = List.(free_vars_of_cmd phys
                   |> filter ~f:(fun x -> exists (Problem.fvs problem) ~f:(Stdlib.(=) x))) in
   (* let fvs = problem.fvs in *)
@@ -502,7 +502,12 @@ let rec cegis_math params (data : ProfData.t ref) (problem : Problem.t) =
   let cex = get_cex params data problem in
   ProfData.update_time !data.impl_time st;
   match cex with
-  | `Yes -> Problem.phys_edits problem |> Some
+  | `Yes ->
+     if params.interactive then begin
+       Printf.printf "%s\n%!" (Problem.phys_gcl_program problem |> string_of_cmd);
+       ignore(Stdio.In_channel.(input_char stdin) : char option)
+       end;
+     Problem.phys_edits problem |> Some
   | `NoAndCE counter ->
      let params = {params with fastcx = false} in
      let f = liftPair ~f:Packet.equal ~combine:(&&) counter in
