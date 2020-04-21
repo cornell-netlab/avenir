@@ -112,7 +112,7 @@ let get_one_model_edit
             (if params.debug then Printf.printf "no holes, so skipping\n%!";
              None)
           else
-            let (res, time) = check params `MinSat (log_wp %=>% wp_phys) in
+            let (res, time) = check_min params (log_wp %=>% wp_phys) in
             data := {!data with
                      model_z3_time = Time.Span.(!data.model_z3_time + time);
                      model_z3_calls = !data.model_z3_calls + 1};
@@ -205,7 +205,7 @@ let get_one_model_edit_no_widening
               (string_of_test wp_phys);
           let h_st = Time.now() in
           let h_dur =  Time.diff (Time.now ()) h_st in
-          let (res, dur) = check params `Sat condition in
+          let (res, dur) = check_sat params condition in
           data := {!data with
                     model_holes_time = Time.Span.(!data.model_holes_time + h_dur);
                     model_z3_time = Time.Span.(!data.model_z3_time + dur);
@@ -304,7 +304,7 @@ let slice_conclusive (params : Parameters.t) (data : ProfData.t ref) (problem : 
     FastCX.(Problem.(
               hits_list_pred data (log problem) (log_inst problem) (log_edits problem)
             %<=>% hits_list_pred data (phys problem) (phys_inst problem) (phys_edits problem)))
-    |> check params `Valid
+    |> check_valid params
     |> fst
     |> Option.is_none
   in
@@ -436,7 +436,7 @@ let get_model (params : Parameters.t) (data : ProfData.t ref) (problem : Problem
             (string_of_cmd phys)
             (Packet.string__packet out_pkt)
             ("OMITTED" (*string_of_test spec*));
-        let model, dur = check params `Sat condition in
+        let model, dur = check_sat params condition in
         data := {!data with
                   model_z3_time = Time.(Span.(!data.model_z3_time + dur));
                   tree_sizes = num_nodes_in_test condition :: !data.tree_sizes ;
@@ -540,7 +540,7 @@ and solve_math params data problem =
   (* if params.debug then
    *   Printf.printf "+Model Space+\n%!"; *)
   if Problem.model_space problem = True
-     || (check params `Sat (Problem.model_space problem) |> fst |> Option.is_some)
+     || (check_sat params (Problem.model_space problem) |> fst |> Option.is_some)
   then begin
       let st = Time.now () in
       let model_opt = get_model params data problem in

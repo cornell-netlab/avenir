@@ -30,7 +30,7 @@ let ctor_name_expression (e : Expression.t) : string =
   | E.Range _ -> "Range"
 
 let string_of_binop (e : Op.bin) : string =
-  let open Op in 
+  let open Op in
   match snd e with
   | Plus -> "Plus"
   | PlusSat -> "PlusSat"
@@ -53,7 +53,7 @@ let string_of_binop (e : Op.bin) : string =
   | PlusPlus -> "PlusPlus"
   | And -> "And"
   | Or -> "Or"
-  
+
 let rec dispatch_list ((info,expr) : Expression.t) : P4String.t list =
   let module E = Expression in
   let type_error name =
@@ -65,8 +65,8 @@ let rec dispatch_list ((info,expr) : Expression.t) : P4String.t list =
   | _ ->  ctor_name_expression (info,expr) |> type_error
 
 let string_of_memberlist =
-  concatMap ~f:(snd) ~c:(fun x y -> x ^ "." ^ y) 
-   
+  concatMap ~f:(snd) ~c:(fun x y -> x ^ "." ^ y)
+
 let rec encode_expression_to_value (e : Expression.t) : expr =
   let module E= Expression in
   let unimplemented name =
@@ -81,7 +81,7 @@ let rec encode_expression_to_value (e : Expression.t) : expr =
   match snd e with
   | E.True -> type_error "True"
   | E.False -> type_error "False"
-  | E.Int (_,i) -> mkVInt((i.value |> Petr4.Bigint.to_int_exn), -1)
+  | E.Int (_,i) -> mkVInt((i.value |> Bigint.to_int_exn), -1)
   | E.Name (_,s) -> Var (s,-1)
   | E.ExpressionMember _ -> Var (dispatch_list e |> string_of_memberlist, -1)
   | E.BinaryOp {op;args=(e, e')} ->
@@ -100,7 +100,7 @@ let rec encode_expression_to_value (e : Expression.t) : expr =
 
 let rec encode_expression_to_test (e: Expression.t) : test =
   let module E = Expression in
-  let unimplemented (name : string) : test = 
+  let unimplemented (name : string) : test =
     failwith ("[Unimplemented Expression->Value Encoding for " ^ name ^"] at " ^ Petr4.Info.to_string (fst e))
   in
   let type_error (got : string) : test =
@@ -162,7 +162,7 @@ let rec encode_expression_to_test (e: Expression.t) : test =
 
 let lookup_exn (Program(top_decls) : program) (ctx : Declaration.t list) (ident : P4String.t) : Declaration.t =
   let find name =
-    let module D = Declaration in 
+    let module D = Declaration in
     List.find ~f:(fun d -> snd (D.name d) = snd name) in
   match find ident ctx with
   | None -> begin match find ident top_decls with
@@ -171,14 +171,14 @@ let lookup_exn (Program(top_decls) : program) (ctx : Declaration.t list) (ident 
     end
   | Some d -> d
 
-            
+
 let lookup_action_exn prog ctx action_name =
   let open Declaration in
   match lookup_exn prog ctx action_name with
   | _, Action a -> (a.body, List.map ~f:(fun (_,p) -> Parameter.(p.variable)) a.params)
   | _ -> failwith ("[TypeError] Expecting \""^ snd action_name ^ "\" to be an action, "
                    ^ "but it resolved to something else at " ^ Petr4.Info.to_string (fst action_name))
-          
+
 
 let dispatch prog ctx members =
   match members with
@@ -187,7 +187,7 @@ let dispatch prog ctx members =
   | [member] ->
     failwith ("[Unimplemented] Tried to apply " ^ snd member ^ " as a function, but i'm not sure what it is")
   | member :: members' ->
-    let open Declaration in 
+    let open Declaration in
     match lookup_exn prog ctx member with
     | (_, Table _ ) as tbl ->
       if List.map ~f:snd members' = ["apply"] then
@@ -239,7 +239,7 @@ let rec encode_statement prog (ctx : Declaration.t list) ((info, stmt) : Stateme
 
 and encode_block : program -> Declaration.t list ->  Block.t -> cmd =
   encode_action ~action_data:[]
-    
+
 (** Takes a block representing an action and the action_data variables, replacing them with controller holes *)
 and encode_action prog (ctx : Declaration.t list) ( (_,act) : Block.t ) ~action_data : cmd =
  let open Block in
@@ -256,8 +256,8 @@ and encode_program (Program(top_decls) as prog : program ) =
   | None -> failwith "Could not find control module MyIngress"
   | Some (_, Control c) -> encode_control prog c.locals c.apply
   | Some _ -> failwith "Found a module called MyIngress, but it wasn't a control module"
-  
-  
+
+
 and encode_match ((_, m) : Table.key) : test =
   match m.match_kind with
   | _, "exact" -> encode_expression_to_value m.key %=% Hole ("?",-1)
@@ -285,7 +285,7 @@ and encode_table prog (ctx : Declaration.t list) (props : Table.property list) :
 let read_lines filename =
   let chan = In_channel.create filename in
   Std.input_list chan
-  
+
 let apply_model_from_file (c : cmd) (model_file : string) : cmd =
   let lines = read_lines model_file in
   let parse_line l =
@@ -303,35 +303,35 @@ let apply_model_from_file (c : cmd) (model_file : string) : cmd =
       | None -> c
       | Some (hole, data) ->
          StringMap.singleton hole (mkInt (data, -1))
-         |> fill_holes c)  
+         |> fill_holes c)
 
 (* P4-PARSING *)
 let colorize colors s = ANSITerminal.sprintf colors "%s" s
 let red s = colorize [ANSITerminal.red] s
 let green s = colorize [ANSITerminal.green] s
 
-let preprocess include_dirs p4file = 
-  let cmd = 
+let preprocess include_dirs p4file =
+  let cmd =
     String.concat ~sep:" "
-      (["cc"] @ 
+      (["cc"] @
        (List.map include_dirs ~f:(Printf.sprintf "-I%s") @
-       ["-undef"; "-nostdinc"; "-E"; "-x"; "c"; p4file])) in 
+       ["-undef"; "-nostdinc"; "-E"; "-x"; "c"; p4file])) in
   let in_chan = Unix.open_process_in cmd in
-  let str = In_channel.input_all in_chan in 
+  let str = In_channel.input_all in_chan in
   let _ : Core.Unix.Exit_or_signal.t = Unix.close_process_in in_chan in
   str
 
-let parse_p4 include_dirs p4_file verbose = 
-  let () = Lexer.reset () in 
+let parse_p4 include_dirs p4_file verbose =
+  let () = Lexer.reset () in
   let () = Lexer.set_filename p4_file in
   let p4_string = preprocess include_dirs p4_file in
   let lexbuf = Lexing.from_string p4_string in
   try
-    let prog = Petr4.Parser.p4program Lexer.lexer lexbuf in 
-    if verbose then Format.eprintf "[%s] %s@\n%!" (green "Passed") p4_file;      
+    let prog = Petr4.Parser.p4program Lexer.lexer lexbuf in
+    if verbose then Format.eprintf "[%s] %s@\n%!" (green "Passed") p4_file;
     `Ok prog
   with
-  | err -> 
+  | err ->
     if verbose then Format.eprintf "[%s] %s@\n%!" (red "Failed") p4_file;
     `Error (Lexer.info lexbuf, err)
 
@@ -345,5 +345,3 @@ let encode_from_p4 include_dirs p4_file verbose : Ast.cmd =
      let cmd = encode_program p4_program in
     Format.printf "Encoded Program: \n%!\n %s%! \n%!" (string_of_cmd cmd);
     cmd
-      
-                 
