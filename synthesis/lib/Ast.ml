@@ -707,22 +707,25 @@ let rec get_tables_actsizes = function
   | Apply(tbl, _,acts,_) -> [tbl, List.length acts]
   | While(_,c) -> get_tables_actsizes c
 
-let table_vars (keys, acts, default) =
+let table_vars ?keys_only:(keys_only=false) (keys, acts, default) =
   let open List in
   keys
-  @ (acts >>= fun (ad,c) ->
-     free_vars_of_cmd c
-     |> filter ~f:(fun (x,_) ->
-            for_all ad ~f:(fun (y,_) -> x <> y)))
-  @ free_vars_of_cmd default
+  @ if keys_only then
+      []
+    else
+      (acts >>= fun (ad,c) ->
+       free_vars_of_cmd c
+       |> filter ~f:(fun (x,_) ->
+              for_all ad ~f:(fun (y,_) -> x <> y)))
+      @ free_vars_of_cmd default
 
-let rec get_tables_vars = function
+let rec get_tables_vars ?keys_only:(keys_only=false) = function
   | Skip | Assume _ | Assert _ | Assign _ -> []
-  | Seq (c1,c2) -> get_tables_vars c1 @ get_tables_vars c2
+  | Seq (c1,c2) -> get_tables_vars ~keys_only c1 @ get_tables_vars ~keys_only c2
   | Select(_,cs) ->
-     List.fold cs ~init:[] ~f:(fun acc (_,c) -> acc @ get_tables_vars c)
-  | Apply(tbl, keys,acts, default) -> [tbl, table_vars (keys, acts, default)]
-  | While(_,c) -> get_tables_vars c
+     List.fold cs ~init:[] ~f:(fun acc (_,c) -> acc @ get_tables_vars ~keys_only c)
+  | Apply(tbl, keys,acts, default) -> [tbl, table_vars ~keys_only (keys, acts, default)]
+  | While(_,c) -> get_tables_vars ~keys_only c
 
 let string_of_map m =
   StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value v) ^ ") " ^ acc)) m ~init:""

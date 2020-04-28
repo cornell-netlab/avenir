@@ -204,3 +204,17 @@ let bit_string_to_decimal bs  =
 let uncurry f (x,y) = f x y
 let liftPair ~f ~combine (x1,x2) (y1,y2) =
   combine (f x1 x2) (f y1 y2)
+
+
+
+let nonempty_inter (xs : (string * int) list) (ys : (string * int) list) =
+  List.exists xs ~f:(fun (v,_) ->
+      List.exists ys
+        ~f:(fun (v',_) -> Stdlib.(v = v')))
+
+
+let or_unequal_lengths_to_option =
+  let open List.Or_unequal_lengths in
+  function
+  | Ok x -> Some x
+  | Unequal_lengths -> None

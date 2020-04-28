@@ -12,6 +12,7 @@ module Parameters = Motley.Parameters
 module ProfData = Motley.ProfData
 module Problem = Motley.Problem
 module Tables = Motley.Tables
+module Instance = Motley.Instance
 module Runtime = Motley.Runtime
 
 
@@ -53,8 +54,8 @@ module Solver = struct
                      fastcx})
         (ProfData.zero ())
         (Problem.make ~log ~phys
-           ~log_inst:Motley.Tables.Instance.empty
-           ~phys_inst:Motley.Tables.Instance.empty
+           ~log_inst:Motley.Instance.empty
+           ~phys_inst:Motley.Instance.empty
            ~log_edits
            ~fvs:(List.dedup_and_sort ~compare:Stdlib.compare
                    Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)))
@@ -65,9 +66,9 @@ module Solver = struct
        if print_res
        then
          begin
-           let synth_inst = Tables.Instance.(update_list empty phys_edits) in
+           let synth_inst = Instance.(update_list empty phys_edits) in
            Printf.printf "Synthesized Program (%d edits made)\n%!" (List.length phys_edits);
-           Printf.printf "%s\n%!" (Tables.Instance.apply `NoHoles `Exact synth_inst phys |> fst |> Ast.string_of_cmd)
+           Printf.printf "%s\n%!" (Instance.apply `NoHoles `Exact synth_inst phys |> fst |> Ast.string_of_cmd)
          end
        else ()
 end
@@ -129,8 +130,8 @@ module RunTest = struct
                                         interactive = false
                                         }) in
               let problem = Problem.make ~log ~phys ~log_edits
-                              ~log_inst:Motley.Tables.Instance.empty
-                              ~phys_inst:Motley.Tables.Instance.empty
+                              ~log_inst:Instance.empty
+                              ~phys_inst:Instance.empty
                               ~fvs:(List.dedup_and_sort ~compare:Stdlib.compare
                                       Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)) in
               let data = ProfData.zero () in
@@ -214,7 +215,7 @@ module ONF = struct
       +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly")
 
 
-  let run gas widening do_slice injection monotonic interactive print debug data_fp fastcx () =
+  let run gas widening do_slice monotonic interactive injection print debug data_fp fastcx () =
     let res = Benchmark.basic_onf_ipv4
               Parameters.({widening;do_slice;gas;monotonic;injection;interactive;debug;fastcx})
               data_fp

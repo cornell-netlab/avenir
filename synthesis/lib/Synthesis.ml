@@ -86,8 +86,8 @@ let get_one_model_edit
   let pinst_edited = Problem.phys_edited_instance problem in
   let (pkt',_), wide, trace, actions = trace_eval_inst ~wide:StringMap.empty (Problem.log problem) linst_edited (pkt,None) in
   let deletions = compute_deletions pkt problem in
- let st = Time.now () in
-  let cands = CandidateMap.apply_hints (`WithHoles deletions) `Range hints actions (Problem.phys problem) pinst_edited in
+  let st = Time.now () in
+  let cands = CandidateMap.apply_hints (`WithHoles (deletions, [])) `Range hints actions (Problem.phys problem) pinst_edited in
   let log_wp = wp trace True in
   let wp_phys_paths =
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
@@ -156,7 +156,7 @@ let get_one_model_edit_no_widening
    * in *)
   if params.debug then Printf.printf "Computing candidates\n%!";
   let cst = Time.now () in
-  let cands = CandidateMap.apply_hints (`WithHoles deletions) `Exact hints actions (Problem.phys problem) phys_edited in
+  let cands = CandidateMap.apply_hints (`WithHoles (deletions,[])) `Exact hints actions (Problem.phys problem) phys_edited in
   ProfData.update_time !data.cand_time cst;
   let () =
     if params.debug then begin
@@ -391,21 +391,16 @@ let complete_model (holes : (string * size) list) (model : value StringMap.t) : 
    *   ) *)
 
 
-let edit_domain (prog : cmd) (edit : Edit.t) =
-  get_schema_of_table (Edit.table edit) prog
-  |> Option.value_exn
-  |> table_vars
-
-let edits_domain (prog : cmd) (edits : Edit.t list) : (string * size) list =
-  let open List in
-  edits >>= edit_domain prog
 
 
-let get_model (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (value StringMap.t option) =
+let get_model (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (value StringMap.t option * Hint.t list) =
   let (in_pkt, out_pkt) = Problem.cexs problem |> List.hd_exn in
   let st = Time.now () in
   let deletions = [] in
-  let phys = Problem.phys_gcl_holes problem (`WithHoles deletions) (if params.widening then `Range else `Exact) in
+  let hints = Hint.construct (Problem.log problem) (Problem.phys problem) (Problem.log_edits problem |> List.hd_exn) in
+  let hole_protocol = `WithHoles (deletions, hints) in
+  let hole_type =  if params.widening then `Range else `Exact in
+  let phys = Problem.phys_gcl_holes problem hole_protocol hole_type  in
   ProfData.update_time !data.model_holes_time st;
   let st = Time.now () in
   let fvs = List.(free_vars_of_cmd phys
@@ -446,26 +441,9 @@ let get_model (params : Parameters.t) (data : ProfData.t ref) (problem : Problem
                          )
 
         in
-        let edit_domain = Problem.(edits_domain (log problem) (log_edits problem)) in
-        if params.debug then
-          Printf.printf "%s vars in log edits domain\n%!" (List.map edit_domain ~f:fst |> List.reduce_exn ~f:(Printf.sprintf "%s %s"));
-        let injection_restriction =
-          if params.injection then
-            List.fold (Problem.phys problem |> get_tables_vars) ~init:StringMap.empty
-              ~f:(fun acc (tbl,vars) ->
-                if params.debug then
-                  Printf.printf "%s vars in table %s\n%!" (List.map vars ~f:fst |> List.reduce_exn ~f:(Printf.sprintf "%s %s")) tbl;
-                  if List.exists vars ~f:(fun (v,_) -> List.exists edit_domain ~f:(fun (v',_) -> v = v'))
-                  then
-                    acc
-                  else
-                    StringMap.set acc ~key:("?AddRowTo"^tbl) ~data:(mkInt(0,1))
-              )
-          else
-            StringMap.empty
-        in
         let condition =
-          fixup_test injection_restriction ((wf_holes %&% Problem.model_space problem) %&% spec)
+          (wf_holes %&% Problem.model_space problem) %&% spec
+          |> Injection.optimization params problem
         in
         ProfData.update_time !data.model_cond_time st;
         if params.debug || params.interactive then
@@ -474,7 +452,7 @@ let get_model (params : Parameters.t) (data : ProfData.t ref) (problem : Problem
                       (string_of_cmd phys)
                       (Packet.string__packet out_pkt)
                       ("OMITTED" (*string_of_test spec*));
-        if condition = False
+        if condition = False || not (has_hole_test spec)
         then None
         else
           let model, dur = check_sat params condition in
@@ -487,7 +465,7 @@ let get_model (params : Parameters.t) (data : ProfData.t ref) (problem : Problem
   if params.interactive then begin
       ignore(Stdio.In_channel.(input_char stdin) : char option)
     end;
-  model
+  (model,hints)
 
 
 let holes_for_table table phys =
@@ -588,7 +566,7 @@ and solve_math (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
       let model_opt = get_model params data problem in
       ProfData.update_time !data.model_search_time st;
       match model_opt with
-      | None ->
+      | None,_ ->
          if params.debug || params.interactive then
            Printf.printf "No model could be found\n%!";
          if params.interactive then
@@ -597,7 +575,7 @@ and solve_math (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
            solve_math {params with injection = false} data problem
          else
            None
-      | Some model ->
+      | Some model, hints ->
          let model = minimize_model model (Problem.phys problem) in
          if List.exists (Problem.attempts problem) ~f:(StringMap.equal veq model)
          then begin
@@ -610,7 +588,10 @@ and solve_math (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                      (Problem.attempts_to_string problem)
                      (string_of_map model); in
            (* assert (Problem.num_attempts problem <= 1); *)
-           let es = Edit.extract (Problem.phys problem) model in
+           let es =
+             model
+             |> Hint.add_to_model (Problem.phys problem) hints
+             |> Edit.extract (Problem.phys problem) in
            if params.debug then begin
                Printf.printf "***Edits***\n%!";
                List.iter es ~f:(fun e -> Printf.printf "%s\n%!" (Edit.to_string e));
