@@ -123,8 +123,8 @@ let rec apply ?no_miss:(no_miss = false)
           List.mapi t.actions
             ~f:(fun i (params, act) ->
               (tbl_hole encode_tag t.keys t.name row_hole act_hole i actSize hs
-               %&% List.fold selects ~init:True
-                     ~f:(fun acc (cond, _) -> acc %&% !%(cond))
+               (* %&% List.fold selects ~init:True
+                *       ~f:(fun acc (cond, _) -> acc %&% !%(cond)) *)
               , holify (List.map params ~f:fst) act))
      in
      let dflt_row =
