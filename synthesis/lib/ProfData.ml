@@ -35,8 +35,11 @@ let headers =
    "check_sliceable_time";
    "eq_num_z3_calls";
    "model_search_time";
-   (* "cand_time"; *)
+   "model_holes_time";
+   "model_cond_time";
+   "search_wp_time";
    "model_z3_time";
+   "model_z3_calls";
    "num_backtracks"
 (*;
    ( "model_cond_time";
@@ -62,7 +65,7 @@ let min_tree_size data = List.fold !(data.tree_sizes) ~init:(max_tree_size data)
 
 
 let to_string (data : t) =
-  Printf.sprintf "%d,%f,%f,%f,%f,%f,%f,%d,%f,%f,%d"
+  Printf.sprintf "%d,%f,%f,%f,%f,%f,%f,%d,%f,%f,%f,%f,%f,%d,%d"
     !(data.log_inst_size)
     (* data.phys_inst_size *)
     (!(data.time) |> Time.Span.to_ms)
@@ -73,15 +76,19 @@ let to_string (data : t) =
     (!(data.check_sliceable_time) |> Time.Span.to_ms)
     !(data.eq_num_z3_calls)
     (!(data.model_search_time) |> Time.Span.to_ms)
-    (* (data.cand_time |> Time.Span.to_ms) *)
+    (!(data.model_holes_time) |> Time.Span.to_ms)
+    (!(data.model_cond_time) |> Time.Span.to_ms)
+    (!(data.search_wp_time) |> Time.Span.to_ms)
     (!(data.model_z3_time) |> Time.Span.to_ms)
+    (!(data.model_z3_calls))
     (!(data.num_backtracks))
+
+
     (* (data.model_cond_time |> Time.Span.to_ms)
-     * (data.model_holes_time |> Time.Span.to_ms)
+     *
      * (data.interp_time |> Time.Span.to_ms) *)
-    (* data.model_z3_calls *)
     (* (data.fixup_time |> Time.Span.to_ms)
-     * (data.search_wp_time |> Time.Span.to_ms)
+     *
      * (mean_tree_size data)
      * (min_tree_size data)
      * (max_tree_size data) *)

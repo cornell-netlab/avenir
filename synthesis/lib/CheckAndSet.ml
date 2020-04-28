@@ -11,9 +11,10 @@ let rec map_holes_expr e ~f =
   match e with
   | Value _ | Var _ -> e
   | Hole(h,sz) -> Hole (f h, sz)
-  | Plus (e1,e2) -> binop (fun e1' e2' -> Plus (e1',e2')) e1 e2
-  | Minus(e1,e2) -> binop (fun e1' e2' -> Minus (e1',e2')) e1 e2
-  | Times(e1,e2) -> binop (fun e1' e2' -> Times (e1',e2')) e1 e2
+  | Plus (e1,e2) -> binop mkPlus e1 e2
+  | Minus(e1,e2) -> binop mkMinus e1 e2
+  | Times(e1,e2) -> binop mkTimes e1 e2
+  | Mask (e1,e2) -> binop mkMask e1 e2
 
 let rec map_holes_test b ~f =
   let binope op e1 e2 = op (map_holes_expr e1 ~f) (map_holes_expr e2 ~f) in
@@ -59,9 +60,10 @@ let rec freshen_holes_expr e holes_so_far =
      | Some i -> freshen_hole h sz i
      | None -> freshen_hole h sz 0
      end
-  | Plus(e1,e2) -> binop (fun e e' -> Plus(e,e')) e1 e2
-  | Minus(e1,e2) -> binop (fun e e' -> Minus(e,e')) e1 e2
-  | Times(e1,e2) -> binop (fun e e' -> Times(e,e')) e1 e2
+  | Plus(e1,e2) -> binop mkPlus e1 e2
+  | Minus(e1,e2) -> binop mkMinus e1 e2
+  | Times(e1,e2) -> binop mkTimes e1 e2
+  | Mask (e1,e2) -> binop mkMask e1 e2
 
 
 let rec freshen_holes c holes_so_far =
@@ -202,9 +204,10 @@ let rec apply_model_expr m e =
      | None -> Printf.sprintf "Model is incomplete, no value for %s" x |> failwith
      | Some v -> Value(v)
      end
-  | Plus(e1,e2) -> binop (fun e1 e2 -> Plus(e1,e2)) e1 e2
-  | Minus(e1,e2) -> binop (fun e1 e2 -> Minus(e1,e2)) e1 e2
-  | Times(e1,e2) -> binop (fun e1 e2 -> Times(e1,e2)) e1 e2
+  | Plus(e1,e2) -> binop mkPlus e1 e2
+  | Minus(e1,e2) -> binop mkMinus e1 e2
+  | Times(e1,e2) -> binop mkTimes e1 e2
+  | Mask(e1,e2) -> binop mkMask e1 e2
 
 
 let rec apply_model_test m t : test =

@@ -95,6 +95,7 @@ let rec substitute ?holes:(holes = false) ex subsMap =
     | Plus (e, e') -> Plus (substituteE e, substituteE e')
     | Times (e, e') -> Times (substituteE e, substituteE e')
     | Minus (e, e') -> Minus (substituteE e, substituteE e')
+    | Mask (e, e') -> Mask (substituteE e, substituteE e')
   in
   match ex with
   | True | False -> ex
@@ -211,6 +212,7 @@ let good_execs fvs c =
     | Plus(e1,e2) -> Plus(indexVars_expr e1 sub, indexVars_expr e2 sub)
     | Minus(e1,e2) -> Minus(indexVars_expr e1 sub, indexVars_expr e2 sub)
     | Times(e1,e2) -> Times(indexVars_expr e1 sub, indexVars_expr e2 sub)
+    | Mask (e1,e2) -> Mask(indexVars_expr e1 sub, indexVars_expr e2 sub)
   in
   let rec indexVars b sub =
     match b with
@@ -365,6 +367,7 @@ let rec prepend_expr pfx e =
   | Plus (e1, e2) -> Plus(prepend_expr pfx e1, prepend_expr pfx e2)
   | Minus (e1, e2) -> Minus(prepend_expr pfx e1, prepend_expr pfx e2)
   | Times (e1, e2) -> Times(prepend_expr pfx e1, prepend_expr pfx e2)
+  | Mask (e1, e2)  -> Mask(prepend_expr pfx e1, prepend_expr pfx e2)
 
 let rec prepend_test pfx b =
   match b with
@@ -463,7 +466,7 @@ let rec fill_holes_expr e (subst : value StringMap.t) =
   | Plus (e, e') -> binop mkPlus e e'
   | Minus (e, e') -> binop mkMinus e e'
   | Times (e, e') -> binop mkTimes e e'
-
+  | Mask (e, e') -> binop mkMask e e'
 
 (* Fills in first-order holes according to subst  *)                  
 let rec fill_holes_test t subst =
@@ -592,6 +595,7 @@ let rec fixup_val (model : value StringMap.t) (e : expr)  : expr =
   | Plus  (e, e') -> binop mkPlus  e e'
   | Times (e, e') -> binop mkTimes e e'
   | Minus (e, e') -> binop mkMinus e e'
+  | Mask (e,e') -> binop mkMask e e'
 
 
 let rec fixup_test (model : value StringMap.t) (t : test) : test =

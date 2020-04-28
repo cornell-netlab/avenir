@@ -24,6 +24,7 @@ type expr =
   | Plus of (expr * expr)
   | Times of (expr * expr)
   | Minus of (expr * expr)
+  | Mask of (expr * expr)
 
 
 let rec string_of_value (v : value) : string =
@@ -49,6 +50,7 @@ let rec string_of_expr (e : expr) : string =
   | Plus (e, e') -> "(" ^ string_of_expr e ^ " + " ^ string_of_expr e' ^ ")"
   | Times (e, e') -> string_of_expr e ^ " * " ^ string_of_expr e'
   | Minus (e, e') -> "(" ^ string_of_expr e ^ " - " ^ string_of_expr e' ^ ")"
+  | Mask (e,e') -> "(" ^ string_of_expr e ^ " & " ^ string_of_expr e' ^ ")"
 
 let rec sexp_string_of_value (v : value) =
   match v with
@@ -65,6 +67,8 @@ let rec sexp_string_of_expr (e : expr) =
      "Times(" ^ sexp_string_of_expr e ^ ", " ^ sexp_string_of_expr e' ^ ")"
   | Minus (e, e') ->
      "Minus(" ^ sexp_string_of_expr e ^ ", " ^ sexp_string_of_expr e' ^ ")"
+  | Mask (e,e') ->
+     "Mask(" ^ sexp_string_of_expr e ^ ", " ^ sexp_string_of_expr e' ^ ")"
 
 
 let get_int (v : value) : Bigint.t =
@@ -80,7 +84,7 @@ let rec size_of_expr (e : expr) : size =
   | Value v -> size_of_value v
   | Var (_,s) -> s
   | Hole (_,s) -> s
-  | Plus (e, e') | Minus(e,e') | Times (e,e') ->
+  | Plus (e, e') | Minus(e,e') | Times (e,e') | Mask(e,e')->
      let s = size_of_expr e in
      let s' = size_of_expr e' in
      if s = s' then s
@@ -92,7 +96,7 @@ let rec size_of_expr (e : expr) : size =
 let rec num_nodes_in_expr e =
   match e with
   | Value _ | Var _ | Hole _ -> 1
-  | Plus (e,e') | Minus(e,e') | Times(e,e') ->
+  | Plus (e,e') | Minus(e,e') | Times(e,e') | Mask(e,e') ->
      num_nodes_in_expr e
      + num_nodes_in_expr e'
      + 1
@@ -103,6 +107,7 @@ let mkVInt i = Value (mkInt i)
 let mkPlus e e' = Plus(e,e')
 let mkMinus e e' = Minus (e, e')
 let mkTimes e e' = Times (e, e')
+let mkMask e e' = Mask (e,e')
 
 
                    
@@ -123,7 +128,15 @@ let rec subtract_values (v : value) (v' : value) : value =
   | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x - x'), sz)
   | Int (x, sz), Int (x', sz') ->
      failwith (Printf.sprintf "Type error %s#%d and %s#%d have different file sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
-         
+
+let rec mask_values (v : value) (v' : value) : value =
+  match v,v' with
+  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x land x'), sz)
+  | Int (x, sz), Int (x', sz') ->
+     failwith (Printf.sprintf "Type error %s#%d and %s#%d have different file sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
+
+
+
 type test =
   | True | False
   | Eq of (expr * expr)
@@ -142,7 +155,7 @@ let rec string_of_test t =
   | Le (left, right) -> string_of_expr left ^ " <= " ^ string_of_expr right
   | Impl (assum, conseq) -> "(" ^ string_of_test assum ^ " ==> " ^ string_of_test conseq ^ ")\n"
   | Iff (left, right) -> "(" ^ string_of_test left ^ " <==> " ^ string_of_test right ^ ")\n"
-  | Or (left, right) -> "(" ^ string_of_test left ^ "\n || " ^ string_of_test right ^ ")"
+  | Or (left, right) -> "(" ^ string_of_test left ^ " || " ^ string_of_test right ^ ")"
   | And (left, right) -> "(" ^ string_of_test left ^ "&&" ^ string_of_test right ^ ")"
   | Neg (Le(left, right)) ->
      Printf.sprintf "(%s < %s)" (string_of_expr right) (string_of_expr left)
@@ -206,6 +219,7 @@ let rec mkEq (e : expr) (e':expr) =
       | Minus _ -> 4
       | Times _ -> 5
       | Value _ -> 7
+      | Mask _ -> 8
     in
     match e, e' with 
     | Value _, Value _
@@ -223,27 +237,27 @@ let rec mkEq (e : expr) (e':expr) =
        else Eq (e', e)
 
 
-let mkLe (e : expr) (e' : expr) : test =
-  if not enable_smart_constructors then Le(e,e') else
-  match e, e' with
-    | Value(Int first), Value(Int second) -> 
-       if first <= second then True else False
-    | _, _ -> Le(e, e')
+let mkLe (e : expr) (e' : expr) : test = Le(e,e')
+  (* if not enable_smart_constructors then Le(e,e') else
+   * match e, e' with
+   *   | Value(Int first), Value(Int second) ->
+   *      if first <= second then True else False
+   *   | _, _ -> Le(e, e') *)
             
 let (%=%) = mkEq
 let (%<>%) v v' = Neg(v %=% v') 
 
 let (%<=%) = mkLe
 let (%>=%) e e' = e' %<=% e
-let (%<%) e e' = (e %<=% e') %&% (e %<>% e')
-let (%>%) e e' = (e %>=% e') %&% (e %<>% e')
+let (%<%) e e' = !%(e %>=% e')
+let (%>%) e e' = !%(e %<=% e')
 
 let mkImplies assum conseq =
   if not enable_smart_constructors then Impl(assum, conseq) else
     if assum = conseq then True else
     match assum, conseq with
     | True, _ -> conseq
-    | _, True -> True
+    | _, True | False, _ -> True
     | _, False -> !%(assum)
     | _, _ -> Impl(assum, conseq) 
 
@@ -302,7 +316,7 @@ let rec free_of_expr typ e : (string * size) list =
   | Var (x,sz), `Var  | Hole (x,sz), `Hole -> [x,sz]
   | Var _ , `Hole -> []
   | Hole _ , `Var -> []
-  | Plus(e,e'),_| Times (e,e'),_ | Minus(e,e'),_ ->
+  | Plus(e,e'),_ | Times (e,e'),_ | Minus(e,e'),_ | Mask (e,e'), _->
      free_of_expr typ e @ free_of_expr typ e'
 
 let rec free_of_test typ test : (string * size) list =
@@ -328,7 +342,7 @@ let holes_of_test = free_of_test `Hole
 let rec has_hole_expr = function
   | Value _ | Var _  -> false
   | Hole _ -> true
-  | Plus (e1,e2) | Minus(e1,e2) | Times (e1,e2) ->
+  | Plus (e1,e2) | Minus(e1,e2) | Times (e1,e2) | Mask (e1,e2) ->
      has_hole_expr e1 || has_hole_expr e2
                                  
 let rec has_hole_test = function
@@ -348,7 +362,7 @@ let rec multi_ints_of_expr e : (Bigint.t * size) list =
   match e with
   | Value v -> multi_ints_of_value v
   | Var _ | Hole _ -> []
-  | Plus (e,e') | Times (e,e') | Minus (e,e')
+  | Plus (e,e') | Times (e,e') | Minus (e,e')  | Mask (e,e')
     -> multi_ints_of_expr e @ multi_ints_of_expr e'
                   
 let rec multi_ints_of_test test : (Bigint.t * size) list =
@@ -624,8 +638,9 @@ let rec holify_expr holes (e : expr) : expr =
      | Some _ -> Hole ((*"?" ^*) x, sz)
      end
   | Plus (e,e') -> Plus (holify_expr holes e, holify_expr holes  e')
-  | Times (e,e') -> Times (holify_expr holes  e, holify_expr holes  e')
-  | Minus (e,e') -> Minus (holify_expr holes  e, holify_expr holes  e')
+  | Times (e,e') -> Times (holify_expr holes e, holify_expr holes  e')
+  | Minus (e,e') -> Minus (holify_expr holes e, holify_expr holes  e')
+  | Mask (e,e') -> Mask (holify_expr holes e, holify_expr holes e')
                           
 and holify_test holes b : test =
   match b with
@@ -692,6 +707,22 @@ let rec get_tables_actsizes = function
   | Apply(tbl, _,acts,_) -> [tbl, List.length acts]
   | While(_,c) -> get_tables_actsizes c
 
+let table_vars (keys, acts, default) =
+  let open List in
+  keys
+  @ (acts >>= fun (ad,c) ->
+     free_vars_of_cmd c
+     |> filter ~f:(fun (x,_) ->
+            for_all ad ~f:(fun (y,_) -> x <> y)))
+  @ free_vars_of_cmd default
+
+let rec get_tables_vars = function
+  | Skip | Assume _ | Assert _ | Assign _ -> []
+  | Seq (c1,c2) -> get_tables_vars c1 @ get_tables_vars c2
+  | Select(_,cs) ->
+     List.fold cs ~init:[] ~f:(fun acc (_,c) -> acc @ get_tables_vars c)
+  | Apply(tbl, keys,acts, default) -> [tbl, table_vars (keys, acts, default)]
+  | While(_,c) -> get_tables_vars c
 
 let string_of_map m =
   StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value v) ^ ") " ^ acc)) m ~init:""

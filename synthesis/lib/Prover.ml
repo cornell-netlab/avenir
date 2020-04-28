@@ -5,18 +5,17 @@ open Packet
 open Z3
 
 let debug term = let res = Smtlib.term_to_sexp term |> Smtlib.sexp_to_string
-  in Printf.printf "TERM: %s"res
+  in Printf.printf "TERM: %s\n%!" res
 
-let test_str test = let res = Ast.string_of_test test in Printf.printf "TEST: %s"res
+let test_str test = let res = Ast.sexp_string_of_test test in Printf.printf "TEST: %s"res
 
 let expr_str test = let res = Ast.string_of_expr test in Printf.printf "EXPR: %s"res
 
 let quantify expr etyp styp =
-  match styp with
-  | `Valid -> (match etyp with
-      | `Var -> Smtlib.const expr
-      | _ -> raise (Failure "not allowed here"))
-  | `Sat -> Smtlib.const expr
+  match etyp, styp with
+  | `Var, `Valid -> Smtlib.const expr
+  | `Hole, `Valid -> failwith "holes not allowed in valid queries"
+  | _, `Sat -> Smtlib.const expr
 
 let rec expr_to_term_help expr styp : Smtlib.term =
   match expr with
@@ -30,6 +29,9 @@ let rec expr_to_term_help expr styp : Smtlib.term =
                         (expr_to_term_help e1 styp)
                         (expr_to_term_help e2 styp)
   | Minus (e1, e2) -> Smtlib.bvsub
+                        (expr_to_term_help e1 styp)
+                        (expr_to_term_help e2 styp)
+  | Mask (e1,e2) -> Smtlib.bvand
                         (expr_to_term_help e1 styp)
                         (expr_to_term_help e2 styp)
 
@@ -81,19 +83,24 @@ let test_to_term test styp d = if d
   else test_to_term_help test styp
 
 let vars_to_term vars d = let open Smtlib in if d
-  then (List.iter vars ~f:(fun (id, i) -> Printf.printf "VAR: %s %d" id i);
+  then (List.iter vars ~f:(fun (id, i) -> Printf.printf "VAR: %s %d\n%!" id i);
         List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i)))
   else List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i))
 
 let prover = Smtlib.make_solver "/usr/bin/z3"
+
 let check_sat (params : Parameters.t) (test : Ast.test) =
   let open Smtlib in
+  (* Printf.printf "Finding model for test of size %d\n%!" (num_nodes_in_test test); *)
+  (* Printf.printf "\n%s\n\n%!" (string_of_test test); *)
   let vars = vars_to_term (free_vars_of_test test) params.debug in
   let st = Time.now() in
   let holes = holes_of_test test |> List.dedup_and_sort
                 ~compare:(fun (idx, x) (idy, y) -> Stdlib.compare idx idy) in
   let () = List.iter holes
-      ~f:(fun (id, i) -> declare_const prover (Id id) (BitVecSort i)) in
+             ~f:(fun (id, i) ->
+               (* Printf.printf "DECLARING %s\n%!" id; *)
+               declare_const prover (Id id) (BitVecSort i)) in
   let term = (test_to_term test `Sat params.debug) in
   let response = assert_ prover (forall_ vars term);
     check_sat_using (UFBV : tactic) prover in
@@ -106,6 +113,7 @@ let check_sat (params : Parameters.t) (test : Ast.test) =
 
 let check_valid (params : Parameters.t) (test : Ast.test) =
   let open Smtlib in
+  (* Printf.printf "Checking validity for test of size %d\n%!" (num_nodes_in_test test); *)
   let vars = free_vars_of_test test |> List.dedup_and_sort
                ~compare:(fun (idx, x) (idy, y) -> Stdlib.compare idx idy) in
   let () = List.iter vars

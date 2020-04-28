@@ -35,6 +35,7 @@ val update_phys : t -> cmd -> t
 val append_phys_edits : t -> Edit.t list -> t
 val replace_log_edits : t -> Edit.t list -> t
 val replace_phys_edits : t -> Edit.t list -> t
+val delete_phys_edits : t -> t
 val apply_edits_to_log : t -> Edit.t list -> t
 val apply_edits_to_phys : t -> Edit.t list -> t
 

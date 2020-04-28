@@ -9,6 +9,7 @@ type t =
     debug: bool;
     monotonic: bool;
     interactive : bool;
+    injection: bool;
     fastcx : bool;
   }
 
@@ -18,5 +19,6 @@ let default =
     gas = 1000;
     debug = false;
     monotonic = false;
+    injection = false;
     interactive = false;
     fastcx = false }

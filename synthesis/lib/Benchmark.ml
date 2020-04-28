@@ -17,18 +17,23 @@ let rec run_experiment iter seq phys_seq params hints (problem : Problem.t) =
      let data = ProfData.zero () in
      let problem_inner = Problem.(replace_log_edits problem edit) in
      let st = Time.now () in
-     let pedits = cegis_math params data problem_inner |> Option.value_exn  in
-     !data.time := Time.(diff (now()) st);
-     !data.log_inst_size :=  Problem.log_inst problem |> Instance.size ;
-     !data.phys_inst_size := Problem.phys_inst problem |> Instance.size;
-     Printf.printf "%s\n%!" (ProfData.to_string !data);
-     run_experiment (iter + 1)
-       edits
-       (phys_seq @ pedits)
-       params
-       hints
-       Problem.(apply_edits_to_log problem edit
-                |> flip apply_edits_to_phys pedits)
+     assert (List.length (Problem.phys_edits problem_inner) = 0);
+     match cegis_math params data problem_inner with
+     | None -> failwith "example failed"
+     | Some pedits ->
+        !data.time := Time.(diff (now()) st);
+        !data.log_inst_size :=  Problem.log_inst problem |> Instance.size ;
+        !data.phys_inst_size := Problem.phys_inst problem |> Instance.size;
+        Printf.printf "%s\n%!" (ProfData.to_string !data);
+        run_experiment (iter + 1)
+          edits
+          (phys_seq @ pedits)
+          params
+          hints
+          Problem.(problem
+                   |> flip apply_edits_to_log edit
+                   |> flip apply_edits_to_phys pedits
+                   |> delete_phys_edits)
                         
 let measure params hints problem insertions =
   Printf.printf "%s\n%!" ProfData.header_string;
@@ -96,7 +101,7 @@ let rec generate_n_insertions varsize length n avail_tables maxes : Edit.t list 
        Add (name, row)
        :: generate_n_insertions varsize length (n-1) avail_tables' maxes'
                                   
-let reorder_benchmark varsize length max_inserts widening =
+let reorder_benchmark varsize length max_inserts params =
   Random.init 99;
   let logical_pipeline = mk_pipeline varsize length in
   let physical_pipeline = permute logical_pipeline in
@@ -119,16 +124,8 @@ let reorder_benchmark varsize length max_inserts widening =
                  ])
             |> List.join
   in
-  let params =
-    Parameters.(
-      { default with
-        widening;
-        gas = 10;
-    }) in
   let problem = Problem.make ~log ~phys ~fvs ~log_inst ~phys_inst ~log_edits:[] in
   measure params (Some (List.return)) problem insertion_sequence
-
-
 
 
   

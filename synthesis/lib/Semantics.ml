@@ -13,6 +13,7 @@ let rec eval_expr (pkt_loc : Packet.located) ( e : expr ) : value =
   | Plus  (e, e') -> binop add_values e e'
   | Times (e, e') -> binop multiply_values e e'
   | Minus (e, e') -> binop subtract_values e e'
+  | Mask (e,e') -> binop mask_values e e'
 
 
 let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
@@ -57,6 +58,7 @@ let rec wide_eval wide (e : expr) =
   | Minus(x,y) -> let (lox, hix) = wide_eval wide x in
                   let (loy, hiy) = wide_eval wide y in
                   (subtract_values lox hiy, subtract_values hix loy)
+  | Mask (x,y) -> failwith "Don't know how to widely evaluate a mask"
 
 
 let widening_assignment (wide : (value*value) StringMap.t) f e : (value * value) StringMap.t =
@@ -118,6 +120,7 @@ let widening_match pkt wide matches =
              | Some (lo',hi') ->
                 (Stdlib.max lo lo', Stdlib.min hi hi')
            )
+      | _ -> failwith "dont know how to widen masks"
     )
 
 let action_to_execute pkt wide keys (rows : Row.t list ) =

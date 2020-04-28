@@ -11,11 +11,13 @@ module Match = struct
   type t =
     | Exact of value
     | Between of value * value
+    | Mask of value * value
 
   let to_string m =
     match m with
     | Exact x -> string_of_value x
     | Between (lo,hi) -> Printf.sprintf "[%s,%s]" (string_of_value lo) (string_of_value hi)
+    | Mask (v,m) -> Printf.sprintf "%s & %s" (string_of_value v) (string_of_value m)
 
   let to_test k m =
     match m with
@@ -32,13 +34,17 @@ module Match = struct
        Printf.sprintf "Type error, %s#%d and %s#%d are of different sizes"
          (Bigint.to_string lo) sz (Bigint.to_string hi) sz'
        |> failwith
+    | Mask (v, m) ->
+       (Ast.mkMask (Var k) (Value m)) %=% Value v
          
 
   let holes encode_tag x sz =
+    let h = Printf.sprintf "?%s" x in
     match encode_tag with
-    | `Range -> (Var (x,sz) %<=% Hole ("?"^x^"_hi",sz))
-                %&% (Var(x,sz) %>=% Hole("?"^x^"_lo",sz))
-    | `Exact -> Var(x, sz) %=% Hole ("?"^x, sz)
+    | `Range ->
+       let hmask = Printf.sprintf "%s_mask" h in
+       mkMask (Var(x, sz)) (Hole (hmask,sz)) %=% Hole (h, sz)
+    | `Exact -> Var(x, sz) %=% Hole (h,sz)
 
   let list_to_string : t list -> string =
     List.fold ~init:"" ~f:(fun acc m -> Printf.sprintf "%s %s" acc (to_string m))
@@ -99,6 +105,10 @@ module Match = struct
          [Between (lo'', hi'')]
        else
          []
+    | Mask _, _ | _, Mask _ ->
+       failwith "Dont know how to intersect masks"
+
+
 
   let has_inter (m : t) (m' : t) : bool =
     match m, m' with
@@ -108,6 +118,9 @@ module Match = struct
       -> vleq lo x && vleq x hi
     | Between(lo, hi), Between(lo',hi')
       -> Stdlib.max lo lo' <= Stdlib.min hi hi'
+    | Mask _, _ | _, Mask _ ->
+       failwith "Dont know how to intersect masks"
+
 
                                          
   let has_inter_l (ms : t list) (ms' : t list) : bool =
@@ -123,6 +136,9 @@ module Match = struct
     | Exact i, Between (lo', hi') -> vleq lo' i && vleq i hi'
     | Between (lo, hi), Exact j -> veq lo j && veq hi j
     | Between (lo, hi), Between (lo', hi') -> vleq lo hi' && vleq lo' hi
+    | Mask _, _ | _, Mask _ ->
+       failwith "Dont know how to subset masks"
+
 
 end
 
@@ -160,10 +176,14 @@ module Row = struct
              with
              | None, _,_ -> None
              | Some ks, Hole _, Hole _ ->
-                begin match fixup_val match_model (Hole("?"^v, sz)) with
-                | Hole _ -> None
-                | Value v ->
+                begin match fixup_val match_model (Hole("?"^v, sz)),
+                            fixup_val match_model (Hole("?"^v^"_mask",sz))
+                with
+                | Hole _,_ -> None
+                | Value v,Hole _ ->
                    Some (ks @ [Match.Exact v])
+                | Value v, Value m ->
+                   Some (ks @ [Match.Mask (v,m)])
                 | _ -> failwith "Model did something weird"
                 end
              | Some ks, Value lo, Value hi ->
@@ -222,6 +242,11 @@ end
 module Edit = struct
   type t = Add of string * Row.t (* Name of table *)
          | Del of string * int
+
+  let table = function
+    | Add (name, _ )
+      | Del (name, _) -> name
+
 
   let to_string e =
     match e with
@@ -336,24 +361,24 @@ module Instance = struct
          | _ ->
             List.foldi rows ~init:[]
               ~f:(fun i acc (matches, data, action) ->
-                let prev_tst =
-                  if List.for_all matches ~f:(function | Exact _ -> true | _ -> false) then
-                    False
-                  else
-                    let prev_rows =
-                      if i + 1 >= List.length rows then [] else
-                        List.sub rows ~pos:(i+1) ~len:(List.length rows - (i+1))
-                    in
-                    let overlapping_matches =
-                      List.filter_map prev_rows
-                        ~f:(fun (prev_ms,_,_) ->
-                          if Match.has_inter_l matches prev_ms
-                          then Some prev_ms
-                          else None
-                        )
-                    in
-                    List.fold overlapping_matches ~init:False
-                      ~f:(fun acc ms -> acc %+% Match.list_to_test keys ms )
+                let prev_tst = False
+                  (* if List.for_all matches ~f:(function | Exact _ -> true | _ -> false) then
+                   *   False
+                   * else
+                   *   let prev_rows =
+                   *     if i + 1 >= List.length rows then [] else
+                   *       List.sub rows ~pos:(i+1) ~len:(List.length rows - (i+1))
+                   *   in
+                   *   let overlapping_matches =
+                   *     List.filter_map prev_rows
+                   *       ~f:(fun (prev_ms,_,_) ->
+                   *         if Match.has_inter_l matches prev_ms
+                   *         then Some prev_ms
+                   *         else None
+                   *       )
+                   *   in
+                   *   List.fold overlapping_matches ~init:False
+                   *     ~f:(fun acc ms -> acc %+% Match.list_to_test keys ms ) *)
                 in
                 let tst = Match.list_to_test keys matches
                           %&% match tag with
@@ -386,18 +411,19 @@ module Instance = struct
                 , holify (List.map params ~f:fst) act))
        in
        let dflt_row =
-         let cond = if no_miss
-                    then False
-                    else List.foldi rows ~init:(True)
-                           ~f:(fun i acc (ms,_,act) ->
-                             acc %&%
-                               if act >= List.length acts then True else
-                                 !%(Match.list_to_test keys ms
-                                    %&% match tag with
-                                        | `WithHoles ds when List.exists ds ~f:((=) (tbl, i))
-                                          -> delete_hole i tbl %=% mkVInt(0,1)
-                                        | _ -> True)) in
-         [(cond, default)] in
+            let cond = True in (* if no_miss
+                        * then False
+                        * else List.foldi rows ~init:(True)
+                        *        ~f:(fun i acc (ms,_,act) ->
+                        *          acc %&%
+                        *         if act >= List.length acts then True else
+                        *           !%(Match.list_to_test keys ms
+                        *              %&% match tag with
+                        *                  | `WithHoles ds when List.exists ds ~f:((=) (tbl, i))
+                        *                    -> delete_hole i tbl %=% mkVInt(0,1)
+                        *                  | _ -> True)) in *)
+            [(cond, default)]
+       in
        let mk_select = match tag with
          | `OnlyHoles -> mkPartial
          | _ -> mkOrdered

@@ -68,8 +68,11 @@ let slice (p : t) : t =
   let phys_inst_slice = Instance.update_list Instance.empty p.phys_edits in
   let log_inst = Instance.overwrite p.log_inst log_inst_slice in
   let phys_inst = Instance.overwrite p.phys_inst phys_inst_slice in
-  {p with log_inst; phys_inst;
-          log_edits = []; phys_edits = [] }
+  (* Printf.printf "PROBLEM:\n%s\n%!" (to_string p); *)
+  let p = {p with log_inst; phys_inst;
+                  log_edits = []; phys_edits = [] } in
+  (* Printf.printf "SLICED PROBLEM:\n%s\n%!" (to_string p); *)
+  p
 
 let append_phys_edits (p : t) (es : Edit.t list) : t =
   {p with phys_edits = p.phys_edits @ es}
@@ -79,6 +82,8 @@ let replace_log_edits (p : t) (log_edits : Edit.t list) : t =
 
 let replace_phys_edits (p : t) (phys_edits : Edit.t list) : t =
   {p with phys_edits}
+
+let delete_phys_edits (p : t) : t = replace_phys_edits p []
 
 let reset_attempts (p : t) : t = {p with attempts = []}
 let add_attempt (p : t) (attempt : value StringMap.t) : t =
