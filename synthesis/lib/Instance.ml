@@ -85,11 +85,11 @@ let rec apply ?no_miss:(no_miss = false)
            acc @ [(t,c')], cnt'
          ) in
      (mkSelect typ ss, ss_cnt)
-  | Apply (tbl, keys, acts, default) ->
-     let actSize = max (log2(List.length acts)) 1 in
-     let row_hole = add_row_hole tbl in
-     let act_hole = which_act_hole tbl actSize in
-     let rows = StringMap.find_multi inst tbl in
+  | Apply t ->
+     let actSize = max (log2(List.length t.actions)) 1 in
+     let row_hole = add_row_hole t.name in
+     let act_hole = which_act_hole t.name actSize in
+     let rows = StringMap.find_multi inst t.name in
      let selects =
        match tag with
        | `OnlyHoles _ -> []
@@ -97,21 +97,21 @@ let rec apply ?no_miss:(no_miss = false)
           List.foldi rows ~init:[]
             ~f:(fun i acc (matches, data, action) ->
               let prev_tst = False in
-              let tst = Match.list_to_test keys matches
+              let tst = Match.list_to_test t.keys matches
                         %&% match tag with
                             | `WithHoles (ds,_) ->
                                (* delete_hole i tbl %=% mkVInt(0,1) *)
-                               if List.exists ds ~f:((=) (tbl, i))
-                               then delete_hole i tbl %=% mkVInt(0,1)
+                               if List.exists ds ~f:((=) (t.name, i))
+                               then delete_hole i t.name %=% mkVInt(0,1)
                                else True
                             | _ -> True in
-              if action >= List.length acts then
+              if action >= List.length t.actions then
                 acc
               else begin
                   let cond = tst %&% !%(prev_tst) in
                   (* if params.debug then Printf.printf "[%s] Adding %s\n%!" tbl (string_of_test cond); *)
-                  (cond, (List.nth acts action
-                          |> Option.value ~default:([], default)
+                  (cond, (List.nth t.actions action
+                          |> Option.value ~default:([], t.default)
                           |> bind_action_data data))
                   :: acc
                 end)
@@ -120,9 +120,9 @@ let rec apply ?no_miss:(no_miss = false)
        match tag with
        | `NoHoles -> []
        | `WithHoles (_,hs) | `OnlyHoles hs ->
-          List.mapi acts
+          List.mapi t.actions
             ~f:(fun i (params, act) ->
-              (tbl_hole encode_tag keys tbl row_hole act_hole i actSize hs
+              (tbl_hole encode_tag t.keys t.name row_hole act_hole i actSize hs
                %&% List.fold selects ~init:True
                      ~f:(fun acc (cond, _) -> acc %&% !%(cond))
               , holify (List.map params ~f:fst) act))
@@ -135,15 +135,15 @@ let rec apply ?no_miss:(no_miss = false)
             else List.foldi rows ~init:(True)
                    ~f:(fun i acc (ms,_,act) ->
                      acc %&%
-                       if act >= List.length acts then True else
-                         !%(Match.list_to_test keys ms
+                       if act >= List.length t.actions then True else
+                         !%(Match.list_to_test t.keys ms
                             %&% match tag with
-                                | `WithHoles (ds,_) when List.exists ds ~f:((=) (tbl, i))
-                                  -> delete_hole i tbl %=% mkVInt(0,1)
+                                | `WithHoles (ds,_) when List.exists ds ~f:((=) (t.name, i))
+                                  -> delete_hole i t.name %=% mkVInt(0,1)
                                 | _ -> True))
          | _ -> True
        in
-       [(cond, default)]
+       [(cond, t.default)]
      in
      let mk_select = match tag with
        | `OnlyHoles _ -> mkPartial

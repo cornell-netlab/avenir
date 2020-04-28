@@ -61,11 +61,10 @@ let complete_inner ~falsify (cmd : cmd) =
                ~f:(fun (b, c) ->
                    complete_aux_test ~falsify b , complete_aux ~falsify c )
             )
-    | Apply (name, keys, acts, dflt)
-      -> Apply (name
-               , keys
-               , List.map acts ~f:(fun (data, a) -> (data, complete_aux a ~falsify))
-               , complete_aux ~falsify dflt)
+    | Apply t
+      -> Apply {t with
+               actions = List.map t.actions ~f:(fun (data, a) -> (data, complete_aux a ~falsify));
+               default = complete_aux ~falsify t.default}
   in
   complete_aux ~falsify cmd
 

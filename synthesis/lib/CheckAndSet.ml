@@ -173,16 +173,16 @@ let rec instrument_entries (table_keys : (string * int) list) (rows : Row.t list
      let c2', holes'' = instrument_entries table_keys rows action_table c2 holes' in
      (c1' %:% c2', holes'')
   | While(b,c) -> failwith "while loops are hard"
-  | Apply(name, keys, actions, default) ->
-     if name = action_table
-     then (populate_action_table name keys actions holes, holes)
-     else if List.length actions <> 1
+  | Apply t ->
+     if t.name = action_table
+     then (populate_action_table t.name t.keys t.actions holes, holes)
+     else if List.length t.actions <> 1
      then failwith "too many actions"
      else
        (* let _ = Printf.printf "Projecting the classifier\n%!" in *)
-       let (data, act) = List.hd_exn actions in
+       let (data, act) = List.hd_exn t.actions in
        let selects, holes =
-         project_classifier name keys table_keys  rows
+         project_classifier t.name t.keys table_keys  rows
          |> List.(fold ~init:([],holes)
                     ~f:(fun (ss,holes) test ->
                       Printf.printf "freshening entry %s -> %s\n%!" (string_of_test test) (string_of_cmd act);
@@ -190,7 +190,7 @@ let rec instrument_entries (table_keys : (string * int) list) (rows : Row.t list
                                          |> flip freshen_holes holes in
                       (ss @ [test, act'], holes'))
             ) in
-       let default', holes' = freshen_holes default holes in
+       let default', holes' = freshen_holes t.default holes in
        (mkOrdered (selects @ [True,default']), holes')
 
 let rec apply_model_expr m e =
@@ -245,9 +245,9 @@ let rec apply_model m cmd =
 
 let populate one_big_table fvs physical_pipeline physical_check_name logical_rows =
   match one_big_table with
-  | Apply(name, keys, actions, default) ->
-     let phys_instrumented,_ = instrument_entries keys logical_rows physical_check_name physical_pipeline StringMap.empty in
-     let log_inst = StringMap.of_alist_exn [(name,logical_rows)] in
+  | Apply t ->
+     let phys_instrumented,_ = instrument_entries t.keys logical_rows physical_check_name physical_pipeline StringMap.empty in
+     let log_inst = StringMap.of_alist_exn [(t.name,logical_rows)] in
      let log_populated =
        sequence [
            "drop"%<-%mkVInt(0,1);
@@ -274,7 +274,7 @@ let populate one_big_table fvs physical_pipeline physical_check_name logical_row
 
 let test_population _ =
   populate
-    (Apply("megatable",
+    (mkApply("megatable",
            ["inport",9; "ipv4", 32],
            [ ["o",9], "outport" %<-% Var("o", 9)
            ; [], "drop"%<-% mkVInt(1,1)
@@ -283,9 +283,9 @@ let test_population _ =
     (["inport",9; "ipv4", 32; "outport",9; "drop",1])
     (sequence [
          "drop"%<-%mkVInt(0,1); "outport"%<-%mkVInt(0,9); "next"%<-%mkVInt(0,32)
-       ; Apply("ingress", ["inport", 9], [["n", 32], "next"%<-%Var("n",32)], "next"%<-%Hole("n",32))
-       ; Apply("l3_fwd", ["ipv4", 32], [["n",32], "next" %<-% Var("n",32)], "next"%<-%Hole("n",32))
-       ; Apply("next", ["next",32], [["o",9], sequence["outport"%<-% Var("o", 9)]
+       ; mkApply("ingress", ["inport", 9], [["n", 32], "next"%<-%Var("n",32)], "next"%<-%Hole("n",32))
+       ; mkApply("l3_fwd", ["ipv4", 32], [["n",32], "next" %<-% Var("n",32)], "next"%<-%Hole("n",32))
+       ; mkApply("next", ["next",32], [["o",9], sequence["outport"%<-% Var("o", 9)]
                                  ;[], Skip], Skip)
     ])
     "next"

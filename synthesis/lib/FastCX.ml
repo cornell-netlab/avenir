@@ -26,7 +26,7 @@ and truncated (table : string) (program : Ast.cmd) : Ast.cmd option =
      | None -> truncated table c1
      | Some c2' -> Some (Seq (c1, c2')))
   | Select (_, lst) -> one_some table lst
-  | (Apply (t, _, _, _)) -> if t = table then Some Skip else None
+  | Apply t -> if t.name = table then Some Skip else None
 
 let hits_pred data prog inst edits e : test =
   match e with

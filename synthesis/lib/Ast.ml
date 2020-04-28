@@ -402,10 +402,10 @@ type cmd =
   | Seq of (cmd * cmd)
   | While of (test * cmd)
   | Select of (select_typ * ((test * cmd) list))
-  | Apply of (string (*Table name*)
-              * (string * size) list (*Keys*)
-              * (((string * size) list * cmd) list) (*actions*)
-              * cmd) (*default action*)
+  | Apply of {name:string;
+              keys:(string * size) list;
+              actions:(((string * size) list * cmd) list);
+              default: cmd}
 
 let clean_selects_list ss = ss
   (* List.filter ~f:(fun (c,a) -> c <> False) *)
@@ -464,7 +464,9 @@ let mkSelect styp =
   | Total -> mkTotal
   | Ordered -> mkOrdered
 
-         
+
+let mkApply (name,keys,actions,default) = Apply{name;keys;actions;default}
+
 let (%:%) = mkSeq
 
 let mkAssn f v = Assign (f, v)
@@ -519,15 +521,15 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
         ^ string_of_test cond  ^ " -> " ^ string_of_cmd ~depth:(depth+2) act ^ " []"
       )
     ^ "\n" ^ repeat "\t" depth ^ "fi"
-  | Apply (name, keys, acts, default) ->
-      "apply (" ^ name ^ ",("
-      ^ List.fold_left keys ~init:""
+  | Apply t ->
+      "apply (" ^ t.name ^ ",("
+      ^ List.fold_left t.keys ~init:""
           ~f:(fun str (k,sz) ->
             str ^ "," ^ k ^ "#" ^ string_of_int sz) ^ ")"
-      ^ "," ^ List.fold_left acts ~init:""
+      ^ "," ^ List.fold_left t.actions ~init:""
                 ~f:(fun str a ->
                   str ^ " | { fun (SOME ACTION DATA) -> " ^ string_of_cmd (snd a) ^ "}")
-      ^ ", {" ^ string_of_cmd default ^ "})"
+      ^ ", {" ^ string_of_cmd t.default ^ "})"
                                        
             
   
@@ -548,13 +550,13 @@ let rec sexp_string_of_cmd e : string =
       | _  -> "[" ^ string_select es ^ "]"
     in
     "Select (" ^ sexp_string_of_select_typ styp ^ "," ^ cases_string ^ ")"
-  | Apply (name, keys, actions, default) ->
+  | Apply t ->
      "Apply("
-     ^ name ^ ",["
-     ^ List.fold_left keys ~init:"" ~f:(fun str (k,sz) -> str ^ ";\"" ^ k ^ "\"," ^ string_of_int sz ^ "")
+     ^ t.name ^ ",["
+     ^ List.fold_left t.keys ~init:"" ~f:(fun str (k,sz) -> str ^ ";\"" ^ k ^ "\"," ^ string_of_int sz ^ "")
      ^ "],["
-     ^ List.fold_left actions ~init:"" ~f:(fun str a -> str ^ ";((SOME ACTION DATA), " ^ sexp_string_of_cmd (snd a) ^")")
-     ^ "]," ^ sexp_string_of_cmd default
+     ^ List.fold_left t.actions ~init:"" ~f:(fun str a -> str ^ ";((SOME ACTION DATA), " ^ sexp_string_of_cmd (snd a) ^")")
+     ^ "]," ^ sexp_string_of_cmd t.default
      ^ ")"
 
 let rec tables_of_cmd (c:cmd) : string list =
@@ -563,7 +565,7 @@ let rec tables_of_cmd (c:cmd) : string list =
   | Seq (c,c') -> tables_of_cmd c @ tables_of_cmd c'
   | Select (_, cs) -> concatMap cs ~c:(@) ~init:(Some []) ~f:(fun (_, c) -> tables_of_cmd c)
   | While (_,c) -> tables_of_cmd c
-  | Apply (s,_,_,_) -> [s]
+  | Apply t -> [t.name]
                                                               
 
     
@@ -583,10 +585,10 @@ let rec free_of_cmd typ (c:cmd) : (string * size) list =
         @ free_of_cmd typ action
         @ fvs
       )
-  | Apply (_,keys,actions, default) ->
-     keys
-     @ List.fold actions
-         ~init:(free_of_cmd typ default)
+  | Apply t ->
+     t.keys
+     @ List.fold t.actions
+         ~init:(free_of_cmd typ t.default)
          ~f:(fun acc (data, a) ->
            acc @ (free_of_cmd typ a
                 |> List.filter ~f:(fun (x,_) ->
@@ -624,8 +626,8 @@ let rec multi_ints_of_cmd c : (Bigint.t * size) list =
           multi_ints_of_test test
           @ multi_ints_of_cmd action
       )
-  | Apply (_,_,actions, default) ->
-     List.fold actions ~init:(multi_ints_of_cmd default)
+  | Apply t ->
+     List.fold t.actions ~init:(multi_ints_of_cmd t.default)
        ~f:(fun rst act -> rst @ multi_ints_of_cmd (snd act))
 
 
@@ -666,13 +668,15 @@ and holify_cmd holes c : cmd=
   | Select (styp, cases) ->
      List.map cases ~f:(fun (t, c) -> holify_test holes t, holify_cmd holes c)
      |> mkSelect styp
-  | Apply (name,keys,acts,dflt)
-    -> Apply(name, keys, List.map acts ~f:(fun (data, act) ->
-                             let holes' = List.filter holes ~f:(fun h ->
-                                              List.for_all (List.map data ~f:fst) ~f:((<>) h)
-                                            ) in
-                             (data, holify_cmd holes' act)),
-             holify_cmd holes dflt)
+  | Apply t
+    -> Apply {name=t.name;
+              keys=t.keys;
+              actions = List.map t.actions ~f:(fun (data, act) ->
+                            let holes' = List.filter holes ~f:(fun h ->
+                                             List.for_all (List.map data ~f:fst) ~f:((<>) h)
+                                           ) in
+                            (data, holify_cmd holes' act));
+             default = holify_cmd holes t.default}
               
     
 (** replace all vars in cmd that are also in holes with holes having the same name*)
@@ -694,8 +698,8 @@ let rec get_schema_of_table name phys =
      end
   | Select (_, cs) ->
      List.find_map cs ~f:(fun (_, c) -> get_schema_of_table name c)
-  | Apply(name', ks, acts, def)
-    -> if name = name' then Some (ks,acts,def) else None
+  | Apply t
+    -> if name = t.name then Some (t.keys, t.actions,t.default) else None
   | While (_, c) -> get_schema_of_table name c
                  
 
@@ -704,7 +708,7 @@ let rec get_tables_actsizes = function
   | Seq (c1,c2) -> get_tables_actsizes c1 @ get_tables_actsizes c2
   | Select(_,cs) ->
      List.fold cs ~init:[] ~f:(fun acc (_,c) -> acc @ get_tables_actsizes c)
-  | Apply(tbl, _,acts,_) -> [tbl, List.length acts]
+  | Apply t -> [t.name, List.length t.actions]
   | While(_,c) -> get_tables_actsizes c
 
 let table_vars ?keys_only:(keys_only=false) (keys, acts, default) =
@@ -724,7 +728,7 @@ let rec get_tables_vars ?keys_only:(keys_only=false) = function
   | Seq (c1,c2) -> get_tables_vars ~keys_only c1 @ get_tables_vars ~keys_only c2
   | Select(_,cs) ->
      List.fold cs ~init:[] ~f:(fun acc (_,c) -> acc @ get_tables_vars ~keys_only c)
-  | Apply(tbl, keys,acts, default) -> [tbl, table_vars ~keys_only (keys, acts, default)]
+  | Apply t -> [t.name, table_vars ~keys_only (t.keys, t.actions, t.default)]
   | While(_,c) -> get_tables_vars ~keys_only c
 
 let string_of_map m =

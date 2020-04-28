@@ -108,7 +108,7 @@ let reorder_benchmark varsize length max_inserts params =
   let mk_empty_inst acc (name,_,_,_) = Map.set acc ~key:name ~data:[]  in
   let log_inst = List.fold logical_pipeline ~init:StringMap.empty ~f:mk_empty_inst in
   let phys_inst = List.fold logical_pipeline ~init:StringMap.empty ~f:mk_empty_inst in
-  let to_cmd line =  List.((line >>| fun t -> Apply t)
+  let to_cmd line =  List.((line >>| fun t -> mkApply t)
                            |> reduce_exn ~f:(%:%)) in
   let log = to_cmd logical_pipeline in
   let phys = to_cmd physical_pipeline in
@@ -253,7 +253,7 @@ let onos_to_edits filename =
                                                       
 
 let fwd_classifier_table =
-  Apply(
+  mkApply(
       "fwd_classifier"
     , [ (standard_metadata_ingress_port_str, 9 (*exact*))
       ; (hdr_ethernet_dst_addr_str, 48 (*ternary*))
@@ -262,7 +262,7 @@ let fwd_classifier_table =
     , [ ([("fwd_type",3)], fabric_metadata_fwd_type_str %<-% Var("fwd_type", 3))]
     , fabric_metadata_fwd_type_str %<-% fwd_bridging)
 let bridging_table =
-  Apply("bridging"
+  mkApply("bridging"
       , [ (fabric_metadata_vlan_id_str, 12 (*exact*))
         ; (hdr_ethernet_dst_addr_str, 48 (*ternary*))
         ]
@@ -270,17 +270,17 @@ let bridging_table =
       , Skip)
        
 let mpls_table =
-  Apply("mpls"
+  mkApply("mpls"
       , [ (fabric_metadata_mpls_label_str, 20 (* exact *) ) ]
       , [ ([("next_id",32)],  fabric_metadata_next_id_str %<-% Var("next_id", 32)) ]
       , Skip )
 let ipv4_tbl =
-  Apply("ipv4"
+  mkApply("ipv4"
       , [ (hdr_ipv4_dst_addr_str, 20 (*exact *))]
       , [ ([("next_id",32)],  fabric_metadata_next_id_str %<-% Var("next_id", 32)) ]
       , Skip)
        
-let acl_table = Apply("acl",
+let acl_table = mkApply("acl",
                       [ (standard_metadata_ingress_port_str, 9  (*exact*))
                       ; (fabric_metadata_ip_proto_str, 8 (*ternary*))
                       ; (fabric_metadata_l4_sport_str, 16 (*ternary*))
@@ -301,7 +301,7 @@ let acl_table = Apply("acl",
                      
 
 let apply_simple_next =
-  Apply("next.simple"
+  mkApply("next.simple"
       , [(fabric_metadata_next_id_str, 32 (*exact*))]
       , [ ([("port",9)], standard_metadata_egress_spec_str %<-% Var("port", 9))
         ; ([("port",9);("smac",48);("dmac",48)], sequence [ hdr_ethernet_src_addr_str %<-% Var("smac", 48)
@@ -527,14 +527,14 @@ let bcm_eth_ipv4_tcp_parser =
     ]
 
 let my_station_table =
-  Apply("my_station_table"
+  mkApply("my_station_table"
       , [(hdr_ethernet_dst_addr_str, 48 (*ternary*))]
       , [ ( [] , local_metadata_l3_admit_str %<-% mkVInt(1,1) )
         ; ( [], Skip )]
       , Skip)
 
 let l3_fwd =
-  Apply("l3_fwd"
+  mkApply("l3_fwd"
       , [(hdr_ipv4_dst_addr_str, 32 (*lpm*))
         ; (hdr_ipv4_src_addr_str, 32 (*selector*))
         ; (hdr_ipv4_protocol_str, 8 (*selector*))
@@ -552,7 +552,7 @@ let l3_fwd =
       , Skip)
 
 let l2_unicast_table =
-  Apply("l2_unicast_table"
+  mkApply("l2_unicast_table"
       , [(hdr_ethernet_dst_addr_str, 48 (*exact*))]
       , [([("port",9)], standard_metadata_egress_spec_str %<-% Var("port", 9) )]
       , Skip)
@@ -566,7 +566,7 @@ let bcm_eth_ipv4_tcp_ingress=
       ; (True, Skip)
       ]
   in
-  (* let punt_table = Apply("punt", [], [], Skip) in *)
+  (* let punt_table = mkApply("punt", [], [], Skip) in *)
   let l2_l3_tables =
     mkOrdered [
         ((standard_metadata_egress_spec %=% mkVInt(0,9)) %+% (standard_metadata_egress_spec %=% loopback_port),
@@ -622,7 +622,7 @@ let basic_onf_ipv4 params filename =
   let log =
     sequence [
         "class_id" %<-% mkVInt(0,32)
-      ; Apply("ipv6",
+      ; mkApply("ipv6",
               [("ipv6_dst", 128)],
               [([("next_id",32)], "class_id"%<-% Var("next_id",32))],
               Skip)
@@ -640,7 +640,7 @@ let basic_onf_ipv4 params filename =
           ]
       ] in
   let phys =
-    Apply("l3_fwd"
+    mkApply("l3_fwd"
         , [ ("ipv6_dst", 128) (*; ("ipv4_src", 32); ("ipv4_proto", 16)*) ]
         , [ ([("port",9)], "out_port"%<-% Var("port",9))]
         , "out_port" %<-% mkVInt(0,9)) in
@@ -673,14 +673,14 @@ let get_classbench_data n =
 let running_example gas widening =
   let log =
     sequence [
-        Apply("src_table"
+        mkApply("src_table"
             , [("src", 2)]
             , [ ["s",2], "smac" %<-% (Var("s",2))
               ; ["d",2], "dst" %<-% (Var("d",2))
               ; [], Skip
               ]
             , Skip)
-      ; Apply("dst_table"
+      ; mkApply("dst_table"
             , [("dst",2)]
             , [ ["p",2], "out" %<-% (Var("p",2))
               ; [], Skip
@@ -688,7 +688,7 @@ let running_example gas widening =
             ,Skip)
       ] in
   let phys =
-        Apply("src_dst_table"
+        mkApply("src_dst_table"
             , ["src",2; "dst", 2]
             , [ ["s",2], "smac" %<-% Var("s",2)
               ; ["d",2], "dst" %<-% (Var("d",2))
@@ -727,25 +727,25 @@ let onf_representative gas widening =
   let fwd_mpls = fwd_type_i 1 in
   let fwd_ipv4 = fwd_type_i 2 in
   let station =
-    Apply("my_station_table"
+    mkApply("my_station_table"
         , [("inport", 9); ("dmac", 48); ("eth_type", 16)]
         , [["sf", 2], ("fwd_type" %<-% Var("sf", 2))]
         , "fwd_type" %<-% fwd_bridge)
   in
   let bridge =
-    Apply("bridge_table"
+    mkApply("bridge_table"
         , [("vlan_id", 12); ("dmac", 48)]
         , [[("bv",32)], "next_id"%<-% Var("bv",32)]
         , Skip)
   in
   let mpls =
-    Apply("mpls_table"
+    mkApply("mpls_table"
         , [("mpls_label", 20)]
         , [["mv",32], ("mpls_label"%<-% mkVInt(0,20)) %:% ("next_id"%<-% Var("mv", 32))]
         ,Skip)
   in
   let ipv4 =
-    Apply("ipv4_dst"
+    mkApply("ipv4_dst"
         , [("ivp4_dst", 32)]
         , [["iv",32], "next_id" %<-% Var("iv", 32)]
         , Skip)
@@ -758,7 +758,7 @@ let onf_representative gas widening =
       ]
   in
   let acl = 
-    Apply ("acl"
+    mkApply ("acl"
          , ["in_port", 9; "ip_proto", 8;
             "l4_src", 16; "l4_dst", 16;
             "dmac", 48 ; "smac", 48;
@@ -773,7 +773,7 @@ let onf_representative gas widening =
       ) in
   let next =
     mkOrdered [ Var("skip_next",1) %=% mkVInt(1,1),
-                Apply("next"
+                mkApply("next"
                     , ["next_id", 32]
                     , [["nv",9], "out_port" %<-% Var("nv",9)
                       ; ["nvv", 9; "nvs", 48; "nvd", 48], sequence [
@@ -806,18 +806,18 @@ let onf_representative gas widening =
   in
   let logical = sequence [station; set_next; acl; next; fabric_egress] in
   let admit =
-    Apply("admit"
+    mkApply("admit"
         , ["dmac", 48]
         , [[], "l3_admit" %<-% mkVInt(1,1)]
         , "l3_admit" %<-% mkVInt(0,1))
   in
   let l2 =
-    Apply("l2"
+    mkApply("l2"
         , ["dmac", 48]
         , [["out_port", 9], "out_port" %<-% Var("out_port",9)]
         , Skip) in
   let l3 =
-    Apply ("l3"
+    mkApply ("l3"
          , ["dmac", 48; "smac", 48; "ip_proto", 16; "l4_src", 16; "l4_dst", 16; (*"ttl", 8*)]
          , [["op", 9; "smac", 48; "dmac", 48;],
             sequence [
@@ -836,7 +836,7 @@ let onf_representative gas widening =
         Var("l3_admit",1) %=% mkVInt(1,1), l2
       ] in
   let punt =
-    Apply("punt"
+    mkApply("punt"
         , ["in_port", 9; "out_port", 9; "eth_type", 16
            ; "ipv4_src", 32; "ip_proto", 16; "icmp_code", 16
            ; "vlan_id", 12
@@ -1002,7 +1002,7 @@ let of_to_pipe1 widening gas fp () =
   let of_table =
     sequence [
         init_no_drop
-      ; Apply("of"
+      ; mkApply("of"
             , [ "ipv4_dst", 32
               ; "in_port", 9]
             , [["pp",9], sequence ["out_port" %<-% Var("pp", 9);"drop" %<-% mkVInt(0,1)]
@@ -1013,13 +1013,13 @@ let of_to_pipe1 widening gas fp () =
   let pipe =
     sequence [
         init_no_drop
-      ; Apply("ingress"
+      ; mkApply("ingress"
             , ["in_port",9]
             , [ [], "drop" %<-% mkVInt(1,1)
               ; [], "drop" %<-% mkVInt(0,1)
               ]
             , "drop" %<-% mkVInt(0,1))
-      ; Apply("ipv4_fwd"
+      ; mkApply("ipv4_fwd"
             , ["ipv4_dst", 32]
             , [["op",9], "out_port" %<-% Var("op", 9)
               ]

@@ -184,22 +184,21 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
           let (_, a, _) = find_match pkt_loc selects ~default in
           trace_eval_inst ~gas ~wide a inst pkt_loc
 
-       | Apply (name, keys, actions, default) ->
-
-          begin match StringMap.find inst name with
-          | None -> trace_eval_inst ~gas ~wide default inst pkt_loc
+       | Apply t ->
+          begin match StringMap.find inst t.name with
+          | None -> trace_eval_inst ~gas ~wide t.default inst pkt_loc
           | Some rules ->
              begin
                (* Printf.printf "Widening a match! %s\n" (Packet.test_of_wide wide |> string_of_test); *)
-               match action_to_execute pkt_loc wide keys rules with
+               match action_to_execute pkt_loc wide t.keys rules with
                | (cond, Some wide, Some (data, aid)) ->
                   (* Printf.printf "HIT A RULE\n%!"; *)
-                  let pkt', wide', cmd', trace = trace_eval_inst ~wide (List.nth_exn actions aid |> bind_action_data data) inst pkt_loc in
-                  (pkt', wide', Assert cond %:% cmd', StringMap.set ~key:name ~data:(data, aid) trace)
+                  let pkt', wide', cmd', trace = trace_eval_inst ~wide (List.nth_exn t.actions aid |> bind_action_data data) inst pkt_loc in
+                  (pkt', wide', Assert cond %:% cmd', StringMap.set ~key:t.name ~data:(data, aid) trace)
                | (cond, _, _) ->
                   (* Printf.printf "Missed everything\n%!"; *)
-                  let pkt',wide', cmd', trace = trace_eval_inst ~wide default inst pkt_loc in
-                  (pkt' , wide', Assert cond %:% cmd', StringMap.set ~key:name ~data:([],List.length actions) trace )
+                  let pkt',wide', cmd', trace = trace_eval_inst ~wide t.default inst pkt_loc in
+                  (pkt' , wide', Assert cond %:% cmd', StringMap.set ~key:t.name ~data:([],List.length t.actions) trace )
              end
           end
        | While ( _ , _ ) ->
@@ -247,15 +246,15 @@ let rec trace_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : ((string 
            ~f:(fun (hits2,pkt2) ->
              (hits1 @ hits2), pkt2) @ acc
        )
-  | Apply (t, ks, acts, def) ->
-     begin match StringMap.find inst t with
-     | None -> trace_nd_hits def inst pkt
+  | Apply t ->
+     begin match StringMap.find inst t.name with
+     | None -> trace_nd_hits t.default inst pkt
      | Some rules ->
         List.foldi rules ~init:[] ~f:(fun i acc (ms, data, aid) ->
-            let cond = Match.list_to_test ks ms in
+            let cond = Match.list_to_test t.keys ms in
             if check_test cond (pkt,None)
-            then List.map (trace_nd_hits (List.nth_exn acts aid |> bind_action_data data) inst pkt)
-                   ~f:(fun (hits, pkt') -> (t,i) :: hits, pkt')
+            then List.map (trace_nd_hits (List.nth_exn t.actions aid |> bind_action_data data) inst pkt)
+                   ~f:(fun (hits, pkt') -> (t.name,i) :: hits, pkt')
                  @ acc
             else acc)
      end
