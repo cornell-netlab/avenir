@@ -198,9 +198,7 @@ let action_run_field members =
   string_of_memberlist members ^ action_run_suffix
 
 let rec encode_expression_to_value (type_ctx : Declaration.t list) (e : Expression.t) : expr =
-  let e = encode_expression_to_value_with_width (-1) type_ctx e in
-  let x = printf "expr = %s\n\n" (string_of_expr e) in
-  e
+  encode_expression_to_value_with_width (-1) type_ctx e
 
 and encode_expression_to_value2 (type_ctx : Declaration.t list) (e : Expression.t) : expr =
   encode_expression_to_value_with_width (-1) type_ctx e
@@ -234,7 +232,6 @@ and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) 
       end
   | E.Name (_,s) ->
     let w = get_width type_ctx e in
-    let x = printf "s = %s\nwidth2 = %i\n\n" s w in
     Var (s, w)
   | E.ExpressionMember _ ->
     let members = dispatch_list e in
