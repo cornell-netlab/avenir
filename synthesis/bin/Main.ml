@@ -12,6 +12,7 @@ module Parameters = Motley.Parameters
 module ProfData = Motley.ProfData
 module Problem = Motley.Problem
 module Tables = Motley.Tables
+module Instance = Motley.Instance
 module Runtime = Motley.Runtime
 
 
@@ -31,12 +32,13 @@ module Solver = struct
       +> flag "-w" no_arg ~doc:"Do widening"
       +> flag "-s" no_arg ~doc:"Do slicing optimization"
       +> flag "-m" no_arg ~doc:"Prune rows with no holes"
+      +> flag "-inj" no_arg ~doc:"Try injection optimization"
       +> flag "-g" (required int) ~doc:"max number of CEGIS reps"
       +> flag "-DEBUG" no_arg ~doc:"Print Debugging commands"
       +> flag "-i" no_arg ~doc:"Interactive Mode"
       +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly")
 
-  let run logical real logical_edits print_res widening do_slice monotonic gas debug interactive fastcx () =
+  let run logical real logical_edits print_res widening do_slice monotonic injection gas debug interactive fastcx () =
     let log = parse_file logical in
     let phys = parse_file real in
     let log_edits = Runtime.parse logical_edits in
@@ -47,19 +49,16 @@ module Solver = struct
                      gas;
                      debug;
                      monotonic;
+                     injection;
                      interactive;
                      fastcx})
         (ProfData.zero ())
-        Problem.({log; phys; log_inst = Motley.Tables.Instance.empty;
-                  phys_inst = Motley.Tables.Instance.empty;
-                  log_edits = log_edits;
-                  phys_edits = [];
-                  cexs = [];
-                  attempts = [];
-                  model_space = True;
-                  fvs =
-                    List.dedup_and_sort ~compare:Stdlib.compare
-                    Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)})
+        (Problem.make ~log ~phys
+           ~log_inst:Motley.Instance.empty
+           ~phys_inst:Motley.Instance.empty
+           ~log_edits
+           ~fvs:(List.dedup_and_sort ~compare:Stdlib.compare
+                   Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)))
     in
     match phys_edits with
     | None -> Printf.printf "Failed\n%!"
@@ -67,9 +66,9 @@ module Solver = struct
        if print_res
        then
          begin
-           let synth_inst = Tables.Instance.(update_list empty phys_edits) in
+           let synth_inst = Instance.(update_list empty phys_edits) in
            Printf.printf "Synthesized Program (%d edits made)\n%!" (List.length phys_edits);
-           Printf.printf "%s\n%!" (Tables.Instance.apply `NoHoles `Exact synth_inst phys |> fst |> Ast.string_of_cmd)
+           Printf.printf "%s\n%!" (Instance.apply `NoHoles `Exact synth_inst phys |> fst |> Ast.string_of_cmd)
          end
        else ()
 end
@@ -106,11 +105,12 @@ module RunTest = struct
       +> flag "-w" no_arg ~doc:"Do widening"
       +> flag "-s" no_arg ~doc:"Do slicing optimization"
       +> flag "-m" no_arg ~doc:"Prune rows with no holes"
+      +> flag "-inj" no_arg ~doc:"Attempt an injection"
       +> flag "-g" (required int) ~doc:"max number of CEGIS reps"
       +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly")
 
 
-  let run test_file widening do_slice monotonic gas fastcx () =
+  let run test_file widening do_slice monotonic injection gas fastcx () =
     Printf.printf "Failed Tests:\n";
     In_channel.read_lines test_file
     |> List.iter
@@ -125,20 +125,15 @@ module RunTest = struct
                                         gas;
                                         monotonic;
                                         fastcx;
+                                        injection;
                                         debug = false;
                                         interactive = false
                                         }) in
-              let problem = Problem.({log; phys;
-                                      log_inst = Motley.Tables.Instance.empty;
-                                      phys_inst = Motley.Tables.Instance.empty;
-                                      log_edits;
-                                      phys_edits = [];
-                                      cexs = [];
-                                      attempts = [];
-                                      model_space = True;
-                                      fvs =
-                                        List.dedup_and_sort ~compare:Stdlib.compare
-                                          Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)}) in
+              let problem = Problem.make ~log ~phys ~log_edits
+                              ~log_inst:Instance.empty
+                              ~phys_inst:Instance.empty
+                              ~fvs:(List.dedup_and_sort ~compare:Stdlib.compare
+                                      Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)) in
               let data = ProfData.zero () in
               begin
                 try
@@ -173,11 +168,28 @@ module Bench = struct
       +> anon ("varsize" %: int)
       +> anon ("num_tables" %: int)
       +> anon ("max_inserts" %: int)
-      +> flag "-w" no_arg ~doc:"perform widening")
+      +> flag "-w" no_arg ~doc:"perform widening"
+      +> flag "-s" no_arg ~doc:"perform slicing optimization"
+      +> flag "-m" no_arg ~doc:"eliminate non-hole branches"
+      +> flag "-i" no_arg ~doc:"interactive mode"
+      +> flag "-inj" no_arg ~doc:"try injection optimization"
+      +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
+      +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly")
 
-
-  let run varsize num_tables max_inserts widening () =
-    ignore(Benchmark.reorder_benchmark varsize num_tables max_inserts widening : Tables.Edit.t list)
+  let run varsize num_tables max_inserts widening do_slice monotonic interactive injection debug fastcx  () =
+    let params =
+      Parameters.(
+        { widening;
+          do_slice;
+          monotonic;
+          interactive;
+          injection;
+          debug;
+          fastcx;
+          gas = 10
+      })
+    in
+    ignore(Benchmark.reorder_benchmark varsize num_tables max_inserts params : Tables.Edit.t list)
 end
 
 
@@ -196,15 +208,16 @@ module ONF = struct
       +> flag "-s" no_arg ~doc:"perform slicing optimization"
       +> flag "-m" no_arg ~doc:"eliminate non-hole branches"
       +> flag "-i" no_arg ~doc:"interactive mode"
+      +> flag "-inj" no_arg ~doc:"try injection optimization"
       +> flag "-p" no_arg ~doc:"show_result_at_end"
       +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
       +> flag "-data" (required string) ~doc:"the input log"
       +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly")
 
 
-  let run gas widening do_slice monotonic interactive print debug data_fp fastcx () =
+  let run gas widening do_slice monotonic interactive injection print debug data_fp fastcx () =
     let res = Benchmark.basic_onf_ipv4
-              Parameters.({widening;do_slice;gas;monotonic;interactive;debug;fastcx})
+              Parameters.({widening;do_slice;gas;monotonic;injection;interactive;debug;fastcx})
               data_fp
     in
     if print then
@@ -223,6 +236,7 @@ module ONFReal = struct
       +> flag "-s" no_arg ~doc:"perform slicing optimization"
       +> flag "-m" no_arg ~doc:"eliminate non-hole branches"
       +> flag "-i" no_arg ~doc:"interactive mode"
+      +> flag "-inj" no_arg ~doc:"try injection optimization"
       +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
       +> flag "-data" (required string) ~doc:"the input log" 
       +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly" 
@@ -232,8 +246,8 @@ module ONFReal = struct
       +> flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file" )
   
 
-  let run gas widening do_slice monotonic interactive debug data_fp fastcx logical_p4 physical_p4 logical_inc physical_inc() =
-          ignore (Benchmark.basic_onf_ipv4_real Parameters.({widening;do_slice;gas;monotonic;interactive;debug;fastcx}) data_fp logical_p4 physical_p4 logical_inc physical_inc : Tables.Edit.t list)
+  let run gas widening do_slice monotonic interactive injection debug data_fp fastcx logical_p4 physical_p4 logical_inc physical_inc() =
+          ignore (Benchmark.basic_onf_ipv4_real Parameters.({widening;do_slice;gas;monotonic;injection;interactive;debug;fastcx}) data_fp logical_p4 physical_p4 logical_inc physical_inc : Tables.Edit.t list)
     (* Benchmark.onf_representative gas widening |> ignore *)
 end
 

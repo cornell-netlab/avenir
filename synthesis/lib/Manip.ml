@@ -95,6 +95,7 @@ let rec substitute ?holes:(holes = false) ex subsMap =
     | Plus (e, e') -> Plus (substituteE e, substituteE e')
     | Times (e, e') -> Times (substituteE e, substituteE e')
     | Minus (e, e') -> Minus (substituteE e, substituteE e')
+    | Mask (e, e') -> Mask (substituteE e, substituteE e')
   in
   match ex with
   | True | False -> ex
@@ -180,7 +181,7 @@ let rec wp ?no_negations:(no_negations = false) c phi =
       )
     |> fst
 
-  | Apply (_, _, acts, dflt)
+  | Apply t
     -> failwith "wp of apply is no good"
   (* concatMap acts ~f:(fun (scope, a) ->
        *      wp ~no_negations (holify (List.map scope ~f:fst) a) phi) ~c:(mkAnd) ~init:(Some True)
@@ -211,6 +212,7 @@ let good_execs fvs c =
     | Plus(e1,e2) -> Plus(indexVars_expr e1 sub, indexVars_expr e2 sub)
     | Minus(e1,e2) -> Minus(indexVars_expr e1 sub, indexVars_expr e2 sub)
     | Times(e1,e2) -> Times(indexVars_expr e1 sub, indexVars_expr e2 sub)
+    | Mask (e1,e2) -> Mask(indexVars_expr e1 sub, indexVars_expr e2 sub)
   in
   let rec indexVars b sub =
     match b with
@@ -365,6 +367,7 @@ let rec prepend_expr pfx e =
   | Plus (e1, e2) -> Plus(prepend_expr pfx e1, prepend_expr pfx e2)
   | Minus (e1, e2) -> Minus(prepend_expr pfx e1, prepend_expr pfx e2)
   | Times (e1, e2) -> Times(prepend_expr pfx e1, prepend_expr pfx e2)
+  | Mask (e1, e2)  -> Mask(prepend_expr pfx e1, prepend_expr pfx e2)
 
 let rec prepend_test pfx b =
   match b with
@@ -388,11 +391,11 @@ let rec prepend pfx c =
   | Select(typ, cs) ->
      List.map cs ~f:(fun (t,c) -> (prepend_test pfx t, prepend pfx c))
      |> mkSelect typ
-  | Apply(name, keys, acts, def) ->
-     Apply(pfx ^ name
-         , List.map keys ~f:(fun (k,sz) -> (pfx ^ k, sz))
-         , List.map acts ~f:(fun (scope, act) -> (List.map scope ~f:(fun (x,sz) -> (pfx ^ x, sz)), prepend pfx act))
-         , prepend pfx def)
+  | Apply t ->
+     Apply {name = pfx ^ t.name;
+            keys = List.map t.keys ~f:(fun (k,sz) -> (pfx ^ k, sz));
+            actions = List.map t.actions ~f:(fun (scope, act) -> (List.map scope ~f:(fun (x,sz) -> (pfx ^ x, sz)), prepend pfx act));
+            default = prepend pfx t.default}
   
                  
 let equivalent eq_fvs l p =
@@ -463,7 +466,7 @@ let rec fill_holes_expr e (subst : value StringMap.t) =
   | Plus (e, e') -> binop mkPlus e e'
   | Minus (e, e') -> binop mkMinus e e'
   | Times (e, e') -> binop mkTimes e e'
-
+  | Mask (e, e') -> binop mkMask e e'
 
 (* Fills in first-order holes according to subst  *)                  
 let rec fill_holes_test t subst =
@@ -503,10 +506,10 @@ let rec fill_holes (c : cmd) subst =
   | Select (styp, cmds) ->
      rec_select cmds |> mkSelect styp
   | While (cond, body) -> While (fill_holes_test cond subst, fill_holes body subst)
-  | Apply (n,keys, acts, dflt)
-    -> Apply(n, keys
-             , List.map acts ~f:(fun (scope, a) -> (scope, fill_holes a subst))
-             , fill_holes dflt subst)            
+  | Apply t
+    -> Apply { t with
+               actions = List.map t.actions ~f:(fun (scope, a) -> (scope, fill_holes a subst));
+               default = fill_holes t.default subst }
 
 let rec wp_paths ~no_negations (params : Parameters.t) c phi : (cmd * test) list =
   match c with
@@ -539,7 +542,7 @@ let rec wp_paths ~no_negations (params : Parameters.t) c phi : (cmd * test) list
   | Select (Partial, []) -> [(Skip, True)]
   | Select (Partial, cmds) ->
      List.fold cmds ~init:([]) ~f:(fun wp_so_far (cond, act) ->
-         if params.monotonic && has_hole_test cond then 
+         if (params.monotonic && has_hole_test cond) || not params.monotonic then
            List.fold (wp_paths ~no_negations params act phi) ~init:wp_so_far         
              ~f:(fun acc (trace, act_wp) ->
                wp_so_far @ [ (Assert cond %:% trace, cond %&% act_wp)])
@@ -558,9 +561,9 @@ let rec wp_paths ~no_negations (params : Parameters.t) c phi : (cmd * test) list
              acc @[(Assert (cond %&% misses) %:% trace, cond %&% misses %&% act_wp)]), prev_conds %+% cond)
      |> fst
 
-  | Apply (_, _, acts, dflt) ->
+  | Apply t ->
      let open List in
-     (dflt :: List.map ~f:(fun (sc, a) -> holify (List.map sc ~f:fst) a) acts) >>= flip (wp_paths ~no_negations params) phi
+     (t.default :: List.map ~f:(fun (sc, a) -> holify (List.map sc ~f:fst) a) t.actions) >>= flip (wp_paths ~no_negations params) phi
   | While _ ->
      failwith "[Error] loops must be unrolled\n%!"
 
@@ -592,6 +595,7 @@ let rec fixup_val (model : value StringMap.t) (e : expr)  : expr =
   | Plus  (e, e') -> binop mkPlus  e e'
   | Times (e, e') -> binop mkTimes e e'
   | Minus (e, e') -> binop mkMinus e e'
+  | Mask (e,e') -> binop mkMask e e'
 
 
 let rec fixup_test (model : value StringMap.t) (t : test) : test =
@@ -632,9 +636,7 @@ and fixup (real:cmd) (model : value StringMap.t) : cmd =
   | Seq (p, q) -> Seq (fixup p model, fixup q model)
   | While (cond, body) -> While (fixup_test model cond, fixup body model)
   | Select (styp,cmds) -> fixup_selects model cmds |> mkSelect styp
-  | Apply (name, keys, acts, dflt)
-    -> Apply (name
-            , keys
-            , List.map acts ~f:(fun (data, a) -> (data, fixup a model))
-            , fixup dflt model)
-       
+  | Apply t
+    -> Apply {t with
+              actions = List.map t.actions ~f:(fun (data, a) -> (data, fixup a model));
+              default = fixup t.default model}

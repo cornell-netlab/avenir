@@ -19,7 +19,7 @@ let rec compute_cand_for_trace (tag : [`Exact | `Range]) (line: cmd) (pinst : In
   | Select(typ, cs) ->
      List.map cs ~f:(fun (b, c) -> (b, compute_cand_for_trace tag c pinst trace))
      |> mkSelect typ
-  | Apply(name, keys, acts, default) ->
+  | Apply t ->
      (*might need to use existing instance to negate prior rules *)
      (* let misses =
       *   match StringMap.find pinst name with
@@ -30,17 +30,17 @@ let rec compute_cand_for_trace (tag : [`Exact | `Range]) (line: cmd) (pinst : In
       *          acc %&% !%(List.fold2_exn keys ms ~init:True ~f:(fun acc k m -> acc %&% encode_match k m))
       *        )
       * in *)
-     begin match StringMap.find trace name with
+     begin match StringMap.find trace t.name with
      | None -> Assume False
      | Some (data, act_idx) ->
-        if act_idx >= List.length acts
-        then (*Assert (misses) %:%*) default
+        if act_idx >= List.length t.actions
+        then (*Assert (misses) %:%*) t.default
         else
-          let actSize = max (log2(List.length acts)) 1 in
-          let row_hole = Instance.add_row_hole name in
-          let act_hole = Instance.which_act_hole name actSize in
-          let cond = Instance.tbl_hole tag keys name row_hole act_hole act_idx actSize in
-          let (params, act) = List.nth_exn acts act_idx in
+          let actSize = max (log2(List.length t.actions)) 1 in
+          let row_hole = Instance.add_row_hole t.name in
+          let act_hole = Instance.which_act_hole t.name actSize in
+          let cond = Instance.tbl_hole tag t.keys t.name row_hole act_hole act_idx actSize [] in
+          let (params, act) = List.nth_exn t.actions act_idx in
           let args = List.fold2_exn params data ~init:True
                        ~f:(fun acc param arg ->
                          acc %&% (Hole param %=% Value arg)

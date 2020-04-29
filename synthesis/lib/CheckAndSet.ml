@@ -11,9 +11,10 @@ let rec map_holes_expr e ~f =
   match e with
   | Value _ | Var _ -> e
   | Hole(h,sz) -> Hole (f h, sz)
-  | Plus (e1,e2) -> binop (fun e1' e2' -> Plus (e1',e2')) e1 e2
-  | Minus(e1,e2) -> binop (fun e1' e2' -> Minus (e1',e2')) e1 e2
-  | Times(e1,e2) -> binop (fun e1' e2' -> Times (e1',e2')) e1 e2
+  | Plus (e1,e2) -> binop mkPlus e1 e2
+  | Minus(e1,e2) -> binop mkMinus e1 e2
+  | Times(e1,e2) -> binop mkTimes e1 e2
+  | Mask (e1,e2) -> binop mkMask e1 e2
 
 let rec map_holes_test b ~f =
   let binope op e1 e2 = op (map_holes_expr e1 ~f) (map_holes_expr e2 ~f) in
@@ -27,7 +28,7 @@ let rec map_holes_test b ~f =
   | Impl(e1,e2) -> binopb (%=>%) e1 e2
   | Iff (e1,e2) -> binopb (%<=>%) e1 e2
   | Neg(e) -> !%(map_holes_test b ~f)
-  
+
 
 let rec map_holes c ~f =
   match c with
@@ -59,11 +60,12 @@ let rec freshen_holes_expr e holes_so_far =
      | Some i -> freshen_hole h sz i
      | None -> freshen_hole h sz 0
      end
-  | Plus(e1,e2) -> binop (fun e e' -> Plus(e,e')) e1 e2
-  | Minus(e1,e2) -> binop (fun e e' -> Minus(e,e')) e1 e2
-  | Times(e1,e2) -> binop (fun e e' -> Times(e,e')) e1 e2                                                  
+  | Plus(e1,e2) -> binop mkPlus e1 e2
+  | Minus(e1,e2) -> binop mkMinus e1 e2
+  | Times(e1,e2) -> binop mkTimes e1 e2
+  | Mask (e1,e2) -> binop mkMask e1 e2
 
-              
+
 let rec freshen_holes c holes_so_far =
   match c with
   | Skip -> (Skip, holes_so_far)
@@ -78,9 +80,9 @@ let rec freshen_holes c holes_so_far =
   | Assume _ | Assert _ | While _ | Apply _ ->
      Printf.sprintf "Cannot handle %s " (string_of_cmd c)
      |> failwith
-     
-              
-       
+
+
+
 
 
 let common_indices ksmall kbig : int option list =
@@ -92,7 +94,7 @@ let common_indices ksmall kbig : int option list =
                    None
                 | Some (i,_) ->
                    Printf.printf "Found %s in logical table at index %d\n%!" (fst k) i;
-                   Some i                     
+                   Some i
               )
     )
 
@@ -115,8 +117,8 @@ let project keys idxs ms =
                    |> failwith
          end
     )
-  
-       
+
+
 let project_classifier table keys table_keys rows =
   let projection = common_indices keys table_keys in
   List.mapi rows ~f:(fun i (matches,_,_) ->
@@ -130,7 +132,7 @@ let project_classifier table keys table_keys rows =
    *        t
    *      ) *)
 
-(* Skip must be one of the actions *)           
+(* Skip must be one of the actions *)
 let instrumented_action_for_hole (h,_) actions =
   let act_size = max (log2 (List.length actions)) 1 in
   List.(mapi actions ~f:(fun i (data, act)->
@@ -139,9 +141,9 @@ let instrumented_action_for_hole (h,_) actions =
             Hole("?act_for_path_"^h, act_size) %=% mkVInt(i,act_size),
             act''
   ))
-  |> mkOrdered    
-                 
-           
+  |> mkOrdered
+
+
 let populate_action_table name keys actions holes : cmd =
   match keys with
   | [k,sz] ->
@@ -156,7 +158,7 @@ let populate_action_table name keys actions holes : cmd =
        )@ [True, Skip] |> mkOrdered
   | _ -> Printf.sprintf "%s must have one key since it is the action table. It has %d" name (List.length keys)
          |> failwith
-           
+
 
 
 let rec instrument_entries (table_keys : (string * int) list) (rows : Row.t list) (action_table : string)
@@ -171,16 +173,16 @@ let rec instrument_entries (table_keys : (string * int) list) (rows : Row.t list
      let c2', holes'' = instrument_entries table_keys rows action_table c2 holes' in
      (c1' %:% c2', holes'')
   | While(b,c) -> failwith "while loops are hard"
-  | Apply(name, keys, actions, default) ->
-     if name = action_table
-     then (populate_action_table name keys actions holes, holes)
-     else if List.length actions <> 1
+  | Apply t ->
+     if t.name = action_table
+     then (populate_action_table t.name t.keys t.actions holes, holes)
+     else if List.length t.actions <> 1
      then failwith "too many actions"
      else
        (* let _ = Printf.printf "Projecting the classifier\n%!" in *)
-       let (data, act) = List.hd_exn actions in
+       let (data, act) = List.hd_exn t.actions in
        let selects, holes =
-         project_classifier name keys table_keys  rows
+         project_classifier t.name t.keys table_keys  rows
          |> List.(fold ~init:([],holes)
                     ~f:(fun (ss,holes) test ->
                       Printf.printf "freshening entry %s -> %s\n%!" (string_of_test test) (string_of_cmd act);
@@ -188,7 +190,7 @@ let rec instrument_entries (table_keys : (string * int) list) (rows : Row.t list
                                          |> flip freshen_holes holes in
                       (ss @ [test, act'], holes'))
             ) in
-       let default', holes' = freshen_holes default holes in 
+       let default', holes' = freshen_holes t.default holes in
        (mkOrdered (selects @ [True,default']), holes')
 
 let rec apply_model_expr m e =
@@ -202,9 +204,10 @@ let rec apply_model_expr m e =
      | None -> Printf.sprintf "Model is incomplete, no value for %s" x |> failwith
      | Some v -> Value(v)
      end
-  | Plus(e1,e2) -> binop (fun e1 e2 -> Plus(e1,e2)) e1 e2
-  | Minus(e1,e2) -> binop (fun e1 e2 -> Minus(e1,e2)) e1 e2
-  | Times(e1,e2) -> binop (fun e1 e2 -> Times(e1,e2)) e1 e2
+  | Plus(e1,e2) -> binop mkPlus e1 e2
+  | Minus(e1,e2) -> binop mkMinus e1 e2
+  | Times(e1,e2) -> binop mkTimes e1 e2
+  | Mask(e1,e2) -> binop mkMask e1 e2
 
 
 let rec apply_model_test m t : test =
@@ -238,20 +241,20 @@ let rec apply_model m cmd =
        )
      |> mkSelect typ
   | While _ | Apply _ -> failwith "you died of dysentery"
-              
+
 
 let populate one_big_table fvs physical_pipeline physical_check_name logical_rows =
   match one_big_table with
-  | Apply(name, keys, actions, default) ->
-     let phys_instrumented,_ = instrument_entries keys logical_rows physical_check_name physical_pipeline StringMap.empty in
-     let log_inst = StringMap.of_alist_exn [(name,logical_rows)] in
-     let log_populated = 
+  | Apply t ->
+     let phys_instrumented,_ = instrument_entries t.keys logical_rows physical_check_name physical_pipeline StringMap.empty in
+     let log_inst = StringMap.of_alist_exn [(t.name,logical_rows)] in
+     let log_populated =
        sequence [
            "drop"%<-%mkVInt(0,1);
            "outport"%<-%mkVInt(0,9);
            (Instance.apply `NoHoles `Exact log_inst one_big_table |> fst) ]
      in
-     begin match check Parameters.default `Sat (equivalent fvs phys_instrumented log_populated) with
+     begin match check_sat Parameters.default (equivalent fvs phys_instrumented log_populated) with
      | None, d ->
         Printf.printf "Logical Program:\n%s\n%!The instrumented physical program:\n%s\n"
           (string_of_cmd log_populated)
@@ -265,13 +268,13 @@ let populate one_big_table fvs physical_pipeline physical_check_name logical_row
      end
   | _ -> Printf.sprintf "logical_table was not one big table, it was %s"(string_of_cmd one_big_table)
          |> failwith
-  
+
 
 
 
 let test_population _ =
   populate
-    (Apply("megatable", 
+    (mkApply("megatable",
            ["inport",9; "ipv4", 32],
            [ ["o",9], "outport" %<-% Var("o", 9)
            ; [], "drop"%<-% mkVInt(1,1)
@@ -280,9 +283,9 @@ let test_population _ =
     (["inport",9; "ipv4", 32; "outport",9; "drop",1])
     (sequence [
          "drop"%<-%mkVInt(0,1); "outport"%<-%mkVInt(0,9); "next"%<-%mkVInt(0,32)
-       ; Apply("ingress", ["inport", 9], [["n", 32], "next"%<-%Var("n",32)], "next"%<-%Hole("n",32))
-       ; Apply("l3_fwd", ["ipv4", 32], [["n",32], "next" %<-% Var("n",32)], "next"%<-%Hole("n",32))
-       ; Apply("next", ["next",32], [["o",9], sequence["outport"%<-% Var("o", 9)]
+       ; mkApply("ingress", ["inport", 9], [["n", 32], "next"%<-%Var("n",32)], "next"%<-%Hole("n",32))
+       ; mkApply("l3_fwd", ["ipv4", 32], [["n",32], "next" %<-% Var("n",32)], "next"%<-%Hole("n",32))
+       ; mkApply("next", ["next",32], [["o",9], sequence["outport"%<-% Var("o", 9)]
                                  ;[], Skip], Skip)
     ])
     "next"
@@ -290,7 +293,7 @@ let test_population _ =
      (* ; [Between(0,pow 2 9-1,9); Exact(2, 32)], [1,9], 0 *)
     ]
 
-              
+
 
 
 
@@ -318,7 +321,7 @@ let test_diagram _ =
   let five = Int64.of_int 5 in
   let four = Int64.of_int 4 in
   let three = Int64.of_int 3 in
-  let two = Int64.of_int 2 in  
+  let two = Int64.of_int 2 in
   let star = Value.Mask(zero,0) in
   (* let _ = Printf.printf "The first one\n" in *)
   let fdd = create_from_rows

@@ -130,7 +130,7 @@ let ctor_name_expression (e : Expression.t) : string =
   | E.Range _ -> "Range"
 
 let string_of_binop (e : Op.bin) : string =
-  let open Op in 
+  let open Op in
   match snd e with
   | Plus -> "Plus"
   | PlusSat -> "PlusSat"
@@ -293,7 +293,7 @@ let get_type_decls : Declaration.t list -> Declaration.t list =
 
 let rec encode_expression_to_test (type_ctx : Declaration.t list) (e: Expression.t) : test =
   let module E = Expression in
-  let unimplemented (name : string) : test = 
+  let unimplemented (name : string) : test =
     failwith ("[Unimplemented Expression->Value Encoding for " ^ name ^"] at " ^ Petr4.Info.to_string (fst e))
   in
   let type_error (got : string) : test =
@@ -393,7 +393,6 @@ let lookup_action_exn prog ctx action_name =
   | _, Action a -> (a.body, a.params)
   | _ -> failwith ("[TypeError] Expecting \""^ snd action_name ^ "\" to be an action, "
                    ^ "but it resolved to something else at " ^ Petr4.Info.to_string (fst action_name))
-
 
 let lookup_string_action_exn prog ctx action_name =
   let open Declaration in
@@ -723,12 +722,6 @@ and encode_program (Program(top_decls) as prog : program ) =
     assign_consts %:% assign_rv %:% encode_control prog c.locals type_cxt2 rv c.apply
   | Some _ -> failwith "Found a module called MyIngress, but it wasn't a control module"
     
-(* and encode_match ((_, m) : Table.key) : test =
-  match m.match_kind with
-  | _, "exact" -> encode_expression_to_value m.key %=% Hole ("?",-1)
-  | info, x -> failwith ("[Unimplemented MatchKind " ^ x ^ "] Cannot handle match kind "
-                   ^ x ^ " at " ^ Petr4.Info.to_string info )
- *)
 and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) (name : P4String.t) (props : Table.property list) : cmd =
   let open Table in
   let p4keys, p4actions, p4customs = List.fold_left props ~init:([], [], [])
@@ -765,12 +758,12 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
 
   let init_action_run = Assign(snd name ^ action_run_suffix, mkVInt(0, 1)) in
 
-  init_action_run %:% Apply(snd name, str_keys, action_cmds, enc_def_act)
+  init_action_run %:% Apply { name = snd name; keys = str_keys; actions =  action_cmds; default =  enc_def_act }
 
 let read_lines filename =
   let chan = In_channel.create filename in
   Std.input_list chan
-  
+
 let apply_model_from_file (c : cmd) (model_file : string) : cmd =
   let lines = read_lines model_file in
   let parse_line l =
@@ -788,35 +781,35 @@ let apply_model_from_file (c : cmd) (model_file : string) : cmd =
       | None -> c
       | Some (hole, data) ->
          StringMap.singleton hole (mkInt (data, -1))
-         |> fill_holes c)  
+         |> fill_holes c)
 
 (* P4-PARSING *)
 let colorize colors s = ANSITerminal.sprintf colors "%s" s
 let red s = colorize [ANSITerminal.red] s
 let green s = colorize [ANSITerminal.green] s
 
-let preprocess include_dirs p4file = 
-  let cmd = 
+let preprocess include_dirs p4file =
+  let cmd =
     String.concat ~sep:" "
-      (["cc"] @ 
+      (["cc"] @
        (List.map include_dirs ~f:(Printf.sprintf "-I%s") @
-       ["-undef"; "-nostdinc"; "-E"; "-x"; "c"; p4file])) in 
+       ["-undef"; "-nostdinc"; "-E"; "-x"; "c"; p4file])) in
   let in_chan = Unix.open_process_in cmd in
-  let str = In_channel.input_all in_chan in 
-  let _ : Core.Unix.Exit_or_signal.t = Unix.close_process_in in_chan in
+  let str = In_channel.input_all in_chan in
+  let _ : Core.Unix.Exit_or_signal.t = try Unix.close_process_in in_chan with _ -> failwith "bad close" in
   str
 
-let parse_p4 include_dirs p4_file verbose = 
-  let () = Lexer.reset () in 
+let parse_p4 include_dirs p4_file verbose =
+  let () = Lexer.reset () in
   let () = Lexer.set_filename p4_file in
   let p4_string = preprocess include_dirs p4_file in
   let lexbuf = Lexing.from_string p4_string in
   try
-    let prog = Petr4.Parser.p4program Lexer.lexer lexbuf in 
-    if verbose then Format.eprintf "[%s] %s@\n%!" (green "Passed") p4_file;      
+    let prog = Petr4.Parser.p4program Lexer.lexer lexbuf in
+    if verbose then Format.eprintf "[%s] %s@\n%!" (green "Passed") p4_file;
     `Ok prog
   with
-  | err -> 
+  | err ->
     if verbose then Format.eprintf "[%s] %s@\n%!" (red "Failed") p4_file;
     `Error (Lexer.info lexbuf, err)
 
@@ -830,5 +823,3 @@ let encode_from_p4 include_dirs p4_file verbose : Ast.cmd =
      let cmd = encode_program p4_program in
     Format.printf "Encoded Program: \n%!\n %s%! \n%!" (string_of_cmd cmd);
     cmd
-      
-                 

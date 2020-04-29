@@ -47,7 +47,7 @@ command :
 | IF; ORDERED; s = select; FI
   { Ast.(Select (Ordered, s)) }
 | APPLY; LPAREN; s = ID; COMMA; LPAREN; ks = keys; RPAREN; COMMA; LPAREN; a = actions; RPAREN; COMMA; LBRACE; d = command; RBRACE; RPAREN
-  { Ast.(Apply(s,ks,a,d)) }
+  { Ast.(mkApply(s,ks,a,d)) }
 
 keys :
   | { [] }
