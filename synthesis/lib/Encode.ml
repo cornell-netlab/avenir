@@ -10,6 +10,14 @@ let safe_name (d : Declaration.t) =
   try Some (snd (D.name d))
   with _ -> None
 
+let typ_safe_name (t : Type.t) =
+  let module T = Type in
+  match snd t with
+    | T.TypeName n -> Some (snd n)
+    | _ -> None
+ 
+
+
 (* Type lookup *)
 
 let rec lookup_type_width (type_ctx : Declaration.t list) (typ : Type.t) =
@@ -30,7 +38,7 @@ let rec lookup_type_width (type_ctx : Declaration.t list) (typ : Type.t) =
                         ~f:(fun td -> match td with
                                         | (_, TypeDef d) -> snd d.name = snd n
                                         | (_, Header h) -> snd h.name = snd n
-                                        | (_, Struct s) -> snd s.name = snd n
+                                        (* | (_, Struct s) -> snd s.name = snd n *)
                                         | _ -> false ) in
       begin match t with
         | Some (_, TypeDef{typ_or_decl;_}) ->
@@ -41,7 +49,9 @@ let rec lookup_type_width (type_ctx : Declaration.t list) (typ : Type.t) =
         | Some (_, Header{fields;_}) ->
           Some (List.fold (List.map fields ~f:(fun (_, fl) -> lookup_field_width_exn type_ctx (snd fl.name))) ~f:(+) ~init:0)
         | Some (_, Struct{fields;_}) ->
-          Some (List.fold (List.map fields ~f:(fun (_, fl) -> lookup_field_width_exn type_ctx (snd fl.name))) ~f:(+) ~init:0)
+            let x = Some (List.fold (List.map fields ~f:(fun (_, fl) -> lookup_field_width_exn type_ctx (snd fl.name))) ~f:(+) ~init:0) in
+            let y = printf "struct width = %s" (Sexp.to_string ([%sexp_of: int option] x))  in
+            x
         | _ -> failwith ("lookup_type_width: 1 type not handled " 
                               ^ Sexp.to_string ([%sexp_of: Type.t] typ) ^ " "
                               ^ Sexp.to_string ([%sexp_of: Declaration.t option] t))
@@ -188,7 +198,13 @@ let action_run_field members =
   string_of_memberlist members ^ action_run_suffix
 
 let rec encode_expression_to_value (type_ctx : Declaration.t list) (e : Expression.t) : expr =
+  let e = encode_expression_to_value_with_width (-1) type_ctx e in
+  let x = printf "expr = %s\n\n" (string_of_expr e) in
+  e
+
+and encode_expression_to_value2 (type_ctx : Declaration.t list) (e : Expression.t) : expr =
   encode_expression_to_value_with_width (-1) type_ctx e
+
 
 and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) (e : Expression.t) : expr =
   let module E= Expression in
@@ -218,6 +234,7 @@ and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) 
       end
   | E.Name (_,s) ->
     let w = get_width type_ctx e in
+    let x = printf "s = %s\nwidth2 = %i\n\n" s w in
     Var (s, w)
   | E.ExpressionMember _ ->
     let members = dispatch_list e in
@@ -435,7 +452,7 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t l
     | _ -> failwith "unimplemented, only know how to resolve table dispatches"
     end
   | Assignment {lhs=lhs; rhs=rhs} ->
-    begin match encode_expression_to_value type_ctx lhs with
+    begin match encode_expression_to_value2 type_ctx lhs with
       | Var (f,s) -> f %<-% encode_expression_to_value_with_width s type_ctx rhs, false, false
       | _ -> failwith ("[TypeError] lhs of assignment must be a field, at " ^ Petr4.Info.to_string info)
     end
@@ -535,12 +552,7 @@ and assign_param (type_ctx : Declaration.t list) (param_arg : Parameter.t * Argu
   let flds = get_rel_variables type_ctx (fst param_arg) in
   match arg with
     | Expression {value} ->
-      let add_to_expr f v = match v with
-                              | (i, Name (ni, n)) -> (i, Name (ni, n ^ "." ^ snd f))
-                              | _ -> failwith "HERE" in
-      let val_assgn = List.map flds
-            ~f:(fun fld -> Assign(snd param.variable ^ "." ^ snd ((snd fld).name)
-                                 , encode_expression_to_value type_ctx (add_to_expr (snd fld).name value))) in
+      let val_assgn = List.concat_map flds ~f:(assign_fields type_ctx param value) in
       begin match param.direction with
         | Some (_, In)
         | None -> val_assgn
@@ -577,15 +589,39 @@ and return_args (type_ctx : Declaration.t list) (param_arg : Parameter.t * Argum
           (*let w = lookup_type_width_exn type_ctx param.typ in
           let val_assgn = Assign (string_of_memberlist n, Var(snd param.variable, w)) in *)
           let flds = get_rel_variables type_ctx (fst param_arg) in
-          let add_to_expr f v = match v with
-                              | (i, Name (ni, n)) -> (i, Name (ni, n ^ "." ^ snd f))
-                              | _ -> failwith "HERE" in
-          let val_assgn = List.map flds
-            ~f:(fun fld -> Assign(snd param.variable ^ "." ^ snd ((snd fld).name)
-                                 , encode_expression_to_value type_ctx (add_to_expr (snd fld).name value))) in
+          let val_assgn = List.concat_map flds ~f:(assign_fields type_ctx param value) in
           Assign(validity_bit_no_removal n, Var(validity_bit_no_removal [param.variable], 1)) :: val_assgn
       end
     | _ -> failwith "Unhandled argument"
+
+(* and assign_fields type_ctx param value fld =
+  let open Expression in
+  let add_to_expr f v = match v with
+                              | (i, Name (ni, n)) -> (i, Name (ni, n ^ "." ^ snd f))
+                              | _ -> failwith "HERE" in
+  [Assign( snd param.variable ^ "." ^ snd ((snd fld).name)
+         , encode_expression_to_value2 type_ctx (add_to_expr (snd fld).name value))] *)
+
+and assign_fields type_ctx param value fld =
+  let open Expression in
+  let add_to_expr f v = match v with
+                              | (i, Name (ni, n)) -> (i, Name (ni, n ^ f))
+                              | _ -> failwith "HERE" in
+  let flds = get_all_fields type_ctx "" fld in
+  List.map flds ~f:(fun f -> Assign( snd param.variable ^ f
+                                   , encode_expression_to_value type_ctx (add_to_expr f value)))
+  (* [Assign( snd param.variable ^ "." ^ snd ((snd fld).name)
+         , encode_expression_to_value2 type_ctx (add_to_expr (snd fld).name value))] *)
+
+and get_all_fields type_ctx h (fld : Declaration.field)  =
+  let open Declaration in
+  let decl = List.find type_ctx
+                    ~f:(fun d -> safe_name d = typ_safe_name (snd fld).typ) in
+  match decl with
+    | Some (_, Header {name;fields})
+    | Some (_, Struct {name;fields}) ->
+      List.concat_map fields ~f:(get_all_fields type_ctx (h ^ "." ^ snd (snd fld).name))
+    | _ -> let x = printf "fld = %s"  (Sexp.to_string ([%sexp_of: Declaration.field] fld)) in [h ^ "." ^ snd (snd fld).name]
 
 and encode_control prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv:int) ( body : Block.t ) =
   encode_block prog ctx type_ctx rv body
@@ -637,7 +673,7 @@ and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t
           match snd prop with
           | Actions {actions} -> acc_actions @ actions
           | _ -> acc_actions) in
-      encode_expression_to_value type_ctx e, p4actions
+      encode_expression_to_value2 type_ctx e, p4actions
     | _ -> failwith "Table not found"
 
 
