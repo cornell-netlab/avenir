@@ -6,6 +6,12 @@ open Manip
 
 type t = Row.t list StringMap.t (* Keys are table names, Rows are table rows*)
 
+type interp =
+  | NoHoles
+  | OnlyHoles of Hint.t list
+  | WithHoles of (string * int) list * Hint.t list
+
+
 let empty = StringMap.empty
 
 let update (inst : t) (e : Edit.t) =
@@ -63,7 +69,7 @@ let tbl_hole encode_tag keys tbl row_hole act_hole i actSize (hs : Hint.t list) 
   %&% (act_hole %=% mkVInt (i,actSize))
 
 let rec apply ?no_miss:(no_miss = false)
-          (tag : [< `NoHoles | `OnlyHoles of Hint.t list | `WithHoles of (string * int) list * Hint.t list]) encode_tag ?cnt:(cnt=0)
+          (tag : interp) encode_tag ?cnt:(cnt=0)
           (inst : t)
           (prog : cmd)
         : (cmd * int) =
@@ -92,14 +98,14 @@ let rec apply ?no_miss:(no_miss = false)
      let rows = StringMap.find_multi inst t.name in
      let selects =
        match tag with
-       | `OnlyHoles _ -> []
+       | OnlyHoles _ -> []
        | _ ->
           List.foldi rows ~init:[]
             ~f:(fun i acc (matches, data, action) ->
               let prev_tst = False in
               let tst = Match.list_to_test t.keys matches
                         %&% match tag with
-                            | `WithHoles (ds,_) ->
+                            | WithHoles (ds,_) ->
                                (* delete_hole i tbl %=% mkVInt(0,1) *)
                                if List.exists ds ~f:((=) (t.name, i))
                                then delete_hole i t.name %=% mkVInt(0,1)
@@ -118,8 +124,8 @@ let rec apply ?no_miss:(no_miss = false)
      in
      let holes =
        match tag with
-       | `NoHoles -> []
-       | `WithHoles (_,hs) | `OnlyHoles hs ->
+       | NoHoles -> []
+       | WithHoles (_,hs) | OnlyHoles hs ->
           List.mapi t.actions
             ~f:(fun i (params, act) ->
               (tbl_hole encode_tag t.keys t.name row_hole act_hole i actSize hs
@@ -129,7 +135,7 @@ let rec apply ?no_miss:(no_miss = false)
      in
      let dflt_row =
        let cond = match tag with
-         | `OnlyHoles _ ->
+         | OnlyHoles _ ->
             if no_miss
             then False
             else List.foldi rows ~init:(True)
@@ -138,7 +144,7 @@ let rec apply ?no_miss:(no_miss = false)
                        if act >= List.length t.actions then True else
                          !%(Match.list_to_test t.keys ms
                             %&% match tag with
-                                | `WithHoles (ds,_) when List.exists ds ~f:((=) (t.name, i))
+                                | WithHoles (ds,_) when List.exists ds ~f:((=) (t.name, i))
                                   -> delete_hole i t.name %=% mkVInt(0,1)
                                 | _ -> True))
          | _ -> True
@@ -146,7 +152,7 @@ let rec apply ?no_miss:(no_miss = false)
        [(cond, t.default)]
      in
      let mk_select = match tag with
-       | `OnlyHoles _ -> mkPartial
+       | OnlyHoles _ -> mkPartial
        | _ -> mkOrdered
      in
      let tbl_select = selects @ holes @ dflt_row |> mk_select in

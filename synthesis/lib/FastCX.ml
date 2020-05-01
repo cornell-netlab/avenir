@@ -34,7 +34,7 @@ let hits_pred data prog inst edits e : test =
     let (ks, _, _) = get_schema_of_table t prog |> Option.value_exn in
     let phi = Match.list_to_test ks ms in
     let prefix = truncated t prog |> Option.value_exn in
-    let (pref_gcl,_) = Instance.(apply `NoHoles `Exact (update_list inst edits) prefix) in
+    let (pref_gcl,_) = Instance.(apply NoHoles `Exact (update_list inst edits) prefix) in
     wp pref_gcl phi
   | Edit.Del (_, _) -> failwith "unimplemented"
 

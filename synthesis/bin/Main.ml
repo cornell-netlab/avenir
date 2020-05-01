@@ -68,7 +68,7 @@ module Solver = struct
          begin
            let synth_inst = Instance.(update_list empty phys_edits) in
            Printf.printf "Synthesized Program (%d edits made)\n%!" (List.length phys_edits);
-           Printf.printf "%s\n%!" (Instance.apply `NoHoles `Exact synth_inst phys |> fst |> Ast.string_of_cmd)
+           Printf.printf "%s\n%!" (Instance.(apply NoHoles `Exact synth_inst phys) |> fst |> Ast.string_of_cmd)
          end
        else ()
 end

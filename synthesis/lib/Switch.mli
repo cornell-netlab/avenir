@@ -15,7 +15,7 @@ val edits : t -> Edit.t list
 
 val edited_instance : t -> Instance.t
 val to_gcl : t -> cmd
-val to_gcl_holes : t -> [`NoHoles | `OnlyHoles of Hint.t list | `WithHoles of (string * int) list * Hint.t list] -> [< `Exact | `Range] -> cmd
+val to_gcl_holes : t -> Instance.interp -> [ `Exact | `Mask] -> cmd
 
 val to_string : t -> string
 

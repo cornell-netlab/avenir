@@ -41,7 +41,7 @@ module Match = struct
   let holes encode_tag x sz =
     let h = Printf.sprintf "?%s" x in
     match encode_tag with
-    | `Range ->
+    | `Mask ->
        let hmask = Printf.sprintf "%s_mask" h in
        mkMask (Var(x, sz)) (Hole (hmask,sz)) %=% Hole (h, sz)
     | `Exact -> Var(x, sz) %=% Hole (h,sz)
@@ -180,7 +180,9 @@ module Row = struct
                 begin match fixup_val match_model (Hole("?"^v, sz)),
                             fixup_val match_model (Hole("?"^v^"_mask",sz))
                 with
-                | Hole _,_ -> None
+                | Hole _,_ ->
+                   Printf.sprintf "couldn't find ?%s in model %s" v (string_of_map match_model)
+                   |> failwith
                 | Value v,Hole _ ->
                    Some (ks @ [Match.Exact v])
                 | Value v, Value m ->

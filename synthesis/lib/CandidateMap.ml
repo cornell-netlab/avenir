@@ -7,7 +7,7 @@ open Tables
 type trace = (Row.action_data * int) StringMap.t
 
 
-let rec compute_cand_for_trace (tag : [`Exact | `Range]) (line: cmd) (pinst : Instance.t) (trace : trace) : cmd =
+let rec compute_cand_for_trace (tag : [`Exact | `Mask]) (line: cmd) (pinst : Instance.t) (trace : trace) : cmd =
   match line with
   | Skip 
     | Assert _

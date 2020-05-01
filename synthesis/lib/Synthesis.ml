@@ -86,7 +86,7 @@ let get_one_model_edit
   let (pkt',_), wide, trace, actions = trace_eval_inst ~wide:StringMap.empty (Problem.log problem) linst_edited (pkt,None) in
   let deletions = compute_deletions pkt problem in
   let st = Time.now () in
-  let cands = CandidateMap.apply_hints (`WithHoles (deletions, [])) `Range hints actions (Problem.phys problem) pinst_edited in
+  let cands = CandidateMap.apply_hints (Instance.WithHoles (deletions, [])) `Mask hints actions (Problem.phys problem) pinst_edited in
   let log_wp = wp trace True in
   let wp_phys_paths =
     List.fold cands ~init:[] ~f:(fun acc (path, acts) ->
@@ -155,7 +155,7 @@ let get_one_model_edit_no_widening
    * in *)
   if params.debug then Printf.printf "Computing candidates\n%!";
   let cst = Time.now () in
-  let cands = CandidateMap.apply_hints (`WithHoles (deletions,[])) `Exact hints actions (Problem.phys problem) phys_edited in
+  let cands = CandidateMap.apply_hints (Instance.WithHoles (deletions,[])) `Exact hints actions (Problem.phys problem) phys_edited in
   ProfData.update_time !data.cand_time cst;
   let () =
     if params.debug then begin
@@ -172,7 +172,7 @@ let get_one_model_edit_no_widening
                     then
                       if params.monotonic then
                         Packet.to_test ~fvs:(Problem.fvs problem) pkt'
-                        |> wp_paths ~no_negations:false params path
+                        |> wp_paths ~no_negations:false path
                         |> List.filter_map ~f:(fun (_, cond) ->
                                if has_hole_test cond then Some cond else None)
                       else
@@ -232,19 +232,20 @@ let symb_wp ?fvs:(fvs=[]) cmd =
 
 let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t)
   : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
+  let st_mk_cond = Time.now () in
   let log = Problem.log_gcl_program problem in
   let phys = Problem.phys_gcl_program problem in
-  if params.debug then
-    Printf.printf "-------------------------------------------\n%s \n???====?=====????\n %s\n-------------------------------------\n%!"
-      (string_of_cmd log) (string_of_cmd phys);
-  let st_mk_cond = Time.now () in
-  let condition = equivalent Problem.(fvs problem) log phys in
+  (* if params.debug then
+   *   Printf.printf "-------------------------------------------\n%s \n???====?=====????\n %s\n-------------------------------------\n%!"
+   *     (string_of_cmd log) (string_of_cmd phys); *)
   ProfData.update_time !data.make_vc_time st_mk_cond;
+  let condition = equivalent Problem.(fvs problem) log phys in
   let cv_st = Time.now () in
   let model_opt, z3time = check_valid params condition in
   ProfData.update_time !data.check_valid_time cv_st;
   ProfData.update_time_val !data.eq_time z3time;
   !data.tree_sizes :=  num_nodes_in_test condition :: !(!data.tree_sizes);
+  let st = Time.now () in
   let pkt_opt = match model_opt with
     | None  -> if params.debug then Printf.printf "++++++++++valid+++++++++++++\n%!";
       `Yes
@@ -260,6 +261,7 @@ let implements (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
            (Packet.string__packet out_pkt')
        ; `NoAndCE (in_pkt', out_pkt')
   in
+  ProfData.update_time !data.normalize_packet_time st;
   pkt_opt
 
 
@@ -389,16 +391,13 @@ let complete_model (holes : (string * size) list) (model : value StringMap.t) : 
    *     StringMap.set acc ~key ~data
    *   ) *)
 
-
-
-
 let get_model (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (value StringMap.t option * Hint.t list) =
   let (in_pkt, out_pkt) = Problem.cexs problem |> List.hd_exn in
   let st = Time.now () in
   let deletions = [] in
   let hints = Hint.construct (Problem.log problem) (Problem.phys problem) (Problem.log_edits problem |> List.hd_exn) in
-  let hole_protocol = `WithHoles (deletions, hints) in
-  let hole_type =  if params.widening then `Range else `Exact in
+  let hole_protocol = Instance.WithHoles (deletions, hints) in
+  let hole_type =  if params.widening then `Mask else `Exact in
   let phys = Problem.phys_gcl_holes problem hole_protocol hole_type  in
   ProfData.update_time !data.model_holes_time st;
   let st = Time.now () in
@@ -407,58 +406,55 @@ let get_model (params : Parameters.t) (data : ProfData.t ref) (problem : Problem
   (* let fvs = problem.fvs in *)
   let in_pkt_form, out_pkt_form = Packet.to_test in_pkt ~fvs, Packet.to_test out_pkt ~fvs in
   let wp_list =
-    if params.monotonic then
-      wp_paths ~no_negations:true {params with monotonic = false} phys out_pkt_form |> List.map ~f:snd
+    (if params.monotonic then
+      wp_paths ~no_negations:true phys out_pkt_form
     else
-      [wp phys out_pkt_form]
+      []) @  [Skip, wp phys out_pkt_form]
   in
   ProfData.update_time !data.search_wp_time st;
   let model =
     List.find_map wp_list
-      ~f:(fun in_pkt_wp ->
-        if in_pkt_wp = False then None else
+      ~f:(fun (_,in_pkt_wp) ->
+        if in_pkt_wp = False || not (has_hole_test in_pkt_wp) then None else
         let st = Time.now() in
+        (* Printf.printf "\n\nWP: %s\n\n%!" (string_of_test in_pkt_wp); *)
         let spec = in_pkt_form %=>% in_pkt_wp in
         let wf_holes = List.fold (Problem.phys problem |> get_tables_actsizes) ~init:True
                          ~f:(fun acc (tbl,num_acts) ->
                            acc %&%
                              (Hole("?ActIn"^tbl,max (log2 num_acts) 1)
-                              %<=% mkVInt(num_acts-1,max (log2 num_acts) 1)))
-                       %&%
-                         ( if params.widening then
-                             List.fold (holes_of_test in_pkt_wp)  ~init:True
-                               ~f:(fun acc (hole, sz) ->
-                                 match String.chop_suffix hole ~suffix:"_mask" with
-                                 | Some hole_val ->
-                                    Hole(hole_val,sz) %=% (mkMask (Hole(hole_val,sz)) (Hole(hole, sz)))
-                                    %&% ((Hole(hole,sz) %=% mkVInt(0, sz))
-                                         %+% (Hole(hole,sz) %=% Value(Int(Bigint.((pow (of_int 2) (of_int sz)) - one), sz))))
-                                | None -> acc
+                              %<=% mkVInt(num_acts-1,max (log2 num_acts) 1))) in
+        let widening_constraint =
+          if params.widening then
+            List.fold (holes_of_test in_pkt_wp)  ~init:True
+              ~f:(fun acc (hole, sz) ->
+                match String.chop_suffix hole ~suffix:"_mask" with
+                | Some hole_val ->
+                   Hole(hole_val,sz) %=% (mkMask (Hole(hole_val,sz)) (Hole(hole, sz)))
+                   %&% ((Hole(hole,sz) %=% mkVInt(0, sz))
+                        %+% (Hole(hole,sz) %=% Value(Int(Bigint.((pow (of_int 2) (of_int sz)) - one), sz))))
+                | None -> acc
 
-                               )
-                           else True
-                         )
-
+              )
+          else True
         in
-        let condition =
-          (wf_holes %&% Problem.model_space problem) %&% spec
+        let pre_condition =
+          (Problem.model_space problem) %&% wf_holes %&% spec
           |> Injection.optimization params problem
         in
+        let wf_condition = wf_holes %&% widening_constraint %&% pre_condition in
         ProfData.update_time !data.model_cond_time st;
         if params.debug || params.interactive then
                     Printf.printf "phys to check\n--\nInput:%s\n--\n%s\n--\nOutput:%s\n--\nWP:\n%s--\n%!"
                       (Packet.string__packet in_pkt)
                       (string_of_cmd phys)
                       (Packet.string__packet out_pkt)
-                      ("OMITTED" (*string_of_test spec*));
-        if condition = False || not (has_hole_test spec)
-        then None
-        else
-          let model, dur = check_sat params condition in
-          ProfData.update_time_val !data.model_z3_time dur;
-          ProfData.incr !data.model_z3_calls;
-          !data.tree_sizes := num_nodes_in_test condition :: !(!data.tree_sizes) ;
-          Option.(model >>| complete_model (holes_of_test condition))
+                      (string_of_test spec);
+        let model, dur = check_sat params wf_condition in
+        ProfData.update_time_val !data.model_z3_time dur;
+        ProfData.incr !data.model_z3_calls;
+        !data.tree_sizes := num_nodes_in_test wf_condition :: !(!data.tree_sizes) ;
+        Option.(model >>| complete_model (holes_of_test wf_condition))
       )
   in
   if params.interactive then begin
@@ -493,7 +489,10 @@ let minimize_model (model : value StringMap.t) (phys : cmd) : value StringMap.t 
 let get_cex (params : Parameters.t) (data :  ProfData.t ref) (problem : Problem.t)
     : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
   if params.fastcx then begin
-      match FastCX.get_cex params data problem with
+      let st = Time.now () in
+      let cex = FastCX.get_cex params data problem in
+      ProfData.update_time !data.fast_cex_time st;
+      match cex with
       | `Yes ->
          if params.debug then
            Printf.printf "New rule is not reachable\n%!";
@@ -501,18 +500,27 @@ let get_cex (params : Parameters.t) (data :  ProfData.t ref) (problem : Problem.
       | `NotFound ->
          if params.debug then
            Printf.printf "No cex to be found rapidly, check full equivalence\n%!";
-         implements params data problem
+         let st = Time.now () in
+         let res = implements params data problem in
+         ProfData.update_time !data.impl_time st;
+         res
       | `NoAndCE counter ->
          `NoAndCE counter
     end
   else
     if params.do_slice && not( List.is_empty (Problem.phys_edits problem)) then
-      match implements params data (Problem.slice problem) with
+      let st = Time.now () in
+      let res = implements params data (Problem.slice problem) in
+      ProfData.update_time !data.impl_time st;
+      match res with
       | `NoAndCE counter -> `NoAndCE counter
       | `Yes when slice_conclusive params data problem -> `Yes
       | `Yes -> implements params data problem
     else
-      implements params data problem
+      let st = Time.now () in
+      let res = implements params data problem in
+      ProfData.update_time !data.impl_time st;
+      res
       (* let hits_phys_edits =
        *   FastCX.hits_list_pred
        *     data
@@ -531,9 +539,9 @@ let get_cex (params : Parameters.t) (data :  ProfData.t ref) (problem : Problem.
 
 
 let rec cegis_math params (data : ProfData.t ref) (problem : Problem.t) =
-  let st = Time.now () in
+  (* let st = Time.now () in *)
   let cex = get_cex params data problem in
-  ProfData.update_time !data.impl_time st;
+  (* ProfData.update_time !data.impl_time st; *)
   match cex with
   | `Yes ->
      if params.interactive then begin
@@ -562,53 +570,61 @@ and solve_math (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
      || (check_sat params (Problem.model_space problem) |> fst |> Option.is_some)
   then begin
       let st = Time.now () in
-      let model_opt = get_model params data problem in
-      ProfData.update_time !data.model_search_time st;
-      match model_opt with
-      | None,_ ->
-         if params.debug || params.interactive then
-           Printf.printf "No model could be found\n%!";
-         if params.interactive then
-           ignore(Stdio.In_channel.(input_char stdin) : char option);
-         if params.injection then
-           solve_math {params with injection = false} data problem
-         else
-           None
-      | Some model, hints ->
-         let model = minimize_model model (Problem.phys problem) in
-         if List.exists (Problem.attempts problem) ~f:(StringMap.equal veq model)
-         then begin
-             Printf.printf "ALREADY EXPLORED\n %s \n%!" (string_of_map model);
-             failwith ""
-           end
-         else
-           let problem = Problem.add_attempt problem model in
-           let () = if params.debug then Printf.printf "=======================\n      ATTEMPTS:\n======================-%s\n=======================\n   Current Attempt\n=======================\n%s\n=======================\n%!"
-                     (Problem.attempts_to_string problem)
-                     (string_of_map model); in
-           (* assert (Problem.num_attempts problem <= 1); *)
-           let es =
-             model
-             |> Hint.add_to_model (Problem.phys problem) hints
-             |> Edit.extract (Problem.phys problem) in
-           if params.debug then begin
-               Printf.printf "***Edits***\n%!";
-               List.iter es ~f:(fun e -> Printf.printf "%s\n%!" (Edit.to_string e));
-               Printf.printf "***     ***\n"
+      let searcher = ModelFinder.make_searcher params data problem in
+      let rec loop searcher =
+        let model_opt = ModelFinder.search params data problem searcher in
+        (*get_model params data problem in*)
+        ProfData.update_time !data.model_search_time st;
+        match model_opt with
+        | None ->
+           if params.debug || params.interactive then
+             Printf.printf "No model could be found\n%!";
+           if params.interactive then
+             ignore(Stdio.In_channel.(input_char stdin) : char option);
+           if params.injection then
+             solve_math {params with injection = false} data problem
+           else
+             None
+        | Some (model, searcher) ->
+           let model = minimize_model model (Problem.phys problem) in
+           if List.exists (Problem.attempts problem) ~f:(StringMap.equal veq model)
+           then begin
+               Printf.printf "ALREADY EXPLORED\n %s \n%!" (string_of_map model);
+               failwith ""
+             end
+           else
+             let () = if params.debug then Printf.printf "=======================\n PREVIOUS ATTEMPTS:\n=====================%s\n=======================\n   Current Attempt\n=======================\n%s\n=======================\n%!"
+                                             (Problem.attempts_to_string problem)
+                                             (string_of_map model); in
+             let problem = Problem.add_attempt problem model in
+             (* assert (Problem.num_attempts problem <= 1); *)
+             let es =
+               model
+               (* |> Hint.add_to_model (Problem.phys problem) hints *)
+               |> Edit.extract (Problem.phys problem) in
+             if params.debug then begin
+                 Printf.printf "***Edits***\n%!";
+                 List.iter es ~f:(fun e -> Printf.printf "%s\n%!" (Edit.to_string e));
+                 Printf.printf "***     ***\n"
              end;
-           if List.length es = 0 then None else
-           match
-             cegis_math params data (Problem.(append_phys_edits problem es |> reset_model_space |> reset_attempts))
-           with
-           | None ->
-              let model_space = Problem.model_space problem %&% negate_model model in
-              if params.debug || params.interactive then
-                Printf.printf "Backtracking with\n%s\nadded to\n%s\n%!" (string_of_test (negate_model model)) (string_of_test (Problem.model_space problem));
-              if params.interactive then
-                ignore(Stdio.In_channel.(input_char stdin) : char option);
-            ProfData.incr !data.num_backtracks;
-            solve_math params data (Problem.set_model_space problem model_space)
-           | Some es -> Some es
+             if List.length es = 0 then None else
+               match
+                 cegis_math params data (Problem.(append_phys_edits problem es |> reset_model_space |> reset_attempts))
+               with
+               | None -> begin
+                   match loop searcher with
+                   | None ->
+                      let model_space = Problem.model_space problem %&% negate_model model in
+                      if params.debug || params.interactive then
+                        Printf.printf "Backtracking with\n%s\nadded to\n%s\n%!" (string_of_test (negate_model model)) (string_of_test (Problem.model_space problem));
+                      if params.interactive then
+                        ignore(Stdio.In_channel.(input_char stdin) : char option);
+                      ProfData.incr !data.num_backtracks;
+                      solve_math params data (Problem.set_model_space problem model_space)
+                   | Some es -> Some es
+                 end
+               | Some es -> Some es in
+      loop searcher
     end
   else begin
       Printf.printf "Exhausted the Space\n%!";

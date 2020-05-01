@@ -52,7 +52,7 @@ let rec mk_pipeline varsize =
   if n = 0 then [] else
     (tbl n
     , [("k_" ^tbl n, varsize)]
-    , [(["v",varsize],("x_"^tbl n) %<-% Var("v",varsize))]
+    , [([Printf.sprintf "v%d" n,varsize],("x_"^tbl n) %<-% Var(Printf.sprintf "v%d" n,varsize))]
     , ("x_"^tbl n) %<-% mkVInt (0,varsize)
     ) :: mk_pipeline varsize (n-1)
 

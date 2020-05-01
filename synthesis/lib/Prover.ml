@@ -7,7 +7,7 @@ open Z3
 let debug term = let res = Smtlib.term_to_sexp term |> Smtlib.sexp_to_string
   in Printf.printf "TERM: %s\n%!" res
 
-let test_str test = let res = Ast.sexp_string_of_test test in Printf.printf "TEST: %s"res
+let test_str test = let res = Ast.string_of_test test in Printf.printf "TEST: %s\n%!"res
 
 let expr_str test = let res = Ast.string_of_expr test in Printf.printf "EXPR: %s"res
 
@@ -87,7 +87,10 @@ let vars_to_term vars d = let open Smtlib in if d
         List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i)))
   else List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i))
 
-let prover = Smtlib.make_solver "/usr/bin/z3"
+let sat_prover = Smtlib.make_solver "/usr/bin/z3"
+let valid_prover = let s = Smtlib.make_solver "/usr/local/bin/boolector" in
+                   Printf.printf "Solver successfully created\n%!";
+                   s
 
 let check_sat (params : Parameters.t) (test : Ast.test) =
   let open Smtlib in
@@ -100,33 +103,43 @@ let check_sat (params : Parameters.t) (test : Ast.test) =
   let () = List.iter holes
              ~f:(fun (id, i) ->
                (* Printf.printf "DECLARING %s\n%!" id; *)
-               declare_const prover (Id id) (BitVecSort i)) in
+               declare_const sat_prover (Id id) (BitVecSort i)) in
   let term = (test_to_term test `Sat params.debug) in
-  let response = assert_ prover (forall_ vars term);
-    check_sat_using (UFBV : tactic) prover in
+  let response = assert_ sat_prover (forall_ vars term);
+    check_sat_using (UFBV : tactic) sat_prover in
   let dur = Time.(diff (now()) st) in
   let model =
     if response = Sat then
-      Some (model_to_packet (get_model prover))
+      Some (model_to_packet (get_model sat_prover))
     else None
-  in reset prover; (model, dur)
+  in reset sat_prover; (model, dur)
 
 let check_valid (params : Parameters.t) (test : Ast.test) =
   let open Smtlib in
-  (* Printf.printf "Checking validity for test of size %d\n%!" (num_nodes_in_test test); *)
-  let vars = free_vars_of_test test |> List.dedup_and_sort
-               ~compare:(fun (idx, x) (idy, y) -> Stdlib.compare idx idy) in
-  let () = List.iter vars
-      ~f:(fun (id, i) -> declare_const prover (Id id) (BitVecSort i)) in
+  Printf.printf "Checking validity for test of size %d\n%!" (num_nodes_in_test test);
+  let vars = free_vars_of_test test
+             |> List.dedup_and_sort
+                  ~compare:(fun (idx, x) (idy, y) -> Stdlib.compare idx idy) in
+  Printf.printf "compute vars\n%!";
+  let () =
+    push valid_prover;
+    Printf.printf "Pushed\n%!";
+    List.iter vars
+      ~f:(fun (id, i) -> declare_const valid_prover (Id id) (BitVecSort i)) in
+  Printf.printf "Inserted\n%!";
   let st = Time.now() in
-  let response = assert_ prover (not_ (test_to_term test `Valid params.debug));
-    check_sat_using (QFBV : tactic) prover in
+  let response =
+    assert_ valid_prover (not_ (test_to_term test `Valid params.debug));
+    check_sat valid_prover in
   let dur = Time.(diff (now()) st) in
+  Printf.printf "Solved\n%!";
   let model =
-    if response = Sat then
-      Some (model_to_packet (get_model prover))
-    else None
-  in reset prover; (model, dur)
+    if response = Sat
+    then Some (model_to_packet (get_model valid_prover))
+    else None in
+  Printf.printf "Model got\n%!";
+  pop valid_prover;
+  (model, dur)
 
 let check_min (params : Parameters.t) (test : Ast.test) =
   let open Smtlib in
@@ -164,14 +177,14 @@ let check_min (params : Parameters.t) (test : Ast.test) =
   let ranges = List.map constraints
       ~f:(fun e -> expr_to_term e `Sat params.debug) in
   let () = List.iter holes
-      ~f:(fun (id, i) -> declare_const prover (Id id) (BitVecSort i)) in
+      ~f:(fun (id, i) -> declare_const sat_prover (Id id) (BitVecSort i)) in
   let term = (test_to_term test `Sat params.debug) in
-  let response = assert_ prover (forall_ vars term);
-    List.iter ranges ~f:(fun t -> minimize prover t);
-    check_sat_using (UFBV : tactic) prover in
+  let response = assert_ sat_prover (forall_ vars term);
+    List.iter ranges ~f:(fun t -> minimize sat_prover t);
+    check_sat_using (UFBV : tactic) sat_prover in
   let dur = Time.(diff (now()) st) in
   let model =
     if response = Sat then
-      Some (model_to_packet (get_model prover))
+      Some (model_to_packet (get_model sat_prover))
     else None
-  in reset prover; (model, dur)
+  in reset sat_prover; (model, dur)
