@@ -179,20 +179,20 @@ and header_stack_name (name:Expression.t) (size:Expression.t) =
     | _ -> failwith "header_stack_name"
 
 let validity_bit_no_removal members =
-  string_of_memberlist members ^ "_valid()"
+  string_of_memberlist members ^ "_valid"
 
 let validity_bit members =
   validity_bit_no_removal (List.take members (List.length members - 1))
 
 let hit_bit members =
-  string_of_memberlist members ^ "_hit()"
+  string_of_memberlist members ^ "_hit"
 
 let return_bit i =
   "return" ^ string_of_int i
 
 let exit_bit = "exit"
 
-let action_run_suffix = "_action_run()"
+let action_run_suffix = "_action_run"
 
 let action_run_field members =
   string_of_memberlist members ^ action_run_suffix
@@ -796,7 +796,7 @@ let preprocess include_dirs p4file =
        ["-undef"; "-nostdinc"; "-E"; "-x"; "c"; p4file])) in
   let in_chan = Unix.open_process_in cmd in
   let str = In_channel.input_all in_chan in
-  let _ : Core.Unix.Exit_or_signal.t = try Unix.close_process_in in_chan with _ -> failwith "bad close" in
+  (*let _ : Core.Unix.Exit_or_signal.t = try Unix.close_process_in in_chan with _ -> failwith "bad close" in*)
   str
 
 let parse_p4 include_dirs p4_file verbose =
