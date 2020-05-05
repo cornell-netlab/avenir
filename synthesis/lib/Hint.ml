@@ -11,7 +11,7 @@ type t = {table:string;
 let well_formed (hint : t) : bool =
   match hint.match_opt, hint.act_id_opt, hint.act_data_opt with
   | None  , None  , None   -> false (*No point in an empty hint*)
-  | Some _, None  , None   -> true  (*An action-only hint is just fine too!*)
+  | Some _, None  , None   -> true  (*An key-only hint is just fine!*)
   | _     , Some _, _      -> true  (*Action Id without data is okay*)
   | _     , None  , Some _ -> false (*Action Data without id is bad*)
 
@@ -54,12 +54,17 @@ let encode_match keys h encode_tag =
   | Some matches ->
      List.fold2 keys matches ~init:True
        ~f:(fun acc (x,sz) match_opt ->
-         match match_opt with
-         | None -> Match.holes encode_tag x sz
-         | Some m ->
-            Match.to_test (x,sz) m
+         acc %&%
+           (match match_opt with
+            | None ->
+               (* Printf.printf "Encoding hole for %s\n%!"x; *)
+               let tst = Match.holes encode_tag x sz in
+               (* Printf.printf " == %s\n%!" (string_of_test tst); *)
+               tst
+            | Some m ->
+               Match.to_test (x,sz) m)
        )
-  |> or_unequal_lengths_to_option
+     |> or_unequal_lengths_to_option
 
 
 let added_to_row (table : string) (m : value StringMap.t)  : bool =

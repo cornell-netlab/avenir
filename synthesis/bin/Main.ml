@@ -42,33 +42,27 @@ module Solver = struct
     let log = parse_file logical in
     let phys = parse_file real in
     let log_edits = Runtime.parse logical_edits in
-    let phys_edits =
-      Synthesis.cegis_math
-        Parameters.({widening;
-                     do_slice;
-                     gas;
-                     debug;
-                     monotonic;
-                     injection;
-                     interactive;
-                     fastcx})
-        (ProfData.zero ())
-        (Problem.make ~log ~phys
-           ~log_inst:Motley.Instance.empty
-           ~phys_inst:Motley.Instance.empty
-           ~log_edits
-           ~fvs:(List.dedup_and_sort ~compare:Stdlib.compare
-                   Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)))
-    in
-    match phys_edits with
-    | None -> Printf.printf "Failed\n%!"
-    | Some phys_edits ->
+    let fvs = List.dedup_and_sort ~compare:Stdlib.compare
+                Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys) in
+    let params = Parameters.({widening;
+                              do_slice;
+                              gas;
+                              debug;
+                              monotonic;
+                              injection;
+                               interactive;
+                               fastcx}) in
+    let problem =
+      let open Motley.Instance in
+      Problem.make ~log ~phys ~log_inst:empty ~phys_inst:empty ~log_edits ~fvs in
+    match Synthesis.cegis_math_sequence params (ProfData.zero ()) problem with
+    | None -> failwith "failed"
+    | Some (solution, phys_edits) ->
        if print_res
        then
          begin
-           let synth_inst = Instance.(update_list empty phys_edits) in
            Printf.printf "Synthesized Program (%d edits made)\n%!" (List.length phys_edits);
-           Printf.printf "%s\n%!" (Instance.(apply NoHoles `Exact synth_inst phys) |> fst |> Ast.string_of_cmd)
+           Printf.printf "%s\n%!" (Problem.phys_gcl_program solution |> Ast.string_of_cmd)
          end
        else ()
 end
@@ -111,7 +105,6 @@ module RunTest = struct
 
 
   let run test_file widening do_slice monotonic injection gas fastcx () =
-    Printf.printf "Failed Tests:\n";
     In_channel.read_lines test_file
     |> List.iter
          ~f:(fun line ->
@@ -128,7 +121,7 @@ module RunTest = struct
                                         injection;
                                         debug = false;
                                         interactive = false
-                                        }) in
+                           }) in
               let problem = Problem.make ~log ~phys ~log_edits
                               ~log_inst:Instance.empty
                               ~phys_inst:Instance.empty
@@ -137,12 +130,13 @@ module RunTest = struct
               let data = ProfData.zero () in
               begin
                 try
-                     match Synthesis.cegis_math params data problem with
-                     | Some _  -> ()
+                     match Synthesis.cegis_math_sequence params data problem with
+                     | Some _  ->
+                        Printf.printf " ✔✔ %s\n%!" line
                      | None ->
-                        Printf.printf " ✗✗ %s\n" line
+                        Printf.printf " ✗✗ %s\n%!" line
                 with _ ->
-                  Printf.printf " ✗✗  %s |---> Threw an exception\n" line
+                  Printf.printf " ✗✗  %s |---> Threw an exception\n%!" line
 
 
               end

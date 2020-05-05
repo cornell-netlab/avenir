@@ -38,11 +38,15 @@ val replace_phys_edits : t -> Edit.t list -> t
 val delete_phys_edits : t -> t
 val apply_edits_to_log : t -> Edit.t list -> t
 val apply_edits_to_phys : t -> Edit.t list -> t
+val commit_edits_log : t -> t
+val commit_edits_phys : t -> t
 
 val reset_attempts : t -> t
 val add_attempt : t -> value StringMap.t -> t
 val attempts_to_string : t -> string
 val num_attempts : t -> int
+val seen_attempt : t -> value StringMap.t -> bool
+
 
 val add_cex : t -> Packet.t * Packet.t -> t
 

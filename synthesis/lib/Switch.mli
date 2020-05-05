@@ -27,4 +27,6 @@ val append_edits : t -> Edit.t list -> t
 val update_inst : t -> Edit.t list -> t
 val replace_inst : t -> Instance.t -> t
 
+val commit_edits : t -> t
+
 val replace_pipeline : t -> cmd -> t

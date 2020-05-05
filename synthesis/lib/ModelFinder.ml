@@ -49,11 +49,19 @@ let make_searcher (params : Parameters.t) (data : ProfData.t ref) (problem : Pro
   
 
 
+let compute_deletions pkt (problem : Problem.t) =
+  let open Problem in
+  let phys_inst = Problem.phys_inst problem in
+  StringMap.fold phys_inst ~init:[]
+    ~f:(fun ~key:table_name ~data:rows dels ->
+      dels @ List.mapi rows ~f:(fun i _ -> (table_name,i))
+    )
+
 
 let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) (opts : opts)  =
   let (in_pkt, out_pkt) = Problem.cexs problem |> List.hd_exn in
   let st = Time.now () in
-  let deletions = [] in
+  let deletions = compute_deletions in_pkt problem in
   let hints = if opts.hints then
                 let open Problem in
                 Hint.construct (log problem) (phys problem) (log_edits problem |> List.hd_exn)
@@ -132,5 +140,6 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
   | (test,hints)::search_space, schedule ->
      let model_opt, _ = check_sat params test in
      match model_opt with
-     | Some model -> Some (Hint.add_to_model (Problem.phys problem) hints model,t)
-     | None -> search params data problem {schedule; search_space}
+     | Some model when not (Problem.seen_attempt problem model)
+       -> Some (Hint.add_to_model (Problem.phys problem) hints model,t)
+     | _ -> search params data problem {schedule; search_space}

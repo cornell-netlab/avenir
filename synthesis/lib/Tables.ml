@@ -269,10 +269,21 @@ module Edit = struct
     | Del (s, row) -> None
 
   let extract phys (m : value StringMap.t)  : t list =
-    StringMap.fold m ~init:([],[]) (*Deletions, additions*)
+   let dels, adds =  StringMap.fold m ~init:([],[]) (*Deletions, additions*)
       ~f:(fun ~key ~data acc ->
         match String.chop_prefix key ~prefix:"?AddRowTo" with
-        | None -> acc
+        | None -> begin
+            match String.chop_prefix key ~prefix:"?DeleteRow" with
+            | Some idx_tbl when data |> get_int = Bigint.one -> begin
+               match String.substr_index idx_tbl ~pattern:"In" with
+               | None -> failwith "malformed deletion hole"
+               | Some i ->
+                    let row_idx = String.prefix idx_tbl i |> int_of_string in
+                    let table_name = String.drop_prefix idx_tbl (i + 2)  in
+                    (Del(table_name, row_idx) :: fst acc, snd acc)
+              end
+            |  _ -> acc
+          end
         | Some tbl ->
            if data |> get_int = Bigint.one then
              let actin_vname =  (Printf.sprintf "?ActIn%s" tbl)  in
@@ -288,7 +299,12 @@ module Edit = struct
              | Some row ->
                 (fst acc, Add (tbl, row) :: snd acc)
            else acc)
-    |> uncurry (@)
+   in
+   List.dedup_and_sort dels  ~compare:(fun i j ->
+       match i, j with
+       | Del(_,ix), Del(_, jx) -> compare jx ix
+       | _, _ -> failwith "dels list contains an add")
+   @ adds
 
 end
 

@@ -61,14 +61,18 @@ let rec test_to_term_help test styp : Smtlib.term =
 
 let rec model_to_packet (lst : (Smtlib.identifier * Smtlib.term) list) =
   let name_vals : (string * value) list =
-    (List.map lst ~f:(fun (Id id, x) -> (match x with
+    (List.map lst ~f:(fun (Id id, x) ->
+         let id = match String.index id '@' with
+           | None -> id
+           | Some index -> String.drop_prefix id index in
+         match x with
          | Smtlib.BitVec (n, w) -> let value =
                                      Int (Bigint.of_int n, w) in id, value
          | Smtlib.BigBitVec (n, w) -> let value =
-                                     Int (n, w) in id, value
+                                        Int (n, w) in id, value
          | Smtlib.Int i -> let value =
                              Int (Bigint.of_int i, Int.max_value) in id, value
-         | _ -> raise (Failure "not a supported model"))))
+         | _ -> raise (Failure "not a supported model")))
   in StringMap.of_alist_exn name_vals
 
 let toZ3String test = test_to_term_help test `Sat
@@ -82,15 +86,15 @@ let test_to_term test styp d = if d
   then (test_str test; let res = test_to_term_help test styp in debug res; res)
   else test_to_term_help test styp
 
-let vars_to_term vars d = let open Smtlib in if d
-  then (List.iter vars ~f:(fun (id, i) -> Printf.printf "VAR: %s %d\n%!" id i);
-        List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i)))
-  else List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i))
+let vars_to_term vars d =
+  let open Smtlib in
+  (* if d
+   * then (List.iter vars ~f:(fun (id, i) -> Printf.printf "VAR: %s %d\n%!" id i);
+   *       List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i)))
+   * else *) List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i))
 
 let sat_prover = Smtlib.make_solver "/usr/bin/z3"
-let valid_prover = let s = Smtlib.make_solver "/usr/local/bin/boolector" in
-                   Printf.printf "Solver successfully created\n%!";
-                   s
+let valid_prover = Smtlib.make_solver (*"/usr/local/bin/boolector"*) "/usr/bin/z3"
 
 let check_sat (params : Parameters.t) (test : Ast.test) =
   let open Smtlib in
@@ -116,28 +120,23 @@ let check_sat (params : Parameters.t) (test : Ast.test) =
 
 let check_valid (params : Parameters.t) (test : Ast.test) =
   let open Smtlib in
-  Printf.printf "Checking validity for test of size %d\n%!" (num_nodes_in_test test);
+  (* Printf.printf "Checking validity for test of size %d\n%!" (num_nodes_in_test test); *)
   let vars = free_vars_of_test test
              |> List.dedup_and_sort
                   ~compare:(fun (idx, x) (idy, y) -> Stdlib.compare idx idy) in
-  Printf.printf "compute vars\n%!";
   let () =
     push valid_prover;
-    Printf.printf "Pushed\n%!";
     List.iter vars
       ~f:(fun (id, i) -> declare_const valid_prover (Id id) (BitVecSort i)) in
-  Printf.printf "Inserted\n%!";
   let st = Time.now() in
   let response =
     assert_ valid_prover (not_ (test_to_term test `Valid params.debug));
     check_sat valid_prover in
   let dur = Time.(diff (now()) st) in
-  Printf.printf "Solved\n%!";
   let model =
     if response = Sat
     then Some (model_to_packet (get_model valid_prover))
     else None in
-  Printf.printf "Model got\n%!";
   pop valid_prover;
   (model, dur)
 

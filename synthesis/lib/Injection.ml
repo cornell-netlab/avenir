@@ -29,7 +29,6 @@ let make (problem : Problem.t) : t =
       )
 
 let apply (inj : t) (phi : test) =
-  Printf.printf "INJECTION\n%s\n" (string_of_map inj);
   Manip.fixup_test inj phi
 
 let optimization (params : Parameters.t) (problem : Problem.t) : test -> test =

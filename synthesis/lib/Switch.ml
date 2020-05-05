@@ -80,3 +80,10 @@ let replace_inst (p : t) (i : Instance.t) =
 let replace_pipeline (p : t) (c : cmd) =
   {p with pipeline = ref c}
   |> clear_cache
+
+
+let commit_edits (p : t) =
+  let p' = update_inst p (p.edits) in
+  let p'' = replace_edits p' [] in
+  p''.gcl := !(p.gcl);
+  p''

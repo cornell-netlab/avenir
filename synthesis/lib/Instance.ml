@@ -61,8 +61,8 @@ let tbl_hole encode_tag keys tbl row_hole act_hole i actSize (hs : Hint.t list) 
        | None ->  default_match_holes keys
        | Some phi -> phi
        end
-    | None ->
-       default_match_holes keys
+    | None when List.length hs > 0 -> False
+    | _ -> default_match_holes keys
  in
   match_holes
   %&% (row_hole %=% mkVInt (1,1))
@@ -106,10 +106,12 @@ let rec apply ?no_miss:(no_miss = false)
               let tst = Match.list_to_test t.keys matches
                         %&% match tag with
                             | WithHoles (ds,_) ->
-                               (* delete_hole i tbl %=% mkVInt(0,1) *)
-                               if List.exists ds ~f:((=) (t.name, i))
-                               then delete_hole i t.name %=% mkVInt(0,1)
-                               else True
+                               delete_hole i t.name %=% mkVInt(0,1)
+                               (* if List.exists ds ~f:((=) (t.name, i))
+                                * then begin
+                                *
+                                *     delete_hole i t.name %=% mkVInt(0,1)
+                                * else True *)
                             | _ -> True in
               if action >= List.length t.actions then
                 acc

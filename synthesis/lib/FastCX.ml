@@ -48,25 +48,25 @@ let unreachable params (problem : Problem.t) (test : Ast.test) =
      let open Problem in
      let in_pkt = Packet.make x ~fvs:(fvs problem |> Some) in
      let log  = log_gcl_program problem in
-     let phys = phys_gcl_program problem in
+     (* let phys = phys_gcl_program problem in *)
      let log_pkt = eval_act log in_pkt in
-     let phys_pkt = eval_act phys in_pkt in
-     if params.debug
-     then begin
-         if params.debug then
-           Printf.printf "-------------------------------------------\n%s \n???====?=====????\n %s\n-------------------------------------\n%!"
-             (string_of_cmd log) (string_of_cmd phys);
-
-         Printf.printf "LOG :%s -> %s\n" (Packet.string__packet in_pkt) (Packet.string__packet log_pkt);
-         Printf.printf "PHYS:%s -> %s\n" (Packet.string__packet in_pkt) (Packet.string__packet phys_pkt)
-       end;
-     if Packet.equal log_pkt phys_pkt
-     then `NotFound
-     else `NoAndCE (in_pkt,log_pkt)
+     (* let phys_pkt = eval_act phys in_pkt in *)
+     (* if params.debug
+      * then begin
+      *     if params.debug then
+      *       Printf.printf "-------------------------------------------\n%s \n???====?=====????\n %s\n-------------------------------------\n%!"
+      *         (string_of_cmd log) (string_of_cmd phys);
+      *
+      *     Printf.printf "LOG :%s -> %s\n" (Packet.string__packet in_pkt) (Packet.string__packet log_pkt);
+      *     Printf.printf "PHYS:%s -> %s\n" (Packet.string__packet in_pkt) (Packet.string__packet phys_pkt)
+      *   end; *)
+     (* if Packet.equal log_pkt phys_pkt
+      * then `NotFound
+      * else  *)`NoAndCE (in_pkt,log_pkt)
   | (None, _) -> `Yes
 
 let get_cex params data (problem : Problem.t) =
   let open Problem in
-  let e = Problem.log_edits problem |> List.hd_exn in
+  let e = log_edits problem |> List.hd_exn in
   hits_pred data (log problem) (log_inst problem) (log_edits problem) e
   |> unreachable params problem

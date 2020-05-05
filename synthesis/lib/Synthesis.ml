@@ -70,10 +70,6 @@ let complete_inner ~falsify (cmd : cmd) =
 
 let complete cmd = complete_inner ~falsify:true cmd
 
-let compute_deletions pkt (problem : Problem.t) =
-  let open Problem in
-  get_nd_hits (phys problem) (phys_inst problem) pkt
-
 let get_one_model_edit
     (pkt : Packet.t)
     (data : ProfData.t ref)
@@ -84,7 +80,7 @@ let get_one_model_edit
   let linst_edited = Problem.log_edited_instance problem in
   let pinst_edited = Problem.phys_edited_instance problem in
   let (pkt',_), wide, trace, actions = trace_eval_inst ~wide:StringMap.empty (Problem.log problem) linst_edited (pkt,None) in
-  let deletions = compute_deletions pkt problem in
+  let deletions = [] in
   let st = Time.now () in
   let cands = CandidateMap.apply_hints (Instance.WithHoles (deletions, [])) `Mask hints actions (Problem.phys problem) pinst_edited in
   let log_wp = wp trace True in
@@ -135,7 +131,7 @@ let get_one_model_edit_no_widening
   let phys_edited = Problem.phys_edited_instance problem in
   let (pkt',_), _, trace, actions = trace_eval_inst ~wide:StringMap.empty
       (Problem.log problem) linst_edited (pkt,None) in
-  let deletions = compute_deletions pkt problem in
+  let deletions = [] in
     if params.debug then
     begin
       Printf.printf "The following rules are deletable";
@@ -571,7 +567,7 @@ and solve_math (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   then begin
       let st = Time.now () in
       let searcher = ModelFinder.make_searcher params data problem in
-      let rec loop searcher =
+      let rec loop problem searcher =
         let model_opt = ModelFinder.search params data problem searcher in
         (*get_model params data problem in*)
         ProfData.update_time !data.model_search_time st;
@@ -587,7 +583,7 @@ and solve_math (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
              None
         | Some (model, searcher) ->
            let model = minimize_model model (Problem.phys problem) in
-           if List.exists (Problem.attempts problem) ~f:(StringMap.equal veq model)
+           if Problem.seen_attempt problem model
            then begin
                Printf.printf "ALREADY EXPLORED\n %s \n%!" (string_of_map model);
                failwith ""
@@ -606,27 +602,54 @@ and solve_math (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                  Printf.printf "***Edits***\n%!";
                  List.iter es ~f:(fun e -> Printf.printf "%s\n%!" (Edit.to_string e));
                  Printf.printf "***     ***\n"
-             end;
+               end;
+             let problem' = Problem.(append_phys_edits problem es
+                                     |> reset_model_space
+                                     |> reset_attempts) in
+             if params.debug then begin
+                 Printf.printf "\n%s\n%!" (Problem.to_string problem');
+               end;
              if List.length es = 0 then None else
-               match
-                 cegis_math params data (Problem.(append_phys_edits problem es |> reset_model_space |> reset_attempts))
-               with
+               match cegis_math params data problem' with
                | None -> begin
-                   match loop searcher with
+                   match loop problem' searcher with
                    | None ->
                       let model_space = Problem.model_space problem %&% negate_model model in
-                      if params.debug || params.interactive then
-                        Printf.printf "Backtracking with\n%s\nadded to\n%s\n%!" (string_of_test (negate_model model)) (string_of_test (Problem.model_space problem));
-                      if params.interactive then
-                        ignore(Stdio.In_channel.(input_char stdin) : char option);
+                      (* if params.debug || params.interactive then
+                       *   Printf.printf "Backtracking with\n%s\nadded to\n%s\n%!"
+                       *     (string_of_test (negate_model model))
+                       *     (string_of_test (Problem.model_space problem)); *)
+                      (* if params.interactive then
+                       *   ignore(Stdio.In_channel.(input_char stdin) : char option); *)
                       ProfData.incr !data.num_backtracks;
                       solve_math params data (Problem.set_model_space problem model_space)
                    | Some es -> Some es
                  end
                | Some es -> Some es in
-      loop searcher
+      loop problem searcher
     end
   else begin
       Printf.printf "Exhausted the Space\n%!";
       None
     end
+
+
+let cegis_math_sequence params data problem =
+  let log_edit_sequence = Problem.log_edits problem in
+  let problem = Problem.replace_log_edits problem [] in
+  List.fold log_edit_sequence ~init:(Some(problem,[]))
+    ~f:(fun acc ledit ->
+      match acc with
+      | None -> None
+      | Some (problem, pedits) ->
+          let problem = Problem.replace_log_edits problem [ledit] in
+          (* Printf.printf "\n\n\n%s\n\n\n" (Problem.to_string problem); *)
+          match cegis_math params data problem with
+          | None -> None
+          | Some phys_edits ->
+             Some
+               (Problem.replace_phys_edits problem phys_edits
+                |> Problem.commit_edits_log
+                |> Problem.commit_edits_phys,
+                pedits @ phys_edits)
+    )

@@ -71,9 +71,14 @@ let replace_phys_edits (p : t) (phys_edits : Edit.t list) : t =
 
 let delete_phys_edits (p : t) : t = replace_phys_edits p []
 
+let commit_edits_phys (p : t) : t = {p with phys = Switch.commit_edits p.phys}
+let commit_edits_log (p : t) : t = {p with log = Switch.commit_edits p.log}
+
+
 let reset_attempts (p : t) : t = {p with attempts = []}
 let add_attempt (p : t) (attempt : value StringMap.t) : t =
   {p with attempts = attempt :: p.attempts}
+let seen_attempt (p : t)  (attempt : value StringMap.t) : bool =                            List.exists p.attempts ~f:(StringMap.equal veq attempt)
 
 let add_cex (p : t) (cex : (Packet.t * Packet.t)) : t =
   {p with cexs = cex :: p.cexs}
