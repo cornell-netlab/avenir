@@ -87,21 +87,21 @@ let add_to_model (phys : cmd) (hints : t list) (m : value StringMap.t) : value S
               List.fold2_exn keys matches ~init:acc ~f:(fun acc (ky,_) mtch ->
                   match mtch with
                   | None ->
-                     Printf.printf "Skipping key %s\n%!" ky;
+                     (* Printf.printf "Skipping key %s\n%!" ky; *)
                      acc
                   | Some (Match.Exact data) ->
-                     Printf.printf "Exact Matching key %s\n%!" ky;
+                     (* Printf.printf "Exact Matching key %s\n%!" ky; *)
                      let m = StringMap.set acc ~key:(Hole.match_hole_exact hint.table ky) ~data in
-                     Printf.printf "Model is now: %s\n%!" (string_of_map m);
+                     (* Printf.printf "Model is now: %s\n%!" (string_of_map m); *)
                      m
 
                   | Some (Match.Between (lo, hi)) ->
-                     Printf.printf "Between Matching key %s\n%!" ky;
+                     (* Printf.printf "Between Matching key %s\n%!" ky; *)
                      let (klo, khi) = Hole.match_holes_range hint.table ky in
                      StringMap.set acc ~key:klo ~data:lo
                      |> StringMap.set ~key:khi ~data:hi
                   | Some (Match.Mask (v, m)) ->
-                     Printf.printf "Mask Matching key %s\n" ky;
+                     (* Printf.printf "Mask Matching key %s\n" ky; *)
                      let (k,km) = Hole.match_holes_mask hint.table ky in
                      StringMap.set acc ~key:k ~data:v
                      |> StringMap.set ~key:km ~data:m

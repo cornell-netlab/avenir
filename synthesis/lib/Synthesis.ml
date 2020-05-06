@@ -459,15 +459,6 @@ let get_model (params : Parameters.t) (data : ProfData.t ref) (problem : Problem
   (model,hints)
 
 
-let holes_for_table table phys =
-  match get_schema_of_table table phys with
-  | None -> failwith ""
-  | Some (ks, acts, _) ->
-     List.map ks ~f:(fun (k,_) -> "?" ^ k )
-     @ List.(acts >>= fun (params,_) ->
-             params >>| fst )
-
-
 let get_cex (params : Parameters.t) (data :  ProfData.t ref) (problem : Problem.t)
     : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
   if params.fastcx then begin
@@ -593,13 +584,10 @@ and solve_math (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                  Printf.printf "\n%s\n%!" (Problem.to_string problem');
                end;
              if List.length es = 0 then None else
-               match Printf.printf "PLUNGE\n%!";
-                     cegis_math params data problem'
-               with
+               match cegis_math params data problem' with
                | None -> begin
                    let model_space = Problem.model_space problem %&% negate_model model in
                    let problem = Problem.set_model_space problem model_space in
-                   Printf.printf "RESUME SEARCH\n%!";
                    match loop problem searcher with
                    | None ->
                       Printf.printf "Backtracking\n%!";

@@ -42,9 +42,13 @@ let rec expr_to_term_help expr styp : Smtlib.term =
   | Minus (e1, e2) -> Smtlib.bvsub
                         (expr_to_term_help e1 styp)
                         (expr_to_term_help e2 styp)
-  | Mask (e1,e2) -> Smtlib.bvand
-                        (expr_to_term_help e1 styp)
-                        (expr_to_term_help e2 styp)
+  | Mask (e1,e2) ->
+     let sexp = Smtlib.bvand
+                  (expr_to_term_help e1 styp)
+                  (expr_to_term_help e2 styp) in
+     (* expr_str expr;
+      * debug sexp; *)
+     sexp
 
 let rec test_to_term_help test styp : Smtlib.term =
   match test with

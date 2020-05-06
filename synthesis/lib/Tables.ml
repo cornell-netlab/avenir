@@ -173,9 +173,10 @@ module Row = struct
                    match fixup_val match_model (Hole(h, sz)),
                          fixup_val match_model (Hole(hm,sz))
                    with
-                | Hole _,_ ->
-                   Printf.sprintf "couldn't find %s in model %s" h (string_of_map match_model)
-                   |> failwith
+                   | Hole _,_ ->
+                      Some (ks @ [Match.Mask(mkInt(0,sz),mkInt(0,sz))])
+                   (*    Printf.sprintf "when filling %s couldn't find %s in model %s" tbl_name h (string_of_map match_model)
+                    * |> failwith *)
                 | Value v,Hole _ ->
                    Some (ks @ [Match.Exact v])
                 | Value v, Value m ->

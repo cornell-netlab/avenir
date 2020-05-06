@@ -154,12 +154,12 @@ let minimize_model (model : value StringMap.t) (phys : cmd) : value StringMap.t 
 let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t) option)=
   match t.search_space, t.schedule with
   | [], [] ->
-     Printf.printf "Search failed\n%!";
+     if params.debug then Printf.printf "Search failed\n%!";
      None
   | [], (opts::schedule) ->
      let () =
        if params.debug then
-         Printf.printf "\n\nOPTIMIZATION FAILED! Backing off to |%s|\n\n%!"
+         Printf.printf "\nusing optimization to |%s|\n\n%!"
            (string_of_opts opts)
      in
      let search_space = apply_opts params data problem opts in
@@ -177,7 +177,11 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
         if Problem.seen_attempt problem model then
           search params data problem {schedule; search_space}
         else begin
-            Printf.printf "IsNOVEL??? \n    %s \n" (Problem.model_space problem |> fixup_test model |> string_of_test);
+            if params.debug then
+              Printf.printf "IsNOVEL??? \n    %s \n"
+                (Problem.model_space problem
+                 |> fixup_test model
+                 |> string_of_test);
             Some (Hint.add_to_model (Problem.phys problem) hints model,t)
           end
      | _ ->
