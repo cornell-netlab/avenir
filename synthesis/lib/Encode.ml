@@ -82,7 +82,7 @@ and check_typedef_widths type_ctx n =
 and lookup_field_width (type_ctx : Declaration.t list) fn : size option =
   let open Declaration in
   match fn with
-  | "ingress_port" -> Some 32 (* TODO: Is this right? *)
+  | "ingress_port" -> Some 9 (* TODO: Is this right? *)
   | "parser_error" -> Some 1 (* TODO: Is this right? *)
   | "isValid" -> Some 1
   | _ -> 
@@ -649,7 +649,7 @@ and encode_action3 prog (ctx : Declaration.t list) (type_ctx : Declaration.t lis
                             else tstmt in
             (rst %:% tstmt3, ret_rb, ret_eb))
   in
-  holify (List.map ~f:snd action_data) c, rb, eb
+  c, rb, eb
 
 and encode_switch prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : Expression.t) (rv : int) ( cases : Statement.switch_case list) : (test * cmd) list =
   let e, acs = encode_switch_expr prog ctx type_ctx expr in

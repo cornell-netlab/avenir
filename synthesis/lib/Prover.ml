@@ -7,9 +7,9 @@ open Z3
 let debug term = let res = Smtlib.term_to_sexp term |> Smtlib.sexp_to_string
   in Printf.printf "TERM: %s\n%!" res
 
-let test_str test = let res = Ast.sexp_string_of_test test in Printf.printf "TEST: %s"res
+let test_str test = let res = Ast.sexp_string_of_test test in Printf.printf "TEST: %s\n"res
 
-let expr_str test = let res = Ast.string_of_expr test in Printf.printf "EXPR: %s"res
+let expr_str test = let res = Ast.string_of_expr test in Printf.printf "EXPR: %s\n"res
 
 let quantify expr etyp styp =
   match etyp, styp with
@@ -121,6 +121,7 @@ let check_valid (params : Parameters.t) (test : Ast.test) =
   let st = Time.now() in
   let response = assert_ prover (not_ (test_to_term test `Valid params.debug));
     check_sat_using (QFBV : tactic) prover in
+  let () = printf "HERE 2" in
   let dur = Time.(diff (now()) st) in
   let model =
     if response = Sat then
