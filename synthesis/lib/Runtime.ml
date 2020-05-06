@@ -27,11 +27,7 @@ let matches_of_string (data_str : string) : Match.t list =
                    Printf.sprintf "0b%s%s" (String.make prefix_len '1') (String.make (size - prefix_len) '0') 
                    |> Bigint.of_string
                  in
-                 let hi = Bigint.(((prefix land mask) +
-                                     (Bigint.shift_left Bigint.one (Int.(size - prefix_len))) -
-                                     Bigint.one)) in
-                 let lo = Bigint.(prefix land mask) in
-                 Match.Between (Int(lo,size), Int(hi,size))
+                 Match.Mask (Int(prefix,size), Int(mask,size))
             | None -> Match.Exact(Int(Bigint.of_string value_str, size))
             end
          | None ->

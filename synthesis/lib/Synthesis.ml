@@ -418,7 +418,7 @@ let get_model (params : Parameters.t) (data : ProfData.t ref) (problem : Problem
         let wf_holes = List.fold (Problem.phys problem |> get_tables_actsizes) ~init:True
                          ~f:(fun acc (tbl,num_acts) ->
                            acc %&%
-                             (Hole("?ActIn"^tbl,max (log2 num_acts) 1)
+                             (Hole.which_act_hole tbl (max (log2 num_acts) 1)
                               %<=% mkVInt(num_acts-1,max (log2 num_acts) 1))) in
         let widening_constraint =
           if params.widening then
@@ -466,20 +466,6 @@ let holes_for_table table phys =
      List.map ks ~f:(fun (k,_) -> "?" ^ k )
      @ List.(acts >>= fun (params,_) ->
              params >>| fst )
-
-let minimize_model (model : value StringMap.t) (phys : cmd) : value StringMap.t =
-  StringMap.keys model
-  |> List.filter ~f:(String.is_prefix ~prefix:"?AddRowTo")
-  |> List.fold ~init:model
-       ~f:(fun model key ->
-         match StringMap.find model key with
-         | Some Int(v,_) when v = Bigint.zero ->
-            let table = String.chop_prefix_exn key ~prefix:"?AddRowTo" in
-            holes_for_table table phys
-            |> List.fold ~init:model ~f:(StringMap.remove)
-         | _ -> model
-       )
-
 
 
 let get_cex (params : Parameters.t) (data :  ProfData.t ref) (problem : Problem.t)
@@ -566,7 +552,6 @@ and solve_math (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
      || (check_sat params (Problem.model_space problem) |> fst |> Option.is_some)
   then begin
       let st = Time.now () in
-      let searcher = ModelFinder.make_searcher params data problem in
       let rec loop problem searcher =
         let model_opt = ModelFinder.search params data problem searcher in
         (*get_model params data problem in*)
@@ -577,27 +562,25 @@ and solve_math (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
              Printf.printf "No model could be found\n%!";
            if params.interactive then
              ignore(Stdio.In_channel.(input_char stdin) : char option);
-           if params.injection then
-             solve_math {params with injection = false} data problem
-           else
-             None
+           None
         | Some (model, searcher) ->
-           let model = minimize_model model (Problem.phys problem) in
            if Problem.seen_attempt problem model
            then begin
-               Printf.printf "ALREADY EXPLORED\n %s \n%!" (string_of_map model);
+               Printf.printf "ALREADY EXPLORED\n %s \n\n %s \n%!"
+                 (Problem.model_space problem |> string_of_test)
+                 (string_of_map model);
+               let res = fixup_test model (Problem.model_space problem) in
+               Printf.printf "applied \n\n\n %s\n\n\n" (string_of_test res);
                failwith ""
              end
            else
-             let () = if params.debug then Printf.printf "=======================\n PREVIOUS ATTEMPTS:\n=====================%s\n=======================\n   Current Attempt\n=======================\n%s\n=======================\n%!"
-                                             (Problem.attempts_to_string problem)
-                                             (string_of_map model); in
+             let () = if params.debug then
+                        Printf.printf "=======================\n PREVIOUS ATTEMPTS:\n=====================%s\n=======================\n   Current Attempt\n=======================\n%s\n=======================\n%!"
+                          (Problem.attempts_to_string problem)
+                          (string_of_map model); in
              let problem = Problem.add_attempt problem model in
              (* assert (Problem.num_attempts problem <= 1); *)
-             let es =
-               model
-               (* |> Hint.add_to_model (Problem.phys problem) hints *)
-               |> Edit.extract (Problem.phys problem) in
+             let es = Edit.extract (Problem.phys problem) model in
              if params.debug then begin
                  Printf.printf "***Edits***\n%!";
                  List.iter es ~f:(fun e -> Printf.printf "%s\n%!" (Edit.to_string e));
@@ -610,23 +593,25 @@ and solve_math (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                  Printf.printf "\n%s\n%!" (Problem.to_string problem');
                end;
              if List.length es = 0 then None else
-               match cegis_math params data problem' with
+               match Printf.printf "PLUNGE\n%!";
+                     cegis_math params data problem'
+               with
                | None -> begin
-                   match loop problem' searcher with
+                   let model_space = Problem.model_space problem %&% negate_model model in
+                   let problem = Problem.set_model_space problem model_space in
+                   Printf.printf "RESUME SEARCH\n%!";
+                   match loop problem searcher with
                    | None ->
-                      let model_space = Problem.model_space problem %&% negate_model model in
-                      (* if params.debug || params.interactive then
-                       *   Printf.printf "Backtracking with\n%s\nadded to\n%s\n%!"
-                       *     (string_of_test (negate_model model))
-                       *     (string_of_test (Problem.model_space problem)); *)
+                      Printf.printf "Backtracking\n%!";
                       (* if params.interactive then
                        *   ignore(Stdio.In_channel.(input_char stdin) : char option); *)
                       ProfData.incr !data.num_backtracks;
-                      solve_math params data (Problem.set_model_space problem model_space)
+                      solve_math params data problem
                    | Some es -> Some es
                  end
                | Some es -> Some es in
-      loop problem searcher
+      ModelFinder.make_searcher params data problem
+      |> loop problem
     end
   else begin
       Printf.printf "Exhausted the Space\n%!";

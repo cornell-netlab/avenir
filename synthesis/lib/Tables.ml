@@ -36,15 +36,6 @@ module Match = struct
        |> failwith
     | Mask (v, m) ->
        (Ast.mkMask (Var k) (Value m)) %=% Value v
-         
-
-  let holes encode_tag x sz =
-    let h = Printf.sprintf "?%s" x in
-    match encode_tag with
-    | `Mask ->
-       let hmask = Printf.sprintf "%s_mask" h in
-       mkMask (Var(x, sz)) (Hole (hmask,sz)) %=% Hole (h, sz)
-    | `Exact -> Var(x, sz) %=% Hole (h,sz)
 
   let list_to_string : t list -> string =
     List.fold ~init:"" ~f:(fun acc m -> Printf.sprintf "%s %s" acc (to_string m))
@@ -171,17 +162,19 @@ module Row = struct
        let keys_holes =
          List.fold ks ~init:(Some [])
            ~f:(fun acc (v, sz) ->
+             let hlo,hhi = Hole.match_holes_range tbl_name v in
              match acc,
-                   fixup_val match_model (Hole("?"^v^"_lo", sz)),
-                   fixup_val match_model (Hole("?"^v^"_hi", sz))
+                   fixup_val match_model (Hole(hlo, sz)),
+                   fixup_val match_model (Hole(hhi, sz))
              with
              | None, _,_ -> None
-             | Some ks, Hole _, Hole _ ->
-                begin match fixup_val match_model (Hole("?"^v, sz)),
-                            fixup_val match_model (Hole("?"^v^"_mask",sz))
-                with
+             | Some ks, Hole _, Hole _ ->  begin
+                 let h, hm = Hole.match_holes_mask tbl_name v in
+                   match fixup_val match_model (Hole(h, sz)),
+                         fixup_val match_model (Hole(hm,sz))
+                   with
                 | Hole _,_ ->
-                   Printf.sprintf "couldn't find ?%s in model %s" v (string_of_map match_model)
+                   Printf.sprintf "couldn't find %s in model %s" h (string_of_map match_model)
                    |> failwith
                 | Value v,Hole _ ->
                    Some (ks @ [Match.Exact v])
@@ -271,28 +264,20 @@ module Edit = struct
   let extract phys (m : value StringMap.t)  : t list =
    let dels, adds =  StringMap.fold m ~init:([],[]) (*Deletions, additions*)
       ~f:(fun ~key ~data acc ->
-        match String.chop_prefix key ~prefix:"?AddRowTo" with
+        match Hole.find_add_row key with
         | None -> begin
-            match String.chop_prefix key ~prefix:"?DeleteRow" with
-            | Some idx_tbl when data |> get_int = Bigint.one -> begin
-               match String.substr_index idx_tbl ~pattern:"In" with
-               | None -> failwith "malformed deletion hole"
-               | Some i ->
-                    let row_idx = String.prefix idx_tbl i |> int_of_string in
-                    let table_name = String.drop_prefix idx_tbl (i + 2)  in
-                    (Del(table_name, row_idx) :: fst acc, snd acc)
+            match Hole.find_delete_row key with
+            | Some (table_name,row_idx) when data |> get_int = Bigint.one -> begin
+                (Del(table_name, row_idx) :: fst acc, snd acc)
               end
             |  _ -> acc
           end
         | Some tbl ->
            if data |> get_int = Bigint.one then
-             let actin_vname =  (Printf.sprintf "?ActIn%s" tbl)  in
-             let act = match StringMap.find m actin_vname with
+             let act = match StringMap.find m (Hole.which_act_hole_name tbl) with
                | None ->
-                  Printf.printf "WARNING:: Couldn't find %s even though I found %s to be true\n%!"
-                    actin_vname
-                    key;
-                  failwith ""
+                  Printf.sprintf "WARNING:: Couldn't find %s even though I found %s to be true\n%!"  (Hole.which_act_hole_name tbl) key
+                  |> failwith
                | Some v -> get_int v |> Bigint.to_int_exn in
              match Row.mk_new_row m phys tbl None act with
              | None -> failwith (Printf.sprintf "Couldn't make new row in table %s\n" tbl)

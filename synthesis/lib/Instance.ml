@@ -26,7 +26,7 @@ let update (inst : t) (e : Edit.t) =
      StringMap.change inst tbl
        ~f:(function
          | None -> None
-         | Some rows -> List.filteri rows ~f:(fun j _ -> i <> j) |> Some)
+         | Some rows -> List.filteri rows ~f:(fun j _ -> i <> (List.length rows - j - 1)) |> Some)
 
 let rec update_list (inst : t) (edits : Edit.t list) =
   match edits with
@@ -42,31 +42,6 @@ let rec overwrite (old_inst : t) (new_inst : t) : t =
 let size : t -> int =
   StringMap.fold ~init:0 ~f:(fun ~key:_ ~data -> (+) (List.length data))
 
-let delete_hole i tbl = Hole(Printf.sprintf "?DeleteRow%dIn%s" i tbl, 1)
-let add_row_hole tbl = Hole (Printf.sprintf "?AddRowTo%s" tbl, 1)
-let which_act_hole tbl actSize =
-  assert (actSize > 0);
-  Hole (Printf.sprintf "?ActIn%s" tbl, actSize)
-
-
-let tbl_hole encode_tag keys tbl row_hole act_hole i actSize (hs : Hint.t list) =
-  let default_match_holes =
-    List.fold ~init:True
-      ~f:(fun acc (x,sz) ->
-        acc %&% Match.holes encode_tag x sz) in
-  let match_holes =
-    match List.find hs ~f:(fun h -> Stdlib.(h.table = tbl)) with
-    | Some h ->
-       begin match Hint.encode_match keys h encode_tag with
-       | None ->  default_match_holes keys
-       | Some phi -> phi
-       end
-    | None when List.length hs > 0 -> False
-    | _ -> default_match_holes keys
- in
-  match_holes
-  %&% (row_hole %=% mkVInt (1,1))
-  %&% (act_hole %=% mkVInt (i,actSize))
 
 let rec apply ?no_miss:(no_miss = false)
           (tag : interp) encode_tag ?cnt:(cnt=0)
@@ -93,8 +68,8 @@ let rec apply ?no_miss:(no_miss = false)
      (mkSelect typ ss, ss_cnt)
   | Apply t ->
      let actSize = max (log2(List.length t.actions)) 1 in
-     let row_hole = add_row_hole t.name in
-     let act_hole = which_act_hole t.name actSize in
+     let row_hole = Hole.add_row_hole t.name in
+     let act_hole = Hole.which_act_hole t.name actSize in
      let rows = StringMap.find_multi inst t.name in
      let selects =
        match tag with
@@ -106,12 +81,11 @@ let rec apply ?no_miss:(no_miss = false)
               let tst = Match.list_to_test t.keys matches
                         %&% match tag with
                             | WithHoles (ds,_) ->
-                               delete_hole i t.name %=% mkVInt(0,1)
-                               (* if List.exists ds ~f:((=) (t.name, i))
-                                * then begin
-                                *
-                                *     delete_hole i t.name %=% mkVInt(0,1)
-                                * else True *)
+                               (* Hole.delete_hole i t.name %=% mkVInt(0,1) *)
+                               let i = List.length rows - i - 1 in
+                               if List.exists ds ~f:((=) (t.name, i))
+                               then Hole.delete_hole i t.name %=% mkVInt(0,1)
+                               else True
                             | _ -> True in
               if action >= List.length t.actions then
                 acc
@@ -130,7 +104,7 @@ let rec apply ?no_miss:(no_miss = false)
        | WithHoles (_,hs) | OnlyHoles hs ->
           List.mapi t.actions
             ~f:(fun i (params, act) ->
-              (tbl_hole encode_tag t.keys t.name row_hole act_hole i actSize hs
+              (Hint.tbl_hole encode_tag t.keys t.name row_hole act_hole i actSize hs
                (* %&% List.fold selects ~init:True
                 *       ~f:(fun acc (cond, _) -> acc %&% !%(cond)) *)
               , holify (List.map params ~f:fst) act))
@@ -142,12 +116,13 @@ let rec apply ?no_miss:(no_miss = false)
             then False
             else List.foldi rows ~init:(True)
                    ~f:(fun i acc (ms,_,act) ->
+                     let i = List.length rows - i in
                      acc %&%
                        if act >= List.length t.actions then True else
                          !%(Match.list_to_test t.keys ms
                             %&% match tag with
                                 | WithHoles (ds,_) when List.exists ds ~f:((=) (t.name, i))
-                                  -> delete_hole i t.name %=% mkVInt(0,1)
+                                  -> Hole.delete_hole i t.name %=% mkVInt(0,1)
                                 | _ -> True))
          | _ -> True
        in
@@ -210,7 +185,7 @@ let remove_deleted_rows (params : Parameters.t) match_model (pinst : t) : t =
       StringMap.set acc ~key:tbl_name
         ~data:(
           List.filteri data ~f:(fun i _ ->
-              match delete_hole i tbl_name with
+              match Hole.delete_hole i tbl_name with
               | Hole(s,_) ->
                  begin match StringMap.find match_model s with
                  | None -> true

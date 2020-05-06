@@ -4,12 +4,23 @@ open Util
 open Packet
 open Z3
 
-let debug term = let res = Smtlib.term_to_sexp term |> Smtlib.sexp_to_string
-  in Printf.printf "TERM: %s\n%!" res
+let print_debug = true
 
-let test_str test = let res = Ast.string_of_test test in Printf.printf "TEST: %s\n%!"res
+let debug term =
+  if print_debug then
+    let res = Smtlib.term_to_sexp term |> Smtlib.sexp_to_string in
+    Printf.printf "TERM: %s\n%!" res
+  else ()
 
-let expr_str test = let res = Ast.string_of_expr test in Printf.printf "EXPR: %s"res
+let test_str test =
+  if print_debug then
+    let res = Ast.string_of_test test in Printf.printf "TEST: %s\n%!"res
+  else ()
+
+let expr_str test =
+  if print_debug then
+    let res = Ast.string_of_expr test in Printf.printf "EXPR: %s"res
+  else ()
 
 let quantify expr etyp styp =
   match etyp, styp with
@@ -114,7 +125,10 @@ let check_sat (params : Parameters.t) (test : Ast.test) =
   let dur = Time.(diff (now()) st) in
   let model =
     if response = Sat then
-      Some (model_to_packet (get_model sat_prover))
+      let model = model_to_packet (get_model sat_prover) in
+      if params.debug && print_debug then
+        Printf.printf "MODEL: %s\n%!" (Packet.string__packet model);
+      Some model
     else None
   in reset sat_prover; (model, dur)
 

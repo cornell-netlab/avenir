@@ -544,7 +544,7 @@ let rec wp_paths ~no_negations c phi : (cmd * test) list =
      List.fold cmds ~init:([]) ~f:(fun wp_so_far (cond, act) ->
           List.fold (wp_paths ~no_negations act phi) ~init:wp_so_far
              ~f:(fun acc (trace, act_wp) ->
-               (Assert cond %:% trace, cond %&% act_wp) :: acc))
+               acc @ [(Assert cond %:% trace, cond %&% act_wp)]))
 
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
