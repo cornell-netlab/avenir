@@ -718,7 +718,7 @@ let basic_onf_ipv4_real params data_file log_p4 phys_p4 log_inc phys_inc =
   let problem =
     Problem.make
       ~log  ~phys ~fvs
-      ~log_inst:log_ins (* StringMap.(set empty ~key:"ipv6" ~data:[]); *)
+      ~log_inst: StringMap.(set empty ~key:"ipv6" ~data:[])
       ~phys_inst:StringMap.(set empty ~key:"l3_fwd" ~data:[])
       ~log_edits:[]
   in

@@ -200,10 +200,6 @@ let action_run_field members =
 let rec encode_expression_to_value (type_ctx : Declaration.t list) (e : Expression.t) : expr =
   encode_expression_to_value_with_width (-1) type_ctx e
 
-and encode_expression_to_value2 (type_ctx : Declaration.t list) (e : Expression.t) : expr =
-  encode_expression_to_value_with_width (-1) type_ctx e
-
-
 and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) (e : Expression.t) : expr =
   let module E= Expression in
   let unimplemented name =
@@ -448,7 +444,7 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t l
     | _ -> failwith "unimplemented, only know how to resolve table dispatches"
     end
   | Assignment {lhs=lhs; rhs=rhs} ->
-    begin match encode_expression_to_value2 type_ctx lhs with
+    begin match encode_expression_to_value type_ctx lhs with
       | Var (f,s) -> f %<-% encode_expression_to_value_with_width s type_ctx rhs, false, false
       | _ -> failwith ("[TypeError] lhs of assignment must be a field, at " ^ Petr4.Info.to_string info)
     end
@@ -512,7 +508,6 @@ and dispatch_control (Program(top_decls) as prog : program) (ident : P4String.t)
                       ~f:(fun assgn prog -> prog %:% assgn ) in
         let added_r = List.fold r ~init:(added_b)
                       ~f:(fun assgn prog -> assgn %:% prog ) in
-        let x = printf "dispatch_control %s END" (String.concat ~sep:"\n" (List.map r ~f:string_of_cmd)) in
         assign_rv %:% added_r, false, eb
       | Unequal_lengths -> failwith "Parameters and arguments don't match")
   | Some (_, ExternFunction _) -> Skip, false, false
@@ -617,7 +612,7 @@ and get_all_fields type_ctx h (fld : Declaration.field)  =
     | Some (_, Header {name;fields})
     | Some (_, Struct {name;fields}) ->
       List.concat_map fields ~f:(get_all_fields type_ctx (h ^ "." ^ snd (snd fld).name))
-    | _ -> let x = printf "fld = %s"  (Sexp.to_string ([%sexp_of: Declaration.field] fld)) in [h ^ "." ^ snd (snd fld).name]
+    | _ -> [h ^ "." ^ snd (snd fld).name]
 
 and encode_control prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv:int) ( body : Block.t ) =
   encode_block prog ctx type_ctx rv body
@@ -669,7 +664,7 @@ and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t
           match snd prop with
           | Actions {actions} -> acc_actions @ actions
           | _ -> acc_actions) in
-      encode_expression_to_value2 type_ctx e, p4actions
+      encode_expression_to_value type_ctx e, p4actions
     | _ -> failwith "Table not found"
 
 
