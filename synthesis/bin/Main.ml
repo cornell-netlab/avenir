@@ -7,6 +7,7 @@ module Synthesis = Motley.Synthesis
 module Encode = Motley.Encode
 module Manip = Motley.Manip
 module Benchmark = Motley.Benchmark
+module Classbenching = Motley.Classbenching
 module CheckAndSet = Motley.CheckAndSet
 module Parameters = Motley.Parameters
 module ProfData = Motley.ProfData
@@ -43,28 +44,28 @@ module Solver = struct
     let phys = parse_file real in
     let log_edits = Runtime.parse logical_edits in
     let fvs = List.dedup_and_sort ~compare:Stdlib.compare
-                Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys) in
+        Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys) in
     let params = Parameters.({widening;
                               do_slice;
                               gas;
                               debug;
                               monotonic;
                               injection;
-                               interactive;
-                               fastcx}) in
+                              interactive;
+                              fastcx}) in
     let problem =
       let open Motley.Instance in
       Problem.make ~log ~phys ~log_inst:empty ~phys_inst:empty ~log_edits ~fvs in
     match Synthesis.cegis_math_sequence params (ProfData.zero ()) problem with
     | None -> failwith "failed"
     | Some (solution, phys_edits) ->
-       if print_res
-       then
-         begin
-           Printf.printf "Synthesized Program (%d edits made)\n%!" (List.length phys_edits);
-           Printf.printf "%s\n%!" (Problem.phys_gcl_program solution |> Ast.string_of_cmd)
-         end
-       else ()
+      if print_res
+      then
+        begin
+          Printf.printf "Synthesized Program (%d edits made)\n%!" (List.length phys_edits);
+          Printf.printf "%s\n%!" (Problem.phys_gcl_program solution |> Ast.string_of_cmd)
+        end
+      else ()
 end
 
 
@@ -107,43 +108,43 @@ module RunTest = struct
   let run test_file widening do_slice monotonic injection gas fastcx () =
     In_channel.read_lines test_file
     |> List.iter
-         ~f:(fun line ->
-           match String.split line ~on:',' with
-           | [log_str;phys_str;edits_str] ->
-              let log = parse_file log_str in
-              let phys = parse_file phys_str in
-              let log_edits = Runtime.parse edits_str in
-              let params = Parameters.({widening;
-                                        do_slice;
-                                        gas;
-                                        monotonic;
-                                        fastcx;
-                                        injection;
-                                        debug = false;
-                                        interactive = false
-                           }) in
-              let problem = Problem.make ~log ~phys ~log_edits
-                              ~log_inst:Instance.empty
-                              ~phys_inst:Instance.empty
-                              ~fvs:(List.dedup_and_sort ~compare:Stdlib.compare
-                                      Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)) in
-              let data = ProfData.zero () in
-              begin
-                try
-                     match Synthesis.cegis_math_sequence params data problem with
-                     | Some _  ->
-                        Printf.printf " ✔✔ %s\n%!" line
-                     | None ->
-                        Printf.printf " ✗✗ %s\n%!" line
-                with _ ->
-                  Printf.printf " ✗✗  %s |---> Threw an exception\n%!" line
+      ~f:(fun line ->
+          match String.split line ~on:',' with
+          | [log_str;phys_str;edits_str] ->
+            let log = parse_file log_str in
+            let phys = parse_file phys_str in
+            let log_edits = Runtime.parse edits_str in
+            let params = Parameters.({widening;
+                                      do_slice;
+                                      gas;
+                                      monotonic;
+                                      fastcx;
+                                      injection;
+                                      debug = false;
+                                      interactive = false
+                                     }) in
+            let problem = Problem.make ~log ~phys ~log_edits
+                ~log_inst:Instance.empty
+                ~phys_inst:Instance.empty
+                ~fvs:(List.dedup_and_sort ~compare:Stdlib.compare
+                        Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys)) in
+            let data = ProfData.zero () in
+            begin
+              try
+                match Synthesis.cegis_math_sequence params data problem with
+                | Some _  ->
+                  Printf.printf " ✔✔ %s\n%!" line
+                | None ->
+                  Printf.printf " ✗✗ %s\n%!" line
+              with _ ->
+                Printf.printf " ✗✗  %s |---> Threw an exception\n%!" line
 
 
-              end
-           | _ ->
-              Printf.sprintf "Cannot recognize string %s" line
-              |> failwith
-         )
+            end
+          | _ ->
+            Printf.sprintf "Cannot recognize string %s" line
+            |> failwith
+        )
 
 end
 
@@ -181,7 +182,7 @@ module Bench = struct
           debug;
           fastcx;
           gas = 10
-      })
+        })
     in
     ignore(Benchmark.reorder_benchmark varsize num_tables max_inserts params : Tables.Edit.t list)
 end
@@ -211,8 +212,8 @@ module ONF = struct
 
   let run gas widening do_slice monotonic interactive injection print debug data_fp fastcx () =
     let res = Benchmark.basic_onf_ipv4
-              Parameters.({widening;do_slice;gas;monotonic;injection;interactive;debug;fastcx})
-              data_fp
+        Parameters.({widening;do_slice;gas;monotonic;injection;interactive;debug;fastcx})
+        data_fp
     in
     if print then
       List.iter res ~f:(fun edit ->
@@ -288,6 +289,23 @@ let of_bench : Command.t =
     OFBench.spec
     OFBench.run
 
+module Classbench = struct
+  let spec = Command.Spec.(
+      empty
+      +> flag "-name" (required string) ~doc:"name of table"
+      +> flag "-data" (required string) ~doc:"path to classbench data")
+
+  let run table classbench_file () =
+    let edits = List.map (Classbenching.classbench_to_acl classbench_file table) ~f:(fun e -> Tables.Edit.to_string e)
+    in (List.iter edits ~f:(fun m -> Printf.printf "%s\n" m))
+end
+
+let classbench_cmd : Command.t =
+  Command.basic_spec
+    ~summary:"benchmarks generated insertions"
+    Classbench.spec
+    Classbench.run
+
 module Meta = struct
   let spec = Command.Spec.(empty)
   let run = CheckAndSet.run
@@ -306,6 +324,7 @@ let main : Command.t =
     ; ("encode-p4", encode_cmd)
     ; ("runtest", runtest_cmd)
     ; ("bench", benchmark)
+    ; ("classbench", classbench_cmd)
     ; ("onf", onf)
     ; ("of", of_bench)
     ; ("ex", running_example)
