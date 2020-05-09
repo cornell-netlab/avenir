@@ -21,7 +21,7 @@ let update (inst : t) (e : Edit.t) =
        ~f:(fun rows_opt ->
          match rows_opt with
          | None -> [row]
-         | Some rows -> row::rows)
+         | Some rows -> rows@[row])
   | Del (tbl, i) ->
      StringMap.change inst tbl
        ~f:(function
@@ -84,7 +84,7 @@ let rec apply ?no_miss:(no_miss = false)
                                (* Hole.delete_hole i t.name %=% mkVInt(0,1) *)
                                let i = List.length rows - i - 1 in
                                if List.exists ds ~f:((=) (t.name, i))
-                               then Hole.delete_hole i t.name %=% mkVInt(0,1)
+                               then True (*(Hole.delete_hole i t.name %=% mkVInt(0,1))*)
                                else True
                             | _ -> True in
               if action >= List.length t.actions then
@@ -132,7 +132,7 @@ let rec apply ?no_miss:(no_miss = false)
        | OnlyHoles _ -> mkPartial
        | _ -> mkOrdered
      in
-     let tbl_select = selects @ holes @ dflt_row |> mk_select in
+     let tbl_select = holes @selects  @ dflt_row |> mk_select in
      (* Printf.printf "TABLE %s: \n %s\n%!" tbl (string_of_cmd tbl_select); *)
      (tbl_select, cnt)
 

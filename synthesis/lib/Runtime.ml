@@ -6,6 +6,7 @@ open Tables
 
 let action_data_of_string (data_str : string) : Row.action_data =
   String.split data_str ~on:';'
+  |> List.filter ~f:(fun s -> String.is_empty s |> not)
   |> List.map ~f:(fun arg_str ->
          let value_str, size_str = String.lsplit2_exn arg_str ~on:'#' in
          Int(Bigint.of_string value_str, int_of_string size_str))

@@ -9,8 +9,9 @@
 
 
 # Formalism
-1. Draft Proofs (Eric)
-2. Polish/Debug Proofs (Eric / Ruzica / Hossein / Nate)
+1. Draft Section 3 Proofs (Eric) -- Done
+2. Draft Section 5 Proofs (Eric)
+3. Polish/Debug Proofs (Eric / Ruzica / Hossein / Nate)
 
 # Example
 1. Come up with example (Eric / Robert / Priya)

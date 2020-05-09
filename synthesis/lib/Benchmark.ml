@@ -19,7 +19,9 @@ let rec run_experiment iter seq phys_seq params hints (problem : Problem.t) =
      let st = Time.now () in
      assert (List.length (Problem.phys_edits problem_inner) = 0);
      match cegis_math params data problem_inner with
-     | None -> failwith "example failed"
+     | None ->
+        (* let _ : Edit.t list option = cegis_math {params with debug = true} data problem_inner in *)
+        failwith "example failed"
      | Some pedits ->
         !data.time := Time.(diff (now()) st);
         !data.log_inst_size :=  Problem.log_inst problem |> Instance.size ;
@@ -659,6 +661,18 @@ let basic_onf_ipv4 params filename =
       ~phys_inst:StringMap.(set empty ~key:"l3_fwd" ~data:[])
   in
   measure params None problem (onos_to_edits filename)
+
+
+let bigger_onf_ipv4 params log phys log_edits phys_edits fvs datafile =
+  let problem =
+    Problem.make ~log ~phys ~fvs ~log_edits
+      ~log_inst:StringMap.empty
+      ~phys_inst:StringMap.empty
+    |> flip Problem.replace_phys_edits phys_edits
+  in
+  measure params None problem (onos_to_edits datafile)
+
+
 
 
 let parse_rule_to_update line =

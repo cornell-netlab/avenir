@@ -21,6 +21,16 @@ let parse_file (filename : string) : Ast.cmd =
   let lexbuf = Lexing.from_string cts in
   Parser.main Lexer.tokens lexbuf
 
+let parse_fvs fp =
+  In_channel.read_lines fp
+  |> List.map ~f:(fun line ->
+         match String.lsplit2 line ~on:'#' with
+         | None -> Printf.sprintf "Malformed FV line %s" line
+                   |> failwith
+         | Some (x, sz) -> (x, int_of_string sz)
+       )
+
+
 
 module Solver = struct
   let spec = Command.Spec.(
@@ -28,6 +38,9 @@ module Solver = struct
       +> anon ("logical" %: string)
       +> anon ("real" %: string)
       +> anon ("logical_edits" %: string)
+      +> anon ("physical_edits" %: string)
+      +> anon ("fvs" %: string)
+      +> flag "-data" (required string) ~doc:"The logical experiment to run"
       +> flag "-p" no_arg ~doc:"Print synthesized program"
       +> flag "-w" no_arg ~doc:"Do widening"
       +> flag "-s" no_arg ~doc:"Do slicing optimization"
@@ -36,14 +49,19 @@ module Solver = struct
       +> flag "-g" (required int) ~doc:"max number of CEGIS reps"
       +> flag "-DEBUG" no_arg ~doc:"Print Debugging commands"
       +> flag "-i" no_arg ~doc:"Interactive Mode"
-      +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly")
+      +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly"
+      +> flag "-measure" no_arg ~doc:"Produce a CSV of data to stdout"
+      +> flag "-onos" no_arg ~doc:"Parse logical edits as onos insertions")
 
-  let run logical real logical_edits print_res widening do_slice monotonic injection gas debug interactive fastcx () =
+  let run logical real logical_edits physical_edits fvs data print_res widening do_slice monotonic injection gas debug interactive fastcx measure onos () =
     let log = parse_file logical in
     let phys = parse_file real in
-    let log_edits = Runtime.parse logical_edits in
-    let fvs = List.dedup_and_sort ~compare:Stdlib.compare
-                Ast.(free_of_cmd `Var log @ free_of_cmd `Var phys) in
+    let log_inst = Runtime.parse logical_edits |> Instance.(update_list empty) in
+    let log_edits = if onos
+                    then Benchmark.onos_to_edits data
+                    else Runtime.parse data |> List.(map ~f:return)  in
+    let phys_inst = Runtime.parse physical_edits |> Instance.(update_list empty) in
+    let fvs = parse_fvs fvs in
     let params = Parameters.({widening;
                               do_slice;
                               gas;
@@ -52,19 +70,26 @@ module Solver = struct
                               injection;
                                interactive;
                                fastcx}) in
-    let problem =
+    if measure then
       let open Motley.Instance in
-      Problem.make ~log ~phys ~log_inst:empty ~phys_inst:empty ~log_edits ~fvs in
-    match Synthesis.cegis_math_sequence params (ProfData.zero ()) problem with
-    | None -> failwith "failed"
-    | Some (solution, phys_edits) ->
-       if print_res
-       then
-         begin
-           Printf.printf "Synthesized Program (%d edits made)\n%!" (List.length phys_edits);
-           Printf.printf "%s\n%!" (Problem.phys_gcl_program solution |> Ast.string_of_cmd)
-         end
-       else ()
+      let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits:[] ~fvs in
+      let soln = Benchmark.measure params None problem log_edits in
+      if print_res then
+        List.iter soln ~f:(fun e -> Printf.printf "%s\n%!" (Tables.Edit.to_string e))
+      else ()
+    else
+      let log_edits = List.join log_edits in
+      let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits ~fvs in
+      match Synthesis.cegis_math_sequence params (ProfData.zero ()) problem with
+      | None -> failwith "failed"
+      | Some (solution, phys_edits) ->
+         if print_res
+         then
+           begin
+             Printf.printf "Synthesized Program (%d edits made)\n%!" (List.length phys_edits);
+             Printf.printf "%s\n%!" (Problem.phys_gcl_program solution |> Ast.string_of_cmd)
+           end
+         else ()
 end
 
 
@@ -246,6 +271,73 @@ let running_example : Command.t =
     RunningExample.spec
     RunningExample.run
 
+let onf : Command.t =
+  Command.basic_spec
+    ~summary: "Run the onf benchmark"
+    ONF.spec
+    ONF.run
+
+module Equality = struct
+  let spec = Command.Spec.(
+      empty
+      +> anon ("log" %: string)
+      +> anon ("phys" %: string)
+      +> anon ("log_edits" %: string)
+      +> anon ("phys_edits" %: string)
+      +> anon ("fvs" %: string)
+      +> flag "-DEBUG" no_arg ~doc:"Debugging messages" )
+
+
+  let run log phys log_edits phys_edits fvs_fp debug () =
+    let log = parse_file log in
+    let phys = parse_file phys in
+    let log_edits = Runtime.parse log_edits in
+    let phys_edits = Runtime.parse phys_edits in
+    let params = Parameters.(
+        { debug;
+          interactive = false;
+          do_slice = false;
+          widening = false;
+          gas = 1;
+          monotonic = false;
+          fastcx = false;
+          injection = false}) in
+    let data = ProfData.zero () in
+    let log_inst = Instance.empty in
+    let phys_inst = Instance.empty in
+    let fvs = parse_fvs fvs_fp in
+    let problem =
+      Problem.make ~log ~phys ~fvs
+        ~log_inst ~phys_inst
+        ~log_edits
+      |> Motley.Util.flip Problem.replace_phys_edits phys_edits
+    in
+    match Synthesis.implements params data problem with
+    | `Yes -> Printf.printf "Equivalent\n%!"
+    | `NoAndCE (inpkt,_) ->
+       let printer p i o =
+         Printf.printf "%s\n  in: %s\n  out: %s\n" p
+           (Motley.Packet.string__packet i)
+           (Motley.Packet.string__packet o)
+       in
+       let log_out = Motley.Semantics.eval_act (Problem.log_gcl_program problem) inpkt in
+       let phys_out = Motley.Semantics.eval_act (Problem.phys_gcl_program problem) inpkt in
+       Printf.printf "--\n%!";
+       printer "Log" inpkt log_out;
+       Printf.printf "--\n%!";
+       printer "Phys" inpkt phys_out
+
+
+
+end
+
+
+let equality : Command.t =
+  Command.basic_spec
+    ~summary: "Check equivalence"
+    Equality.spec
+    Equality.run
+
 
 module WeakestPrecondition = struct
   let spec = Command.Spec.(
@@ -307,7 +399,7 @@ let main : Command.t =
     ; ("runtest", runtest_cmd)
     ; ("bench", benchmark)
     ; ("onf", onf)
-    ; ("of", of_bench)
+    ; ("eq", equality)
     ; ("ex", running_example)
     ; ("meta", meta)
     ; ("wp", wp_cmd)]

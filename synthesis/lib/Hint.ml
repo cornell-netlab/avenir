@@ -26,7 +26,9 @@ let make edit table (log_keys, log_acts, log_def) (phys_keys, phys_acts, phys_de
   let match_opt =
     List.map phys_keys ~f:(fun (key,sz) ->
         match List.findi log_keys ~f:(fun i (key',_) -> key = key') with
-        | None -> None
+        | None ->
+           let string = Printf.sprintf "0b%s" (String.make sz '0') in
+           Some (Match.Mask(mkInt(0,sz), mkInt(int_of_string string, sz)))
         | Some (i,_) -> Edit.get_ith_match ~i edit
       ) |> Some
   in

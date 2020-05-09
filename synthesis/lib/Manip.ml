@@ -335,7 +335,7 @@ let good_execs fvs c =
   (* Printf.printf "active : \n %s \n" (string_of_cmd c); *)
   let merged_sub, passive_c = passify init_sub c  in
   (* Printf.printf "passive : \n %s\n" (string_of_cmd passive_c); *)
-  (* let vc = good_wp passive_c in *)
+  let vc = good_wp passive_c in
   (* Printf.printf "good_executions:\n %s\n%!" (string_of_test vc); *)
   (merged_sub, good_wp passive_c, bad_wp passive_c)
 
@@ -566,6 +566,12 @@ let rec wp_paths ~no_negations c phi : (cmd * test) list =
 
 let bind_action_data vals (scope, cmd) : cmd =
   let holes = List.map scope fst in
+  (* Printf.printf "holes:";
+   * List.iter holes ~f:(Printf.printf " %s");
+   * Printf.printf "\n%!";
+   * Printf.printf "vals:";
+   * List.iter holes ~f:(Printf.printf " %s");
+   * Printf.printf "\n%!"; *)
   List.fold2_exn holes vals
     ~init:StringMap.empty
     ~f:(fun acc x v -> StringMap.set acc ~key:x ~data:v)

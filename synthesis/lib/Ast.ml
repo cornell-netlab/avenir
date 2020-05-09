@@ -125,7 +125,10 @@ let rec multiply_values (v : value) (v' : value) : value =
 
 let rec subtract_values (v : value) (v' : value) : value =
   match v, v' with
-  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x - x'), sz)
+  | Int (x, sz), Int (x',sz') when sz = sz' ->
+     if Bigint.(x-x' < zero)
+     then Int (Bigint.zero, sz)
+     else Int (Bigint.(x - x'), sz)
   | Int (x, sz), Int (x', sz') ->
      failwith (Printf.sprintf "Type error %s#%d and %s#%d have different file sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 

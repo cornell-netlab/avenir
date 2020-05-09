@@ -40,25 +40,25 @@ let rec find_match ?idx:(idx = 0) pkt_loc ss ~default:default =
      else
        (find_match ~idx:(idx+1) pkt_loc rest ~default)
 
-let rec wide_eval wide (e : expr) =
-  match e with
-  | Value(x) -> (x,x)
-  | Var(x, sz) ->
-     begin match StringMap.find wide x with
-     | None -> failwith ("USE BEFORE DEF " ^ x)
-     | Some (lo,hi) -> (lo,hi)
-     end
-  | Hole _ -> failwith "dont know how to eval holes"
-  | Plus(x,y) -> let (lox,hix) = wide_eval wide x in
-                 let (loy, hiy) = wide_eval wide y in
-                 (add_values lox loy, add_values hix hiy)
-  | Times(x,y) -> let (lox, hix) = wide_eval wide x in
-                  let (loy, hiy) = wide_eval wide y in
-                  (multiply_values lox loy, multiply_values hix hiy)
-  | Minus(x,y) -> let (lox, hix) = wide_eval wide x in
-                  let (loy, hiy) = wide_eval wide y in
-                  (subtract_values lox hiy, subtract_values hix loy)
-  | Mask (x,y) -> failwith "Don't know how to widely evaluate a mask"
+let rec wide_eval wide (e : expr) = (mkInt(0,-1),mkInt(0,-1))
+  (* match e with
+   * | Value(x) -> (x,x)
+   * | Var(x, sz) ->
+   *    begin match StringMap.find wide x with
+   *    | None -> failwith ("USE BEFORE DEF " ^ x)
+   *    | Some (lo,hi) -> (lo,hi)
+   *    end
+   * | Hole _ -> failwith "dont know how to eval holes"
+   * | Plus(x,y) -> let (lox,hix) = wide_eval wide x in
+   *                let (loy, hiy) = wide_eval wide y in
+   *                (add_values lox loy, add_values hix hiy)
+   * | Times(x,y) -> let (lox, hix) = wide_eval wide x in
+   *                 let (loy, hiy) = wide_eval wide y in
+   *                 (multiply_values lox loy, multiply_values hix hiy)
+   * | Minus(x,y) -> let (lox, hix) = wide_eval wide x in
+   *                 let (loy, hiy) = wide_eval wide y in
+   *                 (subtract_values lox hiy, subtract_values hix loy)
+   * | Mask (x,y) -> failwith "Don't know how to widely evaluate a mask" *)
 
 
 let widening_assignment (wide : (value*value) StringMap.t) f e : (value * value) StringMap.t =
