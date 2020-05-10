@@ -639,11 +639,16 @@ and assign_param (type_ctx : Declaration.t list) (param_arg : Parameter.t * Argu
 and update_typ_ctx_from_param (type_ctx : Declaration.t list) (param : Parameter.t) : Declaration.t =
   let open Parameter in
   let open Declaration in
+  let open Type in
   let v = snd (snd param).variable in
-  let decl = List.find type_ctx ~f:(fun d -> safe_name d = typ_safe_name (snd param).typ) in
+  let decl = List.find type_ctx ~f:(fun d -> is_some (safe_name d) && safe_name d = typ_safe_name (snd param).typ) in
   match decl with
   | Some (_, d) -> M v, d
-  | None -> failwith "update_typ_ctx_from_param"
+  | None ->
+    begin match snd (snd param).typ with
+          | BitType _ -> M v, TypeDef { annotations = []; name = M v, v; typ_or_decl = Left ((snd param).typ)}
+          | _ -> failwith "update_typ_ctx_from_param"
+    end
   (* M v, Header { annotations = [];
                 name = M v, v;
                 fields = [ M v, { annotations = []; typ = (snd param).typ; name = (snd param).variable } ]
@@ -825,13 +830,14 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
                                               (kn, lookup_field_width_exn type_ctx kn)) in
   
   let lookup_and_encode_action i (_,a) =
-    let xxx = printf "action name = %s " (snd a.name) in
+    let xxx = printf "action name = %s\n" (snd a.name) in
     let (body, ad) = lookup_action_exn prog ctx a.name in
     let action_data = List.map ad ~f:(fun (_,p) -> Parameter.(p.variable)) in
     (* Set up an action run variable so we can use it to figure out which action ran in switch statements *)
     let set_action_run = Assign(snd name ^ action_run_suffix, mkVInt(i + 1, 1)) in
     let add_tctx = List.map ad ~f:(update_typ_ctx_from_param type_ctx) in 
     let type_ctx2 = add_tctx @ type_ctx in
+    let xxx = printf "add_tctx = %s" (Sexp.to_string ([%sexp_of: Declaration.t list] add_tctx)) in
     List.map action_data ~f:(fun (_, ad) -> ad, -1), set_action_run %:% encode_action prog ctx type_ctx2 rv body ~action_data
   in
   let action_cmds = List.mapi p4actions ~f:lookup_and_encode_action in
