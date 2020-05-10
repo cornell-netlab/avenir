@@ -48,9 +48,7 @@ let rec lookup_type_width (type_ctx : Declaration.t list) (typ : Type.t) =
         | Some (_, Header{fields;_}) ->
           Some (List.fold (List.map fields ~f:(fun (_, fl) -> lookup_field_width_exn type_ctx (snd fl.name))) ~f:(+) ~init:0)
         | Some (_, Struct{fields;_}) ->
-            let x = Some (List.fold (List.map fields ~f:(fun (_, fl) -> lookup_field_width_exn type_ctx (snd fl.name))) ~f:(+) ~init:0) in
-            let y = printf "struct width = %s" (Sexp.to_string ([%sexp_of: int option] x))  in
-            x
+            Some (List.fold (List.map fields ~f:(fun (_, fl) -> lookup_field_width_exn type_ctx (snd fl.name))) ~f:(+) ~init:0)
         | _ -> failwith ("lookup_type_width: 1 type not handled " 
                               ^ Sexp.to_string ([%sexp_of: Type.t] typ) ^ " "
                               ^ Sexp.to_string ([%sexp_of: Declaration.t option] t))
@@ -111,10 +109,10 @@ and lookup_field_width (type_ctx : Declaration.t list) fn : size option =
     match List.find type_ctx ~f:(fun d -> Some split_hd = safe_name d || M split_hd = fst d) with
     | Some (_, TypeDef { typ_or_decl = Left t}) -> lookup_type_width type_ctx t
     | Some d ->
-        if split_tl == []
+        if split_tl = []
           then Option.bind (check_typedef_widths type_ctx fn) ~f:(lookup_type_width type_ctx)
           else lookup_field_width' type_ctx d split_tl 
-    | None ->  let xxx = printf "None\nsplit_hd = %s" split_hd in None
+    | None -> None
     end
 
 and lookup_field_width' (type_ctx : Declaration.t list) (decl : Declaration.t) fn : size option =
@@ -127,7 +125,7 @@ and lookup_field_width' (type_ctx : Declaration.t list) (decl : Declaration.t) f
                 | Some fl -> fl
                 | None -> failwith "lookup_field_width': field not found" in
       begin match List.find type_ctx ~f:(fun d -> safe_name d = typ_safe_name (snd fld).typ) with
-       | Some d -> if fs == []
+       | Some d -> if fs = []
                         then lookup_type_width type_ctx (snd fld).typ
                         else lookup_field_width' type_ctx d fs
        | None -> failwith "lookup_field_width': decl not found"
@@ -168,7 +166,6 @@ and lookup_field_width' (type_ctx : Declaration.t list) (red_type_ctx : Declarat
 
 and lookup_field_width_exn (type_ctx : Declaration.t list) field : size =
 (* let last_field = List.last_exn (String.split field ~on:'.') in *)
-  let xx = printf "field = %s\n" field in 
   match lookup_field_width type_ctx field with
     | Some i -> i
     | None -> failwith ("lookup_field_width_exn: field " ^ field)
@@ -304,7 +301,6 @@ and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) 
         | None -> mkVInt(i.value |> Petr4.Bigint.to_int_exn, width)
       end
   | E.Name (_,s) ->
-    let xxx = printf "s = %s\n" s in 
     let w = get_width type_ctx e in
     Var (s, w)
   | E.ExpressionMember _ ->
@@ -622,10 +618,7 @@ and assign_param (type_ctx : Declaration.t list) (param_arg : Parameter.t * Argu
   let flds = get_rel_variables type_ctx (fst param_arg) in
   match arg with
     | Expression {value} ->
-      let xxx = printf "value = %s\n" (Sexp.to_string ([%sexp_of: Expression.t] value)) in
-      let xxx = printf "BEFORE ASSIGN\n" in
       let val_assgn = List.concat_map flds ~f:(assign_fields type_ctx param value) in
-      let xxx = printf "AFTER ASSIGN\n------\n------\n" in
       begin match param.direction with
         | Some (_, In)
         | None -> val_assgn
@@ -692,7 +685,6 @@ and assign_fields type_ctx param value fld =
                               | (i, Name (ni, n)) -> (i, Name (ni, n ^ f))
                               | _ -> failwith "HERE" in
   let flds = get_all_fields type_ctx "" fld in
-  let xxx = printf "flds = %s\n" (Sexp.to_string ([%sexp_of: string list] flds)) in
   List.map flds ~f:(fun f -> Assign( snd param.variable ^ f
                                    , encode_expression_to_value type_ctx (add_to_expr f value)))
   (* [Assign( snd param.variable ^ "." ^ snd ((snd fld).name)
@@ -702,16 +694,13 @@ and get_all_fields type_ctx h (fld : Declaration.field)  =
   let open Declaration in
   let decl = List.find type_ctx
                     ~f:(fun d -> is_some (safe_name d) && safe_name d = typ_safe_name (snd fld).typ) in
-  let xxx = printf "typ = %s\n" (Sexp.to_string ([%sexp_of: Type.t ] (snd fld).typ)) in
-  let xxx = printf "decl = %s\n" (Sexp.to_string ([%sexp_of: Declaration.t option] decl)) in
   match decl with
     | Some (_, Header {name;fields})
     | Some (_, Struct {name;fields}) ->
-      let xxx = printf "get_all_fields\nh = %s\nname = %s\n" h (snd name) in
       List.concat_map fields ~f:(get_all_fields type_ctx (h ^ "." ^ snd (snd fld).name))
     | Some (_, TypeDef _)
     | Some (_, Error _) ->  [h ^ "." ^ snd (snd fld).name]
-    | _ -> let xxx = printf "unknown = %s\n" (snd (snd fld).name) in  [h ^ "." ^ snd (snd fld).name]
+    | _ ->  [h ^ "." ^ snd (snd fld).name]
 
 and encode_control prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv:int) ( body : Block.t ) =
   encode_block prog ctx type_ctx rv body
@@ -830,18 +819,15 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
                                               (kn, lookup_field_width_exn type_ctx kn)) in
   
   let lookup_and_encode_action i (_,a) =
-    let xxx = printf "action name = %s\n" (snd a.name) in
     let (body, ad) = lookup_action_exn prog ctx a.name in
     let action_data = List.map ad ~f:(fun (_,p) -> Parameter.(p.variable)) in
     (* Set up an action run variable so we can use it to figure out which action ran in switch statements *)
     let set_action_run = Assign(snd name ^ action_run_suffix, mkVInt(i + 1, 1)) in
     let add_tctx = List.map ad ~f:(update_typ_ctx_from_param type_ctx) in 
     let type_ctx2 = add_tctx @ type_ctx in
-    let xxx = printf "add_tctx = %s" (Sexp.to_string ([%sexp_of: Declaration.t list] add_tctx)) in
     List.map action_data ~f:(fun (_, ad) -> ad, -1), set_action_run %:% encode_action prog ctx type_ctx2 rv body ~action_data
   in
   let action_cmds = List.mapi p4actions ~f:lookup_and_encode_action in
-  let xxx_end_ac = printf "END ENCODE ACTION CMDS\n" in
 
   let def_act = List.find_map p4customs
         ~f:(fun (n, e) -> if snd n = "default_action" then Some e else None) in
