@@ -825,6 +825,7 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
                                               (kn, lookup_field_width_exn type_ctx kn)) in
   
   let lookup_and_encode_action i (_,a) =
+    let xxx = printf "action name = %s " (snd a.name) in
     let (body, ad) = lookup_action_exn prog ctx a.name in
     let action_data = List.map ad ~f:(fun (_,p) -> Parameter.(p.variable)) in
     (* Set up an action run variable so we can use it to figure out which action ran in switch statements *)
