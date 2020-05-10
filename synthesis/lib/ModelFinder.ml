@@ -9,8 +9,7 @@ type opts =
    hints : bool;
    paths : bool;
    only_holes: bool;
-   mask : bool;
-   join: bool}
+   mask : bool}
 
 type t = {
     schedule : opts list;
@@ -32,9 +31,9 @@ let rec make_schedule ({injection;hints;paths;only_holes;mask} as opt) =
      *   make_schedule {opt with only_holes = false}
      * else if hints || injection then
      *   make_schedule {opt with injection = false; hints = false}
-     * else  *)
-    if injection || hints || paths || only_holes || mask then
-      [{injection=false;hints=false;paths=false;only_holes=false;mask=false;join=false}]
+     * else *)
+    if injection || hints || paths || only_holes then
+      [{injection=false;hints=false;paths=false;only_holes=false;mask=mask}]
     else
       []
 
@@ -45,7 +44,6 @@ let make_searcher (params : Parameters.t) (data : ProfData.t ref) (problem : Pro
                      paths = params.monotonic;
                      only_holes = params.monotonic;
                      mask = params.widening;
-                     join = true;
                    } in
   {schedule; search_space = []}
   
@@ -72,7 +70,7 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                       then Instance.OnlyHoles hints
                       else Instance.WithHoles (deletions, hints) in
   let hole_type =  if opts.mask then `Mask else `Exact in
-  let phys = Problem.phys_gcl_holes problem hole_protocol hole_type  in
+  let phys = Problem.phys_gcl_holes params problem hole_protocol hole_type  in
   if params.debug then Printf.printf "NEW Phys\n %s\n%!" (string_of_cmd phys);
   ProfData.update_time !data.model_holes_time st;
   let st = Time.now () in
@@ -97,8 +95,8 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
         let () = if params.debug then
                    Printf.printf "Checking path with hole!\n  %s\n\n%!" (string_of_cmd cmd) in
         let spec = in_pkt_form %=>% in_pkt_wp in
-        let () = if params.debug then
-                   Printf.printf "test starts:\n%!  %s\n\n%!" (string_of_test spec) in
+        (* let () = if params.debug then
+         *            Printf.printf "test starts:\n%!  %s\n\n%!" (string_of_test spec) in *)
         let wf_holes = List.fold (Problem.phys problem |> get_tables_actsizes) ~init:True
                          ~f:(fun acc (tbl,num_acts) ->
                            acc %&%
@@ -127,7 +125,7 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
         (* Printf.printf "Pre_condition computed\n%!"; *)
         let out_test = wf_holes %&% widening_constraint %&% pre_condition in
         (* Printf.printf "outtest_computed\n%!"; *)
-        (* let () = if params.debug then Printf.printf "test is \n   %s\n\n%!" (string_of_test pre_condition) in *)
+        let () = if params.debug then Printf.printf "test is \n   %s\n\n%!" (string_of_test pre_condition) in
         Some (out_test, hints)) in
   tests
 

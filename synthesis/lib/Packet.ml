@@ -106,7 +106,13 @@ let make ?fvs:(fvs = None) (store : value StringMap.t) : t =
 
 
 
-let equal (pkt:t) (pkt':t) = StringMap.equal (=) pkt pkt'
+let equal ?(fvs = None) (pkt:t) (pkt':t) =
+  match fvs with
+  | None -> StringMap.equal (=) pkt pkt'
+  | Some fvs ->
+     let pkt_fvs = StringMap.filter_keys pkt ~f:(fun k -> List.exists fvs (fun (v,_) -> k = v)) in
+     let pkt_fvs' = StringMap.filter_keys pkt ~f:(fun k -> List.exists fvs (fun (v,_) -> k = v)) in
+     StringMap.equal (=) pkt_fvs pkt_fvs'
 
 let generate ?bound:(bound=10000000) ?values:(values=([] : value list))  (vars : (string * size) list) =
   match values with

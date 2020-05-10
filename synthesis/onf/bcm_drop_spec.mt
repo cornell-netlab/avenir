@@ -1,0 +1,1 @@
+assume (out_port#9 = 0#9)

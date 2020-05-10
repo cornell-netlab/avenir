@@ -8,7 +8,7 @@ open Tables
 module IntMap = Map.Make(Int)
 
 
-let rec run_experiment iter seq phys_seq params hints (problem : Problem.t) =
+let rec run_experiment iter seq phys_seq (params : Parameters.t) hints (problem : Problem.t) =
   match seq with
   | [] -> phys_seq
   | edit::edits ->
@@ -18,6 +18,7 @@ let rec run_experiment iter seq phys_seq params hints (problem : Problem.t) =
      let problem_inner = Problem.(replace_log_edits problem edit) in
      let st = Time.now () in
      assert (List.length (Problem.phys_edits problem_inner) = 0);
+     assert params.do_slice;
      match cegis_math params data problem_inner with
      | None ->
         (* let _ : Edit.t list option = cegis_math {params with debug = true} data problem_inner in *)
@@ -33,8 +34,8 @@ let rec run_experiment iter seq phys_seq params hints (problem : Problem.t) =
           params
           hints
           Problem.(problem
-                   |> flip apply_edits_to_log edit
-                   |> flip apply_edits_to_phys pedits
+                   |> flip (apply_edits_to_log params) edit
+                   |> flip (apply_edits_to_phys params) pedits
                    |> delete_phys_edits)
                         
 let measure params hints problem insertions =
@@ -126,7 +127,7 @@ let reorder_benchmark varsize length max_inserts params =
                  ])
             |> List.join
   in
-  let problem = Problem.make ~log ~phys ~fvs ~log_inst ~phys_inst ~log_edits:[] in
+  let problem = Problem.make ~log ~phys ~fvs ~log_inst ~phys_inst ~log_edits:[] () in
   measure params (Some (List.return)) problem insertion_sequence
 
 
@@ -658,19 +659,9 @@ let basic_onf_ipv4 params filename =
     Problem.make ~log ~phys ~fvs
       ~log_inst:StringMap.(set empty ~key:"ipv6" ~data:[])
       ~log_edits:[]
-      ~phys_inst:StringMap.(set empty ~key:"l3_fwd" ~data:[])
+      ~phys_inst:StringMap.(set empty ~key:"l3_fwd" ~data:[]) ()
   in
   measure params None problem (onos_to_edits filename)
-
-
-let bigger_onf_ipv4 params log phys log_edits phys_edits fvs datafile =
-  let problem =
-    Problem.make ~log ~phys ~fvs ~log_edits
-      ~log_inst:StringMap.empty
-      ~phys_inst:StringMap.empty
-    |> flip Problem.replace_phys_edits phys_edits
-  in
-  measure params None problem (onos_to_edits datafile)
 
 
 
@@ -722,7 +713,8 @@ let running_example gas widening =
                                             ;([Match.Exact (mkInt(1,2))], [mkInt(2,2)], 1)])
                              ; ("dst_table", [([Match.Exact (mkInt(0,2))], [mkInt(1,2)], 0)])])
       ~log_edits:[Add ("dst_table", ([Exact (mkInt(1,2))], [mkInt(2,2)], 0))]
-      ~phys_inst:StringMap.empty in
+      ~phys_inst:StringMap.empty
+      () in
   synthesize ~iter:1
     params
     None
@@ -906,6 +898,7 @@ let onf_representative gas widening =
                              ])
       ~log_edits:[Add("next", ([Match.Exact(mkInt(1,32))], [mkInt(1,9)], 0))]
       ~phys_inst:Instance.empty
+      ()
   in
   synthesize ~iter:1
     params
@@ -1053,6 +1046,7 @@ let of_to_pipe1 widening gas fp () =
                   ~phys:of_table
                   ~log_inst:StringMap.empty
                   ~phys_inst:StringMap.empty
-                  ~log_edits: []
+                  ~log_edits:[]
+                  ()
   in
   measure params None problem pipe_insertions

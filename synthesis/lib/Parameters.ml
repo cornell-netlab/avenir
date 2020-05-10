@@ -11,6 +11,8 @@ type t =
     interactive : bool;
     injection: bool;
     fastcx : bool;
+    del_pushdown: bool;
+    above:bool;
   }
 
 let default =
@@ -21,4 +23,6 @@ let default =
     monotonic = false;
     injection = false;
     interactive = false;
-    fastcx = false }
+    fastcx = false;
+    del_pushdown = false;
+    above = false}

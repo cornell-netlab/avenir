@@ -54,6 +54,7 @@ let rec compute_cand_for_trace (tag : [`Exact | `Mask]) (line: cmd) (pinst : Ins
 
                                      
 let apply_hints
+      params
       tag
       typ
       (h_opt : (trace -> trace list) option)
@@ -61,7 +62,7 @@ let apply_hints
       pline pinst : (cmd * (Row.action_data * int) StringMap.t option) list =
   match h_opt with
   | None ->
-     [Instance.apply tag typ pinst pline |> fst, None]
+     [Instance.apply params tag typ pinst pline |> fst, None]
   | Some h ->
      List.map (h m) ~f:(fun t -> (compute_cand_for_trace typ pline pinst t, Some t))
 

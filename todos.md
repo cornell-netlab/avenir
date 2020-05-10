@@ -1,17 +1,19 @@
 
 # TODOs : Evaluation
-1. Ablation testing to measure optimizations (Done -- only collect data)
-2. Retargeting (Eric) (Justifies story)
+1. Ablation testing to measure optimizations (✓ -- only collect data)
+2. Retargeting (Eric) (Justifies story) ✓
 3. Scalability Testing (Priya)
-4. Get Infosys working (Eric) (Adds depth)
+4. Get Infosys working (Eric) (Adds depth) 
 5. Retargeting for Infosys (Eric)
 6. (Nice to have) Randomized testing to justify correctness (Anyone?)
 
 
 # Formalism
-1. Draft Section 3 Proofs (Eric) -- Done
-2. Draft Section 5 Proofs (Eric)
-3. Polish/Debug Proofs (Eric / Ruzica / Hossein / Nate)
+1. Draft Section 3 Proofs (Eric) -- ✓
+2. Write Prose for Section 3 (Eric) 
+3. Draft Section 5 Proofs (Eric)
+4. Write Prose for Section 5 (Eric)
+5. Polish/Debug Proofs (Eric / Ruzica / Hossein / Nate)
 
 # Example
 1. Come up with example (Eric / Robert / Priya)

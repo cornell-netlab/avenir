@@ -244,6 +244,16 @@ module Edit = struct
     | Add (name, _ )
       | Del (name, _) -> name
 
+  let is_delete = function
+    | Add _ -> false
+    | Del _ -> true
+
+  let has_delete = List.exists ~f:(is_delete)
+
+  let get_deletes = List.filter_map ~f:(function
+                        | Add _ -> None
+                        | Del (n,i) -> Some (n,i)
+                      )
 
   let to_string e =
     match e with
@@ -255,7 +265,6 @@ module Edit = struct
     | Add(nm,(m,_,_)), Add(nm',(m',_,_)) when nm = nm'
       -> m = m'
     | _ -> false
-
 
   let get_ith_match ~i (e : t) =
     match e with

@@ -14,24 +14,35 @@ type interp =
 
 let empty = StringMap.empty
 
-let update (inst : t) (e : Edit.t) =
+let update (params : Parameters.t) (inst : t) (e : Edit.t) =
   match e with
   | Add (tbl, row) ->
      StringMap.update inst tbl
        ~f:(fun rows_opt ->
          match rows_opt with
          | None -> [row]
-         | Some rows -> rows@[row])
+         | Some rows -> if params.above then rows @ [row] else row :: rows)
   | Del (tbl, i) ->
      StringMap.change inst tbl
        ~f:(function
          | None -> None
          | Some rows -> List.filteri rows ~f:(fun j _ -> i <> (List.length rows - j - 1)) |> Some)
 
-let rec update_list (inst : t) (edits : Edit.t list) =
+let rec update_list params (inst : t) (edits : Edit.t list) =
   match edits with
   | [] -> inst
-  | (e::es) -> update_list (update inst e) es
+  | (e::es) -> update_list params (update params inst e) es
+
+let get_row (inst : t) (table : string) (idx : int) : Row.t option =
+  match StringMap.find inst table with
+  | None -> None
+  | Some rows -> List.nth rows idx
+
+let get_row_exn inst table idx : Row.t =
+  match get_row inst table idx with
+  | None -> failwith @@ Printf.sprintf "Invalid row %d in table %s" idx table
+  | Some row -> row
+
 
 
 let rec overwrite (old_inst : t) (new_inst : t) : t =
@@ -44,6 +55,7 @@ let size : t -> int =
 
 
 let rec apply ?no_miss:(no_miss = false)
+          (params : Parameters.t)
           (tag : interp) encode_tag ?cnt:(cnt=0)
           (inst : t)
           (prog : cmd)
@@ -54,15 +66,15 @@ let rec apply ?no_miss:(no_miss = false)
     | Assert _
     | Assume _ -> (prog, cnt)
   | Seq (c1,c2) ->
-     let (c1', cnt1) = apply ~no_miss tag encode_tag ~cnt inst c1 in
-     let (c2', cnt2) = apply ~no_miss tag encode_tag ~cnt:cnt1 inst c2 in
+     let (c1', cnt1) = apply ~no_miss params tag encode_tag ~cnt inst c1 in
+     let (c2', cnt2) = apply ~no_miss params tag encode_tag ~cnt:cnt1 inst c2 in
      (c1' %:% c2', cnt2)
   | While _ -> failwith "while loops not supported"
   | Select (typ, ss) ->
      let (ss, ss_cnt) =
        List.fold ss ~init:([],cnt)
          ~f:(fun (acc, cnt) (t, c) ->
-           let (c', cnt') = apply ~no_miss tag encode_tag ~cnt inst c in
+           let (c', cnt') = apply params ~no_miss tag encode_tag ~cnt inst c in
            acc @ [(t,c')], cnt'
          ) in
      (mkSelect typ ss, ss_cnt)
@@ -132,7 +144,7 @@ let rec apply ?no_miss:(no_miss = false)
        | OnlyHoles _ -> mkPartial
        | _ -> mkOrdered
      in
-     let tbl_select = holes @selects  @ dflt_row |> mk_select in
+     let tbl_select = (if params.above then holes @ selects else selects @ holes) @ dflt_row |> mk_select in
      (* Printf.printf "TABLE %s: \n %s\n%!" tbl (string_of_cmd tbl_select); *)
      (tbl_select, cnt)
 

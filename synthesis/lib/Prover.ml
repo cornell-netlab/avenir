@@ -4,7 +4,7 @@ open Util
 open Packet
 open Z3
 
-let print_debug = false
+let print_debug = true
 
 let debug term =
   if print_debug then
@@ -131,7 +131,7 @@ let check_sat (params : Parameters.t) (test : Ast.test) =
     if params.debug && print_debug then debug term;
     assert_ sat_prover term;
     if params.debug && print_debug then Printf.printf "Asserted!\n%!";
-    check_sat_using (ParOr (UFBV, SMT)) sat_prover in
+    check_sat(* _using (ParOr (UFBV, SMT)) *) sat_prover in
   let dur = Time.(diff (now()) st) in
   if params.debug && print_debug then Printf.printf "Got a Result\n%!";
   let model =
@@ -163,9 +163,11 @@ let check_valid (params : Parameters.t) (test : Ast.test) =
     check_sat valid_prover in
   let dur = Time.(diff (now()) st) in
   let model =
-    if response = Sat
-    then Some (model_to_packet (get_model valid_prover))
-    else None in
+    match response with
+    | Sat -> Some (model_to_packet (get_model valid_prover))
+    | Unsat ->  None
+    | Unknown -> failwith "response unknown"
+  in
   reset valid_prover;
   (model, dur)
 
