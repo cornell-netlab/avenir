@@ -38,13 +38,14 @@ let parse_port_range str =
   let lo,hi = String.lsplit2_exn str ~on:':' in
   let lo_int = String.strip lo |> int_of_string in
   let hi_int = String.strip hi |> int_of_string in
-  if lo = hi
-  then Match.Exact(mkInt(lo_int, 9))
-  else Match.Between(mkInt(lo_int, 9), mkInt(hi_int, 9))
+  if lo_int = hi_int
+  then Match.Exact(mkInt(lo_int, 16))
+  else Match.Between(mkInt(lo_int, 16), mkInt(hi_int, 16))
 
 let parse_proto str =
-  let proto,_ = String.lsplit2_exn str ~on:'/' in
-  Match.Exact(Int(Bigint.of_string proto, 8))
+  let list = String.split str ~on:'\t' in
+  let proto,mask = String.lsplit2_exn (List.hd_exn list) ~on:'/' in
+  Match.Mask(Int(Bigint.of_string proto, 8), Int(Bigint.of_string mask, 8))
 
 let debug (q, w, e, r, t) = (Tables.Match.to_string q) ^ " " ^ (Tables.Match.to_string w) ^ " " ^  (Tables.Match.to_string e) ^ " " ^ (Tables.Match.to_string r) ^ " " ^ (Tables.Match.to_string t)
 
