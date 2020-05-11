@@ -11,7 +11,7 @@ let id = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
 
 rule tokens = parse
 | [' ' '\t' '\n'] { tokens lexbuf }
-| '-'?['0'-'9']+ as i { INT i }
+| ['0'-'9']+ as i { INT i }
 | "partial"       { PARTIAL }
 | "ordered"       { ORDERED }
 | "assert"        { ASSERT }
@@ -31,6 +31,7 @@ rule tokens = parse
 | "fi"            { FI }
 | "||"            { OR }
 | "&&"            { AND }
+| "&"             { LAND }
 | "<>"            { NEQ }
 | "!="            { NEQ }
 | "<="            { LEQ }
@@ -48,6 +49,7 @@ rule tokens = parse
 | "#"             { POUND }
 | ">"             { GREATER }
 | "<"             { LESS }
+| "-"             { MINUS }
 | "\\"            { FUNC }
 | eof             { EOF }
 | id as x         { ID x }

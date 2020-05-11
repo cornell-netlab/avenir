@@ -145,9 +145,9 @@ let rec wp ?no_negations:(no_negations = false) c phi =
   match c with
   | Skip -> phi
   | Seq (firstdo, thendo) ->
-    wp ~no_negations firstdo (wp ~no_negations thendo phi)
+    wp ~no_negations firstdo @@ wp ~no_negations thendo phi
   | Assign (field, value) ->
-     let phi' = substitute phi (StringMap.singleton field value) in
+     let phi' = substitute phi @@ StringMap.singleton field value in
      (* Printf.printf "replacing %s with %s in %s \n to get %s \n" field (string_of_expr value) (string_of_test phi) (string_of_test phi'); *)
      phi'
   | Assert t -> t %&% phi
@@ -160,17 +160,19 @@ let rec wp ?no_negations:(no_negations = false) c phi =
   (* doesn't require at any guard to be true *)
   | Select (Partial, []) -> True
   | Select (Partial, cmds) ->
-     List.fold cmds ~init:False ~f:(fun wp_so_far (cond, act) ->
+     let phi' = List.fold cmds ~init:False ~f:(fun wp_so_far (cond, act) ->
          let act_wp = wp ~no_negations act phi in 
          (* Printf.printf "Combining guard: %s  action: %s and accumulation %s\n%!==%s\n%!"
           *   (string_of_test cond) (string_of_test act_wp) (string_of_test wp_so_far)
           *   ((cond %&% act_wp) %+% wp_so_far |> string_of_test); *)
          (cond %&% act_wp) %+% wp_so_far
-       )
+                  ) in
+     (* Printf.printf "{%s}\n %s\n {%s}\n%!" (string_of_test phi') (string_of_cmd c) (string_of_test phi); *)
+     phi'
 
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
-     List.fold cmds ~init:(True, False) ~f:(fun (wp_so_far, misses) (cond, act) ->
+     let phi' = List.fold cmds ~init:(True, False) ~f:(fun (wp_so_far, misses) (cond, act) ->
          let guard = regularize ~no_negations cond misses in
          let act_wp = wp ~no_negations act phi in 
          (* Printf.printf "Combining guard: %s  action: %s and accumulation %s\n%!==%s\n%!"
@@ -179,7 +181,10 @@ let rec wp ?no_negations:(no_negations = false) c phi =
         ((guard %=>% act_wp) %&% wp_so_far
         , cond %+% misses )
       )
-    |> fst
+                |> fst in
+     (* Printf.printf "{%s}\n %s\n {%s}\n%!" (string_of_test phi') (string_of_cmd c) (string_of_test phi); *)
+     phi'
+
 
   | Apply t
     -> failwith "wp of apply is no good"
@@ -544,7 +549,7 @@ let rec wp_paths ~no_negations c phi : (cmd * test) list =
      List.fold cmds ~init:([]) ~f:(fun wp_so_far (cond, act) ->
           List.fold (wp_paths ~no_negations act phi) ~init:wp_so_far
              ~f:(fun acc (trace, act_wp) ->
-               (Assert cond %:% trace, cond %&% act_wp) :: acc))
+               acc @ [(Assert cond %:% trace, cond %&% act_wp)]))
 
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
@@ -566,6 +571,12 @@ let rec wp_paths ~no_negations c phi : (cmd * test) list =
 
 let bind_action_data vals (scope, cmd) : cmd =
   let holes = List.map scope fst in
+  (* Printf.printf "holes:";
+   * List.iter holes ~f:(Printf.printf " %s");
+   * Printf.printf "\n%!";
+   * Printf.printf "vals:";
+   * List.iter holes ~f:(Printf.printf " %s");
+   * Printf.printf "\n%!"; *)
   List.fold2_exn holes vals
     ~init:StringMap.empty
     ~f:(fun acc x v -> StringMap.set acc ~key:x ~data:v)

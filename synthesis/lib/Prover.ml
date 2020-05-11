@@ -4,12 +4,23 @@ open Util
 open Packet
 open Z3
 
-let debug term = let res = Smtlib.term_to_sexp term |> Smtlib.sexp_to_string
-  in Printf.printf "TERM: %s\n%!" res
+let print_debug = true
 
-let test_str test = let res = Ast.string_of_test test in Printf.printf "TEST: %s\n%!"res
+let debug term =
+  if print_debug then
+    let res = Smtlib.term_to_sexp term |> Smtlib.sexp_to_string in
+    Printf.printf "TERM: %s\n%!" res
+  else ()
 
-let expr_str test = let res = Ast.string_of_expr test in Printf.printf "EXPR: %s"res
+let test_str test =
+  if print_debug then
+    let res = Ast.string_of_test test in Printf.printf "TEST: %s\n%!"res
+  else ()
+
+let expr_str test =
+  if print_debug then
+    let res = Ast.string_of_expr test in Printf.printf "EXPR: %s"res
+  else ()
 
 let quantify expr etyp styp =
   match etyp, styp with
@@ -31,9 +42,13 @@ let rec expr_to_term_help expr styp : Smtlib.term =
   | Minus (e1, e2) -> Smtlib.bvsub
                         (expr_to_term_help e1 styp)
                         (expr_to_term_help e2 styp)
-  | Mask (e1,e2) -> Smtlib.bvand
-                        (expr_to_term_help e1 styp)
-                        (expr_to_term_help e2 styp)
+  | Mask (e1,e2) ->
+     let sexp = Smtlib.bvand
+                  (expr_to_term_help e1 styp)
+                  (expr_to_term_help e2 styp) in
+     (* expr_str expr;
+      * debug sexp; *)
+     sexp
 
 let rec test_to_term_help test styp : Smtlib.term =
   match test with
@@ -78,12 +93,14 @@ let rec model_to_packet (lst : (Smtlib.identifier * Smtlib.term) list) =
 let toZ3String test = test_to_term_help test `Sat
                       |> Smtlib.term_to_sexp |> Smtlib.sexp_to_string
 
-let expr_to_term e styp d = if d
-  then (expr_str e; let res = expr_to_term_help e styp in debug res; res)
+let expr_to_term e styp d =
+  if d
+  then (expr_str e; let res = expr_to_term_help e styp in (*debug res;*) res)
   else expr_to_term_help e styp
 
-let test_to_term test styp d = if d
-  then (test_str test; let res = test_to_term_help test styp in debug res; res)
+let test_to_term test styp d =
+  if d
+  then (test_str test; let res = test_to_term_help test styp in (*debug res;*) res)
   else test_to_term_help test styp
 
 let vars_to_term vars d =
@@ -94,50 +111,74 @@ let vars_to_term vars d =
    * else *) List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i))
 
 let sat_prover = Smtlib.make_solver "/usr/bin/z3"
-let valid_prover = Smtlib.make_solver (*"/usr/local/bin/boolector"*) "/usr/bin/z3"
+let valid_prover = sat_prover
+let shortener = Bishtbl.make ()
 
-let check_sat (params : Parameters.t) (test : Ast.test) =
+let check_sat (params : Parameters.t) (longtest : Ast.test) =
   let open Smtlib in
   (* Printf.printf "Finding model for test of size %d\n%!" (num_nodes_in_test test); *)
   (* Printf.printf "\n%s\n\n%!" (string_of_test test); *)
+  let test = Shortener.shorten shortener longtest in
+  if params.debug then assert (longtest = Shortener.unshorten shortener test);
   let vars = vars_to_term (free_vars_of_test test) params.debug in
   let st = Time.now() in
   let holes = holes_of_test test |> List.dedup_and_sort
                 ~compare:(fun (idx, x) (idy, y) -> Stdlib.compare idx idy) in
   let () = List.iter holes
              ~f:(fun (id, i) ->
-               (* Printf.printf "DECLARING %s\n%!" id; *)
+               if params.debug && print_debug then
+                    Printf.printf "(declare-const %s (_ BitVec %d))\n%!" id i;
                declare_const sat_prover (Id id) (BitVecSort i)) in
-  let term = (test_to_term test `Sat params.debug) in
-  let response = assert_ sat_prover (forall_ vars term);
-    check_sat_using (UFBV : tactic) sat_prover in
+  let term = forall_ vars (test_to_term test `Sat params.debug) in
+  let response =
+    if params.debug && print_debug then debug term;
+    assert_ sat_prover term;
+    if params.debug && print_debug then Printf.printf "Asserted!\n%!";
+    check_sat(* _using (ParOr (UFBV, SMT)) *) sat_prover in
   let dur = Time.(diff (now()) st) in
+  if params.debug && print_debug then Printf.printf "Got a Result\n%!";
   let model =
     if response = Sat then
-      Some (model_to_packet (get_model sat_prover))
+      let model = get_model sat_prover
+                  |> model_to_packet
+                  |> Shortener.unshorten_model shortener in
+      if params.debug && print_debug then
+        Printf.printf "MODEL: %s\n%!" (Packet.string__packet model);
+      Some model
     else None
   in reset sat_prover; (model, dur)
 
-let check_valid (params : Parameters.t) (test : Ast.test) =
+let check_valid (params : Parameters.t) (longtest : Ast.test) =
   let open Smtlib in
   (* Printf.printf "Checking validity for test of size %d\n%!" (num_nodes_in_test test); *)
+  let test = Shortener.shorten shortener longtest in
+  if params.debug then assert (longtest = Shortener.unshorten shortener test);
   let vars = free_vars_of_test test
              |> List.dedup_and_sort
                   ~compare:(fun (idx, x) (idy, y) -> Stdlib.compare idx idy) in
   let () =
-    push valid_prover;
     List.iter vars
-      ~f:(fun (id, i) -> declare_const valid_prover (Id id) (BitVecSort i)) in
+      ~f:(fun (id, i) ->
+        if params.debug && print_debug then
+          Printf.printf "(declare-const %s (_ BitVec %d))\n%!" id i;
+        declare_const valid_prover (Id id) (BitVecSort i)) in
   let st = Time.now() in
+  let term = not_ (test_to_term test `Valid params.debug) in
   let response =
-    assert_ valid_prover (not_ (test_to_term test `Valid params.debug));
+    if params.debug && print_debug then debug term;
+    assert_ valid_prover term;
     check_sat valid_prover in
   let dur = Time.(diff (now()) st) in
   let model =
-    if response = Sat
-    then Some (model_to_packet (get_model valid_prover))
-    else None in
-  pop valid_prover;
+    match response with
+    | Sat -> get_model valid_prover
+             |> model_to_packet
+             |> Shortener.unshorten_model shortener
+             |> Some
+    | Unsat ->  None
+    | Unknown -> failwith "response unknown"
+  in
+  reset valid_prover;
   (model, dur)
 
 let check_min (params : Parameters.t) (test : Ast.test) =

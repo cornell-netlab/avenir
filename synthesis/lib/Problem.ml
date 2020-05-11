@@ -13,9 +13,9 @@ type t =
     fvs : (string * int) list
   }
 
-let make ~log ~phys ~fvs ~log_inst ~phys_inst ~log_edits =
+let make ?phys_drop_spec:(phys_drop_spec = None) ~log ~phys ~fvs ~log_inst ~phys_inst ~log_edits () =
   {log = Switch.make log log_inst log_edits;
-   phys = Switch.make phys phys_inst [];
+   phys = Switch.make phys phys_inst [] ~drop_spec:phys_drop_spec;
    fvs;
    cexs = [];
    attempts = [];
@@ -23,10 +23,10 @@ let make ~log ~phys ~fvs ~log_inst ~phys_inst ~log_edits =
 
 
 
-let to_string (p : t) =
+let to_string params (p : t) =
   Printf.sprintf "+-------------------------+\nLogical:\n%s\n\nPhysical:\n%s\nWRT:[%s]\n+-------------------------------+\n"
-    (Switch.to_string p.log)
-    (Switch.to_string p.phys)
+    (Switch.to_string params p.log)
+    (Switch.to_string params p.phys)
     (List.map p.fvs ~f:(fun (x,sz) -> "(" ^ x ^ "#" ^ string_of_int sz ^ ")")
      |> List.reduce ~f:(fun x y -> x ^","^ y)
      |> Option.value ~default:"")
@@ -39,25 +39,26 @@ let attempts (p : t) : value StringMap.t list = p.attempts
 let log (p : t) : cmd = Switch.pipeline p.log
 let log_inst (p : t) : Instance.t = Switch.inst p.log
 let log_edits (p : t) : Edit.t list = Switch.edits p.log
-let log_edited_instance (p : t) : Instance.t = Switch.edited_instance p.log
-let log_gcl_program (p : t) : cmd = Switch.to_gcl p.log
+let log_edited_instance params (p : t) : Instance.t = Switch.edited_instance params p.log
+let log_gcl_program params (p : t) : cmd = Switch.to_gcl params p.log
 
 let phys (p : t) : cmd = Switch.pipeline p.phys
 let phys_inst (p : t) : Instance.t = Switch.inst p.phys
 let phys_edits (p : t) : Edit.t list = Switch.edits p.phys
-let phys_edited_instance (p : t) : Instance.t = Switch.edited_instance p.phys
-let phys_gcl_program (p : t) : cmd = Switch.to_gcl p.phys
+let phys_edited_instance params (p : t) : Instance.t = Switch.edited_instance params p.phys
+let phys_gcl_program params (p : t) : cmd = Switch.to_gcl params p.phys
 
-let phys_gcl_holes (p : t) dels tag : cmd = Switch.to_gcl_holes p.phys dels tag
+let phys_gcl_holes params (p : t) dels tag : cmd = Switch.to_gcl_holes params p.phys dels tag
+let phys_drop_spec (p : t) : test option = Switch.drop_spec p.phys
 
-let slice (p : t) : t =
-  let log_inst_slice = Instance.update_list Instance.empty (Switch.edits p.log) in
-  let phys_inst_slice = Instance.update_list Instance.empty (Switch.edits p.phys) in
+let slice params (p : t) : t =
+  let log_inst_slice = Instance.update_list params Instance.empty (Switch.edits p.log) in
+  let phys_inst_slice = Instance.update_list params Instance.empty (Switch.edits p.phys) in
   let log = Instance.overwrite (Switch.inst p.log) log_inst_slice |> Switch.replace_inst p.log in
   let phys = Instance.overwrite (Switch.inst p.phys) phys_inst_slice |> Switch.replace_inst p.phys in
   (* Printf.printf "PROBLEM:\n%s\n%!" (to_string p); *)
   let p = {p with log; phys} in
-  (* Printf.printf "SLICED PROBLEM:\n%s\n%!" (to_string p); *)
+  Printf.printf "SLICED PROBLEM:\n%s\n%!" (to_string params p);
   p
 
 let append_phys_edits (p : t) (es : Edit.t list) : t =
@@ -71,14 +72,15 @@ let replace_phys_edits (p : t) (phys_edits : Edit.t list) : t =
 
 let delete_phys_edits (p : t) : t = replace_phys_edits p []
 
-let commit_edits_phys (p : t) : t = {p with phys = Switch.commit_edits p.phys}
-let commit_edits_log (p : t) : t = {p with log = Switch.commit_edits p.log}
+let commit_edits_phys params (p : t) : t = {p with phys = Switch.commit_edits params p.phys}
+let commit_edits_log params (p : t) : t = {p with log = Switch.commit_edits params p.log}
 
 
 let reset_attempts (p : t) : t = {p with attempts = []}
 let add_attempt (p : t) (attempt : value StringMap.t) : t =
   {p with attempts = attempt :: p.attempts}
-let seen_attempt (p : t)  (attempt : value StringMap.t) : bool =                            List.exists p.attempts ~f:(StringMap.equal veq attempt)
+let seen_attempt (p : t)  (attempt : value StringMap.t) : bool =
+  List.exists p.attempts ~f:(StringMap.equal veq attempt)
 
 let add_cex (p : t) (cex : (Packet.t * Packet.t)) : t =
   {p with cexs = cex :: p.cexs}
@@ -92,11 +94,11 @@ let refine_model_space (p : t) (b : test) : t =
 let set_model_space (p : t) (model_space : test) : t =
   {p with model_space}
 
-let apply_edits_to_log (p : t) (es : Edit.t list) : t =
-  {p with log = Switch.update_inst p.log es}
+let apply_edits_to_log params (p : t) (es : Edit.t list) : t =
+  {p with log = Switch.update_inst params p.log es}
 
-let apply_edits_to_phys (p : t) (es : Edit.t list) : t =
-  {p with phys = Switch.update_inst p.phys es}
+let apply_edits_to_phys params (p : t) (es : Edit.t list) : t =
+  {p with phys = Switch.update_inst params p.phys es}
 
 let update_phys (p : t) (phys_cmd : cmd) : t =
   {p with phys = Switch.replace_pipeline p.phys phys_cmd}

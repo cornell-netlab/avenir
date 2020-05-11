@@ -37,9 +37,9 @@ let rec compute_cand_for_trace (tag : [`Exact | `Mask]) (line: cmd) (pinst : Ins
         then (*Assert (misses) %:%*) t.default
         else
           let actSize = max (log2(List.length t.actions)) 1 in
-          let row_hole = Instance.add_row_hole t.name in
-          let act_hole = Instance.which_act_hole t.name actSize in
-          let cond = Instance.tbl_hole tag t.keys t.name row_hole act_hole act_idx actSize [] in
+          let row_hole = Hole.add_row_hole t.name in
+          let act_hole = Hole.which_act_hole t.name actSize in
+          let cond = Hint.tbl_hole tag t.keys t.name row_hole act_hole act_idx actSize [] in
           let (params, act) = List.nth_exn t.actions act_idx in
           let args = List.fold2_exn params data ~init:True
                        ~f:(fun acc param arg ->
@@ -54,6 +54,7 @@ let rec compute_cand_for_trace (tag : [`Exact | `Mask]) (line: cmd) (pinst : Ins
 
                                      
 let apply_hints
+      params
       tag
       typ
       (h_opt : (trace -> trace list) option)
@@ -61,7 +62,7 @@ let apply_hints
       pline pinst : (cmd * (Row.action_data * int) StringMap.t option) list =
   match h_opt with
   | None ->
-     [Instance.apply tag typ pinst pline |> fst, None]
+     [Instance.apply params tag typ pinst pline |> fst, None]
   | Some h ->
      List.map (h m) ~f:(fun t -> (compute_cand_for_trace typ pline pinst t, Some t))
 

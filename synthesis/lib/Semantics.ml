@@ -5,16 +5,24 @@ open Manip
 open Tables
 
 let rec eval_expr (pkt_loc : Packet.located) ( e : expr ) : value =
-  let binop op e e' = op (eval_expr pkt_loc e) (eval_expr pkt_loc e') in
+  let binop op e e' =
+    let f = eval_expr pkt_loc in
+    let v = f e in
+    let v' = f e' in
+    (* if size_of_value v <> size_of_expr e then
+     *   failwith
+     *   @@ Printf.sprintf "%s ====> %s, with different sizes!!!!" (sexp_string_of_expr e) (sexp_string_of_value v)
+     * else *)
+    op v v'
+  in
   match e with
   | Value v -> v
   | Var (v,_) -> Packet.get_val (fst pkt_loc) v
   | Hole (h,_) -> Packet.get_val (fst pkt_loc) h
-  | Plus  (e, e') -> binop add_values e e'
-  | Times (e, e') -> binop multiply_values e e'
-  | Minus (e, e') -> binop subtract_values e e'
-  | Mask (e,e') -> binop mask_values e e'
-
+  | Plus  (e1, e2) -> binop add_values e1 e2
+  | Times (e1, e2) -> binop multiply_values e1 e2
+  | Minus (e1, e2) -> binop subtract_values e1 e2
+  | Mask (e1, e2) -> binop mask_values e1 e2
 
 let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   let binopt op a b = op (check_test a pkt_loc) (check_test b pkt_loc) in
@@ -40,25 +48,25 @@ let rec find_match ?idx:(idx = 0) pkt_loc ss ~default:default =
      else
        (find_match ~idx:(idx+1) pkt_loc rest ~default)
 
-let rec wide_eval wide (e : expr) =
-  match e with
-  | Value(x) -> (x,x)
-  | Var(x, sz) ->
-     begin match StringMap.find wide x with
-     | None -> failwith ("USE BEFORE DEF " ^ x)
-     | Some (lo,hi) -> (lo,hi)
-     end
-  | Hole _ -> failwith "dont know how to eval holes"
-  | Plus(x,y) -> let (lox,hix) = wide_eval wide x in
-                 let (loy, hiy) = wide_eval wide y in
-                 (add_values lox loy, add_values hix hiy)
-  | Times(x,y) -> let (lox, hix) = wide_eval wide x in
-                  let (loy, hiy) = wide_eval wide y in
-                  (multiply_values lox loy, multiply_values hix hiy)
-  | Minus(x,y) -> let (lox, hix) = wide_eval wide x in
-                  let (loy, hiy) = wide_eval wide y in
-                  (subtract_values lox hiy, subtract_values hix loy)
-  | Mask (x,y) -> failwith "Don't know how to widely evaluate a mask"
+let rec wide_eval wide (e : expr) = (mkInt(0,-1),mkInt(0,-1))
+  (* match e with
+   * | Value(x) -> (x,x)
+   * | Var(x, sz) ->
+   *    begin match StringMap.find wide x with
+   *    | None -> failwith ("USE BEFORE DEF " ^ x)
+   *    | Some (lo,hi) -> (lo,hi)
+   *    end
+   * | Hole _ -> failwith "dont know how to eval holes"
+   * | Plus(x,y) -> let (lox,hix) = wide_eval wide x in
+   *                let (loy, hiy) = wide_eval wide y in
+   *                (add_values lox loy, add_values hix hiy)
+   * | Times(x,y) -> let (lox, hix) = wide_eval wide x in
+   *                 let (loy, hiy) = wide_eval wide y in
+   *                 (multiply_values lox loy, multiply_values hix hiy)
+   * | Minus(x,y) -> let (lox, hix) = wide_eval wide x in
+   *                 let (loy, hiy) = wide_eval wide y in
+   *                 (subtract_values lox hiy, subtract_values hix loy)
+   * | Mask (x,y) -> failwith "Don't know how to widely evaluate a mask" *)
 
 
 let widening_assignment (wide : (value*value) StringMap.t) f e : (value * value) StringMap.t =
@@ -212,10 +220,12 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
 
 
 let eval_act (act : cmd) (pkt : Packet.t) : Packet.t =
+  (* Printf.printf "EVALUATING WITH PACKET:\n %s\n%!" (Packet.string__packet pkt); *)
   match trace_eval_inst act Instance.empty ~wide:StringMap.empty (pkt, None) with
   | ((pkt, _), _ ,_ ,_) -> pkt
 
 let eval_cmd (cmd : cmd) (inst : Instance.t) (pkt : Packet.t) : Packet.t =
+  (* Printf.printf "EVALUATING WITH PACKET:\n %s\n%!" (Packet.string__packet pkt); *)
   match trace_eval_inst cmd inst ~wide:StringMap.empty (pkt, None) with
   | ((pkt, _), _ ,_ ,_) -> pkt
 

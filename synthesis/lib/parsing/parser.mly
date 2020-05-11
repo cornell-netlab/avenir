@@ -5,7 +5,7 @@
 %token FALSE
 %token OR AND NOT IMPLIES
 %token EQ LESS GREATER LEQ GEQ NEQ
-%token PLUS TIMES MINUS
+%token PLUS TIMES MINUS LAND
 %token WHILE SKIP SEMICOLON ASSIGN
 %token ASSERT ASSUME ABORT APPLY
 %token IF TOTAL PARTIAL ORDERED CASE BRACKETS FI
@@ -75,8 +75,9 @@ expr :
 | i = INT; POUND; size = INT { Ast.(Value (Int (Bigint.of_string i, int_of_string size))) }
 | x = ID; POUND; size = INT  { Ast.Var (x, int_of_string size) }
 | e = expr; PLUS; e1 = expr { Ast.(mkPlus e e1) }
-| e = expr; MINUS; e1 = expr { Ast.(mkPlus e e1) }
+| e = expr; MINUS; e1 = expr { Ast.(mkMinus e e1) }
 | e = expr; TIMES; e1 = expr { Ast.(mkTimes e e1) }
+| e = expr; LAND; e1 = expr { Ast.(mkMask e e1) }
 | LPAREN; e = expr; RPAREN { e }
 | QUESTION; x = ID; POUND; size = INT { Ast.Hole (x, int_of_string size) }
 

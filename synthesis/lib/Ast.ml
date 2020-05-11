@@ -107,8 +107,7 @@ let mkVInt i = Value (mkInt i)
 let mkPlus e e' = Plus(e,e')
 let mkMinus e e' = Minus (e, e')
 let mkTimes e e' = Times (e, e')
-let mkMask e e' = Mask (e,e')
-
+let mkMask e e' = Mask(e,e')
 
                    
 let rec add_values (v : value) (v' : value) : value =
@@ -120,20 +119,23 @@ let rec add_values (v : value) (v' : value) : value =
 let rec multiply_values (v : value) (v' : value) : value =
   match v, v' with
   | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x * x'), sz)
-  | Int (x,sz), Int (x',sz') -> failwith (Printf.sprintf "Type error %s#%d and %s#%d have different file sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
+  | Int (x,sz), Int (x',sz') -> failwith (Printf.sprintf "Type error %s#%d and %s#%d have different bitvec sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 
 
 let rec subtract_values (v : value) (v' : value) : value =
   match v, v' with
-  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x - x'), sz)
+  | Int (x, sz), Int (x',sz') when sz = sz' ->
+     (* if Bigint.(x-x' < zero)
+      * then Int (Bigint.zero, sz)
+      * else  *)Int (Bigint.(x - x'), sz)
   | Int (x, sz), Int (x', sz') ->
-     failwith (Printf.sprintf "Type error %s#%d and %s#%d have different file sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
+     failwith (Printf.sprintf "Type error %s#%d and %s#%d have different bitvec sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 
 let rec mask_values (v : value) (v' : value) : value =
   match v,v' with
   | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x land x'), sz)
   | Int (x, sz), Int (x', sz') ->
-     failwith (Printf.sprintf "Type error %s#%d and %s#%d have different file sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
+     failwith (Printf.sprintf "MASK: Type error %s#%d and %s#%d have different BV sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 
 
 
@@ -221,7 +223,7 @@ let rec mkEq (e : expr) (e':expr) =
       | Value _ -> 7
       | Mask _ -> 8
     in
-    match e, e' with 
+    let norm = match e, e' with
     | Value _, Value _
       ->
        (*Printf.printf "[=] %s and %s are unequal values so False\n" (string_of_expr e) (string_of_expr e');*)
@@ -235,6 +237,11 @@ let rec mkEq (e : expr) (e':expr) =
        if ord e < ord e'
        then Eq (e, e')
        else Eq (e', e)
+    in
+    match norm with
+    | Eq(Value(Int(_,_)), Mask(Var(_,_), Value(Int(m,_))))
+         when Bigint.(m = zero) -> True
+    | _ -> norm
 
 
 let mkLe (e : expr) (e' : expr) : test = Le(e,e')
@@ -407,6 +414,7 @@ type cmd =
               actions:(((string * size) list * cmd) list);
               default: cmd}
 
+
 let clean_selects_list ss = ss
   (* List.filter ~f:(fun (c,a) -> c <> False) *)
   (* List.rev ss
@@ -558,6 +566,10 @@ let rec sexp_string_of_cmd e : string =
      ^ List.fold_left t.actions ~init:"" ~f:(fun str a -> str ^ ";((SOME ACTION DATA), " ^ sexp_string_of_cmd (snd a) ^")")
      ^ "]," ^ sexp_string_of_cmd t.default
      ^ ")"
+
+let get_test_from_assume = function
+  | Assume t -> t
+  | c -> failwith @@ Printf.sprintf "tried to get test from command %s" (string_of_cmd c)
 
 let rec tables_of_cmd (c:cmd) : string list =
   match c with

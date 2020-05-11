@@ -26,7 +26,9 @@ let make edit table (log_keys, log_acts, log_def) (phys_keys, phys_acts, phys_de
   let match_opt =
     List.map phys_keys ~f:(fun (key,sz) ->
         match List.findi log_keys ~f:(fun i (key',_) -> key = key') with
-        | None -> None
+        | None ->
+           let string = Printf.sprintf "0b%s" (String.make sz '0') in
+           Some (Match.Mask(mkInt(0,sz), mkInt(int_of_string string, sz)))
         | Some (i,_) -> Edit.get_ith_match ~i edit
       ) |> Some
   in
@@ -48,7 +50,7 @@ let construct log phys (e : Edit.t) : t list =
                acc @ [make e table log_schema phys_schema]
           )
 
-let encode_match keys h encode_tag =
+let encode_match (keys : (string * size) list) (h : t) encode_tag =
   match h.match_opt with
   | None -> None
   | Some matches ->
@@ -58,7 +60,7 @@ let encode_match keys h encode_tag =
            (match match_opt with
             | None ->
                (* Printf.printf "Encoding hole for %s\n%!"x; *)
-               let tst = Match.holes encode_tag x sz in
+               let tst = Hole.match_holes encode_tag h.table x sz in
                (* Printf.printf " == %s\n%!" (string_of_test tst); *)
                tst
             | Some m ->
@@ -68,7 +70,7 @@ let encode_match keys h encode_tag =
 
 
 let added_to_row (table : string) (m : value StringMap.t)  : bool =
-  match "?AddRowTo" ^ table |> StringMap.find m with
+  match Hole.add_row_hole_name table |> StringMap.find m with
   | Some data -> get_int data = Bigint.one
   | _ -> false
 
@@ -86,14 +88,45 @@ let add_to_model (phys : cmd) (hints : t list) (m : value StringMap.t) : value S
            | Some (keys,_,_) ->
               List.fold2_exn keys matches ~init:acc ~f:(fun acc (ky,_) mtch ->
                   match mtch with
-                  | None -> acc
-                  | Some (Match.Exact data) -> StringMap.set acc ~key:("?"^ky) ~data
+                  | None ->
+                     (* Printf.printf "Skipping key %s\n%!" ky; *)
+                     acc
+                  | Some (Match.Exact data) ->
+                     (* Printf.printf "Exact Matching key %s\n%!" ky; *)
+                     let m = StringMap.set acc ~key:(Hole.match_hole_exact hint.table ky) ~data in
+                     (* Printf.printf "Model is now: %s\n%!" (string_of_map m); *)
+                     m
+
                   | Some (Match.Between (lo, hi)) ->
-                     StringMap.set acc ~key:("?"^ky^"_lo") ~data:lo
-                     |> StringMap.set ~key:("?"^ky^"_hi") ~data:hi
+                     (* Printf.printf "Between Matching key %s\n%!" ky; *)
+                     let (klo, khi) = Hole.match_holes_range hint.table ky in
+                     StringMap.set acc ~key:klo ~data:lo
+                     |> StringMap.set ~key:khi ~data:hi
                   | Some (Match.Mask (v, m)) ->
-                     StringMap.set acc ~key:("?"^ky) ~data:v
-                     |> StringMap.set ~key:("?"^ky^"_mask") ~data:m
+                     (* Printf.printf "Mask Matching key %s\n" ky; *)
+                     let (k,km) = Hole.match_holes_mask hint.table ky in
+                     StringMap.set acc ~key:k ~data:v
+                     |> StringMap.set ~key:km ~data:m
                 )
       else
         acc)
+
+
+let tbl_hole encode_tag (keys: (string * size) list) tbl row_hole act_hole i actSize (hs : t list) =
+  let default_match_holes =
+    List.fold ~init:True
+      ~f:(fun acc (x,sz) ->
+        acc %&% Hole.match_holes encode_tag tbl x sz) in
+  let matches_holes =
+    match List.find hs ~f:(fun h -> Stdlib.(h.table = tbl)) with
+    | Some h ->
+       begin match encode_match keys h encode_tag with
+       | None ->  default_match_holes keys
+       | Some phi -> phi
+       end
+    | None when List.length hs > 0 -> False
+    | _ -> default_match_holes keys
+ in
+  matches_holes
+  %&% (row_hole %=% mkVInt (1,1))
+  %&% (act_hole %=% mkVInt (i,actSize))
