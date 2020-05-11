@@ -112,11 +112,14 @@ let vars_to_term vars d =
 
 let sat_prover = Smtlib.make_solver "/usr/bin/z3"
 let valid_prover = sat_prover
+let shortener = Bishtbl.make ()
 
-let check_sat (params : Parameters.t) (test : Ast.test) =
+let check_sat (params : Parameters.t) (longtest : Ast.test) =
   let open Smtlib in
   (* Printf.printf "Finding model for test of size %d\n%!" (num_nodes_in_test test); *)
   (* Printf.printf "\n%s\n\n%!" (string_of_test test); *)
+  let test = Shortener.shorten shortener longtest in
+  if params.debug then assert (longtest = Shortener.unshorten shortener test);
   let vars = vars_to_term (free_vars_of_test test) params.debug in
   let st = Time.now() in
   let holes = holes_of_test test |> List.dedup_and_sort
@@ -136,16 +139,20 @@ let check_sat (params : Parameters.t) (test : Ast.test) =
   if params.debug && print_debug then Printf.printf "Got a Result\n%!";
   let model =
     if response = Sat then
-      let model = model_to_packet (get_model sat_prover) in
+      let model = get_model sat_prover
+                  |> model_to_packet
+                  |> Shortener.unshorten_model shortener in
       if params.debug && print_debug then
         Printf.printf "MODEL: %s\n%!" (Packet.string__packet model);
       Some model
     else None
   in reset sat_prover; (model, dur)
 
-let check_valid (params : Parameters.t) (test : Ast.test) =
+let check_valid (params : Parameters.t) (longtest : Ast.test) =
   let open Smtlib in
   (* Printf.printf "Checking validity for test of size %d\n%!" (num_nodes_in_test test); *)
+  let test = Shortener.shorten shortener longtest in
+  if params.debug then assert (longtest = Shortener.unshorten shortener test);
   let vars = free_vars_of_test test
              |> List.dedup_and_sort
                   ~compare:(fun (idx, x) (idy, y) -> Stdlib.compare idx idy) in
@@ -164,7 +171,10 @@ let check_valid (params : Parameters.t) (test : Ast.test) =
   let dur = Time.(diff (now()) st) in
   let model =
     match response with
-    | Sat -> Some (model_to_packet (get_model valid_prover))
+    | Sat -> get_model valid_prover
+             |> model_to_packet
+             |> Shortener.unshorten_model shortener
+             |> Some
     | Unsat ->  None
     | Unknown -> failwith "response unknown"
   in
