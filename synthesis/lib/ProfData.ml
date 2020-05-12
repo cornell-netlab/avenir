@@ -1,13 +1,16 @@
 open Core
+
 (* Timing data : lots of subsets, eq time in check valid time in impl time  *)
 type t = {
     log_inst_size : int ref;
     phys_inst_size : int ref;
     time : Time.Span.t ref;
+    fast_cex_time : Time.Span.t ref;
     impl_time : Time.Span.t ref;
     check_valid_time : Time.Span.t ref;
     eq_time : Time.Span.t ref;
     make_vc_time: Time.Span.t ref;
+    normalize_packet_time : Time.Span.t ref;
     check_sliceable_time : Time.Span.t ref;
     eq_num_z3_calls : int ref;
     model_search_time : Time.Span.t ref;
@@ -28,6 +31,7 @@ let headers =
   ["log_inst_size";
    (* "phys_inst_size"; *)
    "time";
+   "fast_cex_time";
    "impl_time";
    "check_valid_time";
    "eq_time";
@@ -65,10 +69,11 @@ let min_tree_size data = List.fold !(data.tree_sizes) ~init:(max_tree_size data)
 
 
 let to_string (data : t) =
-  Printf.sprintf "%d,%f,%f,%f,%f,%f,%f,%d,%f,%f,%f,%f,%f,%d,%d"
+  Printf.sprintf "%d,%f,%f,%f,%f,%f,%f,%f,%d,%f,%f,%f,%f,%f,%d,%d"
     !(data.log_inst_size)
     (* data.phys_inst_size *)
     (!(data.time) |> Time.Span.to_ms)
+    (!(data.fast_cex_time) |> Time.Span.to_ms)
     (!(data.impl_time) |> Time.Span.to_ms)
     (!(data.check_valid_time) |> Time.Span.to_ms)
     (!(data.eq_time) |> Time.Span.to_ms)
@@ -102,9 +107,11 @@ let zero _ : t ref =
   ref { log_inst_size = ref 0;
         phys_inst_size = ref 0;
         time = ref Time.Span.zero;
+        fast_cex_time = ref Time.Span.zero;
         impl_time = ref Time.Span.zero;
         check_valid_time = ref Time.Span.zero;
         eq_time = ref Time.Span.zero;
+        normalize_packet_time = ref Time.Span.zero;
         make_vc_time = ref Time.Span.zero;
         check_sliceable_time = ref Time.Span.zero;
         eq_num_z3_calls = ref 0;

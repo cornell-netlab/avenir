@@ -28,7 +28,8 @@ let make (problem : Problem.t) : t =
           StringMap.set acc ~key:("?AddRowTo"^tbl) ~data:(mkInt(0,1))
       )
 
-let apply (inj : t) (phi : test) = Manip.fixup_test inj phi
+let apply (inj : t) (phi : test) =
+  Manip.fixup_test inj phi
 
 let optimization (params : Parameters.t) (problem : Problem.t) : test -> test =
   if params.injection then make problem |> apply else Fn.id

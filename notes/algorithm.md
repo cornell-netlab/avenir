@@ -422,12 +422,12 @@ or     ⋄(χ ∈ χs)
 let cegis l p τ σ es χs =
   match l τ = p (σ + es) with
   | Valid → success es
-  | Cex χ → solve l p τ σ es ({χ}∪χs) ⊤  
+  | Cex χ → solve l p τ σ es χ χs ⊤  
 and solve l p τ σ es χs φ =
   if φ is unsat
   then fail
   else
-    match get_model'' l p τ σ es χs φ with
+    match get_model'' l p τ σ es χ φ with
       | none → fail
       | some es' →
          match cegis l p τ σ (es·es') χs with

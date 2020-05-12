@@ -252,7 +252,7 @@ let populate one_big_table fvs physical_pipeline physical_check_name logical_row
        sequence [
            "drop"%<-%mkVInt(0,1);
            "outport"%<-%mkVInt(0,9);
-           (Instance.apply `NoHoles `Exact log_inst one_big_table |> fst) ]
+           (Instance.apply Parameters.default Instance.NoHoles `Exact log_inst one_big_table |> fst) ]
      in
      begin match check_sat Parameters.default (equivalent fvs phys_instrumented log_populated) with
      | None, d ->
