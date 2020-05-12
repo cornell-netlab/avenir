@@ -33,15 +33,17 @@ let rec update_list params (inst : t) (edits : Edit.t list) =
   | [] -> inst
   | (e::es) -> update_list params (update params inst e) es
 
+
+let get_rows inst table : Row.t list = StringMap.find inst table |> Option.value ~default:[]
+
 let get_row (inst : t) (table : string) (idx : int) : Row.t option =
-  match StringMap.find inst table with
-  | None -> None
-  | Some rows -> List.nth rows idx
+  List.nth (get_rows inst table) idx
 
 let get_row_exn inst table idx : Row.t =
   match get_row inst table idx with
   | None -> failwith @@ Printf.sprintf "Invalid row %d in table %s" idx table
   | Some row -> row
+
 
 
 

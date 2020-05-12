@@ -58,7 +58,7 @@ let slice params (p : t) : t =
   let phys = Instance.overwrite (Switch.inst p.phys) phys_inst_slice |> Switch.replace_inst p.phys in
   (* Printf.printf "PROBLEM:\n%s\n%!" (to_string p); *)
   let p = {p with log; phys} in
-  Printf.printf "SLICED PROBLEM:\n%s\n%!" (to_string params p);
+  (* Printf.printf "SLICED PROBLEM:\n%s\n%!" (to_string params p); *)
   p
 
 let append_phys_edits (p : t) (es : Edit.t list) : t =

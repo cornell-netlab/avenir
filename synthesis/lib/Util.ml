@@ -218,3 +218,12 @@ let or_unequal_lengths_to_option =
   function
   | Ok x -> Some x
   | Unequal_lengths -> None
+
+
+
+let oLift2 f a b =
+  match a, b with
+  | Some a', Some b' -> f a' b' |> Some
+  | _,_ -> None
+
+

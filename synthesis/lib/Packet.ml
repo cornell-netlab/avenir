@@ -101,7 +101,11 @@ let make ?fvs:(fvs = None) (store : value StringMap.t) : t =
             StringMap.set acc ~key:var_nm ~data:v
          | None ->
             (* Printf.printf "Missed %s setting it to ranodm value\n%!" var_nm; *)
-            init_field_to_random (pow 2 sz) acc (var_nm, sz)
+            let top = (pow 2 sz) - 1 |> Float.of_int  in
+            let upper = Float.(top * 0.9 |> to_int) |> max 1 in
+            let lower = Float.(top * 0.1 |> to_int) in
+            StringMap.set acc ~key:var_nm
+              ~data:(mkInt(lower + Random.int upper, sz))
        )
 
 
@@ -111,7 +115,8 @@ let equal ?(fvs = None) (pkt:t) (pkt':t) =
   | None -> StringMap.equal (=) pkt pkt'
   | Some fvs ->
      let pkt_fvs = StringMap.filter_keys pkt ~f:(fun k -> List.exists fvs (fun (v,_) -> k = v)) in
-     let pkt_fvs' = StringMap.filter_keys pkt ~f:(fun k -> List.exists fvs (fun (v,_) -> k = v)) in
+     let pkt_fvs' = StringMap.filter_keys pkt' ~f:(fun k -> List.exists fvs (fun (v,_) -> k = v)) in
+     (* Printf.printf "Checking\n%s\n=\n%s\n" (string__packet pkt_fvs) (string__packet pkt_fvs'); *)
      StringMap.equal (=) pkt_fvs pkt_fvs'
 
 let generate ?bound:(bound=10000000) ?values:(values=([] : value list))  (vars : (string * size) list) =

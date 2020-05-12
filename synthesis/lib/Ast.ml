@@ -266,9 +266,11 @@ let mkImplies assum conseq =
     | True, _ -> conseq
     | _, True | False, _ -> True
     | _, False -> !%(assum)
-    | _, _ -> Impl(assum, conseq) 
+    | _, _ -> Impl(assum, conseq)
 
-let (%=>%) = mkImplies
+let mkImpl = mkImplies
+
+let (%=>%) = mkImpl
 
 let mkIff lhs rhs =
   if enable_smart_constructors

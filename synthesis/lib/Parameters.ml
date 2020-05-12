@@ -11,6 +11,7 @@ type t =
     interactive : bool;
     injection: bool;
     fastcx : bool;
+    cache : bool;
     del_pushdown: bool;
     above:bool;
   }
@@ -18,6 +19,7 @@ type t =
 let default =
   { widening = false;
     do_slice = false;
+    cache = true;
     gas = 1000;
     debug = false;
     monotonic = false;
