@@ -530,7 +530,7 @@ let rec get_cex (params : Parameters.t) (data :  ProfData.t ref) (problem : Prob
 (*a model is suspicious if it contains a value that's not related to
    anything we've seen so far. Not sure how to analyze masks, so we
    just allow them to have any value*)
-let suspect_model params problem model =
+let suspect_model params problem es model =
   let ints_in_problem =
     multi_ints_of_cmd (Problem.log_gcl_program params problem)
     @ multi_ints_of_cmd (Problem.phys_gcl_program params problem)
@@ -538,16 +538,17 @@ let suspect_model params problem model =
     |> List.dedup_and_sort ~compare:Bigint.compare
   in
   let open Bigint in
-  StringMap.fold model ~init:true
-       ~f:(fun ~key ~data acc ->
+  StringMap.fold model ~init:false
+    ~f:(fun ~key ~data acc ->
          let d = get_int data in
-         acc && (
-           d = zero || d = one
-             || String.is_substring key ~substring:"_mask"
-             || List.exists ints_in_problem ~f:(Bigint.(=) d)
-         )
+         if d = zero then acc
+         else if  d = one then acc
+         else if not (List.exists (Problem.fvs problem) ~f:(fun (v,_) -> String.is_substring key ~substring:v)) then
+           let () = Printf.printf "%s is excluded\n" key in acc
+         else if String.is_substring key ~substring:"_mask" then acc
+         else if List.exists ints_in_problem ~f:(Bigint.(=) d) then acc
+         else true
        )
-
 
 let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (Edit.t list option) =
   (* Printf.printf "\tcegis_math\n%!"; *)
@@ -621,10 +622,10 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
            if params.interactive then
              ignore(Stdio.In_channel.(input_char stdin) : char option);
            if params.debug then None
-           else begin match ModelFinder.search {params with debug = true} data problem searcher with
-                | Some _ -> Printf.printf "found a model when retrying%!\n"; failwith ""
-                | None -> Printf.printf "couldn't find a model when retrying"; None
-                end
+           else None (* begin match ModelFinder.search {params with debug = true} data problem searcher with
+                 * | Some _ -> Printf.printf "found a model when retrying%!\n"; failwith ""
+                 * | None -> Printf.printf "couldn't find a model when retrying"; None
+                 * end *)
         | Some (model, searcher) ->
            (* Printf.printf "\tfound model\n%!"; *)
            if Problem.seen_attempt problem model
@@ -640,20 +641,20 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
              let problem = Problem.add_attempt problem model in
              (* assert (Problem.num_attempts problem <= 1); *)
              let es = Edit.extract (Problem.phys problem) model in
-             if params.debug then begin
+             if true then begin
                  Printf.printf "\t***Edits***\n%!";
                  List.iter es ~f:(fun e -> Printf.printf "\t %s\n%!" (Edit.to_string e));
                  Printf.printf "\t***     ***\n"
                end;
-             let es =
-               if params.del_pushdown then
-                 match Edit.get_deletes es with
-                 | [] -> es
-                 | ds -> es @ List.map ds ~f:(fun (table,idx) ->
-                                  Edit.Add(table, Instance.get_row_exn (Problem.phys_inst problem) table idx)
-                                )
-               else es
-             in
+             (* let es =
+              *   if params.del_pushdown then
+              *     match Edit.get_deletes es with
+              *     | [] -> es
+              *     | ds -> es @ List.map ds ~f:(fun (table,idx) ->
+              *                      Edit.Add(table, Instance.get_row_exn (Problem.phys_inst problem) table idx)
+              *                    )
+              *   else es
+              * in *)
              let problem' = Problem.(append_phys_edits problem es
                                      |> reset_model_space
                                      |> reset_attempts) in
@@ -673,13 +674,17 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
              if params.debug then begin
                  Printf.printf "\n%s\n%!" (Problem.to_string params problem');
                end;
-             if suspect_model params problem model
-             then continue ()
-             else match cegis_math params data problem' with
-                  | None when List.length (Problem.phys_edits problem) > 10
-                    -> None
-                  | None -> continue ()
-                  | Some es -> Some es in
+             if suspect_model params problem es model
+             then
+               let () = Printf.printf "\tSuspicious model: %s\n" (string_of_map model) in
+               continue ()
+             else
+               let () = Printf.printf "\tUnsuspeicious model: %s\n" (string_of_map model) in
+               match cegis_math params data problem' with
+               | None when List.length (Problem.phys_edits problem) > 10
+                 -> None
+               | None -> continue ()
+               | Some es -> Some es in
       ModelFinder.make_searcher params data problem
       |> loop i problem
     end

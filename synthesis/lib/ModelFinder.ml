@@ -133,18 +133,23 @@ let holes_for_table table phys =
   match get_schema_of_table table phys with
   | None -> failwith ""
   | Some (ks, acts, _) ->
-     List.map ks ~f:(fun (k,_) -> "?" ^ k )
+     List.bind ks ~f:(fun (k,_) ->
+         let lo,hi = Hole.match_holes_range table k in
+         let v,m = Hole.match_holes_mask table k in
+         [Hole.match_hole_exact table k;lo;hi;v;m]
+         |> List.dedup_and_sort ~compare:String.compare
+       )
      @ List.(acts >>= fun (params,_) ->
              params >>| fst )
 
 let minimize_model (model : value StringMap.t) (phys : cmd) : value StringMap.t =
   StringMap.keys model
-  |> List.filter ~f:(String.is_prefix ~prefix:"?AddRowTo")
+  |> List.filter ~f:(String.is_prefix ~prefix:Hole.add_row_prefix)
   |> List.fold ~init:model
        ~f:(fun model key ->
          match StringMap.find model key with
          | Some Int(v,_) when v = Bigint.zero ->
-            let table = String.chop_prefix_exn key ~prefix:"?AddRowTo" in
+            let table = String.chop_prefix_exn key ~prefix:Hole.add_row_prefix in
             holes_for_table table phys
             |> List.fold ~init:model ~f:(StringMap.remove)
          | _ -> model
