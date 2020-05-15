@@ -7,6 +7,15 @@ open Tables
 
 module IntMap = Map.Make(Int)
 
+let parse_fvs fp =
+  In_channel.read_lines fp
+  |> List.map ~f:(fun line ->
+         match String.lsplit2 line ~on:'#' with
+         | None -> Printf.sprintf "Malformed FV line %s" line
+                   |> failwith
+         | Some (x, sz) -> (x, int_of_string sz)
+       )
+
 
 let rec run_experiment iter seq phys_seq (params : Parameters.t) hints (problem : Problem.t) =
   match seq with
@@ -660,7 +669,7 @@ let basic_onf_ipv4 params filename =
   in
   measure params None problem (onos_to_edits filename "ipv6")
 
-let basic_onf_ipv4_real params data_file log_p4 phys_p4 log_inc phys_inc = 
+let basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits phys_edits fvs log_inc phys_inc = 
         
   (* let log =
     sequence [
@@ -707,7 +716,7 @@ let basic_onf_ipv4_real params data_file log_p4 phys_p4 log_inc phys_inc =
         , [ ("ipv6_dst", 128) (*; ("ipv4_src", 32); ("ipv4_proto", 16)*) ]
         , [ ([("port",9)], "out_port"%<-% Var("port",9))]
         , "out_port" %<-% mkVInt(0,9))  in *)
-  let fvs = [("hdr.ipv6.dst_addr", 128);] in
+  let fvs = parse_fvs fvs in
   (* synthesize_edit  ~gas ~iter ~fvs p 
    *   logical
    *   physical

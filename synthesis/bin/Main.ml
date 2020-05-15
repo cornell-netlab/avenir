@@ -21,17 +21,6 @@ let parse_file (filename : string) : Ast.cmd =
   let lexbuf = Lexing.from_string cts in
   Parser.main Lexer.tokens lexbuf
 
-let parse_fvs fp =
-  In_channel.read_lines fp
-  |> List.map ~f:(fun line ->
-         match String.lsplit2 line ~on:'#' with
-         | None -> Printf.sprintf "Malformed FV line %s" line
-                   |> failwith
-         | Some (x, sz) -> (x, int_of_string sz)
-       )
-
-
-
 module Solver = struct
   let spec = Command.Spec.(
       empty
@@ -76,7 +65,7 @@ module Solver = struct
                     then Benchmark.onos_to_edits data "ipv6"
                     else Runtime.parse data |> List.(map ~f:return)  in
     let phys_inst = Runtime.parse physical_edits |> Instance.(update_list params empty) in
-    let fvs = parse_fvs fvs in
+    let fvs = Benchmark.parse_fvs fvs in
     let phys_drop_spec = Option.(p_drop_spec >>| fun dp -> parse_file dp |> Ast.get_test_from_assume)in
     if measure then
       let open Motley.Instance in
@@ -282,12 +271,15 @@ module ONFReal = struct
       +> flag "--above" no_arg ~doc:"insert new edits above instance, not below"
       +> anon ("p4file1" %: string)
       +> anon ("p4file2" %: string)
+      +> anon ("log_edits" %: string)
+      +> anon ("phys_edits" %: string)
+      +> anon ("fvs" %: string)
       +> flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
       +> flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file")
   
 
-  let run gas widening do_slice monotonic interactive injection debug data_fp fastcx del_pushdown above logical_p4 physical_p4 logical_inc physical_inc() =
-          ignore (Benchmark.basic_onf_ipv4_real Parameters.({widening;do_slice;gas;monotonic;injection;interactive;debug;fastcx;del_pushdown;above; cache = true}) data_fp logical_p4 physical_p4 logical_inc physical_inc : Tables.Edit.t list)
+  let run gas widening do_slice monotonic interactive injection debug data_fp fastcx del_pushdown above logical_p4 physical_p4 log_edits phys_edits fvs logical_inc physical_inc() =
+          ignore (Benchmark.basic_onf_ipv4_real Parameters.({widening;do_slice;gas;monotonic;injection;interactive;debug;fastcx;del_pushdown;above; cache = true}) data_fp logical_p4 physical_p4 log_edits phys_edits fvs logical_inc physical_inc : Tables.Edit.t list)
     (* Benchmark.onf_representative gas widening |> ignore *)
 end
 
@@ -358,7 +350,7 @@ module Equality = struct
     let data = ProfData.zero () in
     let log_inst = Instance.empty in
     let phys_inst = Instance.empty in
-    let fvs = parse_fvs fvs_fp in
+    let fvs = Benchmark.parse_fvs fvs_fp in
     let problem =
       Problem.make ~log ~phys ~fvs
         ~log_inst ~phys_inst
@@ -424,7 +416,7 @@ module EqualityReal = struct
     let data = ProfData.zero () in
     let log_inst = Instance.empty in
     let phys_inst = Instance.empty in
-    let fvs = parse_fvs fvs_fp in
+    let fvs = Benchmark.parse_fvs fvs_fp in
     let problem =
       Problem.make ~log ~phys ~fvs
         ~log_inst ~phys_inst
