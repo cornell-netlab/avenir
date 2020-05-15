@@ -479,7 +479,10 @@ let mkApply (name,keys,actions,default) = Apply{name;keys;actions;default}
 
 let (%:%) = mkSeq
 
-let mkAssn f v = Assign (f, v)
+let mkAssn f v =
+  match v with
+  | Var(x, sz) when x = f -> Skip
+  | _ -> Assign (f, v)
 let (%<-%)= mkAssn
          
 

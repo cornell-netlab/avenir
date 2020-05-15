@@ -540,13 +540,13 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t l
   | BlockStatement {block} ->
     encode_block3 prog ctx type_ctx rv block
   | Exit ->
-    Assign(exit_bit, mkVInt(1, 1)), false, true
+    mkAssn exit_bit  (mkVInt(1, 1)), false, true
   | EmptyStatement ->
     Skip, false, false
   | Return {expr} ->
     (match expr with
       | None ->
-        Assign(return_bit rv, mkVInt(1, 1)), true, false
+        mkAssn (return_bit rv) (mkVInt(1, 1)), true, false
       | _ -> unimplemented "Return")
   | Switch {expr; cases} ->
     mkOrdered (encode_switch prog ctx type_ctx expr rv cases), true, true
@@ -571,7 +571,7 @@ and dispatch_control (type_ctx : Declaration.t list) (Program(top_decls) as prog
     (match List.zip (c.params) args with
       | Ok param_args ->
         let rv = get_return_value () in
-        let assign_rv = Assign(return_bit rv, mkVInt(1, 1)) in
+        let assign_rv = mkAssn (return_bit rv) (mkVInt(1, 1)) in
         let new_typ_ctx = get_type_decls top_decls @ type_ctx in
         let b = List.concat_map param_args ~f:(assign_param new_typ_ctx) in
         let new_typ_ctx2 = List.map c.params ~f:(update_typ_ctx_from_param new_typ_ctx) @ new_typ_ctx in
@@ -625,7 +625,7 @@ and assign_param (type_ctx : Declaration.t list) (param_arg : Parameter.t * Argu
         | Some (_, Out) -> []
         | Some (_, InOut) ->
           let n = dispatch_list value in
-          Assign(validity_bit_no_removal [param.variable], Var(validity_bit_no_removal n, 1)) :: val_assgn
+          mkAssn(validity_bit_no_removal [param.variable]) (Var(validity_bit_no_removal n, 1)) :: val_assgn
       end
     | _ -> failwith "Unhandled argument"
 
@@ -663,21 +663,11 @@ and return_args (type_ctx : Declaration.t list) (param_arg : Parameter.t * Argum
         | Some (_, Out) -> []
         | Some (_, InOut) ->
           let n = dispatch_list value in
-          (*let w = lookup_type_width_exn type_ctx param.typ in
-          let val_assgn = Assign (string_of_memberlist n, Var(snd param.variable, w)) in *)
           let flds = get_rel_variables type_ctx (fst param_arg) in
           let val_assgn = List.concat_map flds ~f:(assign_fields type_ctx param value) in
-          Assign(validity_bit_no_removal n, Var(validity_bit_no_removal [param.variable], 1)) :: val_assgn
+          mkAssn (validity_bit_no_removal n) (Var(validity_bit_no_removal [param.variable], 1)) :: val_assgn
       end
     | _ -> failwith "Unhandled argument"
-
-(* and assign_fields type_ctx param value fld =
-  let open Expression in
-  let add_to_expr f v = match v with
-                              | (i, Name (ni, n)) -> (i, Name (ni, n ^ "." ^ snd f))
-                              | _ -> failwith "HERE" in
-  [Assign( snd param.variable ^ "." ^ snd ((snd fld).name)
-         , encode_expression_to_value2 type_ctx (add_to_expr (snd fld).name value))] *)
 
 and assign_fields type_ctx param value fld =
   let open Expression in
@@ -685,10 +675,8 @@ and assign_fields type_ctx param value fld =
                               | (i, Name (ni, n)) -> (i, Name (ni, n ^ f))
                               | _ -> failwith "HERE" in
   let flds = get_all_fields type_ctx "" fld in
-  List.map flds ~f:(fun f -> Assign( snd param.variable ^ f
-                                   , encode_expression_to_value type_ctx (add_to_expr f value)))
-  (* [Assign( snd param.variable ^ "." ^ snd ((snd fld).name)
-         , encode_expression_to_value2 type_ctx (add_to_expr (snd fld).name value))] *)
+  List.map flds ~f:(fun f -> mkAssn (snd param.variable ^ f)
+                                    (encode_expression_to_value type_ctx (add_to_expr f value)))
 
 and get_all_fields type_ctx h (fld : Declaration.field)  =
   let open Declaration in
@@ -785,7 +773,7 @@ and assign_constants (type_ctx : Declaration.t list) (decl : Declaration.t list)
               ~f:(fun t -> match t with
                               | (_, Constant { name = n; typ = t; value = e}) ->
                                   let w = lookup_type_width_exn type_ctx t in
-                                  Some(Assign(snd n, encode_expression_to_value_with_width w type_ctx e))
+                                  Some(mkAssn (snd n) (encode_expression_to_value_with_width w type_ctx e))
                               | _ -> None ) in
   List.fold es ~f:mkSeq ~init:Skip
 
@@ -797,7 +785,7 @@ and encode_program (Program(top_decls) as prog : program ) =
   | None -> failwith "Could not find control module MyIngress"
   | Some (_, Control c) ->
     let rv = get_return_value () in
-    let assign_rv = Assign(return_bit rv, mkVInt(1, 1)) in
+    let assign_rv = mkAssn (return_bit rv) (mkVInt(1, 1)) in
     let type_cxt = get_type_decls top_decls in
     let type_cxt2 = List.map c.params ~f:(update_typ_ctx_from_param type_cxt) @ type_cxt in
     (* let _ = printf "type_cxt\n%s\n" (Sexp.to_string ([%sexp_of: Declaration.t list] type_cxt)) in *)
@@ -822,7 +810,7 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
     let (body, ad) = lookup_action_exn prog ctx a.name in
     let action_data = List.map ad ~f:(fun (_,p) -> Parameter.(p.variable)) in
     (* Set up an action run variable so we can use it to figure out which action ran in switch statements *)
-    let set_action_run = Assign(snd name ^ action_run_suffix, mkVInt(i + 1, 1)) in
+    let set_action_run = mkAssn (snd name ^ action_run_suffix) (mkVInt(i + 1, 1)) in
     let add_tctx = List.map ad ~f:(update_typ_ctx_from_param type_ctx) in 
     let type_ctx2 = add_tctx @ type_ctx in
     List.map action_data ~f:(fun (_, ad) -> ad, -1), set_action_run %:% encode_action prog ctx type_ctx2 rv body ~action_data
@@ -842,7 +830,7 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
                       | None -> Skip
   in
 
-  let init_action_run = Assign(snd name ^ action_run_suffix, mkVInt(0, 1)) in
+  let init_action_run = mkAssn (snd name ^ action_run_suffix) (mkVInt(0, 1)) in
 
   init_action_run %:% Apply { name = snd name; keys = str_keys; actions =  action_cmds; default =  enc_def_act }
 

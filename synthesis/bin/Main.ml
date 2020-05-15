@@ -384,12 +384,79 @@ module Equality = struct
 
 end
 
-
 let equality : Command.t =
   Command.basic_spec
     ~summary: "Check equivalence"
     Equality.spec
     Equality.run
+
+
+module EqualityReal = struct
+  let spec = Command.Spec.(
+      empty
+      +> anon ("log" %: string)
+      +> anon ("phys" %: string)
+      +> flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
+      +> flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file"
+      +> anon ("log_edits" %: string)
+      +> anon ("phys_edits" %: string)
+      +> anon ("fvs" %: string)
+      +> flag "-DEBUG" no_arg ~doc:"Debugging messages" )
+
+
+  let run log phys log_incs phys_incs log_edits phys_edits fvs_fp debug () =
+    let log = Encode.encode_from_p4 log_incs log false in
+    let phys = Encode.encode_from_p4 phys_incs phys false in
+    let log_edits = Runtime.parse log_edits in
+    let phys_edits = Runtime.parse phys_edits in
+    let params = Parameters.(
+        { debug;
+          interactive = false;
+          do_slice = false;
+          widening = false;
+          gas = 1;
+          monotonic = false;
+          fastcx = false;
+          injection = false;
+          del_pushdown = false;
+          above = false;
+          cache = true}) in
+    let data = ProfData.zero () in
+    let log_inst = Instance.empty in
+    let phys_inst = Instance.empty in
+    let fvs = parse_fvs fvs_fp in
+    let problem =
+      Problem.make ~log ~phys ~fvs
+        ~log_inst ~phys_inst
+        ~log_edits ()
+      |> Motley.Util.flip Problem.replace_phys_edits phys_edits
+    in
+    match Synthesis.implements params data problem with
+    | `Yes -> Printf.printf "Equivalent\n%!"
+    | `NoAndCE (inpkt,_) ->
+       let printer p i o =
+         Printf.printf "%s\n  in: %s\n  out: %s\n" p
+           (Motley.Packet.string__packet i)
+           (Motley.Packet.string__packet o)
+       in
+       let log_out = Motley.Semantics.eval_act (Problem.log_gcl_program params problem) inpkt in
+       let phys_out = Motley.Semantics.eval_act (Problem.phys_gcl_program params problem) inpkt in
+       Printf.printf "--\n%!";
+       printer "Log" inpkt log_out;
+       Printf.printf "--\n%!";
+       printer "Phys" inpkt phys_out
+
+
+
+end
+
+
+
+let equality_real : Command.t =
+  Command.basic_spec
+    ~summary: "Check equivalence"
+    EqualityReal.spec
+    EqualityReal.run
 
 
 module WeakestPrecondition = struct
@@ -454,6 +521,7 @@ let main : Command.t =
     ; ("onf", onf)
     ; ("onf-real", onf_real)
     ; ("eq", equality)
+    ; ("eq-real", equality_real)
     ; ("ex", running_example)
     ; ("meta", meta)
     ; ("wp", wp_cmd)]
