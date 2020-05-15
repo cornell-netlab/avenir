@@ -1,0 +1,3 @@
+hdr.ipv6.hop_limit#8
+hdr.ipv6.src_addr#128
+hdr.ipv6.dst_addr#128
