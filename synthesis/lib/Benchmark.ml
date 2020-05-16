@@ -18,7 +18,6 @@ let rec run_experiment iter seq phys_seq (params : Parameters.t) hints (problem 
      let problem_inner = Problem.(replace_log_edits problem edit) in
      let st = Time.now () in
      assert (List.length (Problem.phys_edits problem_inner) = 0);
-     assert params.do_slice;
      match cegis_math params data problem_inner with
      | None ->
         (* let _ : Edit.t list option = cegis_math {params with debug = true} data problem_inner in *)

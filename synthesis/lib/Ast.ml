@@ -623,8 +623,7 @@ let rec multi_ints_of_cmd c : (Bigint.t * size) list =
   (* | Assign (_, Int i) ->
    *   [i] *)
   (* Only collect _tested_ inputs*)
-  | Assign _ ->
-    []
+  | Assign (f,e) -> multi_ints_of_expr e
   | Seq (c, c') ->
     multi_ints_of_cmd c
     @ multi_ints_of_cmd c'

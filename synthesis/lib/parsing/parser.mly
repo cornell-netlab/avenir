@@ -62,8 +62,10 @@ actions :
   | LBRACE; c = command; RBRACE;  { [([],c)] }
   | LBRACE; FUNC; LPAREN; ps = params; RPAREN; CASE; c = command; RBRACE;
     { [(ps,c)] }
-  | LBRACE; FUNC; LPAREN; ps = params; RPAREN; CASE; c = command; RBRACE; BAR; a = actions
-    { (ps,c)::a }
+  | LBRACE; c = command; RBRACE; BAR; acts = actions
+    { ([],c)::acts }
+  | LBRACE; FUNC; LPAREN; ps = params; RPAREN; CASE; c = command; RBRACE; BAR; acts = actions
+    { (ps,c)::acts }
                         
 select :
 | t = test; CASE; c = command; BRACKETS { [ t, c ] }

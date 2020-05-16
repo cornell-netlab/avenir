@@ -48,13 +48,28 @@ let make_searcher (params : Parameters.t) (data : ProfData.t ref) (problem : Pro
   {schedule; search_space = []}
   
 
+let reindex_for_dels problem tbl i =
+  Problem.phys_edits problem
+  |>  List.fold ~init:(Some i)
+        ~f:(fun cnt edit ->
+          match cnt, edit with
+          | Some n, Del (t,j) when t = tbl ->
+             if i = j
+             then None
+             else Some (n-1)
+          | _ -> cnt
+        )
 
 let compute_deletions pkt (problem : Problem.t) =
   let open Problem in
   let phys_inst = Problem.phys_inst problem in
   StringMap.fold phys_inst ~init:[]
     ~f:(fun ~key:table_name ~data:rows dels ->
-      dels @ List.mapi rows ~f:(fun i _ -> (table_name,i))
+      dels @ List.filter_mapi rows ~f:(fun i _ ->
+                 match reindex_for_dels problem table_name i with
+                 | None -> None
+                 | Some i' -> Some (table_name, i')
+               )
     )
 
 
@@ -89,44 +104,70 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
     List.filter_map wp_list
       ~f:(fun (cmd, in_pkt_wp) ->
         if in_pkt_wp = False || not (has_hole_test in_pkt_wp) then None else
-        (* let st = Time.now() in *)
+          (* let st = Time.now() in *)
           (* Printf.printf "\n\nWP: %s\n\n%!" (string_of_test in_pkt_wp); *)
 
-        let () = if params.debug then
-                   Printf.printf "Checking path with hole!\n  %s\n\n%!" (string_of_cmd cmd) in
-        let spec = in_pkt_form %=>% in_pkt_wp in
-        (* let () = if params.debug then
-         *            Printf.printf "test starts:\n%!  %s\n\n%!" (string_of_test spec) in *)
-        let wf_holes = List.fold (Problem.phys problem |> get_tables_actsizes) ~init:True
-                         ~f:(fun acc (tbl,num_acts) ->
-                           acc %&%
-                             (Hole(Hole.which_act_hole_name tbl,max (log2 num_acts) 1)
-                              %<=% mkVInt(num_acts-1,max (log2 num_acts) 1))) in
-        (* Printf.printf "well_formedness computed\n%!"; *)
-        let widening_constraint =
-          if opts.mask then
-            List.fold (holes_of_test in_pkt_wp)  ~init:True
-              ~f:(fun acc (hole, sz) ->
-                match String.chop_suffix hole ~suffix:"_mask" with
-                | Some hole_val ->
-                   Hole(hole_val,sz) %=% (mkMask (Hole(hole_val,sz)) (Hole(hole, sz)))
-                   %&% ((Hole(hole,sz) %=% mkVInt(0, sz))
-                        %+% (Hole(hole,sz) %=% Value(Int(Bigint.((pow (of_int 2) (of_int sz)) - one), sz))))
-                | None -> acc
-
+          let () = if params.debug then
+                     Printf.printf "Checking path with hole!\n  %s\n\n%!" (string_of_cmd cmd) in
+          let spec = in_pkt_form %=>% in_pkt_wp in
+          (* let () = if params.debug then
+           *            Printf.printf "test starts:\n%!  %s\n\n%!" (string_of_test spec) in *)
+          let wf_holes = List.fold (Problem.phys problem |> get_tables_actsizes) ~init:True
+                           ~f:(fun acc (tbl,num_acts) ->
+                             acc %&%
+                               (Hole(Hole.which_act_hole_name tbl,max (log2 num_acts) 1)
+                                %<=% mkVInt(num_acts-1,max (log2 num_acts) 1))) in
+          (* Printf.printf "well_formedness computed\n%!"; *)
+          (* let widening_constraint =
+           *   if opts.mask then
+           *     List.fold (holes_of_test in_pkt_wp)  ~init:True
+           *       ~f:(fun acc (hole, sz) ->
+           *         match String.chop_suffix hole ~suffix:"_mask" with
+           *         | Some _ ->
+           *            (Hole(hole, sz) %=% mkVInt(pow 2 sz -1, sz)) %+% ((Hole(hole,sz) %=% mkVInt(0,sz)))
+           *         | None -> acc
+           *
+           *       )
+           *   else True
+           * in
+           * Printf.printf "Widening constriaint:\n  %s \n\n%!" (string_of_test widening_constraint); *)
+          (* Printf.printf "Widening and well-formedness computed\n%!"; *)
+          let pre_condition =
+            (Problem.model_space problem) %&% wf_holes %&% spec
+            |> Injection.optimization {params with injection = opts.injection} problem
+          in
+          (* Printf.printf "Pre_condition computed\n%!"; *)
+          let query_test = wf_holes %&%(* widening_constraint %&%*) pre_condition in
+          let active_domain_restrict =
+            let ints = (multi_ints_of_cmd (Problem.log_gcl_program params problem))
+                       @ (multi_ints_of_cmd (Problem.phys_gcl_program params problem)) in
+            let holes = holes_of_test query_test |> List.dedup_and_sort ~compare:(Stdlib.compare) in
+            List.fold holes ~init:True
+              ~f:(fun acc (h,sz) ->
+                if String.is_prefix h ~prefix:Hole.which_act_prefix then acc else
+                if String.is_substring h ~substring:"_mask"
+                then acc %&%  ((Hole(h, sz) %=% mkVInt(pow 2 sz - 1, sz)) %+% ((Hole(h,sz) %=% mkVInt(0,sz))))
+                else
+                  (* if List.exists (Problem.fvs problem) ~f:(fun (v,_) ->  String.is_substring h ~substring:v || not (String.is_substring h ~substring:"?"))
+                   * then *)
+                    let restr =
+                      List.fold ints
+                        ~init:(((Hole(h,sz) %=% mkVInt(0,sz)) %+% (Hole(h,sz) %=% mkVInt(1,sz))))
+                        ~f:(fun acci (i,szi) ->
+                          acci %+% if sz = szi
+                                   then Hole(h,sz) %=% Value(Int(i,szi))
+                                   else False)
+                    in
+                    acc %&% restr
+                  (* else
+                   *   acc *)
               )
-          else True
-        in
-        (* Printf.printf "Widening and well-formedness computed\n%!"; *)
-        let pre_condition =
-          (Problem.model_space problem) %&% wf_holes %&% spec
-          |> Injection.optimization {params with injection = opts.injection} problem
-        in
-        (* Printf.printf "Pre_condition computed\n%!"; *)
-        let out_test = wf_holes %&% widening_constraint %&% pre_condition in
-        (* Printf.printf "outtest_computed\n%!"; *)
-        let () = if params.debug then Printf.printf "test is \n   %s\n\n%!" (string_of_test pre_condition) in
-        Some (out_test, hints)) in
+          in
+          (* Printf.printf "active domain restr \n %s\n%!" (string_of_test active_domain_restrict); *)
+          let out_test = active_domain_restrict %&% query_test in
+          (* Printf.printf "outtest_computed\n%!"; *)
+          let () = if params.debug then Printf.printf "test is \n   %s\n\n%!" (string_of_test out_test) in
+          Some (out_test, hints)) in
   tests
 
 let holes_for_table table phys =
@@ -142,9 +183,18 @@ let holes_for_table table phys =
      @ List.(acts >>= fun (params,_) ->
              params >>| fst )
 
+let holes_for_other_actions table phys actId =
+  match get_schema_of_table table phys with
+  | None -> failwith ""
+  | Some (ks, acts, _) ->
+     List.foldi acts ~init:[]
+       ~f:(fun i acc (params,_) ->
+         acc @ if i = Bigint.to_int_exn actId then [] else List.map params ~f:fst
+       )
+
 let minimize_model (model : value StringMap.t) (phys : cmd) : value StringMap.t =
   StringMap.keys model
-  |> List.filter ~f:(String.is_prefix ~prefix:Hole.add_row_prefix)
+  |> List.filter ~f:(fun k -> String.is_prefix k ~prefix:Hole.add_row_prefix)
   |> List.fold ~init:model
        ~f:(fun model key ->
          match StringMap.find model key with
@@ -152,6 +202,15 @@ let minimize_model (model : value StringMap.t) (phys : cmd) : value StringMap.t 
             let table = String.chop_prefix_exn key ~prefix:Hole.add_row_prefix in
             holes_for_table table phys
             |> List.fold ~init:model ~f:(StringMap.remove)
+         | Some Int(v,_) when v = Bigint.one ->
+            let table = String.chop_prefix_exn key ~prefix:Hole.add_row_prefix in
+            begin
+              match (StringMap.find model (Hole.which_act_hole_name table)) with
+              | Some (Int (actId, _)) ->
+                 holes_for_other_actions table phys actId
+                 |> List.fold ~init:model ~f:(StringMap.remove)
+              | None -> model
+            end
          | _ -> model
        )
 

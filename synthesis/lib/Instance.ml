@@ -98,7 +98,7 @@ let rec apply ?no_miss:(no_miss = false)
                                (* Hole.delete_hole i t.name %=% mkVInt(0,1) *)
                                let i = List.length rows - i - 1 in
                                if List.exists ds ~f:((=) (t.name, i))
-                               then True (*(Hole.delete_hole i t.name %=% mkVInt(0,1))*)
+                               then (Hole.delete_hole i t.name %=% mkVInt(0,1))
                                else True
                             | _ -> True in
               if action >= List.length t.actions then

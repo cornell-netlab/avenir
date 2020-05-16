@@ -69,7 +69,7 @@ let to_test ?fvs:(fvs = []) ?random_fill:(random_fill=false) (pkt : t) =
              if random_fill then
                Var(x,sz) %=% mkVInt(Random.int (pow 2 sz),sz)
              else
-               True
+               Var(x,sz) %=% Var(x^"_symb", sz)
           | Some v ->
              Var(x, sz) %=% Value(v)))
 
