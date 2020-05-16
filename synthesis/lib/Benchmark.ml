@@ -669,72 +669,47 @@ let basic_onf_ipv4 params filename =
   in
   measure params None problem (onos_to_edits filename "ipv6")
 
-let basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits phys_edits fvs log_inc phys_inc = 
-        
-  (* let log =
-    sequence [
-        "class_id" %<-% mkVInt(0,32)
-      ; Apply("ipv6",
-              [("ipv6_dst", 128)],
-              [([("next_id",32)], "class_id"%<-% Var("next_id",32))],
-              Skip)
-      ;
-        mkOrdered [
-            Var("class_id",32) %=% mkVInt(1017,32), "out_port" %<-% mkVInt(17,9) ;
-            Var("class_id",32) %=% mkVInt(1018,32), "out_port" %<-% mkVInt(18,9) ;
-            Var("class_id",32) %=% mkVInt(1010,32), "out_port" %<-% mkVInt(10,9) ;
-            Var("class_id",32) %=% mkVInt(1012,32), "out_port" %<-% mkVInt(12,9) ;
-            Var("class_id",32) %=% mkVInt(1011,32), "out_port" %<-% mkVInt(11,9) ;
-            Var("class_id",32) %=% mkVInt(1008,32), "out_port" %<-% mkVInt(08,9) ;
-            Var("class_id",32) %=% mkVInt(1003,32), "out_port" %<-% mkVInt(03,9) ;
-            Var("class_id",32) %=% mkVInt(1019,32), "out_port" %<-% mkVInt(19,9) ;
-            True, "out_port" %<-% mkVInt(0,9)
-          ]
-      ] in *)
-  let log = Encode.encode_from_p4 log_inc log_p4 false in
-  let phys = Encode.encode_from_p4 phys_inc phys_p4 false in
+let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_edits_file fvs_file log_inc phys_inc = 
+  let fvs = parse_fvs fvs_file in
+  let log = Encode.encode_from_p4 log_inc log_p4 false |> zero_init fvs in
+  let phys = Encode.encode_from_p4 phys_inc phys_p4 false |> zero_init fvs in
   let open Match in
   let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in
-  let log_ins = StringMap.(of_alist_exn
-                            ["simple", [[Exact(mkInt(1017, 32))], [mkInt(17, 9)], 0;
-                                        [Exact(mkInt(1018, 32))], [mkInt(18, 9)], 0;
-                                        [Exact(mkInt(1010, 32))], [mkInt(10, 9)], 0;
-                                        [Exact(mkInt(1012, 32))], [mkInt(12, 9)], 0;
-                                        [Exact(mkInt(1011, 32))], [mkInt(11, 9)], 0;
-                                        [Exact(mkInt(1008, 32))], [mkInt(08, 9)], 0;
-                                        [Exact(mkInt(1003, 32))], [mkInt(03, 9)], 0;
-                                        [Exact(mkInt(1019, 32))], [mkInt(19, 9)], 0;
-                                        [Between(mkInt(0, 32), Int(maxN 32,32))], [mkInt(0, 9)], 0];
-                             "fwd_classifier", [ [Between(mkInt(0, 9), Int(maxN 9, 9));
-                                                  Between(mkInt(0, 48), Int(maxN 48, 48));
-                                                  Between(mkInt(0, 16), Int(maxN 16, 16));
-                                                  Between(mkInt(0, 16), Int(maxN 16, 16))],
-                                               [mkInt(4, 3)], 0]]) 
-  in
-  (* let phys =
-     Apply("l3_fwd"
-        , [ ("ipv6_dst", 128) (*; ("ipv4_src", 32); ("ipv4_proto", 16)*) ]
-        , [ ([("port",9)], "out_port"%<-% Var("port",9))]
-        , "out_port" %<-% mkVInt(0,9))  in *)
-  let fvs = parse_fvs fvs in
-  (* synthesize_edit  ~gas ~iter ~fvs p 
-   *   logical
-   *   physical
-   *   StringMap.empty
-   *   StringMap.empty
-   *   ("next", ([Exact (1,32)], [(1,9)],0))
-   * %> *)
+  (* let fvs = parse_fvs fvs in *)
+  let log_edits = Runtime.parse log_edits_file in
   let problem =
     Problem.make
       ~log  ~phys ~fvs
       ~log_inst: StringMap.(set empty ~key:"ipv6" ~data:[])
       ~phys_inst:StringMap.(set empty ~key:"l3_fwd" ~data:[])
-      ~log_edits:[] ()
+      ~log_edits ()
   in
-  measure params None problem (onos_to_edits data_file "routing_v6")
+  measure params None problem (log_edits :: onos_to_edits data_file "routing_v6")
 
+and zero_init fvs cmd =
+  let vs = variables cmd in
+  let zi = List.filter vs ~f:(fun v -> List.mem fvs v (=) |> not) in
+  List.map zi ~f:(fun (v, w) ->  mkAssn v  (mkVInt(0, w)))
+  |> List.fold ~init:cmd ~f:(fun c1 c2 -> c2 %:% c1)
 
+and variables cmd =
+  match cmd with
+  | Skip -> []
+  | Assign(s, e) -> [(s, get_width e)]
+  | Seq (c1, c2) -> variables c1 @ variables c2
+  | While(_, c1) -> variables c1
+  | Select(_, tc) -> List.concat_map tc ~f:(fun (_, c) -> variables c)
+  | _ -> []
 
+and get_width e =
+  match e with
+  | Value(Int(_, w)) -> w
+  | Var(_, w) -> w
+  | Hole(_, w) -> w
+  | Plus(e1, _) -> get_width e1
+  | Times(e1, _) -> get_width e1
+  | Minus(e1, _) -> get_width e1
+  | Mask(e1, _) -> get_width e1
 
 let parse_rule_to_update line =
   let columns = String.split line in columns 

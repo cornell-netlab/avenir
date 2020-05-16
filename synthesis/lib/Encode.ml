@@ -832,6 +832,7 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
 
   let init_action_run = mkAssn (snd name ^ action_run_suffix) (mkVInt(0, 1)) in
 
+  let xxx_keys = printf "keys = %s\n" (Sexp.to_string ([%sexp_of: (string * int) list] str_keys)) in
   init_action_run %:% Apply { name = snd name; keys = str_keys; actions =  action_cmds; default =  enc_def_act }
 
 let read_lines filename =
