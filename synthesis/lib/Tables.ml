@@ -4,8 +4,6 @@ open Util
 open Ast
 open Manip
 
-let (=) = Stdlib.(=)   
-   
 (* TYPES *)
 module Match = struct
   type t =

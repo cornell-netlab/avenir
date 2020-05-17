@@ -116,9 +116,9 @@ let unreachable params (problem : Problem.t) (test : Ast.test) =
   in
   loop n True
 
-let get_cex params data (problem : Problem.t) =
+let get_cex ?neg:(neg = True) params data (problem : Problem.t) =
   let open Problem in
   Printf.printf "\t   a fast Cex\n%!";
   let e = log_edits problem |> List.hd_exn in
-  hits_pred params data (log problem) (log_inst problem) (log_edits problem) e
+  (neg %&% hits_pred params data (log problem) (log_inst problem) (log_edits problem) e)
   |> unreachable params problem

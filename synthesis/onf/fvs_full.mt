@@ -1,9 +1,10 @@
 standard_metadata__ingress_port#9
+out_port#9
 ipv6_dst#128
 ipv6_src#128
 ipv6_next_header#8
 ipv6_hop_count#8
-out_port#9
+hdr__ipv6_base__traffic_class#8
 hdr__vlan_tag__isValid#1
 hdr__vlan_tag__vlan_id#12
 hdr__vlan_tag__pri#3
@@ -25,4 +26,3 @@ hdr__packet_in__isValid#1
 hdr__packet_in__ingress_port#9
 hdr__packet_out__isValid#1
 hdr__packet_out__egress_port#9
-hdr__ipv6_base__traffic_class#8

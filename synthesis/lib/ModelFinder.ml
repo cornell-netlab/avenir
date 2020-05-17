@@ -39,7 +39,7 @@ let rec make_schedule ({injection;hints;paths;only_holes;mask} as opt) =
 
 let make_searcher (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : t =
   let schedule = make_schedule {
-                     injection = params.injection;
+                     injection = false; (*params.injection;*)
                      hints = params.injection;
                      paths = params.monotonic;
                      only_holes = params.monotonic;
@@ -146,13 +146,23 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
               ~f:(fun acc (h,sz) ->
                 if String.is_prefix h ~prefix:Hole.which_act_prefix then acc else
                 if String.is_substring h ~substring:"_mask"
-                then acc %&%  ((Hole(h, sz) %=% mkVInt(pow 2 sz - 1, sz)) %+% ((Hole(h,sz) %=% mkVInt(0,sz))))
+                then
+                  let allfs = Printf.sprintf "0b%s" (String.make sz '1') |> Bigint.of_string in
+                  acc %&%  ((Hole(h, sz) %=% Value(Int(allfs, sz))) %+% ((Hole(h,sz) %=% mkVInt(0,sz))))
                 else
                   (* if List.exists (Problem.fvs problem) ~f:(fun (v,_) ->  String.is_substring h ~substring:v || not (String.is_substring h ~substring:"?"))
                    * then *)
+                  (* let is_mask_val =
+                   *   List.exists holes
+                   *     ~f:(fun (hm,_) ->
+                   *       match String.chop_suffix hm ~suffix:"_mask" with
+                   *       | Some h' -> h = h'
+                   *       | None -> false
+                   *     )
+                   * in *)
                     let restr =
                       List.fold ints
-                        ~init:(((Hole(h,sz) %=% mkVInt(0,sz)) %+% (Hole(h,sz) %=% mkVInt(1,sz))))
+                        ~init:(Hole(h,sz) %=% mkVInt(0,sz) %+% (Hole(h,sz) %=% mkVInt(1,sz)))
                         ~f:(fun acci (i,szi) ->
                           acci %+% if sz = szi
                                    then Hole(h,sz) %=% Value(Int(i,szi))

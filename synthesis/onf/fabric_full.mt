@@ -33,7 +33,7 @@ fabric_metadata__eth_type := 34525#16;
 
 if ordered
    hdr__packet_out__isValid#1 = 1#1 ->
-     out_port := hdr__packet_out__egrss_port#9;
+     out_port := hdr__packet_out__egress_port#9;
      hdr__packet_out__isValid := 0#1 []
    true
    -> if ordered 
@@ -181,6 +181,7 @@ if ordered
     fi
   []
 fi;
+
 if ordered
   out_port#9 = 0#9 ->
       standard_metadata__ingress_port := 0#9;

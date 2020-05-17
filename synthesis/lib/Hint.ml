@@ -119,12 +119,12 @@ let tbl_hole encode_tag (keys: (string * size) list) tbl row_hole act_hole i act
         acc %&% Hole.match_holes encode_tag tbl x sz) in
   let matches_holes =
     match List.find hs ~f:(fun h -> Stdlib.(h.table = tbl)) with
-    | Some h ->
+    | Some h (*when String.(tbl <> "punt")*) ->
        begin match encode_match keys h encode_tag with
        | None ->  default_match_holes keys
        | Some phi -> phi
        end
-    | None when List.length hs > 0 -> False
+    (*| None when List.length hs > 0 -> False *)
     | _ -> default_match_holes keys
  in
   matches_holes

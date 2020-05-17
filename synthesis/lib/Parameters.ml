@@ -14,6 +14,7 @@ type t =
     cache : bool;
     del_pushdown: bool;
     above:bool;
+    minimize : bool;
   }
 
 let default =
@@ -27,4 +28,6 @@ let default =
     interactive = false;
     fastcx = false;
     del_pushdown = false;
-    above = false}
+    above = false;
+    minimize = false
+  }

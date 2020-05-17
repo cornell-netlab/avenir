@@ -33,6 +33,7 @@ let to_string params (p : t) =
 
 let fvs (p : t) : (string * int) list = p.fvs
 let cexs (p : t) : (Packet.t * Packet.t) list = p.cexs
+let add_cex (p : t) cex = {p with cexs = cex::p.cexs}
 let model_space (p : t) : test = p.model_space
 let attempts (p : t) : value StringMap.t list = p.attempts
 
@@ -102,6 +103,10 @@ let apply_edits_to_phys params (p : t) (es : Edit.t list) : t =
 
 let update_phys (p : t) (phys_cmd : cmd) : t =
   {p with phys = Switch.replace_pipeline p.phys phys_cmd}
+
+let update_log (p : t) (log_cmd : cmd) : t =
+  {p with log = Switch.replace_pipeline p.log log_cmd}
+
 
 let attempts_to_string (p : t) : string =
   List.map p.attempts ~f:(string_of_map)

@@ -11,8 +11,6 @@ let enable_smart_constructors = true
 
 type size = int
 
-let (=) = Stdlib.(=)
-       
 type value =
   | Int of (Bigint.t * size)
             
@@ -34,12 +32,12 @@ let rec string_of_value (v : value) : string =
 let veq v v' =
   match v,v' with
   | Int (i,sz), Int(i',sz') when sz = sz' ->  Bigint.equal i i'
-  | Int _, Int _ -> failwith "Ints are different sizes" 
+  | Int (i,sz), Int(i',sz') -> failwith @@ Printf.sprintf "Ints are different sizes: %s#%d = %s#%d " (Bigint.Hex.to_string i) sz (Bigint.Hex.to_string i') sz'
 
 let vleq v v' =
   match v, v' with
   | Int(i,sz), Int(i',sz') when sz = sz' -> Bigint.(<=) i i'
-  | Int _, Int _ -> failwith "Ints are different sizes"
+  | Int(i,sz), Int(i',sz') -> failwith @@ Printf.sprintf "Ints are different sizes: %s#%d <= %s#%d " (Bigint.Hex.to_string i) sz (Bigint.Hex.to_string i') sz'
                                   
 
 let rec string_of_expr (e : expr) : string =
@@ -102,7 +100,9 @@ let rec num_nodes_in_expr e =
      + 1
 
                                                                             
-let mkInt (i,sz) = Int (Bigint.of_int_exn i, sz)
+let mkInt (i,sz) =
+  if i < 0 then failwith "Negative integers not representable" else
+  Int (Bigint.of_int_exn i, sz)
 let mkVInt i = Value (mkInt i)    
 let mkPlus e e' = Plus(e,e')
 let mkMinus e e' = Minus (e, e')
