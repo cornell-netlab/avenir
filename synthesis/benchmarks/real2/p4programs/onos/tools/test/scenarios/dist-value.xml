@@ -1,0 +1,70 @@
+<!--
+  ~ Copyright 2016-present Open Networking Foundation
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+-->
+
+<scenario name="distributed-value-test"
+          description="ONOS AtomicValue distributed primitive Test">
+    <group name="Distributed-Primitive-Value">
+
+        <step name="Distributed-Primitive-Value.Test-Value-Initial-Value"
+              exec="onos-cluster-execute-expect value-test test-value get --expect null"/>
+
+        <step name="Distributed-Primitive-Value.Test-Value-Set"
+              requires="Distributed-Primitive-Value.Test-Value-Initial-Value"
+              exec="onos ${OCI} value-test test-value set v0"/>
+
+        <step name="Distributed-Primitive-Value.Test-Value-Get"
+              requires="Distributed-Primitive-Value.Test-Value-Set"
+              exec="onos-cluster-execute-expect value-test test-value get --expect v0"/>
+
+        <step name="Distributed-Primitive-Value.Test-Value-CompareAndSet-False"
+              requires="Distributed-Primitive-Value.Test-Value-Get"
+              exec="onos-execute-expect ${OCI} value-test test-value compareAndSet v1 v2 --expect false"/>
+
+        <step name="Distributed-Primitive-Value.Test-Value-Not-Updated-After-CAS"
+              requires="Distributed-Primitive-Value.Test-Value-CompareAndSet-False"
+              exec="onos-cluster-execute-expect value-test test-value get --expect v0"/>
+
+        <step name="Distributed-Primitive-Value.Test-Value-CompareAndSet-True"
+              requires="Distributed-Primitive-Value.Test-Value-Not-Updated-After-CAS"
+              exec="onos-execute-expect ${OCI} value-test test-value compareAndSet v0 v1 --expect true"/>
+
+        <step name="Distributed-Primitive-Value.Test-Value-Updated-After-CAS"
+              requires="Distributed-Primitive-Value.Test-Value-CompareAndSet-True"
+              exec="onos-cluster-execute-expect value-test test-value get --expect v1"/>
+
+        <step name="Distributed-Primitive-Value.Test-Value-GetAndSet"
+              requires="Distributed-Primitive-Value.Test-Value-Updated-After-CAS"
+              exec="onos-execute-expect ${OCI} value-test test-value getAndSet v2 --expect v1"/>
+
+        <step name="Distributed-Primitive-Value.Test-Value-Updated-After-GetAndSet"
+              requires="Distributed-Primitive-Value.Test-Value-GetAndSet"
+              exec="onos-cluster-execute-expect value-test test-value get --expect v2"/>
+
+        <step name="Distributed-Primitive-Value.Destroy-Value"
+              requires="Distributed-Primitive-Value.Test-Value-Updated-After-GetAndSet"
+              exec="onos ${OCI} value-test test-value set null"/>
+
+        <group name="Distributed-Primitive-Value.Check-Log-Exceptions"
+               requires="Distributed-Primitive-Value.Destroy-Value">
+            <parallel var="${OC#}">
+                <step name="Distributed-Primitive-Value.Check-Log-Exceptions-${#}"
+                      exec="onos-check-logs ${OC#}"/>
+            </parallel>
+        </group>
+
+    </group>
+</scenario>
+

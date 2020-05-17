@@ -1,0 +1,17 @@
+#!/bin/bash
+
+sudo rm -rf /tmp/*
+
+export ONOS_ROOT=/home/ubuntu/onos
+source ${ONOS_ROOT}/tools/dev/bash_profile
+
+sudo mn -c
+
+sudo chmod -R 777 /home/ubuntu/onos
+
+cell 3node
+onos-service --cell stop
+
+cell 1node
+
+onos-test

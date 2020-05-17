@@ -1,0 +1,38 @@
+/*
+ * Copyright 2017-present Open Networking Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+syntax = "proto3";
+option java_package = "org.onosproject.grpc.net.device.models";
+
+package net.device;
+
+enum PortTypeProto {
+    // Signifies copper-based connectivity.
+    COPPER = 0;
+    // Signifies optical fiber-based connectivity.
+    FIBER = 1;
+    // Signifies optical fiber-based packet port.
+    PACKET = 2;
+    // Signifies optical fiber-based optical tributary port (called T-port).
+    //The signal from the client side will be formed into a ITU G.709 (OTN) frame.
+    ODUCLT = 3;
+    // Signifies optical fiber-based Line-side port (called L-port).
+    OCH = 4;
+    // Signifies optical fiber-based WDM port (called W-port).
+    //Optical Multiplexing Section (See ITU G.709).
+    OMS = 5;
+    // Signifies virtual port.
+    VIRTUAL_PORT = 6;
+}

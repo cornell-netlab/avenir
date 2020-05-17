@@ -1,0 +1,100 @@
+<!--
+~ Copyright 2019-present Open Networking Foundation
+~
+~ Licensed under the Apache License, Version 2.0 (the "License");
+~ you may not use this file except in compliance with the License.
+~ You may obtain a copy of the License at
+~
+~     http://www.apache.org/licenses/LICENSE-2.0
+~
+~ Unless required by applicable law or agreed to in writing, software
+~ distributed under the License is distributed on an "AS IS" BASIS,
+~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+~ See the License for the specific language governing permissions and
+~ limitations under the License.
+-->
+<svg:defs xmlns:svg="http://www.w3.org/2000/svg">
+    <!-- Template explanation: Define an SVG Filter that in
+        line 0) creates a box big enough to accommodate the drop shadow
+        line 1) render the target object in to a bit map and apply a blur to it
+            based on its alpha channel
+        line 2) take that blurred layer and shift it down and to the right by 4
+        line 3) Merge this blurred and shifted layer and overlay it with the
+            original target object
+    -->
+    <svg:filter id="drop-shadow" x="-25%" y="-25%" width="200%" height="200%">
+        <svg:feGaussianBlur in="SourceAlpha" stdDeviation="0" result="blur" />
+        <svg:feOffset in="blur" dx="0" dy="0" result="offsetBlur"/>
+        <svg:feMerge >
+            <svg:feMergeNode in="offsetBlur" />
+            <svg:feMergeNode in="SourceGraphic" />
+        </svg:feMerge>
+    </svg:filter>
+    <!-- Template explanation: Define a colour gradient that can be used in icons -->
+    <svg:linearGradient id="diagonal_blue" x1="0%" y1="0%" x2="100%" y2="100%">
+        <svg:stop offset= "0%" style="stop-color: #7fabdb;" />
+        <svg:stop offset= "100%" style="stop-color: #5b99d2;" />
+    </svg:linearGradient>
+</svg:defs>
+<!-- Template explanation: Creates an SVG Group and in
+    line 1) transform it to the position calculated by the d3 force graph engine
+            and scale it inversely to the zoom level
+    line 2) Give it various CSS styles depending on attributes
+    line 3) When it is clicked, call the method that toggles the selection and
+        emits an event.
+    Other child objects have their own description
+-->
+<svg:g xmlns:svg="http://www.w3.org/2000/svg"
+       [attr.transform]="'translate(' + device?.x + ',' + device?.y + '), scale(' + scale + ')'"
+        [ngClass]="['node', 'device', device.online?'online':'', selected?'selected':'']"
+        (click)="toggleSelected(device, $event)">
+    <svg:desc>Device {{device.id}}</svg:desc>
+    <!-- Template explanation: Creates an SVG Rectangle and in
+        line 1) set a css style and shift so that it's centred
+        line 2) set the initial width and height - width changes with label
+        line 3) link to the animation 'deviceLabelToggle', pass in to it a width
+            calculated from the width of the text, and additional padding at the end
+        line 4) Apply the filter defined above to this rectangle (even as its
+            width changes
+    -->
+    <svg:rect
+            class="node-container" x="-18" y="-18"
+            width="36" height="36"
+            [@deviceLabelToggle]="{ value: labelToggle, params: {txtWidth: (36 + labelTextLen() + (labelTextLen() > 0 ? 10 : 0))+'px' }}"
+            filter= "url(#drop-shadow)">
+    </svg:rect>
+    <!-- Template explanation: Creates an SVG Rectangle slightly smaller and
+        overlaid on the above. This is the blue box, and its width and height does
+        not change
+    -->
+    <svg:rect x="-16" y="-16" width="32" height="32" [ngStyle]="{'fill': panelColor}">
+    </svg:rect>
+    <!-- Create an L shaped bracket on bottom left of icon if it has either grid or geo location-->
+    <svg:path *ngIf="device.location && device.location.locType != 'none'"
+              d="M-15 12 v3 h3" class="bracket">
+    </svg:path>
+    <!-- Create an L shaped bracket on top right of icon if it has been pinned or has fixed location-->
+    <svg:path *ngIf="device.fx != null"
+              d="M15 -12 v-3 h-3" class="bracket">
+    </svg:path>
+    <!-- Template explanation: Creates an SVG Text element and in
+        line 1) make it left aligned and slightly down and to the right of the last rect
+        line 2) set its text length to be the calculated value - see that function
+        line 3) because of kerning the actual text might be shorter or longer than
+            the pre-calculated value - if so change the spacing between the letters
+            (and not the letter width to compensate)
+        line 4) link to the animation deviceLabelToggleTxt, so that the text appears
+            in gently
+        line 5) The text will be one of 3 values - blank, the id or the name
+    -->
+    <!--            [attr.textLength]= "labelTextLen()"-->
+    <!--            lengthAdjust= "spacing"-->
+    <svg:text
+            text-anchor="start" y="0.3em" x="22"
+            [@deviceLabelToggleTxt]="labelToggle">
+        {{ labelToggle == 0 ? '': labelToggle == 1 ? device.id:device.props.name }}
+    </svg:text>
+    <svg:use [attr.xlink:href]="'#' + deviceIcon()" width="36" height="36" x="-18" y="-18">
+    </svg:use>
+    <svg:g *ngIf="badge" onos-badgesvg [badge]="badge"></svg:g>
+</svg:g>

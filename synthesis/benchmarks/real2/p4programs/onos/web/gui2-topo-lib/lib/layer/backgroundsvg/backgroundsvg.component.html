@@ -1,0 +1,29 @@
+<!--
+~ Copyright 2018-present Open Networking Foundation
+~
+~ Licensed under the Apache License, Version 2.0 (the "License");
+~ you may not use this file except in compliance with the License.
+~ You may obtain a copy of the License at
+~
+~     http://www.apache.org/licenses/LICENSE-2.0
+~
+~ Unless required by applicable law or agreed to in writing, software
+~ distributed under the License is distributed on an "AS IS" BASIS,
+~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+~ See the License for the specific language governing permissions and
+~ limitations under the License.
+-->
+<!-- The transform here goes from a 0,0 centred grid of -180 to 180 of
+    longitude to -75 to 75 of latitude
+     It is mapped to a 2000x1000 SVG grid with -500,0 at the top left
+     (The SVG viewbox of ONOS is 1000x1000 - for the geo grid we wanted
+     to keep it the same height 1000 representing +75 latitude down to
+     -75 latitude, but double the width. Why 75? There's no city in the
+     world above 70 - Murmansk)
+     The 6.66 represents 1000/150 and the 5.55 represents 2000/360
+     The reason for the difference is that mercator projection widens
+     countries in the northern and southern extremities, and so
+     the map is squashed horizontally slightly here to compensate
+     (with no squashing the width would be 2400)-->
+<svg:g xmlns:svg="http://www.w3.org/2000/svg" onos-mapsvg [map]="map" (mapBounds)="updatedBounds($event)"
+       transform="translate(500,500), scale(5.5555,6.666666)"/>

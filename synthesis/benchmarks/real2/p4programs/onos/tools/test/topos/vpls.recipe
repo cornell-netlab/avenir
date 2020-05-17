@@ -1,0 +1,4 @@
+# Default VPLS topology recipe
+export OTD=6 # ONOS Topology Devices
+export OTL=18 # ONOS Topology Links
+export OTH=6 # ONOS Topology Hosts

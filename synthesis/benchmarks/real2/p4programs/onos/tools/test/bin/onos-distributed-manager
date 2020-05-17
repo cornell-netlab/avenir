@@ -1,0 +1,240 @@
+#!/usr/bin/env python
+"""
+ Copyright 2017-present Open Networking Foundation
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+"""
+
+import argparse
+import json
+import subprocess
+import sys
+import os
+from httplib import OK, NOT_FOUND, BAD_REQUEST
+from subprocess import Popen
+
+from flask import Flask, jsonify, request
+from jsonschema import validate
+
+"""
+Onos Distributed Manager
+this app handles controller information in system
+
+Message Samples :
+--Adding node
+curl  -H "Content-Type: application/json" -X POST --data '{"id":"node-1","ip":"1.2.3.4","port":3456}' http://localhost:5000
+--Updating node
+curl  -H "Content-Type: application/json" -X PUT --data '{"id":"node-1","ip":"1.2.3.4","port":3456}' http://localhost:5000
+--Deleting node
+curl  -H "Content-Type: application/json" -X DELETE --data '{"id":"node-1","ip":"1.2.3.4","port":3456}' http://localhost:5000
+--Getting node data
+curl  -X GET  http://10.15.176.228:5000/cluster.json
+
+"""
+
+
+schema = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "string"},
+        "port": {"type": "number"},
+        "ip": {"type": "string"},
+    },
+    "required": ["id", "port", "ip"]
+}
+
+
+def is_valid_node_json(content):
+    try:
+        validate(content, schema)
+    except Exception as validation_error:
+        return False
+
+    return True
+
+class Manager:
+    cluster_config = {
+        "nodes": [],
+        "name": 315256287,
+        "partitions": []
+    }
+    persistence_filename = ""
+
+    def found_node_index(self, content):
+        for index, node in enumerate(self.cluster_config["nodes"]):
+            if node["id"] == content["id"]:
+                return index
+        return None
+
+
+    def save_to_file(self):
+        config = self.cluster_config
+        if len(self.cluster_config["nodes"]) > 0:
+            command = ["/Users/ray/Documents/work/onos-next/tools/test/bin/onos-gen-partitions", "" ]
+            for controller_node in self.cluster_config["nodes"]:
+                node_string = controller_node["id"]
+                node_string += ":"
+                node_string += controller_node["ip"]
+                node_string += ":"
+                node_string += str(controller_node["port"])
+                command.append(node_string)
+            process = Popen(command, stdout=subprocess.PIPE)
+            config = json.load(process.stdout)
+            self.cluster_config = config
+        else:
+            self.cluster_config["nodes"] = []
+            self.cluster_config["partitions"] = []
+        try:
+            with open(self.persistence_filename, 'w') as file:
+                file.write(json.dumps(config))
+                file.close()
+        except Exception as error:
+            print error
+            sys.exit()
+
+    def load_from_file(self):
+        try:
+            with open(self.persistence_filename, 'r') as file:
+                data = file.read()
+                self.cluster_config = json.loads(data)
+        except Exception:
+            self.save_to_file()
+
+    def data_get_handler(self):
+
+        pagereturn = "<h2> Onos Distributed Controller Manager2 </h2>"
+        pagereturn += "<br><h3> Status of Added controllers  </h3><br>"
+        pagereturn += " Id,&emsp; Ip,&emsp; Port,&emsp; Is Active <br> "
+
+        for key in self.cluster_config["nodes"].keys():
+            pagereturn += self.cluster_config["nodes"][key]["id"] + ",&emsp; " + \
+                          self.cluster_config["nodes"][key]["ip"] + ",&emsp; " + \
+                          str(self.cluster_config["nodes"][key]["port"]) + ",&emsp; "
+            pagereturn += " <br>"
+
+        return pagereturn, OK
+
+    def data_post_handler(self, content):
+        if not is_valid_node_json(content):
+            return "id, ip, and port must be specified", \
+                   BAD_REQUEST
+
+        if self.found_node_index(content) is not None:
+            return "Content Id is already in the list", BAD_REQUEST
+
+        else:
+            self.cluster_config["nodes"].append(content)
+            self.save_to_file()
+
+        return "POST called with content", OK
+
+    def data_put_handler(self, content):
+        if not is_valid_node_json(content):
+            return "id, ip, and port must be specified", \
+                   BAD_REQUEST
+
+        node_index = self.found_node_index(content)
+        if node_index is not None:
+            self.cluster_config["nodes"][node_index] = content
+            self.save_to_file()
+            return "Update succeeded", OK
+
+        else:
+            return "Id %s is not found " % (content["id"]), NOT_FOUND
+
+    def data_delete_handler(self, content):
+        node_index = self.found_node_index(content)
+        if node_index is not None:
+            del self.cluster_config["nodes"][node_index]
+            self.save_to_file()
+            return "Deletion succeed.", OK
+
+        else:
+            return "Id is not found", NOT_FOUND
+
+    """
+    This function returns onos cluster information
+    based on data in memory
+    """
+
+    def cluster_responder(self):
+
+        return jsonify(self.cluster_config), OK
+
+app = Flask(__name__)
+manager = Manager()
+
+
+@app.route('/', methods=['GET'])
+def data_get_handler():
+    return manager.data_get_handler()
+
+
+@app.route('/cluster.json', methods=['GET'])
+def cluster_responder():
+    return manager.cluster_responder()
+
+
+@app.route('/', methods=['POST'])
+def data_post_handler():
+    if request.is_json:
+        content = dict(request.json)
+        return manager.data_post_handler(content)
+    else:
+        return "json required", BAD_REQUEST
+
+
+@app.route('/exit', methods=['PUT'])
+def data_exit_handler():
+    func = request.environ.get('werkzeug.server.shutdown')
+    if func is None:
+        raise RuntimeError('Not running with the Werkzeug Server')
+    func()
+    return "", OK
+
+
+@app.route('/', methods=['PUT'])
+def data_put_handler():
+    if request.is_json:
+        content = dict(request.json)
+        return manager.data_put_handler(content)
+    else:
+        return "json data is missing", BAD_REQUEST
+
+
+@app.route('/', methods=['DELETE'])
+def data_delete_handler():
+    if request.is_json:
+        content = dict(request.json)
+        return manager.data_delete_handler(content)
+    else:
+        return "No json is found", BAD_REQUEST
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Web server and app to maintain ONOS cluster state.")
+    parser.add_argument(
+        '-p', '--persistence-filename',
+        default='./onos-distributed-manager-persistence.json',
+        help="Filename used to store persistence information." )
+
+    args = parser.parse_args()
+    manager.persistence_filename = args.persistence_filename
+    manager.load_from_file()
+
+    app.run(host="0.0.0.0", debug=True)
+
+
+if __name__ == '__main__':
+    manager = Manager()
+    main()

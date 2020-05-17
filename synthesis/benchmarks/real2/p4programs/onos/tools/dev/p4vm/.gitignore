@@ -1,0 +1,4 @@
+.vagrant
+*.ova
+*.log
+tmp/

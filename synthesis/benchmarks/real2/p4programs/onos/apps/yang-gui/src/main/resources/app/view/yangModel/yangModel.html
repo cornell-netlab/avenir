@@ -1,0 +1,63 @@
+<!-- YANG Model partial HTML -->
+<div id="ov-yang-model" yangfiledrop on-file-drop="yangDropped()">
+
+    <div class="tabular-header">
+        <h2>YANG Models ({{tableData.length}} total)</h2>
+        <div class="ctrl-btns">
+            <div class="refresh" ng-class="{active: autoRefresh}"
+                 icon icon-id="refresh" icon-size="42"
+                 tooltip tt-msg="autoRefreshTip"
+                 ng-click="toggleRefresh()"></div>
+
+            <div class="separator"></div>
+
+            <form id="inputYangFileForm">
+                <input id="uploadYangFile"
+                       type="file" size="50" accept=".zip, *.jar, *.yang"
+                       yang-file-model="yangFile">
+            </form>
+
+            <div icon icon-size="42" icon-id="nav_yang"
+                 class="active" trigger-yang-form
+                 tooltip tt-msg="uploadTip">
+            </div>
+        </div>
+    </div>
+
+    <div class="summary-list" onos-table-resize>
+        <div class="table-header" onos-sortable-header>
+            <table>
+                <tr>
+                    <td colId="modelId" col-width="450px" sortable>Model ID</td>
+                    <td colId="id" col-width="450px" sortable>Module</td>
+                    <td colId="revision" sortable>Revision</td>
+                    <!-- TODO: More columns to be added -->
+                </tr>
+            </table>
+        </div>
+
+        <div class="table-body">
+            <table id-prop="id">
+                <tr ng-if="!tableData.length" class="no-data">
+                    <!-- TODO: set colspan to the final number of columns -->
+                    <td colspan="2">
+                        {{annots.no_rows_msg}}
+                    </td>
+                </tr>
+
+                <tr ng-repeat="ymodel in tableData track by $index"
+                    ng-click="selectCallback($event, ymodel)"
+                    ng-class="{selected: ymodel.id === selId}"
+                    ng-repeat-complete row-id="{{ymodel.id}}">
+                    <td>{{ymodel.modelId}}</td>
+                    <td>{{ymodel.id}}</td>
+                    <td>{{ymodel.revision}}</td>
+                    <!-- TODO: add more columns here -->
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <yang-model-details-panel></yang-model-details-panel>
+
+</div>

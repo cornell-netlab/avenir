@@ -1,0 +1,37 @@
+#!/bin/bash -ex
+# -----------------------------------------------------------------------------
+# Builds the release bits and uploads them.
+# -----------------------------------------------------------------------------
+
+set -e -o pipefail
+
+VERSION=$1
+NEXT_VERSION=$2
+BRANCH=$3
+DRY_RUN=$4
+
+dryRun=0
+if [ "${DRY_RUN}" == "--dry-run" ]; then
+    dryRun=1
+fi
+
+# fix version strings, build artifacts, upload artifacts
+onos-release $VERSION $DRY_RUN
+
+if [ $dryRun -eq 0 ]; then
+    # upload docs
+    onos-upload-docs ${WIKI_USER}
+
+    # spot check that uploaded artifacts are correct
+    # TODO - implement this for bazel
+    # check-uploaded-maven-artifacts  $VERSION $ONOS_ROOT https://oss.sonatype.org/content/groups/staging
+
+    # set the version strings to the next version
+    onos-snapshot ${NEXT_VERSION}
+
+    # Push version string changes to git
+    git push origin ${BRANCH}
+
+    # Push tag for this build to git
+    git push origin ${VERSION}
+fi

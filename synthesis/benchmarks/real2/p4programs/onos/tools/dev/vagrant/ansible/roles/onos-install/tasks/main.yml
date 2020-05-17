@@ -1,0 +1,89 @@
+---
+#
+# Installs ONOS and downloads the related dependencies.
+#
+- name: Cloning ONOS repository
+  git:
+    repo: "{{ onos_repo_url }}"
+    dest: "{{ onos_dir }}"
+    version: "onos-{{ onos_version }}"
+
+- name: Changing ONOS repository permissions
+  file:
+    path: "/home/ubuntu/onos"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: 0777
+    recurse: yes
+
+- name: Exporting ONOS variables
+  lineinfile:
+    dest: /home/ubuntu/.bashrc
+    line: "{{ item }}"
+  with_items: "{{ onos_variables }}"
+
+- name: Compiling ONOS
+  shell: "{{ item }}"
+  environment:
+    ONOS_ROOT: /home/ubuntu/onos
+  args:
+    chdir: "/home/ubuntu/onos/tools/build"
+  become: yes
+  become_user: ubuntu
+  with_items:
+    - "./onos-buck build onos"
+
+- name: Creating 1 node ONOS cell
+  template:
+    src: templates/one_node_cell.j2
+    dest: "{{ cell_files[0] }}"
+    owner: ubuntu
+    group: ubuntu
+    mode: 0777
+
+- name: Creating 3 node ONOS cell
+  template:
+    src: templates/three_node_cell.j2
+    dest: "{{ cell_files[1] }}"
+    owner: ubuntu
+    group: ubuntu
+    mode: 0777
+
+- name: Creating ONOS deployment script
+  template:
+    src: templates/onos_deploy.j2
+    dest: "/home/ubuntu/onos_deploy.sh"
+    owner: ubuntu
+    group: ubuntu
+    mode: 0777
+
+- name: Changing ONOS repository permissions
+  file:
+    path: "/home/ubuntu/onos"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: 0777
+
+- name: Changing /tmp/stc dir permissions
+  file:
+    path: "/tmp/stc"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: 0777
+
+- name: Deploying ONOS
+  become: yes
+  become_user: ubuntu
+  shell: "/home/ubuntu/onos_deploy.sh"
+  environment:
+    ONOS_ROOT: /home/ubuntu/onos
+  args:
+    executable: /bin/bash
+
+- name: Adding ONOS to startup
+  become: yes
+  shell: "lxc-attach --name {{ item.value.name }} -- systemctl enable onos"
+  with_dict: "{{ lxc }}"

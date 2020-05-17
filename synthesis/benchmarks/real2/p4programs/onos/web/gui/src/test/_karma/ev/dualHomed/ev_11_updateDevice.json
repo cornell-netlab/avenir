@@ -1,0 +1,36 @@
+{
+  "event": "updateDevice",
+  "payload": {
+    "id": "of:0000000000000206",
+    "type": "switch",
+    "online": true,
+    "master": "10.128.0.217",
+    "labels": [
+      "",
+      "of:0000000000000206",
+      "of:0000000000000206"
+    ],
+    "props": {
+      "managementAddress": "10.128.0.206",
+      "protocol": "OF_13",
+      "latitude": "34.2403",
+      "name": "of:0000000000000206",
+      "locType": "geo",
+      "channelId": "10.128.0.206:52972",
+      "longitude": "-87.0413"
+    },
+    "location": {
+      "locType": "geo",
+      "latOrY": 34.2403,
+      "longOrX": -87.0413
+    },
+    "metaUi": {
+      "x": 764.7366062749779,
+      "y": 639.7691957045747,
+      "equivLoc": {
+        "lng": -87.0413,
+        "lat": 34.2403
+      }
+    }
+  }
+}

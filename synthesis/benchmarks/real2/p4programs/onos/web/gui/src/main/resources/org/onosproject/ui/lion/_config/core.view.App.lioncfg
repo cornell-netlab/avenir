@@ -1,0 +1,31 @@
+#
+# Copyright 2017-present Open Networking Foundation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+#
+
+bundle core.view.App
+
+alias cv core.view
+alias cf core.fw
+alias cc core.common
+
+from cv.App import *
+
+from cf.QuickHelp import qh_hint_close_detail
+
+from cc.Props import icon, title, app_id, version, category, origin, state, role
+from cc.Action import activate, deactivate, uninstall
+from cc.Ui import click_row, scroll_down, tt_ctl_auto_refresh
+from cc.State import total

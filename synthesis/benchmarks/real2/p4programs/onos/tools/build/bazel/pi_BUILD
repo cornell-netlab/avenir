@@ -1,0 +1,5 @@
+proto_library(
+    name = "p4config_proto",
+    srcs = ["p4/tmp/p4config.proto"],
+    visibility = ["//visibility:public"],
+)

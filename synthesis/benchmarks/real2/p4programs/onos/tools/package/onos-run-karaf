@@ -1,0 +1,130 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# Runs ONOS from distributable onos.tar.gz
+# -----------------------------------------------------------------------------
+
+ONOS_TAR=
+JDK_TAR=
+ABSOLUTE_JAVABASE=
+
+[ -f $ONOS_TAR ] || (echo "$ONOS_TAR not found" && exit 1)
+
+
+function killServer() {
+    echo "Killing ONOS server..."
+    ps -ef | grep apache.karaf.main.Main | grep -v grep | awk '{print $2}' | xargs kill -9 &>/dev/null
+}
+
+# Kill any running instances
+killServer
+
+ONOS_DIR=/tmp/$(tar tf $ONOS_TAR | head -n 1 | cut -d/ -f1)
+ONOS_MD5=$ONOS_DIR/CHECKSUM
+
+# Extract MD5 of the ONOS tar file and of the previous installation, if one exists
+md5cmd=''
+md5cmdprm=''
+case "$OSTYPE" in
+  darwin*)  md5cmd='md5' ; md5cmdprm='-q' ;;
+  *)        md5cmd='md5sum';;
+esac
+
+# Either use the given ABSOLUTE_JAVABASE as JAVA_HOME, or extract the passed
+# JDK_TAR and use that.
+if [[ -d ${ABSOLUTE_JAVABASE} ]]; then
+    export JAVA_HOME=${ABSOLUTE_JAVABASE}
+elif [[ -f ${JDK_TAR} ]]; then
+    JDK_DIR=$ONOS_DIR-jdk
+    JDK_MD5=$JDK_DIR/CHECKSUM
+
+    oldJdkMD5=$(cat $JDK_MD5 2>/dev/null)
+    newJdkMD5=$(${md5cmd} ${md5cmdprm} $JDK_TAR)
+
+    if [[ ! -d ${JDK_DIR} || "$oldJdkMD5" != "$newJdkMD5" ]]; then
+        echo "Unpacking JDK in ${JDK_DIR} (from $JDK_TAR)..."
+        # Unroll new JDK from the specified tar file
+        rm -fr $JDK_DIR
+        mkdir $JDK_DIR
+        tar zxf $JDK_TAR -C $JDK_DIR --strip-components 1
+        echo "$newJdkMD5" > $JDK_MD5
+    else
+        echo "Using JDK in ${JDK_DIR}..."
+    fi
+    # Use the extracted JDK as our new JAVA_HOME
+    export JAVA_HOME=${JDK_DIR}
+fi
+
+oldMD5=$(cat $ONOS_MD5 2>/dev/null)
+newMD5=$(${md5cmd} ${md5cmdprm} $ONOS_TAR)
+
+# Search for the "clean" argument anywhere on the command-line
+echo "$@" | egrep -q "\bclean\b" && clean=true || unset clean
+
+set -e          # Do not tolerate any errors from this point onward
+
+# If the previous installation does not exist, or if the ONOS tar changed,
+# or if the user asked for clean run, start from scratch.
+if [ ! -d $ONOS_DIR -o "$oldMD5" != "$newMD5" -o -d $ONOS_DIR -a -n "$clean" ]; then
+    echo "Running clean installation..."
+
+    # Blitz previously unrolled onos- directory
+    rm -fr $ONOS_DIR
+
+    # Unroll new image from the specified tar file
+    [ -f $ONOS_TAR ] && tar zxf $ONOS_TAR -C /tmp
+
+    # Write out this installation's MD5 checksum
+    echo "$newMD5" > $ONOS_MD5
+
+    # Run using the secure SSH client
+    [ ! -f ~/.ssh/id_rsa.pub ] && ssh-keygen -t rsa -f ~/.ssh/id_rsa -P '' -q
+    $ONOS_DIR/bin/onos-user-key $(id -un) "$(cut -d\  -f2 ~/.ssh/id_rsa.pub)"
+    $ONOS_DIR/bin/onos-user-password onos rocks
+
+    # Create config/cluster.json (cluster metadata)
+    IP=${ONOS_IP:-127.0.0.1}
+    echo "Creating local cluster configs for IP $IP..."
+    [ -d $ONOS_DIR/config ] || mkdir -p $ONOS_DIR/config
+    cat > $ONOS_DIR/config/cluster.json <<-EOF
+    {
+      "name": "default-$RANDOM",
+      "node": {
+        "id": "$IP",
+        "ip": "$IP",
+        "port": 9876
+      },
+      "clusterSecret": "$RANDOM"
+    }
+EOF
+
+    # Copy config files
+    find ${ONOS_ROOT:-.}/tools/package/config -maxdepth 1 -name \*.json -exec cp {} $ONOS_DIR/config/ \;
+
+else
+    # Otherwise, run using the previous installation
+    echo "Running previous installation..."
+fi
+
+# Change into the ONOS home directory
+cd $ONOS_DIR
+export ONOS_HOME=$PWD
+
+# Start ONOS as a server, but include any specified options
+./bin/onos-service server "$@" &>onos.log &
+echo "$!" > /tmp/onos.pid
+
+# Hang-on a bit and then start tailing the ONOS log output
+MAX_RETRY=30
+echo "Waiting for karaf.log"
+until [ $MAX_RETRY -le 0 ]; do
+    KARAF_LOG=$(find $ONOS_HOME -type f -name karaf.log)
+    if [ $KARAF_LOG ]; then
+        trap killServer INT
+        tail -f $KARAF_LOG
+        return
+    fi
+    MAX_RETRY=$[$MAX_RETRY-1]
+    sleep 1
+done
+echo "Fail to open karaf.log"
+killServer

@@ -1,0 +1,114 @@
+{
+  "nodes": [
+    {
+      "hostname": "compute-01",
+      "type": "COMPUTE",
+      "managementIp": "172.16.130.4",
+      "dataIp": "172.16.130.4",
+      "vlanPort": "eth2",
+      "integrationBridge": "of:00000000000000a1",
+      "phyIntfs": [
+        {
+          "network": "mgmtnetwork",
+          "intf": "eth3"
+        },
+        {
+          "network": "oamnetwork",
+          "intf": "eth4"
+        },
+        {
+          "network": "datanetwork",
+          "intf": "dpdk0"
+        }
+      ],
+      "sshAuth": {
+        "id": "id",
+        "password": "password"
+      },
+      "dpdkConfig": {
+        "datapathType": "netdev",
+        "socketDir": "/var/lib/libvirt/qemu",
+        "dpdkIntfs": [
+          {
+            "intf": "dpdk0",
+            "mtu": 1500,
+            "deviceName": "br-int",
+            "pciAddress": "0000:85:00.0",
+            "type": "dpdk"
+          },
+          {
+            "intf": "dpdk1",
+            "mtu": 1500,
+            "deviceName": "br-tun",
+            "pciAddress": "0000:85:00.1",
+            "type": "dpdk"
+          }
+        ]
+      },
+      "controllers": [
+        {
+          "ip": "10.10.10.2",
+          "port": 6653
+        },
+        {
+          "ip": "10.10.10.3",
+          "port": 6653
+        },
+        {
+          "ip": "10.10.10.4",
+          "port": 6653
+        }
+      ]
+    },
+    {
+      "hostname": "compute-02",
+      "type": "COMPUTE",
+      "managementIp": "172.16.130.6",
+      "dataIp": "172.16.130.6",
+      "vlanPort": "eth2",
+      "integrationBridge": "of:00000000000000a2",
+      "phyIntfs": [
+        {
+          "network": "mgmtnetwork",
+          "intf": "eth3"
+        },
+        {
+          "network": "oamnetwork",
+          "intf": "eth4"
+        }
+      ]
+    },
+    {
+      "hostname": "controller",
+      "type": "CONTROLLER",
+      "managementIp": "172.16.130.10",
+      "keystoneConfig": {
+        "endpoint": "172.16.130.10:35357/v2.0",
+        "authentication": {
+          "version": "v2.0",
+          "protocol": "HTTP",
+          "project": "admin",
+          "username": "admin",
+          "password": "nova",
+          "perspective": "PUBLIC"
+        }
+      },
+      "neutronConfig": {
+        "useMetadataProxy": true,
+        "metadataProxySecret": "nova",
+        "novaMetadataIp": "172.16.130.10",
+        "novaMetadataPort": 8775
+      }
+    },
+    {
+      "hostname": "gateway-01",
+      "type": "GATEWAY",
+      "managementIp": "172.16.130.8",
+      "dataIp": "172.16.130.7",
+      "vlanPort": "eth2",
+      "integrationBridge": "of:00000000000000a3",
+      "uplinkPort": "ens6"
+    }
+  ]
+}
+

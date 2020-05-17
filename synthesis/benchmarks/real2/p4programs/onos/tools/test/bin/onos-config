@@ -1,0 +1,72 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# Remotely configures & starts ONOS for the first time.
+# -----------------------------------------------------------------------------
+
+function _usage () {
+cat << _EOF_
+usage:
+ $(basename $0) [node]
+
+options:
+- [node] : The node to configure
+
+summary:
+ Remotely configures and starts ONOS for the first time.
+
+ The procedure for configuring a node includes determining base features,
+ applications to load at startup, and clustering and logical network view
+ configurations, among others.
+
+ If [node] isn't specified, the default target becomes \$OCI.
+
+_EOF_
+}
+
+[ "$1" = "-h" ] && _usage && exit 0
+
+[ ! -d "$ONOS_ROOT" ] && echo "ONOS_ROOT is not defined" >&2 && exit 1
+. $ONOS_ROOT/tools/build/envDefaults
+
+node=${1:-$OCI}
+remote=$ONOS_USER@$node
+remote_scp=$ONOS_USER@[$node]
+
+# ONOS boot features
+export ONOS_BOOT_FEATURES="${ONOS_BOOT_FEATURES:-webconsole,onos-api,onos-core,onos-incubator,onos-cli,onos-rest,onos-gui}"
+
+# ONOS builtin apps and providers ignited by default
+export ONOS_APPS="${ONOS_APPS:-gui,drivers,openflow}"
+
+ssh -tt $remote "
+    # Drop atomix related log level for the console
+    echo "log4j2.logger.atomix.name = io.atomix.protocols.raft" >> $ONOS_INSTALL_DIR/$KARAF_DIST/etc/org.ops4j.pax.logging.cfg
+    echo "log4j2.logger.atomix.level = INFO" >> $ONOS_INSTALL_DIR/$KARAF_DIST/etc/org.ops4j.pax.logging.cfg
+
+    # Patch the Apache Karaf distribution file to load ONOS boot features
+    perl -pi.old -e \"s|^(featuresBoot=.*,management)(,webconsole,.*)|\1,$ONOS_BOOT_FEATURES|\" \
+        $ONOS_INSTALL_DIR/$KARAF_DIST/etc/org.apache.karaf.features.cfg
+
+    # Customize which builtin apps should be ignited
+    for app in $(echo $ONOS_APPS | tr ',' ' '); do
+        if  [ -d \"$ONOS_INSTALL_DIR/apps/org.onosproject.\$app/\" ]; then
+            touch $ONOS_INSTALL_DIR/apps/org.onosproject.\$app/active
+        elif [ -d \"$ONOS_INSTALL_DIR/apps/\$app\" ]; then
+            touch $ONOS_INSTALL_DIR/apps/\$app/active
+        else
+            echo \"[WARN] Don\'t know how to activate \$app\"
+        fi
+    done
+"
+
+# Generate a default cluster.json from the ON* environment variables
+CDEF_FILE=/tmp/${remote}.cluster.json
+onos-gen-config $node $CDEF_FILE
+scp -q $CDEF_FILE $remote_scp:$ONOS_INSTALL_DIR/config/cluster.json
+
+# Copy tools/package/config/ to remote
+scp -qr ${ONOS_ROOT}/tools/package/config/ $remote_scp:$ONOS_INSTALL_DIR/
+
+# Copy the desired initial network configuration to remote if needed
+[ -n "$ONOS_CFG" -a -f "$ONOS_CFG" -a "${1:-$OCI}" = "$OC1" ] && \
+    scp $ONOS_CFG $remote_scp:$ONOS_INSTALL_DIR/config/network-cfg.json || true
