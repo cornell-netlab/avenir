@@ -7,6 +7,11 @@ open Tables
 
 module IntMap = Map.Make(Int)
 
+let parse_file (filename : string) : Ast.cmd =
+  let cts = In_channel.read_all filename in
+  let lexbuf = Lexing.from_string cts in
+  Parser.main Lexer.tokens lexbuf
+
 let parse_fvs fp =
   In_channel.read_lines fp
   |> List.map ~f:(fun line ->
@@ -669,10 +674,13 @@ let basic_onf_ipv4 params filename =
   in
   measure params None problem (onos_to_edits filename "ipv6")
 
-let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_edits_file fvs_file log_inc phys_inc = 
+let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_edits_file fvs_file assume_file log_inc phys_inc = 
   let fvs = parse_fvs fvs_file in
-  let log = Encode.encode_from_p4 log_inc log_p4 false |> zero_init fvs in
-  let phys = Encode.encode_from_p4 phys_inc phys_p4 false |> zero_init fvs in
+  let assume = parse_file assume_file in
+
+  let log = (assume %:% Encode.encode_from_p4 log_inc log_p4 false) |> zero_init fvs in
+  let phys = (assume %:% Encode.encode_from_p4 phys_inc phys_p4 false) |> zero_init fvs in
+  
   let open Match in
   let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in
   (* let fvs = parse_fvs fvs in *)
@@ -695,11 +703,34 @@ and zero_init fvs cmd =
 and variables cmd =
   match cmd with
   | Skip -> []
-  | Assign(s, e) -> [(s, get_width e)]
+  | Assign(s, e) -> (s, get_width e) :: variables_expr e
   | Seq (c1, c2) -> variables c1 @ variables c2
   | While(_, c1) -> variables c1
-  | Select(_, tc) -> List.concat_map tc ~f:(fun (_, c) -> variables c)
+  | Select(_, tc) -> List.concat_map tc ~f:(fun (t, c) -> variables_test t @  variables c)
+  | Apply {keys} -> keys
   | _ -> []
+
+and variables_expr e =
+  match e with
+  | Value _ -> []
+  | Var(n, w) -> [(n, w)]
+  | Hole _ -> []
+  | Plus(e1, e2) -> variables_expr e1 @ variables_expr e2
+  | Times(e1, e2) -> variables_expr e1 @ variables_expr e2
+  | Minus(e1, e2) -> variables_expr e1 @ variables_expr e2
+  | Mask(e1, e2) -> variables_expr e1 @ variables_expr e2
+
+and variables_test t =
+  match t with
+  | True
+  | False -> []
+  | Eq(e1, e2)
+  | Le(e1, e2) -> variables_expr e1 @ variables_expr e2
+  | And(t1, t2)
+  | Or(t1, t2)
+  | Impl(t1, t2)
+  | Iff(t1, t2) -> variables_test t1 @ variables_test t2
+  | Neg(t1) -> variables_test t1
 
 and get_width e =
   match e with

@@ -571,7 +571,7 @@ and dispatch_control (type_ctx : Declaration.t list) (Program(top_decls) as prog
     (match List.zip (c.params) args with
       | Ok param_args ->
         let rv = get_return_value () in
-        let assign_rv = mkAssn (return_bit rv) (mkVInt(1, 1)) in
+        let assign_rv = mkAssn (return_bit rv) (mkVInt(0, 1)) in
         let new_typ_ctx = get_type_decls top_decls @ type_ctx in
         let b = List.concat_map param_args ~f:(assign_param new_typ_ctx) in
         let new_typ_ctx2 = List.map c.params ~f:(update_typ_ctx_from_param new_typ_ctx) @ new_typ_ctx in

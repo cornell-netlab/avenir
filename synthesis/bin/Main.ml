@@ -15,12 +15,6 @@ module Tables = Motley.Tables
 module Instance = Motley.Instance
 module Runtime = Motley.Runtime
 
-
-let parse_file (filename : string) : Ast.cmd =
-  let cts = In_channel.read_all filename in
-  let lexbuf = Lexing.from_string cts in
-  Parser.main Lexer.tokens lexbuf
-
 module Solver = struct
   let spec = Command.Spec.(
       empty
@@ -58,15 +52,15 @@ module Solver = struct
                               cache = not no_cache;
                               del_pushdown;
                               above}) in
-    let log = parse_file logical in
-    let phys = parse_file real in
+    let log = Benchmark.parse_file logical in
+    let phys = Benchmark.parse_file real in
     let log_inst = Runtime.parse logical_edits |> Instance.(update_list params empty) in
     let log_edits = if onos
                     then Benchmark.onos_to_edits data "ipv6"
                     else Runtime.parse data |> List.(map ~f:return)  in
     let phys_inst = Runtime.parse physical_edits |> Instance.(update_list params empty) in
     let fvs = Benchmark.parse_fvs fvs in
-    let phys_drop_spec = Option.(p_drop_spec >>| fun dp -> parse_file dp |> Ast.get_test_from_assume)in
+    let phys_drop_spec = Option.(p_drop_spec >>| fun dp -> Benchmark.parse_file dp |> Ast.get_test_from_assume)in
     if measure then
       let open Motley.Instance in
       let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits:[] ~fvs ~phys_drop_spec () in
@@ -133,8 +127,8 @@ module RunTest = struct
          ~f:(fun line ->
            match String.split line ~on:',' with
            | [log_str;phys_str;edits_str] ->
-              let log = parse_file log_str in
-              let phys = parse_file phys_str in
+              let log = Benchmark.parse_file log_str in
+              let phys = Benchmark.parse_file phys_str in
               let log_edits = Runtime.parse edits_str in
               let params = Parameters.({widening;
                                         do_slice;
@@ -274,12 +268,13 @@ module ONFReal = struct
       +> anon ("log_edits" %: string)
       +> anon ("phys_edits" %: string)
       +> anon ("fvs" %: string)
+      +> anon ("assume" %: string)
       +> flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
       +> flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file")
   
 
-  let run gas widening do_slice monotonic interactive injection debug data_fp fastcx del_pushdown above logical_p4 physical_p4 log_edits phys_edits fvs logical_inc physical_inc() =
-          ignore (Benchmark.basic_onf_ipv4_real Parameters.({widening;do_slice;gas;monotonic;injection;interactive;debug;fastcx;del_pushdown;above; cache = true}) data_fp logical_p4 physical_p4 log_edits phys_edits fvs logical_inc physical_inc : Tables.Edit.t list)
+  let run gas widening do_slice monotonic interactive injection debug data_fp fastcx del_pushdown above logical_p4 physical_p4 log_edits phys_edits fvs assume logical_inc physical_inc() =
+          ignore (Benchmark.basic_onf_ipv4_real Parameters.({widening;do_slice;gas;monotonic;injection;interactive;debug;fastcx;del_pushdown;above; cache = true}) data_fp logical_p4 physical_p4 log_edits phys_edits fvs assume logical_inc physical_inc : Tables.Edit.t list)
     (* Benchmark.onf_representative gas widening |> ignore *)
 end
 
@@ -331,8 +326,8 @@ module Equality = struct
 
 
   let run log phys log_edits phys_edits fvs_fp debug () =
-    let log = parse_file log in
-    let phys = parse_file phys in
+    let log = Benchmark.parse_file log in
+    let phys = Benchmark.parse_file phys in
     let log_edits = Runtime.parse log_edits in
     let phys_edits = Runtime.parse phys_edits in
     let params = Parameters.(
@@ -458,7 +453,7 @@ module WeakestPrecondition = struct
       +> flag "-z3" no_arg ~doc: "z3-ready output")
 
   let run file z3 () =
-    let cmd = parse_file file in
+    let cmd = Benchmark.parse_file file in
     let _ : unit = Printf.printf "PROGRAM: %s \n%!" (Ast.string_of_cmd cmd) in
     let wp = Synthesis.symb_wp cmd in
     if z3 then
