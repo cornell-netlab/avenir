@@ -495,8 +495,15 @@ control MyIngress(inout parsed_packet_t hdr,
     }
 
     apply {
-        my_station_table.apply();
-        punt.apply(hdr, local_metadata, standard_metadata);
+        if (hdr.packet_out.isValid()) {
+            standard_metadata.egress_spec = hdr.packet_out.egress_physical_port;
+            hdr.packet_out.setInvalid();
+        }
+
+            my_station_table.apply();
+                l3_fwd.apply(hdr, local_metadata, standard_metadata);
+                l2_fwd.apply(hdr, local_metadata, standard_metadata);
+
     }
 }
 

@@ -529,7 +529,7 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t l
   | Conditional {cond; tru; fls} ->
     let fls_case, fls_rb, fls_eb =
       match fls with
-        | None -> [], false, false
+        | None -> [ True, Skip ], false, false
         | Some fls ->
           let stmt, rb1, eb1 = encode_statement prog ctx type_ctx rv fls in
           [ !%(encode_expression_to_test type_ctx cond), stmt ], rb1, eb1
