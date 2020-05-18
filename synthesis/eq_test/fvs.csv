@@ -1,0 +1,4 @@
+hdr__ipv6__hop_limit#8
+hdr__ipv6__src_addr#128
+hdr__ipv6__dst_addr#128
+standard_metadata__egress_spec#9
