@@ -536,7 +536,7 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t l
     in
     let expr_to_test = encode_expression_to_test type_ctx cond in
     let tr_stmt, tr_rb, tr_eb = encode_statement prog ctx type_ctx rv tru in
-    mkPartial ([ expr_to_test, tr_stmt] @ fls_case), fls_rb || tr_rb, fls_eb || tr_eb
+    mkOrdered ([ expr_to_test, tr_stmt] @ fls_case), fls_rb || tr_rb, fls_eb || tr_eb
   | BlockStatement {block} ->
     encode_block3 prog ctx type_ctx rv block
   | Exit ->
@@ -713,10 +713,12 @@ and encode_action3 prog (ctx : Declaration.t list) (type_ctx : Declaration.t lis
       ~f:(fun (rst, in_rb, in_eb) stmt ->
             let tstmt, ret_rb, ret_eb = encode_statement prog ctx type_ctx rv stmt in
             let tstmt2 = if in_rb
-                            then mkPartial [mkEq (Var(return_bit rv, 1)) (mkVInt(0, 1)), tstmt]
+                            then mkOrdered [ mkEq (Var(return_bit rv, 1)) (mkVInt(0, 1)), tstmt
+                                           ; True , Skip ]
                             else tstmt in
             let tstmt3 = if in_eb
-                            then mkPartial [mkEq (Var(exit_bit, 1)) (mkVInt(0, 1)), tstmt2]
+                            then mkOrdered [ mkEq (Var(exit_bit, 1)) (mkVInt(0, 1)), tstmt2
+                                           ; True, Skip ]
                             else tstmt in
             (rst %:% tstmt3, ret_rb, ret_eb))
   in
