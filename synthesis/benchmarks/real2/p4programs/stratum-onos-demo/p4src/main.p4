@@ -500,10 +500,22 @@ control MyIngress(inout parsed_packet_t hdr,
             hdr.packet_out.setInvalid();
         }
 
+        if (standard_metadata.egress_spec == 0 ||
+                standard_metadata.egress_spec == LOOPBACK_PORT) {
+            // Egress port not valid or not a packet out.
             my_station_table.apply();
-                l3_fwd.apply(hdr, local_metadata, standard_metadata);
+//            if (local_metadata.l3_admit == 1w1) {
+//                l3_fwd.apply(hdr, local_metadata, standard_metadata);
+//            }
+//            else {
                 l2_fwd.apply(hdr, local_metadata, standard_metadata);
+//            }
+        }
+        else {
+            exit;
+        }
 
+        punt.apply(hdr, local_metadata, standard_metadata);
     }
 }
 

@@ -371,21 +371,21 @@ control punt(inout parsed_packet_t hdr,
         key = {
             standard_metadata.ingress_port: ternary;
             standard_metadata.egress_spec : ternary;
-            hdr.ethernet.ether_type       : ternary;
-            hdr.ipv4_base.diffserv        : ternary;
-            // hdr.ipv6_base.traffic_class: ternary;
-            hdr.ipv4_base.ttl             : ternary;
-            // hdr.ipv6_base.hop_limit    : ternary;
-            hdr.ipv4_base.src_addr        : ternary;
-            hdr.ipv4_base.dst_addr        : ternary;
-            // hdr.ipv6_base.src_addr     : ternary;
-            // hdr.ipv6_base.dst_addr     : ternary;
-            hdr.ipv4_base.protocol        : ternary;
-            // hdr.ipv6_base.next_header  : ternary;
+            // hdr.ethernet.ether_type       : ternary;
+            // hdr.ipv4_base.diffserv        : ternary;
+            hdr.ipv6_base.traffic_class: ternary;
+            // hdr.ipv4_base.ttl             : ternary;
+            hdr.ipv6_base.hop_limit    : ternary;
+            // hdr.ipv4_base.src_addr        : ternary;
+            // hdr.ipv4_base.dst_addr        : ternary;
+            hdr.ipv6_base.src_addr     : ternary;
+            hdr.ipv6_base.dst_addr     : ternary;
+            // hdr.ipv4_base.protocol        : ternary;
+            hdr.ipv6_base.next_header  : ternary;
             // hdr.arp.target_proto_addr  : ternary;
-            local_metadata.icmp_code      : ternary;
+            // local_metadata.icmp_code      : ternary;
             hdr.vlan_tag[0].vid           : ternary;
-            hdr.vlan_tag[0].pcp           : ternary;
+             hdr.vlan_tag[0].pcp           : ternary;
             local_metadata.class_id       : ternary;
             local_metadata.vrf_id         : ternary;
         }

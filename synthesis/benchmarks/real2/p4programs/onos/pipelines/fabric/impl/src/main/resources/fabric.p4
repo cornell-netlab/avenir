@@ -76,9 +76,9 @@ control MyIngress (inout parsed_headers_t hdr,
 
     apply {
         _PRE_INGRESS
+        filtering.apply(hdr, fabric_metadata, standard_metadata);
         forwarding.apply(hdr, fabric_metadata, standard_metadata);
         next.apply(hdr, fabric_metadata, standard_metadata);
-
     }
 }
 
@@ -91,7 +91,6 @@ control FabricEgress (inout parsed_headers_t hdr,
 
     apply {
         _PRE_EGRESS
-        pkt_io_egress.apply(hdr, fabric_metadata, standard_metadata);
         egress_next.apply(hdr, fabric_metadata, standard_metadata);
 #ifdef WITH_SPGW
         spgw_egress.apply(hdr.ipv4, hdr.gtpu_ipv4, hdr.gtpu_udp, hdr.gtpu,
