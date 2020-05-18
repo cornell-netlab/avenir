@@ -105,8 +105,5 @@ control Filtering (inout parsed_headers_t hdr,
     }
 
     apply {
-
-        ingress_port_vlan.apply();
-        fwd_classifier.apply();
     }
 }

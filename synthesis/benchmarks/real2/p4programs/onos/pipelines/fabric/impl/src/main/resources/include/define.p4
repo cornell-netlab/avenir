@@ -104,7 +104,7 @@ typedef bit<32> pcc_rule_id_t;
 // spgw.p4 expects uplink packets with IP dst on this subnet
 // 140.0.0.0/8
 //const ipv4_addr_t S1U_SGW_PREFIX = 2348810240;
-//#define S1U_SGW_PREFIX_LEN 8
+#define S1U_SGW_PREFIX_LEN 8
 
 //const bit<16> ETHERTYPE_QINQ = 0x88A8;
 //const bit<16> ETHERTYPE_QINQ_NON_STD = 0x9100;
@@ -150,7 +150,7 @@ typedef bit<32> pcc_rule_id_t;
 //const pcc_gate_status_t PCC_GATE_CLOSED = 1w1;
 
 /* indicate INT at LSB of DSCP */
-///const bit<6> INT_DSCP = 0x1;
+//const bit<6> INT_DSCP = 0x1;
 
 // Length of the whole INT header,
 // including shim and tail, excluding metadata stack.

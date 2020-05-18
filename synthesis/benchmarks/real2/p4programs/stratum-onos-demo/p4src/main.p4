@@ -38,6 +38,21 @@
 
 //const bit<2> METER_GREEN = 0;
 
+//const bit<16> ETHERTYPE_VLAN1 = 0x8100;
+//const bit<16> ETHERTYPE_VLAN2 = 0x9100;
+//const bit<16> ETHERTYPE_VLAN3 = 0x9200;
+//const bit<16> ETHERTYPE_VLAN4 = 0x9300;
+//const bit<16> ETHERTYPE_IPV4 = 0x800;
+//const bit<16> ETHERTYPE_IPV6 = 0x86dd;
+//const bit<16> ETHERTYPE_ARP = 0x806;
+//const bit<16> ETHERTYPE_ND = 0x6007;
+//const bit<16> ETHERTYPE_LLDP = 0x88cc;
+
+//const bit<8> IP_PROTOCOLS_TCP = 6;
+//const bit<8> IP_PROTOCOLS_UDP = 17;
+//const bit<8> IP_PROTOCOLS_ICMP = 1;
+//const bit<8> IP_PROTOCOLS_ICMPv6 = 58;
+
 typedef bit<48> EthernetAddress;
 typedef bit<32> IPv4Address;
 typedef bit<128> IPv6Address;
@@ -481,7 +496,7 @@ control MyIngress(inout parsed_packet_t hdr,
 
     apply {
         my_station_table.apply();
-
+        punt.apply(hdr, local_metadata, standard_metadata);
     }
 }
 

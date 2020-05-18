@@ -36,5 +36,15 @@ control PacketIoEgress(inout parsed_headers_t hdr,
                        inout standard_metadata_t standard_metadata) {
 
     apply {
+        if (fabric_metadata.is_controller_packet_out == _TRUE) {
+            // Transmit right away.
+            exit;
+        }
+        if (standard_metadata.egress_port == CPU_PORT) {
+            hdr.packet_in.setValid();
+            hdr.packet_in.ingress_port = standard_metadata.ingress_port;
+            // No need to process through the rest of the pipeline.
+            exit;
+        }
     }
 }

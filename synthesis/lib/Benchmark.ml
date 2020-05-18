@@ -678,6 +678,8 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
   let fvs = parse_fvs fvs_file in
   let assume = parse_file assume_file in
 
+  let print_fvs = printf "fvs = %s" (Sexp.to_string ([%sexp_of: (string * int) list] fvs)) in
+
   let log = (assume %:% Encode.encode_from_p4 log_inc log_p4 false) |> zero_init fvs in
   let phys = (assume %:% Encode.encode_from_p4 phys_inc phys_p4 false) |> zero_init fvs in
   

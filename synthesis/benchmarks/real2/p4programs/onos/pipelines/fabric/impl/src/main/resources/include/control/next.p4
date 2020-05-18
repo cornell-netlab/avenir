@@ -333,6 +333,13 @@ control EgressNextControl (inout parsed_headers_t hdr,
         }
 
 #ifdef WITH_DOUBLE_VLAN_TERMINATION
+        if (fabric_metadata.push_double_vlan == _TRUE) {
+            // Double VLAN termination.
+            push_vlan();
+            push_inner_vlan();
+        } else {
+            // If no push double vlan, inner_vlan_tag must be popped
+            hdr.inner_vlan_tag.setInvalid();
 #endif // WITH_DOUBLE_VLAN_TERMINATION
             // Port-based VLAN tagging (by default all
             // ports are assumed tagged)
@@ -343,6 +350,7 @@ control EgressNextControl (inout parsed_headers_t hdr,
                 }
             }
 #ifdef WITH_DOUBLE_VLAN_TERMINATION
+        }
 #endif // WITH_DOUBLE_VLAN_TERMINATION
 
         // TTL decrement and check.
