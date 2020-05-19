@@ -525,7 +525,6 @@ let get_cex (params : Parameters.t) (data :  ProfData.t ref) (problem : Problem.
 
 
 let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
-  assert params.do_slice;
   Printf.printf "\tcegis_math\n%!";
   (* let st = Time.now () in *)
   let cex = get_cex params data problem in
@@ -566,7 +565,6 @@ and solve_math (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   if Problem.model_space problem = True
      || (check_sat params (Problem.model_space problem) |> fst |> Option.is_some)
   then begin
-      assert (List.length @@ Problem.cexs problem <= 1);
       let st = Time.now () in
       let rec loop problem searcher =
         Printf.printf "\tlooping\n%!";
@@ -648,7 +646,6 @@ and solve_math (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
 
 
 let cegis_math_sequence (params : Parameters.t) data problem =
-  assert params.do_slice;
   let log_edit_sequence = Problem.log_edits problem in
   let problem = Problem.replace_log_edits problem [] in
   List.fold log_edit_sequence ~init:(Some(problem,[]))
