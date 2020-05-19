@@ -314,7 +314,7 @@ let cegis ~iter
       (Printf.printf "Press enter to continue\n%!";
        ignore(Stdio.In_channel.(input_char stdin) : char option));
     if params.debug || params.interactive then
-      Printf.printf "======================= LOOP (%d, %d) =======================\n%!%s\n%!" (iter) (params.gas) (Problem.to_string params problem);
+      Printf.printf "======================= LOOP (%d, %d) =======================\n%!%s\n%!" (iter) (params.search_width) (Problem.to_string params problem);
     let imp_st = Time.now () in (* update data after setting time start  *)
     let res = ((* if params.fastcx
                 * then
@@ -330,12 +330,12 @@ let cegis ~iter
       (* if params.interactive then
        *   (Printf.printf "Press enter to resolve counterexample\n%!";
        *    ignore(Stdio.In_channel.(input_char stdin) : char option)); *)
-      if params.gas = 0 then failwith "RAN OUT OF GAS" else
+      if params.edits_depth = 0 then failwith "RAN OUT OF GAS" else
         let pedits = solve_concrete ~packet:(Some counter) data params hints problem in
         if List.length pedits = 0
         then failwith ("Could not make progress on edits ")
         else loop
-            { params with gas = params.gas - 1 }
+            { params with search_width = params.search_width - 1 }
             (Problem.append_phys_edits problem pedits)
     in
     match res with
@@ -590,7 +590,7 @@ let minimize_solution params data problem =
 
 let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (Edit.t list option) =
   (* Printf.printf "\tcegis_math\n%!"; *)
-  if params.cache then
+  if params.ecache then
     let () = Printf.printf "\ttrying cache \n%!"in
     solve_math 1 params data problem
   else
@@ -621,7 +621,7 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
            (Packet.string__packet @@ snd counter)
            (Packet.string__packet @@ Semantics.eval_act (Problem.phys_gcl_program params problem) (fst counter))
        ;
-         let params = {params with fastcx = false; cache = false} in
+         let params = {params with fastcx = false; ecache = false} in
          (* let f = liftPair ~f:Packet.equal ~combine:(&&) counter in *)
          (* if List.exists ~f (Problem.cexs problem) then begin
           *     if params.debug then
@@ -631,7 +631,7 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
           *     None
           *   end
           * else *)
-         solve_math 100 params data
+         solve_math params.search_width params data
            (Problem.add_cex problem counter)
 
 
@@ -644,20 +644,20 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
     let () = Printf.printf "The jig is up\n%!" in
     None
   else
-    if params.cache then
+    if params.ecache then
       match EAbstr.infer !edit_cache (Problem.log_edits problem |> List.hd_exn) with
       | None ->
          Printf.printf "\tedit cache miss\n";
-         cegis_math {params with cache = false} data problem
+         cegis_math {params with ecache = false} data problem
       | Some ps ->
-         match cegis_math {params with fastcx = false; cache = false; minimize = false} data (Problem.replace_phys_edits problem ps) with
+         match cegis_math {params with fastcx = false; ecache = false; minimize = false} data (Problem.replace_phys_edits problem ps) with
          | Some ps -> Some ps
-         | None -> cegis_math {params with cache = false} data problem
+         | None -> cegis_math {params with ecache = false} data problem
     else
       if Problem.model_space problem = True
          || (check_sat params (Problem.model_space problem) |> fst |> Option.is_some)
       then begin
-          if (Problem.phys_edits problem |> List.length > 6)
+          if (Problem.phys_edits problem |> List.length > params.edits_depth)
           then let () = Printf.printf "too many edits\n%!" in None
           else
             let st = Time.now () in
@@ -760,7 +760,7 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
                      | None -> continue ()
                      | Some es -> Some es in
             ModelFinder.make_searcher params data problem
-            |> loop 100 problem
+            |> loop params.search_width problem
         end
       else begin
           Printf.printf "Exhausted the Space\n%!";
