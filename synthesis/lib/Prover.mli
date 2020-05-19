@@ -13,6 +13,10 @@ val check_sat : Parameters.t  -> test -> ((value StringMap.t) option * Time.Span
 (* Checks SMT Query for validity. *)
 val check_valid : Parameters.t -> test -> ((value StringMap.t) option * Time.Span.t)
 
+(* Checks SMT Query for validity. *)
+val check_valid_cached : Parameters.t -> test -> ((value StringMap.t) option * Time.Span.t)
+
+
 (* Checks SMT Query as satisfiable, with the difference between h_lo and h_hi minimized. *)
 val check_min : Parameters.t -> test -> ((value StringMap.t) option * Time.Span.t)
 

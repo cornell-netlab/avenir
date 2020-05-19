@@ -51,13 +51,15 @@ module Solver = struct
       +> flag "-DEBUG" no_arg ~doc:"Print Debugging commands"
       +> flag "-i" no_arg ~doc:"Interactive Mode"
       +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly"
+      +> flag "-no-cache" no_arg ~doc:"Disable query and edit caching"
       +> flag "-measure" no_arg ~doc:"Produce a CSV of data to stdout"
       +> flag "-onos" no_arg ~doc:"Parse logical edits as onos insertions"
       +> flag "--del-pushdown" no_arg ~doc:"interpret deletions as pushdowns when possible"
       +> flag "--phys-drop-spec" (optional string) ~doc:"fast counter-examples are restricted to admitted packets"
-      +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below")
+      +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
+      +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn")
 
-  let run logical real logical_edits physical_edits fvs data print_res widening do_slice monotonic injection gas debug interactive fastcx measure onos del_pushdown p_drop_spec above () =
+  let run logical real logical_edits physical_edits fvs data print_res widening do_slice monotonic injection gas debug interactive fastcx no_cache measure onos del_pushdown p_drop_spec above minimize () =
     let params = Parameters.({widening;
                               do_slice;
                               gas;
@@ -66,8 +68,10 @@ module Solver = struct
                               injection;
                               interactive;
                               fastcx;
+                              cache = not no_cache;
                               del_pushdown;
-                              above}) in
+                              above;
+                              minimize}) in
     let log = parse_file logical in
     let phys = parse_file real in
     let log_inst = Runtime.parse logical_edits |> Instance.(update_list params empty) in
@@ -80,11 +84,11 @@ module Solver = struct
     if measure then
       let open Motley.Instance in
       let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits:[] ~fvs ~phys_drop_spec () in
-      assert params.do_slice;
       let soln = Benchmark.measure params None problem log_edits in
-      if print_res then
-        List.iter soln ~f:(fun e -> Printf.printf "%s\n%!" (Tables.Edit.to_string e))
-      else ()
+      (* if print_res then *)
+      Printf.printf "EDITS:\n%!";
+      List.iter soln ~f:(fun e -> Printf.printf "%s\n%!" (Tables.Edit.to_string e))
+      (* else () *)
     else
       let log_edits = List.join log_edits in
       let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits ~fvs ~phys_drop_spec () in
@@ -153,9 +157,11 @@ module RunTest = struct
                                         fastcx;
                                         injection;
                                         debug = false;
+                                        cache = true;
                                         interactive = false;
                                         del_pushdown = false;
                                         above = false;
+                                        minimize = false;
                            }) in
               let problem = Problem.make ~log ~phys ~log_edits
                               ~log_inst:Instance.empty
@@ -205,9 +211,10 @@ module Bench = struct
       +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
       +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly"
       +> flag "--del-pushdown" no_arg ~doc:"interpret deletions as pushdowns when possible"
-      +> flag "--above" no_arg ~doc:"insert new edits above old instance instead of below")
+      +> flag "--above" no_arg ~doc:"insert new edits above old instance instead of below"
+      +> flag "--min"   no_arg ~doc:"minimize a synthesized solution")
 
-  let run varsize num_tables max_inserts widening do_slice monotonic interactive injection debug fastcx del_pushdown above () =
+  let run varsize num_tables max_inserts widening do_slice monotonic interactive injection debug fastcx del_pushdown above minimize () =
     let params =
       Parameters.(
         { widening;
@@ -220,6 +227,8 @@ module Bench = struct
           gas = 10;
           del_pushdown;
           above;
+          cache = true;
+          minimize
       })
     in
     ignore(Benchmark.reorder_benchmark varsize num_tables max_inserts params : Tables.Edit.t list)
@@ -247,12 +256,13 @@ module ONF = struct
       +> flag "-data" (required string) ~doc:"the input log"
       +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly"
       +> flag "--del-pushdown" no_arg ~doc:"interpret deletions as pushdowns when possible"
-      +> flag "--above" no_arg ~doc:"insert new edits above instance, not below")
+      +> flag "--above" no_arg ~doc:"insert new edits above instance, not below"
+      +> flag "--min" no_arg ~doc:"minimize synthesized solutions" )
 
 
-  let run gas widening do_slice monotonic interactive injection print debug data_fp fastcx del_pushdown above() =
+  let run gas widening do_slice monotonic interactive injection print debug data_fp fastcx del_pushdown above minimize () =
     let res = Benchmark.basic_onf_ipv4
-              Parameters.({widening;do_slice;gas;monotonic;injection;interactive;debug;fastcx;del_pushdown;above})
+              Parameters.({widening;do_slice;gas;monotonic;injection;interactive;debug;fastcx;del_pushdown;above; cache = true; minimize})
               data_fp
     in
     if print then
@@ -319,7 +329,9 @@ module Equality = struct
           fastcx = false;
           injection = false;
           del_pushdown = false;
-          above = false; }) in
+          above = false;
+          cache = true;
+          minimize = false}) in
     let data = ProfData.zero () in
     let log_inst = Instance.empty in
     let phys_inst = Instance.empty in

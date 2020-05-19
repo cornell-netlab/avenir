@@ -1,4 +1,5 @@
 open Core
+
 (* Timing data : lots of subsets, eq time in check valid time in impl time  *)
 type t = {
     log_inst_size : int ref;

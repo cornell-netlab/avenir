@@ -32,15 +32,22 @@ let hits_pred params data prog inst edits e : test =
   match e with
   | Edit.Add (t, (ms, _, _)) ->
     let (ks, _, _) = get_schema_of_table t prog |> Option.value_exn in
-    let phi = Match.list_to_test ks ms in
+    let phi = Match.list_to_test ks ms %&%
+                List.fold (Instance.get_rows inst t) ~init:True
+                  ~f:(fun acc (matches,_,_) ->
+                    (* Printf.printf "combining %s\n%!" (Match.list_to_test ks matches |> string_of_test); *)
+                    acc %&% !%(Match.list_to_test ks matches))
+    in
+    (* Printf.printf "Condition: %s\n%!" (string_of_test phi); *)
     let prefix = truncated t prog |> Option.value_exn in
     let (pref_gcl,_) = Instance.(apply params NoHoles `Exact (update_list params inst edits) prefix) in
     wp pref_gcl phi
   | Edit.Del (_, _) -> failwith "unimplemented"
 
 let hits_list_pred params data prog inst edits =
-  List.fold edits ~init:False
-    ~f:(fun acc e -> acc %+% hits_pred params data prog inst edits e)
+  Printf.printf "\tThere are %d edits to check\n" (List.length edits);
+  List.fold edits ~init:[]
+    ~f:(fun acc e -> hits_pred params data prog inst edits e :: acc)
 
 
 let make_cex params problem x =
@@ -60,8 +67,17 @@ let make_cex params problem x =
          Printf.printf "PHYS:%s -> %s\n" (Packet.string__packet in_pkt) (Packet.string__packet phys_pkt)
        end;
      if Packet.equal ~fvs:(fvs problem |> Some) log_pkt phys_pkt
-     then `NotFound in_pkt
-     else`NoAndCE (in_pkt,log_pkt)
+     then
+       (* let () = Printf.printf "PACKETS EQUAL\n%!" in *)
+       `NotFound in_pkt
+     else
+       (* let () = Printf.printf "PACKETS NEQ\n%!" in *)
+       `NoAndCE (in_pkt,log_pkt)
+
+let attempt_model test =
+  match test with
+  | Eq(Hole(x,sz), Value(v)) -> StringMap.(set empty ~key:x ~data:v) |> Some
+  | _ -> None
 
 
 let unreachable params (problem : Problem.t) (test : Ast.test) =
@@ -72,31 +88,37 @@ let unreachable params (problem : Problem.t) (test : Ast.test) =
    *                  wp (Problem.phys_gcl_program params problem) spec)
    *                 |> value_exn in *)
   (* Printf.printf "IN DROP_SPEC%s\n%!" (string_of_test drop_spec); *)
-  let mk_query = holify_test (List.map ~f:fst @@ free_vars_of_test test) in
-  let query = mk_query test in
-  if params.debug then Printf.printf "FAST CX QUERY 1 : \n %s\n%!"(string_of_test query);
-  match check_sat params @@ mk_query test with
-  | (Some in_pkt, _) ->
-     begin match make_cex params problem in_pkt with
-     | (`NoAndCE _ as counter) | (`Yes as counter) -> counter
-     | `NotFound in_pkt ->
-        let query =  mk_query @@ test %&% !%(Packet.to_test ~fvs:(Problem.fvs problem) in_pkt) in
-        if params.debug then Printf.printf "FAST CX QUERY 2 : \n %s \n%!" (string_of_test query);
-        match check_sat params @@ mk_query @@ query with
-        | Some in_pkt, _ -> make_cex params problem in_pkt
-        | None, _ -> `NotFound in_pkt
-     end
-  | None, _ -> `Yes
-  (* | (None, _) ->
-   *    Printf.printf "FAST CX QUERY 2: \n %s\n%!"(string_of_test test);
-   *    let query = holify_test (List.map ~f:fst @@ free_vars_of_test test) test in
-   *    match check_sat params query with
-   *    | Some x, _ -> make_cex params problem x
-   *    | None, _ -> `Yes *)
+  let n = 10 in
+  let rec loop i phi =
+    let mk_query t = holify_test (List.map ~f:fst @@ free_vars_of_test t) t in
+    let query = mk_query @@ test %&% phi in
+    (* if params.debug then *)
+    Printf.printf "FAST CX QUERY %d : \n %s\n%!" (n - i) (string_of_test query);
+    match attempt_model query with
+    | Some in_pkt -> makecexloop params problem i in_pkt phi
+    | None ->
+       match check_sat params query with
+       | (Some in_pkt, _) -> makecexloop params problem i in_pkt phi
+       | None, _ when n = i-> `Yes
+       | None, _ -> `NotFound (Packet.empty)
+  and makecexloop params problem i in_pkt phi =
+    match make_cex params problem in_pkt with
+    | (`NoAndCE _ as counter) | (`Yes as counter) ->
+       (* Printf.printf "****************************************************\n%!"; *)
+     counter
+    | `NotFound full_pkt ->
+       if i <= 0
+       then (* failwith "" *) `NotFound in_pkt
+       else Packet.to_test ~fvs:(Problem.fvs problem) full_pkt
+            |> mkNeg
+            |> mkAnd phi
+            |> loop (i - 1)
+  in
+  loop n True
 
-
-let get_cex params data (problem : Problem.t) =
+let get_cex ?neg:(neg = True) params data (problem : Problem.t) =
   let open Problem in
+  Printf.printf "\t   a fast Cex\n%!";
   let e = log_edits problem |> List.hd_exn in
-  hits_pred params data (log problem) (log_inst problem) (log_edits problem) e
+  (neg %&% hits_pred params data (log problem) (log_inst problem) (log_edits problem) e)
   |> unreachable params problem

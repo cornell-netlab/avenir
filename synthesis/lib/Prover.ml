@@ -4,7 +4,7 @@ open Util
 open Packet
 open Z3
 
-let print_debug = true
+let print_debug = false
 
 let debug term =
   if print_debug then
@@ -13,7 +13,7 @@ let debug term =
   else ()
 
 let test_str test =
-  if print_debug then
+  if false then
     let res = Ast.string_of_test test in Printf.printf "TEST: %s\n%!"res
   else ()
 
@@ -30,7 +30,8 @@ let quantify expr etyp styp =
 
 let rec expr_to_term_help expr styp : Smtlib.term =
   match expr with
-  | Value (Int (num, sz)) -> Smtlib.bbv (num) sz
+  | Value (Int (num, sz)) ->
+     Smtlib.bbv (num) sz
   | Var (v, sz) -> quantify v `Var styp
   | Hole (h, sz) -> quantify h `Hole styp
   | Plus (e1, e2) -> Smtlib.bvadd
@@ -148,11 +149,13 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
     else None
   in reset sat_prover; (model, dur)
 
-let check_valid (params : Parameters.t) (longtest : Ast.test) =
+
+let check_valid_inner (params : Parameters.t) (longtest : Ast.test)  =
   let open Smtlib in
   (* Printf.printf "Checking validity for test of size %d\n%!" (num_nodes_in_test test); *)
   let test = Shortener.shorten shortener longtest in
   if params.debug then assert (longtest = Shortener.unshorten shortener test);
+  (* Printf.printf "Test:  %s\n %!" (string_of_test test ); *)
   let vars = free_vars_of_test test
              |> List.dedup_and_sort
                   ~compare:(fun (idx, x) (idy, y) -> Stdlib.compare idx idy) in
@@ -167,7 +170,7 @@ let check_valid (params : Parameters.t) (longtest : Ast.test) =
   let response =
     if params.debug && print_debug then debug term;
     assert_ valid_prover term;
-    check_sat valid_prover in
+    check_sat_using QFBV valid_prover in
   let dur = Time.(diff (now()) st) in
   let model =
     match response with
@@ -180,6 +183,47 @@ let check_valid (params : Parameters.t) (longtest : Ast.test) =
   in
   reset valid_prover;
   (model, dur)
+
+
+let check_valid = check_valid_inner
+
+let cache = ref @@ QAbstr.make ()
+
+let check_valid_cached (params : Parameters.t) (test : Ast.test) =
+  let st = Time.now () in
+  let (cache', res) = QAbstr.cache_check params !cache test in
+  cache := cache';
+  match res with
+  | `HitAbs ->
+     (* Printf.printf "\tCache_hit after %fms!\n%!" *)
+       (* (Time.(diff (now()) st |> Span.to_ms)); *)
+     (None, Time.(diff (now ()) st))
+  | `Miss test | `Hit test ->
+     Printf.printf "\tCouldn't abstract a thing from %d previous tests!\n" (List.length !cache.seen);
+     let dur' = Time.(diff (now()) st) in
+     let (m , dur) = check_valid_inner params test in
+     if Option.is_none m then
+       cache := QAbstr.add_test test !cache;
+     (m, Time.Span.(dur + dur'))
+  | `AddAbs q ->
+     Printf.printf "\tChecking abstraction from %d previous tests and %d abstractions!\n%!" (List.length !cache.seen) (List.length !cache.generals);
+     let dur' = Time.(diff (now()) st) in
+     let (m , dur) = if List.length !cache.seen > 0 then
+                       check_valid_inner {params with debug = true} q
+                     else
+                       check_valid_inner params q in
+     match m with
+     | Some _ ->
+        Printf.printf "\tAbstraction Failed\n%!";
+        (* Printf.printf "\t%s\n%!" (string_of_test q); *)
+        let dur' = Time.(diff (now()) st) in
+        let (m , dur) = check_valid_inner params test in
+        (m, Time.Span.(dur + dur'))
+     | None ->
+        Printf.printf "\tAbstraction successful\n%!";
+        cache := QAbstr.add_abs q test !cache;
+        (m, Time.Span.(dur + dur'))
+
 
 let check_min (params : Parameters.t) (test : Ast.test) =
   let open Smtlib in

@@ -403,7 +403,10 @@ let rec prepend pfx c =
             default = prepend pfx t.default}
   
                  
-let equivalent eq_fvs l p =
+let equivalent ?neg:(neg = True) eq_fvs l p =
+  (* Printf.printf "assuming %s\n%!" (string_of_test neg); *)
+  let l = Assume neg %:% l in
+  let p = Assume neg %:% p in
   let phys_prefix = "phys_"in
   let p' = prepend phys_prefix p in
   let fvs =

@@ -17,6 +17,7 @@ val fvs : t -> (string * int) list
 val cexs : t -> (Packet.t * Packet.t) list
 val model_space : t -> test
 val attempts : t -> value StringMap.t list
+val add_cex : t  -> (Packet.t * Packet.t) -> t
 
 val log : t -> cmd
 val log_inst : t -> Instance.t
@@ -34,6 +35,7 @@ val phys_drop_spec : t -> test option
 
 
 val slice : Parameters.t -> t -> t
+val update_log : t -> cmd -> t
 val update_phys : t -> cmd -> t
 val append_phys_edits : t -> Edit.t list -> t
 val replace_log_edits : t -> Edit.t list -> t
