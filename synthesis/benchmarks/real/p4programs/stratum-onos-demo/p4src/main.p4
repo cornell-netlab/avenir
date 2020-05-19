@@ -79,7 +79,7 @@ header ipv4_base_t {
     IPv4Address dst_addr;
 }
 
-header ipv6_base_t {
+header ipv6_t {
     bit<4>      version;
     bit<8>      traffic_class;
     bit<20>     flow_label;
@@ -177,7 +177,7 @@ struct local_metadata_t {
 struct parsed_packet_t {
     ethernet_t          ethernet;
     ipv4_base_t         ipv4_base;
-    ipv6_base_t         ipv6_base;
+    ipv6_t         ipv6;
     icmp_header_t       icmp_header;
     tcp_t               tcp;
     udp_t               udp;
@@ -242,8 +242,8 @@ parser pkt_parser(packet_in pk,
     }
 
     state parse_ipv6 {
-        pk.extract(hdr.ipv6_base);
-        transition select(hdr.ipv6_base.next_header) {
+        pk.extract(hdr.ipv6);
+        transition select(hdr.ipv6.next_header) {
             IP_PROTOCOLS_ICMPv6: parse_icmp;
             IP_PROTOCOLS_TCP: parse_tcp;
             IP_PROTOCOLS_UDP: parse_udp;
@@ -282,7 +282,7 @@ control pkt_deparser(packet_out b, in parsed_packet_t hdr) {
         b.emit(hdr.ethernet);
         b.emit(hdr.vlan_tag);
         b.emit(hdr.ipv4_base);
-        b.emit(hdr.ipv6_base);
+        b.emit(hdr.ipv6);
         b.emit(hdr.arp);
         b.emit(hdr.icmp_header);
         b.emit(hdr.tcp);
@@ -373,15 +373,15 @@ control punt(inout parsed_packet_t hdr,
             standard_metadata.egress_spec : ternary;
             // hdr.ethernet.ether_type       : ternary;
             // hdr.ipv4_base.diffserv        : ternary;
-            hdr.ipv6_base.traffic_class: ternary;
+            hdr.ipv6.traffic_class: ternary;
             // hdr.ipv4_base.ttl             : ternary;
-            hdr.ipv6_base.hop_limit    : ternary;
+            hdr.ipv6.hop_limit    : ternary;
             // hdr.ipv4_base.src_addr        : ternary;
             // hdr.ipv4_base.dst_addr        : ternary;
-            hdr.ipv6_base.src_addr     : ternary;
-            hdr.ipv6_base.dst_addr     : ternary;
+            hdr.ipv6.src_addr     : ternary;
+            hdr.ipv6.dst_addr     : ternary;
             // hdr.ipv4_base.protocol        : ternary;
-            hdr.ipv6_base.next_header  : ternary;
+            hdr.ipv6.next_header  : ternary;
             // hdr.arp.target_proto_addr  : ternary;
             // local_metadata.icmp_code      : ternary;
             hdr.vlan_tag[0].vid           : ternary;
