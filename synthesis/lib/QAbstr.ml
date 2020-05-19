@@ -22,10 +22,12 @@ let rec abstract_expr (m : string StringMap.t) (e1 : expr) (e2 : expr) : (string
        | Some (m, e2) -> Some (m, f e1 e2)
   in
   match e1, e2 with
+  | Value(Int(_,sz)), Value(Int(_,sz')) when sz <> sz' -> None
   | Value(v1), Value(v2) ->
      if veq v1 v2
      then Some (m, e1)
-     else begin
+     else
+       begin
        let v1_str = string_of_value v1 in
        let v2_str = string_of_value v2 in
        match StringMap.find m v1_str, StringMap.find m v2_str with
@@ -112,7 +114,15 @@ let rec abstracted (q1 : test) (q2 : test) : bool =
   | Iff (t11,t12), Iff (t21,t22) -> trecurse t11 t12 t21 t22
   | _, _ -> false
 
-
+let string_of_map (m : string StringMap.t) =
+  StringMap.fold m ~init:""
+    ~f:(fun ~key ~data acc ->
+      Printf.sprintf
+        "%s(%s -> %s) "
+        acc
+        key
+        data
+    )
 
 let cache_check params ({seen;generals} : t) test =
   if disable then ({seen=[];generals=[]}, `Miss test) else
@@ -122,13 +132,18 @@ let cache_check params ({seen;generals} : t) test =
     abstract StringMap.empty test phi
   in
   match List.find_map seen ~f with
-  | None -> ({seen = test :: seen; generals}, `Miss test)
+  | None -> ({seen = seen; generals}, `Miss test)
   | Some (_,q) when q = test -> ({seen; generals}, `Hit test)
-  | Some (_,q) ->
+  | Some (m,q) ->
      match List.find generals ~f:(abstracted test) with
      | Some _ ->
         ({seen; generals}, `HitAbs)
-     | None ->  ({seen; generals}, `AddAbs q)
+     | None ->
+        Printf.printf "%s\n%!" (string_of_map m);
+        ({seen; generals}, `AddAbs q)
 
 
-let add_abs g (c : t) = {c with generals = g::c.generals}
+let add_abs g tst (c : t) = {seen = tst::c.seen;
+                             generals = g::c.generals}
+
+let add_test test (c : t) = {c with seen = test::c.seen}

@@ -9,7 +9,13 @@ type opts =
    hints : bool;
    paths : bool;
    only_holes: bool;
-   mask : bool}
+   mask : bool;
+   restrict_mask : bool;
+   nlp : bool;
+   annot : bool;
+   single : bool;
+   domain : bool;
+  }
 
 type t = {
     schedule : opts list;
@@ -33,33 +39,91 @@ let rec make_schedule ({injection;hints;paths;only_holes;mask} as opt) =
      *   make_schedule {opt with injection = false; hints = false}
      * else *)
     if injection || hints || paths || only_holes then
-      [{injection=false;hints=false;paths=false;only_holes=false;mask=mask}]
+      [{opt with injection=false;hints=false;paths=false;only_holes=false}]
     else
       []
 
 let make_searcher (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : t =
   let schedule = make_schedule {
                      injection = params.injection;
-                     hints = params.injection;
+                     hints = params.hints;
                      paths = params.monotonic;
-                     only_holes = params.monotonic;
+                     only_holes = params.only_holes;
                      mask = params.widening;
+                     restrict_mask = params.restrict_mask;
+                     annot = params.allow_annotations;
+                     nlp = params.nlp;
+                     single = params.unique_edits;
+                     domain = params.domain;
                    } in
   {schedule; search_space = []}
   
 
+let reindex_for_dels problem tbl i =
+  Problem.phys_edits problem
+  |>  List.fold ~init:(Some i)
+        ~f:(fun cnt edit ->
+          match cnt, edit with
+          | Some n, Del (t,j) when t = tbl ->
+             if i = j
+             then None
+             else Some (n-1)
+          | _ -> cnt
+        )
 
 let compute_deletions pkt (problem : Problem.t) =
   let open Problem in
   let phys_inst = Problem.phys_inst problem in
   StringMap.fold phys_inst ~init:[]
     ~f:(fun ~key:table_name ~data:rows dels ->
-      dels @ List.mapi rows ~f:(fun i _ -> (table_name,i))
+      dels @ List.filter_mapi rows ~f:(fun i _ ->
+                 match reindex_for_dels problem table_name i with
+                 | None -> None
+                 | Some i' -> Some (table_name, i')
+               )
     )
+
+
+(* let perturb p x v sz =
+ *   if Bigint.(v <> zero && v + one = pow (of_int 2) (of_int sz)) then
+ *     StringMap.set p ~key:x ~data:(Int(Bigint.(v - one), sz))
+ *   else
+ *     StringMap.set p ~key:x ~data:(Int(Bigint.(v + one),sz))
+ *
+ * let refine_counter params problem ((inp,outp) : Packet.t * Packet.t) =
+ *   let l = Problem.log_gcl_program params problem in
+ *   let p = Problem.phys_gcl_program params problem in
+ *   Problem.fvs problem
+ *   |> List.dedup_and_sort ~compare:(fun (x,_) (y,_) -> String.compare x y)
+ *   |> List.fold ~init:(inp,outp)
+ *        ~f:(fun (inp_acc, outp_acc) (x,sz) ->
+ *          match StringMap.find inp x, StringMap.find outp x with
+ *          | None, None -> (inp, outp)
+ *          | Some Int(v_in, sz), Some (Int(v_out, sz')) ->
+ *             let inp' = perturb inp x v_in sz in
+ *             let loutp'= Semantics.eval_act l inp' in
+ *             if Bigint.(v_in = v_out) then
+ *               let poutp' = Semantics.eval_act p inp' in
+ *               Printf.printf "%s unchanged %s |-> %s \n" x (Bigint.Hex.to_string v_in) (Bigint.Hex.to_string v_out);
+ *               if StringMap.find_exn loutp' x = StringMap.find_exn inp' x then
+ *                 let () = Printf.printf "\t up to perturbation\n%!" in
+ *                 (StringMap.remove inp_acc x, StringMap.remove outp_acc x)
+ *               else
+ *                 let () = Printf.printf "\t perturbation changed it %s |-> %s \n%!"
+ *                            (string_of_value @@ StringMap.find_exn loutp' x)
+ *                            (string_of_value @@ StringMap.find_exn inp' x) in
+ *                 (inp_acc,outp_acc)
+ *             else
+ *               (inp_acc,outp_acc)
+ *          | _, _ -> (inp_acc, outp_acc)
+ *        ) *)
+
 
 
 let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) (opts : opts)  =
   let (in_pkt, out_pkt) = Problem.cexs problem |> List.hd_exn in
+                          (* |> refine_counter params problem in *)
+  (* let () = Printf.printf "in : %s \n out: %s\n%!" (string_of_map in_pkt) (string_of_map out_pkt) in *)
   let st = Time.now () in
   let deletions = compute_deletions in_pkt problem in
   let hints = if opts.hints then
@@ -89,49 +153,175 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
     List.filter_map wp_list
       ~f:(fun (cmd, in_pkt_wp) ->
         if in_pkt_wp = False || not (has_hole_test in_pkt_wp) then None else
-        (* let st = Time.now() in *)
+          (* let st = Time.now() in *)
           (* Printf.printf "\n\nWP: %s\n\n%!" (string_of_test in_pkt_wp); *)
 
-        let () = if params.debug then
-                   Printf.printf "Checking path with hole!\n  %s\n\n%!" (string_of_cmd cmd) in
-        let spec = in_pkt_form %=>% in_pkt_wp in
-        (* let () = if params.debug then
-         *            Printf.printf "test starts:\n%!  %s\n\n%!" (string_of_test spec) in *)
-        let wf_holes = List.fold (Problem.phys problem |> get_tables_actsizes) ~init:True
-                         ~f:(fun acc (tbl,num_acts) ->
-                           acc %&%
-                             (Hole(Hole.which_act_hole_name tbl,max (log2 num_acts) 1)
-                              %<=% mkVInt(num_acts-1,max (log2 num_acts) 1))) in
-        (* Printf.printf "well_formedness computed\n%!"; *)
-        let widening_constraint =
-          if opts.mask then
-            List.fold (holes_of_test in_pkt_wp)  ~init:True
-              ~f:(fun acc (hole, sz) ->
-                match String.chop_suffix hole ~suffix:"_mask" with
-                | Some hole_val ->
-                   Hole(hole_val,sz) %=% (mkMask (Hole(hole_val,sz)) (Hole(hole, sz)))
-                   %&% ((Hole(hole,sz) %=% mkVInt(0, sz))
-                        %+% (Hole(hole,sz) %=% Value(Int(Bigint.((pow (of_int 2) (of_int sz)) - one), sz))))
-                | None -> acc
-
+          let () = if params.debug then
+                     Printf.printf "Checking path with hole!\n  %s\n\n%!" (string_of_cmd cmd) in
+          let spec = in_pkt_form %=>% in_pkt_wp in
+          (* let () = if params.debug then
+           *            Printf.printf "test starts:\n%!  %s\n\n%!" (string_of_test spec) in *)
+          let wf_holes = List.fold (Problem.phys problem |> get_tables_actsizes) ~init:True
+                           ~f:(fun acc (tbl,num_acts) ->
+                             acc %&%
+                               (Hole(Hole.which_act_hole_name tbl,max (log2 num_acts) 1)
+                                %<=% mkVInt(num_acts-1,max (log2 num_acts) 1))) in
+          (* Printf.printf "well_formedness computed\n%!"; *)
+          (* let widening_constraint =
+           *   if opts.mask then
+           *     List.fold (holes_of_test in_pkt_wp)  ~init:True
+           *       ~f:(fun acc (hole, sz) ->
+           *         match String.chop_suffix hole ~suffix:"_mask" with
+           *         | Some _ ->
+           *            (Hole(hole, sz) %=% mkVInt(pow 2 sz -1, sz)) %+% ((Hole(hole,sz) %=% mkVInt(0,sz)))
+           *         | None -> acc
+           *
+           *       )
+           *   else True
+           * in
+           * Printf.printf "Widening constriaint:\n  %s \n\n%!" (string_of_test widening_constraint); *)
+          (* Printf.printf "Widening and well-formedness computed\n%!"; *)
+          let pre_condition =
+            (Problem.model_space problem) %&% wf_holes %&% spec
+            |> Injection.optimization {params with injection = opts.injection} problem
+          in
+          (* Printf.printf "Pre_condition computed\n%!"; *)
+          let query_test = wf_holes %&%(* widening_constraint %&%*) pre_condition in
+          let active_domain_restrict =
+            let ints = (multi_ints_of_cmd (Problem.log_gcl_program params problem))
+                       @ (multi_ints_of_cmd (Problem.phys_gcl_program params problem))
+                       |> List.dedup_and_sort ~compare:(Stdlib.compare)
+                       |> List.filter ~f:(fun (v,_) -> Bigint.(v <> zero && v <> one)) in
+            let holes = holes_of_test query_test |> List.dedup_and_sort ~compare:(Stdlib.compare) in
+            List.fold holes ~init:True
+              ~f:(fun acc (h,sz) ->
+                if opts.single && String.is_prefix h ~prefix:Hole.add_row_prefix then
+                  if opts.single && List.exists (Problem.phys_edits problem)
+                       ~f:(fun e ->
+                         Tables.Edit.table e = String.chop_prefix_exn h ~prefix:Hole.add_row_prefix
+                       )
+                  then
+                    acc %&% (Hole(h,1) %=% mkVInt(0,1))
+                  else
+                    acc
+                else if String.is_prefix h ~prefix:Hole.which_act_prefix
+                then acc
+                else if opts.restrict_mask && String.is_substring h ~substring:"_mask"
+                then
+                  let allfs = Printf.sprintf "0b%s" (String.make sz '1') |> Bigint.of_string in
+                  acc %&% ((Hole(h, sz) %=% Value(Int(allfs, sz))) %+%
+                             (if opts.nlp && (List.exists ["ttl";"limit";"count"]
+                                          ~f:(fun s -> String.is_substring h ~substring:s))
+                             then True
+                             else
+                               ((Hole(h,sz) %=% mkVInt(0,sz))
+                                %&% (Hole(String.chop_suffix_exn h ~suffix:"_mask",sz) %=% mkVInt(0,sz)))))
+                else
+                  (* if List.exists (Problem.fvs problem) ~f:(fun (v,_) ->  String.is_substring h ~substring:v || not (String.is_substring h ~substring:"?"))
+                   * then *)
+                  (* let is_mask_val =
+                   *   List.exists holes
+                   *     ~f:(fun (hm,_) ->
+                   *       match String.chop_suffix hm ~suffix:"_mask" with
+                   *       | Some h' -> h = h'
+                   *       | None -> false
+                   *     )
+                   * in *)
+                  let is_addr = List.exists ["addr";"dst";"src";"mac"]
+                                  ~f:(fun substring -> String.is_substring h ~substring) in
+                    let restr =
+                      List.fold ints
+                        ~init:(
+                          if opts.nlp || not is_addr
+                          then
+                            Hole(h,sz) %=% mkVInt(0,sz) %+% (Hole(h,sz) %=% mkVInt(1,sz))
+                          else
+                            False                                                                                          )
+                        ~f:(fun acci (i,szi) ->
+                          acci %+% if sz = szi
+                                      && opts.nlp && not (List.exists ["ttl";"limit";"count"]
+                                                       ~f:(fun s -> String.is_substring h ~substring:s))
+                                   then Hole(h,sz) %=% Value(Int(i,szi))
+                                   else False)
+                    in
+                    let restr = if (not opts.domain) || restr = False then True else restr in
+                    let is_chosen =
+                      match Problem.log_edits problem |> List.hd with
+                      | None | Some (Del _) -> None
+                      | Some (Add(table, (ms,_,_)))
+                        -> match get_schema_of_table table (Problem.log problem) with
+                           | Some (ks,_,_) ->
+                              List.fold2_exn ks ms ~init:None ~f:(fun acc (k,_) m ->
+                                  match acc with
+                                  | None ->
+                                    if String.is_substring h ~substring:k then
+                                      match m with
+                                      | Exact (Int(v,_) as i) when Bigint.(v <> zero) ->
+                                         Some i
+                                      | _ -> None
+                                    else None
+                                  | Some i -> Some i
+                                )
+                           | None -> None
+                    in
+                    ( if opts.nlp then
+                        match is_chosen with
+                        | None -> True
+                        | Some i -> Hole(h,sz) %=% Value i
+                      else if opts.nlp && is_addr && not(String.is_substring h ~substring:"_mask")
+                      then let t = (Hole(h,sz) %<>% mkVInt(0,sz)) %=>%
+                                     (Hole(h ^ "_mask",sz) %=% mkVInt(0,sz)) in
+                           Printf.printf "asserting %s \n" (sexp_string_of_test t);
+                           t
+                      else True)
+                    %&% acc %&% restr
+                  (* else
+                   *   acc *)
               )
-          else True
-        in
-        (* Printf.printf "Widening and well-formedness computed\n%!"; *)
-        let pre_condition =
-          (Problem.model_space problem) %&% wf_holes %&% spec
-          |> Injection.optimization {params with injection = opts.injection} problem
-        in
-        (* Printf.printf "Pre_condition computed\n%!"; *)
-        let out_test = wf_holes %&% widening_constraint %&% pre_condition in
-        (* Printf.printf "outtest_computed\n%!"; *)
-        let () = if params.debug then Printf.printf "test is \n   %s\n\n%!" (string_of_test pre_condition) in
-        Some (out_test, hints)) in
+          in
+          (* Printf.printf "active domain restr \n %s\n%!" (string_of_test active_domain_restrict); *)
+          let out_test =
+            (if opts.annot then
+               ((Hole("?AddRowTonexthop",1) %=% Hole("?AddRowToipv6_fib",1))
+                 %&% (Hole("?AddRowToipv6_fib",1) %=% Hole("?AddRowToprocess_lag",1))
+                 %&% (Hole("?AddRowTonexthop",1) %=% Hole("?AddRowToprocess_lag",1))
+                 %&% (Hole("?ingress_metadata__egress_ifindex",16) %<>% mkVInt(0,16)))
+                %&%
+               (((Hole("?AddRowTonexthop",1) %=% mkVInt(1,1))
+                %=>% ((Hole("?AddRowToipv6_fib",1) %=% mkVInt(1,1))
+                      %&% (Hole("?ActInipv6_fib",1) %=% mkVInt(0,1))
+                      %&% (Hole("n", 32) %=% Hole("?l3_metadata__nexthop_index",32))
+                      %&% (Hole("n", 32) %<>% mkVInt(0,32))
+               )))
+               %&% (((Hole("?AddRowToipv6_fib",1) %=% mkVInt(1,1))
+                     %=>% ((Hole("?AddRowToprocess_lag",1) %=% mkVInt(1,1))
+                           %&% (Hole("?ActInprocess_lag",1) %=% mkVInt(0,1))
+                           %&% (Hole("f", 16) %=% Hole("?ingress_metadata__egress_ifindex",16))
+                           %&% (Hole("?ingress_metadata__egress_ifindex_mask",16) %=% mkVInt(65535,16))
+                           %&% (Hole("f", 16) %<>% mkVInt(0,16))
+                    )))
+               %&% (if List.exists (Problem.phys_edits problem)
+                        ~f:(fun e -> Tables.Edit.table e = "l3_rewrite")
+                   then
+                       Hole("?AddRowTol3_rewrite",1) %=% mkVInt(0,1)
+                    else True )
+               %&% (if List.exists (Problem.phys_edits problem)
+                        ~f:(fun e -> Tables.Edit.table e = "ipv6_fib")
+                   then
+                       Hole("?AddRowToipv6_fib",1) %=% mkVInt(0,1)
+                    else True)
+               (* %&% (Hole("?AddRowTosmac_rewrite",1) %=% mkVInt(0,1)) *)
+             else True)
+            %&%
+            active_domain_restrict %&% query_test in
+          (* Printf.printf "outtest_computed\n%!"; *)
+          let () = if params.debug then Printf.printf "test is \n   %s\n\n%!" (string_of_test out_test) in
+          Some (out_test, hints)) in
   tests
 
 let holes_for_table table phys =
   match get_schema_of_table table phys with
-  | None -> failwith ""
+  | None -> failwith @@ Printf.sprintf "couldn't find schema for %s\n%!" table
   | Some (ks, acts, _) ->
      List.bind ks ~f:(fun (k,_) ->
          let lo,hi = Hole.match_holes_range table k in
@@ -142,9 +332,18 @@ let holes_for_table table phys =
      @ List.(acts >>= fun (params,_) ->
              params >>| fst )
 
+let holes_for_other_actions table phys actId =
+  match get_schema_of_table table phys with
+  | None -> failwith @@ Printf.sprintf"couldnt find schema for %s\n%!" table
+  | Some (ks, acts, _) ->
+     List.foldi acts ~init:[]
+       ~f:(fun i acc (params,_) ->
+         acc @ if i = Bigint.to_int_exn actId then [] else List.map params ~f:fst
+       )
+
 let minimize_model (model : value StringMap.t) (phys : cmd) : value StringMap.t =
   StringMap.keys model
-  |> List.filter ~f:(String.is_prefix ~prefix:Hole.add_row_prefix)
+  |> List.filter ~f:(fun k -> String.is_prefix k ~prefix:Hole.add_row_prefix)
   |> List.fold ~init:model
        ~f:(fun model key ->
          match StringMap.find model key with
@@ -152,6 +351,15 @@ let minimize_model (model : value StringMap.t) (phys : cmd) : value StringMap.t 
             let table = String.chop_prefix_exn key ~prefix:Hole.add_row_prefix in
             holes_for_table table phys
             |> List.fold ~init:model ~f:(StringMap.remove)
+         | Some Int(v,_) when v = Bigint.one ->
+            let table = String.chop_prefix_exn key ~prefix:Hole.add_row_prefix in
+            begin
+              match (StringMap.find model (Hole.which_act_hole_name table)) with
+              | Some (Int (actId, _)) ->
+                 holes_for_other_actions table phys actId
+                 |> List.fold ~init:model ~f:(StringMap.remove)
+              | None -> model
+            end
          | _ -> model
        )
 

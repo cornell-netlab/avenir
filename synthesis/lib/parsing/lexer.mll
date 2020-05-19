@@ -50,6 +50,7 @@ rule tokens = parse
 | ">"             { GREATER }
 | "<"             { LESS }
 | "-"             { MINUS }
+| "+"             { PLUS }
 | "\\"            { FUNC }
 | eof             { EOF }
 | id as x         { ID x }

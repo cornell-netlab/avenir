@@ -13,7 +13,7 @@ let debug term =
   else ()
 
 let test_str test =
-  if print_debug then
+  if false then
     let res = Ast.string_of_test test in Printf.printf "TEST: %s\n%!"res
   else ()
 
@@ -30,7 +30,8 @@ let quantify expr etyp styp =
 
 let rec expr_to_term_help expr styp : Smtlib.term =
   match expr with
-  | Value (Int (num, sz)) -> Smtlib.bbv (num) sz
+  | Value (Int (num, sz)) ->
+     Smtlib.bbv (num) sz
   | Var (v, sz) -> quantify v `Var styp
   | Hole (h, sz) -> quantify h `Hole styp
   | Plus (e1, e2) -> Smtlib.bvadd
@@ -201,20 +202,26 @@ let check_valid_cached (params : Parameters.t) (test : Ast.test) =
      Printf.printf "\tCouldn't abstract a thing from %d previous tests!\n" (List.length !cache.seen);
      let dur' = Time.(diff (now()) st) in
      let (m , dur) = check_valid_inner params test in
+     if Option.is_none m then
+       cache := QAbstr.add_test test !cache;
      (m, Time.Span.(dur + dur'))
   | `AddAbs q ->
      Printf.printf "\tChecking abstraction from %d previous tests and %d abstractions!\n%!" (List.length !cache.seen) (List.length !cache.generals);
      let dur' = Time.(diff (now()) st) in
-     let (m , dur) = check_valid_inner params q in
+     let (m , dur) = if List.length !cache.seen > 0 then
+                       check_valid_inner {params with debug = true} q
+                     else
+                       check_valid_inner params q in
      match m with
      | Some _ ->
         Printf.printf "\tAbstraction Failed\n%!";
+        (* Printf.printf "\t%s\n%!" (string_of_test q); *)
         let dur' = Time.(diff (now()) st) in
         let (m , dur) = check_valid_inner params test in
         (m, Time.Span.(dur + dur'))
      | None ->
         Printf.printf "\tAbstraction successful\n%!";
-        cache := QAbstr.add_abs q !cache;
+        cache := QAbstr.add_abs q test !cache;
         (m, Time.Span.(dur + dur'))
 
 

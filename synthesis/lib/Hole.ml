@@ -35,7 +35,7 @@ let match_holes_range tbl x =
   (Printf.sprintf "%s_lo" (match_hole_exact tbl x)
   , Printf.sprintf "%s_hi" (match_hole_exact tbl x))
 let match_holes_mask tbl x = (match_hole_exact tbl x
-                             , Printf.sprintf "?%s_mask" (match_hole_exact tbl x))
+                             , Printf.sprintf "%s_mask" (match_hole_exact tbl x))
 
 let match_holes encode_tag tbl x sz =
   match encode_tag with

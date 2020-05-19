@@ -4,8 +4,6 @@ open Util
 open Ast
 open Manip
 
-let (=) = Stdlib.(=)   
-   
 (* TYPES *)
 module Match = struct
   type t =
@@ -17,7 +15,11 @@ module Match = struct
     match m with
     | Exact x -> string_of_value x
     | Between (lo,hi) -> Printf.sprintf "[%s,%s]" (string_of_value lo) (string_of_value hi)
-    | Mask (v,m) -> Printf.sprintf "%s & %s" (string_of_value v) (string_of_value m)
+    | Mask ((Int(i,sz) as v), (Int(j,sz') as m)) ->
+       if Bigint.(i = zero && j = zero ) then
+         Printf.sprintf "*"
+       else
+         Printf.sprintf "%s & %s" (string_of_value v) (string_of_value m)
 
   let to_test k m =
     match m with
@@ -250,10 +252,17 @@ module Edit = struct
 
   let has_delete = List.exists ~f:(is_delete)
 
+  let split = List.fold ~init:([],[])
+                ~f:(fun (dels,adds) e ->
+                  match e with
+                  | Add _ -> (dels, adds @ [e])
+                  | Del _ -> (dels @ [e], adds))
+
   let get_deletes = List.filter_map ~f:(function
                         | Add _ -> None
                         | Del (n,i) -> Some (n,i)
                       )
+
 
   let to_string e =
     match e with
