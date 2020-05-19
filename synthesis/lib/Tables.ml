@@ -15,7 +15,11 @@ module Match = struct
     match m with
     | Exact x -> string_of_value x
     | Between (lo,hi) -> Printf.sprintf "[%s,%s]" (string_of_value lo) (string_of_value hi)
-    | Mask (v,m) -> Printf.sprintf "%s & %s" (string_of_value v) (string_of_value m)
+    | Mask ((Int(i,sz) as v), (Int(j,sz') as m)) ->
+       if Bigint.(i = zero && j = zero ) then
+         Printf.sprintf "*"
+       else
+         Printf.sprintf "%s & %s" (string_of_value v) (string_of_value m)
 
   let to_test k m =
     match m with

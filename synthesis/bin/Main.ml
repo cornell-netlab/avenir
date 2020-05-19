@@ -354,9 +354,22 @@ module Equality = struct
        Printf.printf "--\n%!";
        printer "Log" inpkt log_out;
        Printf.printf "--\n%!";
-       printer "Phys" inpkt phys_out
-
-
+       printer "Phys" inpkt phys_out;
+       Printf.printf "\n\nDifferences\t\tlog\tphys\n";
+       List.iter fvs
+         ~f:(fun (fv,_) ->
+           match Motley.Util.StringMap.find log_out fv
+               , Motley.Util.StringMap.find phys_out fv with
+           | None, None -> ()
+           | Some (Int(v,_)), None -> Printf.printf "\t%s\t%s\tundefined\n"
+                                         fv (Bigint.Hex.to_string v)
+           | None, Some (Int(v,_)) -> Printf.printf "\t%s\tundefined\t%s\n"
+                                         fv (Bigint.Hex.to_string v)
+           | Some (Int(vl,_)), Some(Int(vp,_)) ->
+              if Bigint.(vl <> vp) then
+                Printf.printf "\t%s\t%s\t%s\n"
+                  fv (Bigint.Hex.to_string vl) (Bigint.Hex.to_string vp)
+         )
 
 end
 

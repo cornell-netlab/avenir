@@ -40,15 +40,19 @@ l3_metadata__lkp_ip_ttl := 0#8;
 l2_metadata__stp_state := 0#16;
 ingress_metadata__control_frame := 0#1;
 ipv4_metadata__ipv4_unicast_enabled := 0#1;
-ipv6_metadata__ipv6_unicast_enabled := 0#1;
+ipv6_metadata__ipv6_unicast_enabled := 1#1;
 ingress_metadata__egress_ifindex := 0#16;
 fabric_metadata__reason_code := 0#16;
 
+egress_metadata__routed := 0#1;
 egress_metadata__smac_idx := 0#9;
+egress_metadata__bypass := 0#1;
+intrinsic_metadata__deflection_flag := 0#1;
 ingress_metadata__egress_ifindex := 0#16;
 
 hdr__mpls__isValid := 0#1;
 hdr__vlan_tag__isValid := 0#1;
+hdr__vlan_tag__eth_type := 0#16;
 hdr__ipv4__isValid := 0#1;
 hdr__ipv4__version := 0#4;
 hdr__ipv4__ttl := 0#8;
@@ -58,8 +62,15 @@ hdr__ipv6__isValid := 1#1;
 hdr__packet_in__isValid := 0#1;
 hdr__packet_out__isValid := 0#1;
 ipv6_next_header := 0#8;
+hdr__tcp__flags := 0#3;
 
 ingress_metadata__port_type := 0#3;
+
+
+l3_metadata__lkp_ip_ttl := ipv6_hop_count#8;
+l3_metadata__lkp_ip_sa := ipv6_src#128;
+l3_metadata__lkp_ip_da := ipv6_dst#128;
+l3_metadata__lkp_ip_proto := ipv6_next_header#8;
 
 if ordered
   ingress_metadata__port_type#3 = 1#3 -> skip []
@@ -69,12 +80,7 @@ if ordered
 
     if ordered
        hdr__ipv4__isValid#1 = 1#1 ->
-         apply(validate_outer_ipv4_packet,
-              (hdr__ipv4__version#4,
-               hdr__ipv4__ttl#8,
-	       hdr__ipv4__src_addr#32,),
-	      ( {drop_flag := 1#1} ),
-	     { drop_flag := 0#1 })
+         skip
        []
        hdr__ipv6__isValid#1 = 1#1 ->
          apply(validate_outer_ipv6_packet,
@@ -86,28 +92,28 @@ if ordered
        []
        true -> skip []
     fi;   
-    if ordered
-      hdr__ipv4__isValid#1 = 1#1 ->
-        l3_metadata__lkp_ip_ttl := hdr__ipv4__ttl#8 []
-      true ->
-        l3_metadata__lkp_ip_ttl := ipv6_hop_count#8 []
-    fi;      
-  
+
     if ordered
       l3_metadata__lkp_ip_type#2 = 1#2
         && l3_metadata__ipv4_unicast_enabled#1 = 1#1
-      ->
-        apply(ipv4_fib,
-             (l3_metadata__vrf#16, hdr__ipv4__dst_addr#32,),
-             ( {\ (n4#32) -> l3_metadata__nexthop_index := n4#32 } | {skip} ),
-             {skip})
-      []
+      -> skip []
       true
-      -> apply(ipv6_fib,
-              (l3_metadata__vrf#16, ipv6_dst#128,),
-              ( {\ (n#32) -> l3_metadata__nexthop_index := n#32 } | { skip } ),
-              {skip})
-         []
+      -> apply(ipv6_acl,
+               (acl_metadata__bd_label#16,
+	        l3_metadata__lkp_ip_sa#128,
+		l3_metadata__lkp_ip_da#128,
+		l3_metadata__lkp_ip_proto#8,
+		acl_metadata__ingress_src_port_range_id#8,
+		acl_metadata__ingress_dst_port_range_id#8,
+		hdr__tcp__flags#3,
+		l3_metadata__lkp_ip_ttl#8,),
+		({skip} | {acl_metadata__acl_deny := 1#1} ),
+		{skip});      
+         apply(ipv6_fib,
+               (l3_metadata__vrf#16, ipv6_dst#128,),
+               ( {\ (n#32) -> l3_metadata__nexthop_index := n#32 } | { skip } ),
+               {skip})
+      []
     fi;
 
     if ordered
@@ -163,25 +169,20 @@ if ordered
   []
 fi;
 
-apply(l3_rewrite,
-      (hdr__ipv4__isValid#1,hdr__ipv6__isValid#1, ipv6_dst#128,
-       hdr__ipv4__dst_addr#32,
-      ),
-      ({ if ordered
-           ipv6_hop_count#8 = 0#8 -> ipv6_hop_count := 0#8 []
-	   true -> ipv6_hop_count := ipv6_hop_count#8 - 1#8 []
-	 fi }
-       | {if ordered
-           hdr__ipv4__ttl#8 = 0#8 -> hdr__ipv4__ttl := 0#8 []
-	   true -> hdr__ipv4__ttl := hdr__ipv4__ttl#8 - 1#8 []
-	 fi }
-       | {skip}),
-      {skip});
 
-apply(smac_rewrite,
-     (egress_metadata__smac_idx#9,),
-     ({\ (smacr#48,) -> hdr__ethernet__src_addr := smacr#48 }),
-     {skip});
+apply(l3_rewrite,
+     (hdr__ipv4__isValid#1,hdr__ipv6__isValid#1, ipv6_dst#128,
+      hdr__ipv4__dst_addr#32,),
+     ({ if ordered
+           ipv6_hop_count#8 = 0#8 -> ipv6_hop_count := 0#8 []
+           true -> ipv6_hop_count := ipv6_hop_count#8 - 1#8 []
+        fi }
+      | {if ordered
+            hdr__ipv4__ttl#8 = 0#8 -> hdr__ipv4__ttl := 0#8 []
+            true -> hdr__ipv4__ttl := hdr__ipv4__ttl#8 - 1#8 []
+         fi }
+      | {skip}),
+      {skip});
 
 
 if ordered 
@@ -193,19 +194,20 @@ fi;
 if ordered
   out_port#9 = 0#9 ->
       standard_metadata__ingress_port := 0#9;
+      out_port := 0#9;
       ipv6_dst := 0#128;
       ipv6_src := 0#128;
       ipv6_next_header := 0#8;
       ipv6_hop_count := 0#8;
-      out_port := 0#9;
+      hdr__ipv6_base__traffic_class := 0#8;
       hdr__vlan_tag__isValid := 0#1;
       hdr__vlan_tag__vlan_id := 0#12;
       hdr__vlan_tag__pri := 0#3;
       hdr__vlan_tag__cfi := 0#1;
+      hdr__vlan_tag__eth_type := 0#16;      
       hdr__ethernet__dst_addr := 0#48;
       hdr__ethernet__src_addr := 0#48;
-      hdr__vlan_tag__vlan_id := 0#12;
-      hdr__eth_typ__value := 0#16;
+      hdr__eth_typ__value := 0#16;      
       hdr__ipv4__src_addr := 0#32;
       hdr__ipv4__dst_addr := 0#32;
       hdr__ipv4__proto := 0#8;

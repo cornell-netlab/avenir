@@ -472,6 +472,9 @@ let complete_model (holes : (string * size) list) (model : value StringMap.t) : 
 
 let edit_cache = ref @@ EAbstr.make ()
 
+
+
+
 let rec get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref) (problem : Problem.t)
         : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
   if params.fastcx then begin
@@ -539,7 +542,6 @@ let get_new_cex params data problem =
 
 
 
-
 (*a model is suspicious if it contains a value that's not related to
    anything we've seen so far. Not sure how to analyze masks, so we
    just allow them to have any value*)
@@ -585,15 +587,19 @@ let minimize_solution params data problem =
     );
   Problem.replace_phys_edits problem es
 
+
 let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (Edit.t list option) =
   (* Printf.printf "\tcegis_math\n%!"; *)
-  if params.cache then solve_math 1 params data problem else
+  if params.cache then
+    let () = Printf.printf "\ttrying cache \n%!"in
+    solve_math 1 params data problem
+  else
     let st = Time.now () in
     let cex = get_cex params data problem in
     (* ProfData.update_time !data.impl_time st; *)
     match cex with
     | `Yes ->
-       (* (\*if params.debug then*\) Printf.printf "\tNo CEX to be found -- programs are equiv\n%!"; *)
+       (*if params.debug then*) Printf.printf "\tNo CEX to be found -- programs are equiv\n%!";
        let problem = if params.minimize then minimize_solution params data problem else problem in
        edit_cache := EAbstr.update !edit_cache (Problem.log_edits problem |> List.hd_exn) (Problem.phys_edits problem);
        if params.interactive then begin
@@ -602,7 +608,7 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
          end;
        Problem.phys_edits problem |> Some
     | `NoAndCE counter ->
-       (* Printf.printf "\tCEX found in %fms\n%!" *)
+       Printf.printf "\tCEX found \n%!";
        (* (Time.(Span.(diff (now()) st |> to_ms))); *)
        let problem = Problem.add_cex problem counter in
        let counter = (
@@ -659,14 +665,14 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
               if i = 0 then
                 let () = Printf.printf "The jig is up\n%!" in
                 None else
-                (* Printf.printf "\tlooping\n%!"; *)
+                let () = Printf.printf "\tlooping\n%!" in
                 let model_opt = ModelFinder.search params data problem searcher in
                 (*get_model params datproblem in*)
                 ProfData.update_time !data.model_search_time st;
                 match model_opt with
                 | None ->
                    (* if params.debug || params.interactive then *)
-                   (* Printf.printf "No model could be found\n%!"; *)
+                   Printf.printf "No model could be found\n%!";
                    if params.interactive then
                      ignore(Stdio.In_channel.(input_char stdin) : char option);
                    if params.debug then None
@@ -689,7 +695,10 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
                      let problem = Problem.add_attempt problem model in
                      (* assert (Problem.num_attempts problem <= 1); *)
                      let es = Edit.extract (Problem.phys problem) model in
-                     if params.debug then begin
+                     (* if List.exists es ~f:(fun e -> List.exists (Problem.phys_edits problem) ~f:(fun e' -> e = e') ) then
+                      *   None
+                      * else *)
+                     let () = if true then begin
                          (* Printf.printf "\tCEX in %s\n" (Packet.string__packet @@ fst @@ List.hd_exn @@ Problem.cexs problem); *)
                          Printf.printf "\t***Edits***\n%!";
                          Problem.phys_edits problem |>
@@ -697,7 +706,7 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
                          Printf.printf "\t*** New ***\n%!";
                          List.iter es ~f:(fun e -> Printf.printf "\t %s\n%!" (Edit.to_string e));
                          Printf.printf "\t***     ***\n"
-                       end;
+                       end in
                      (* let es =
                       *   if params.del_pushdown then
                       *     match Edit.get_deletes es with

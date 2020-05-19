@@ -1,0 +1,6 @@
+ADD,validate_outer_ipv6_packet,0/0#4;0x1#8;0/0#128,,0
+ADD,validate_outer_ipv6_packet,0/0#4;0x0#8;0/0#128,,0
+ADD,l3_rewrite,0x0#1;0x1#1;0/0#128;0/0#32,,0
+ADD,ipv6_fib,0/0#16;0x20014860486100000000729a00008888#128,1#32,0
+ADD,nexthop,1#32,0x1#16,0
+ADD,process_lag,0x1#16,8#9,0

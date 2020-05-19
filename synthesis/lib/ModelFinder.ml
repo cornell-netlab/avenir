@@ -4,6 +4,10 @@ open Manip
 open Util
 open Prover
 
+let nlp = true
+let annot = false
+let single = true
+
 type opts =
   {injection : bool;
    hints : bool;
@@ -73,8 +77,46 @@ let compute_deletions pkt (problem : Problem.t) =
     )
 
 
+let perturb p x v sz =
+  if Bigint.(v <> zero && v + one = pow (of_int 2) (of_int sz)) then
+    StringMap.set p ~key:x ~data:(Int(Bigint.(v - one), sz))
+  else
+    StringMap.set p ~key:x ~data:(Int(Bigint.(v + one),sz))
+
+let refine_counter params problem ((inp,outp) : Packet.t * Packet.t) =
+  let l = Problem.log_gcl_program params problem in
+  let p = Problem.phys_gcl_program params problem in
+  Problem.fvs problem
+  |> List.dedup_and_sort ~compare:(fun (x,_) (y,_) -> String.compare x y)
+  |> List.fold ~init:(inp,outp)
+       ~f:(fun (inp_acc, outp_acc) (x,sz) ->
+         match StringMap.find inp x, StringMap.find outp x with
+         | None, None -> (inp, outp)
+         | Some Int(v_in, sz), Some (Int(v_out, sz')) ->
+            let inp' = perturb inp x v_in sz in
+            let loutp'= Semantics.eval_act l inp' in
+            if Bigint.(v_in = v_out) then
+              let poutp' = Semantics.eval_act p inp' in
+              Printf.printf "%s unchanged %s |-> %s \n" x (Bigint.Hex.to_string v_in) (Bigint.Hex.to_string v_out);
+              if StringMap.find_exn loutp' x = StringMap.find_exn inp' x then
+                let () = Printf.printf "\t up to perturbation\n%!" in
+                (StringMap.remove inp_acc x, StringMap.remove outp_acc x)
+              else
+                let () = Printf.printf "\t perturbation changed it %s |-> %s \n%!"
+                           (string_of_value @@ StringMap.find_exn loutp' x)
+                           (string_of_value @@ StringMap.find_exn inp' x) in
+                (inp_acc,outp_acc)
+            else
+              (inp_acc,outp_acc)
+         | _, _ -> (inp_acc, outp_acc)
+       )
+
+
+
 let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) (opts : opts)  =
   let (in_pkt, out_pkt) = Problem.cexs problem |> List.hd_exn in
+                          (* |> refine_counter params problem in *)
+  (* let () = Printf.printf "in : %s \n out: %s\n%!" (string_of_map in_pkt) (string_of_map out_pkt) in *)
   let st = Time.now () in
   let deletions = compute_deletions in_pkt problem in
   let hints = if opts.hints then
@@ -140,15 +182,32 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
           let query_test = wf_holes %&%(* widening_constraint %&%*) pre_condition in
           let active_domain_restrict =
             let ints = (multi_ints_of_cmd (Problem.log_gcl_program params problem))
-                       @ (multi_ints_of_cmd (Problem.phys_gcl_program params problem)) in
+                       @ (multi_ints_of_cmd (Problem.phys_gcl_program params problem))
+                       |> List.dedup_and_sort ~compare:(Stdlib.compare)
+                       |> List.filter ~f:(fun (v,_) -> Bigint.(v <> zero && v <> one)) in
             let holes = holes_of_test query_test |> List.dedup_and_sort ~compare:(Stdlib.compare) in
             List.fold holes ~init:True
               ~f:(fun acc (h,sz) ->
-                if String.is_prefix h ~prefix:Hole.which_act_prefix then acc else
+                if single && String.is_prefix h ~prefix:Hole.add_row_prefix then
+                  if single && List.exists (Problem.phys_edits problem)
+                       ~f:(fun e ->
+                         Tables.Edit.table e = String.chop_prefix_exn h ~prefix:Hole.add_row_prefix
+                       )
+                  then
+                    acc %&% (Hole(h,1) %=% mkVInt(0,1))
+                  else
+                    acc
+                else if String.is_prefix h ~prefix:Hole.which_act_prefix then acc else
                 if String.is_substring h ~substring:"_mask"
                 then
                   let allfs = Printf.sprintf "0b%s" (String.make sz '1') |> Bigint.of_string in
-                  acc %&%  ((Hole(h, sz) %=% Value(Int(allfs, sz))) %+% ((Hole(h,sz) %=% mkVInt(0,sz))))
+                  acc %&% ((Hole(h, sz) %=% Value(Int(allfs, sz))) %+%
+                             (if nlp && (List.exists ["ttl";"limit";"count"]
+                                          ~f:(fun s -> String.is_substring h ~substring:s))
+                             then True
+                             else
+                               ((Hole(h,sz) %=% mkVInt(0,sz))
+                                %&% (Hole(String.chop_suffix_exn h ~suffix:"_mask",sz) %=% mkVInt(0,sz)))))
                 else
                   (* if List.exists (Problem.fvs problem) ~f:(fun (v,_) ->  String.is_substring h ~substring:v || not (String.is_substring h ~substring:"?"))
                    * then *)
@@ -160,21 +219,93 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                    *       | None -> false
                    *     )
                    * in *)
+                  let is_addr = List.exists ["addr";"dst";"src";"mac"]
+                                  ~f:(fun substring -> String.is_substring h ~substring) in
                     let restr =
                       List.fold ints
-                        ~init:(Hole(h,sz) %=% mkVInt(0,sz) %+% (Hole(h,sz) %=% mkVInt(1,sz)))
+                        ~init:(
+                          if nlp || not is_addr
+                          then
+                            Hole(h,sz) %=% mkVInt(0,sz) %+% (Hole(h,sz) %=% mkVInt(1,sz))
+                          else
+                            False                                                                                          )
                         ~f:(fun acci (i,szi) ->
                           acci %+% if sz = szi
+                                      && nlp && not (List.exists ["ttl";"limit";"count"]
+                                                       ~f:(fun s -> String.is_substring h ~substring:s))
                                    then Hole(h,sz) %=% Value(Int(i,szi))
                                    else False)
                     in
-                    acc %&% restr
+                    let restr = if restr = False then True else restr in
+                    let is_chosen =
+                      match Problem.log_edits problem |> List.hd with
+                      | None | Some (Del _) -> None
+                      | Some (Add(table, (ms,_,_)))
+                        -> match get_schema_of_table table (Problem.log problem) with
+                           | Some (ks,_,_) ->
+                              List.fold2_exn ks ms ~init:None ~f:(fun acc (k,_) m ->
+                                  match acc with
+                                  | None ->
+                                    if String.is_substring h ~substring:k then
+                                      match m with
+                                      | Exact (Int(v,_) as i) when Bigint.(v <> zero) ->
+                                         Some i
+                                      | _ -> None
+                                    else None
+                                  | Some i -> Some i
+                                )
+                           | None -> None
+                    in
+                    ( if nlp then
+                        match is_chosen with
+                        | None -> True
+                        | Some i -> Hole(h,sz) %=% Value i
+                      else if nlp && is_addr && not(String.is_substring h ~substring:"_mask")
+                      then let t = (Hole(h,sz) %<>% mkVInt(0,sz)) %=>%
+                                     (Hole(h ^ "_mask",sz) %=% mkVInt(0,sz)) in
+                           Printf.printf "asserting %s \n" (sexp_string_of_test t);
+                           t
+                      else True)
+                    %&% acc %&% restr
                   (* else
                    *   acc *)
               )
           in
           (* Printf.printf "active domain restr \n %s\n%!" (string_of_test active_domain_restrict); *)
-          let out_test = active_domain_restrict %&% query_test in
+          let out_test =
+            (if annot then
+               ((Hole("?AddRowTonexthop",1) %=% Hole("?AddRowToipv6_fib",1))
+                %&% (Hole("?AddRowToipv6_fib",1) %=% Hole("?AddRowToprocess_lag",1)))
+               %&% ((Hole("?AddRowTonexthop",1) %=% Hole("?AddRowToprocess_lag",1)))
+               %&%
+               ((Hole("?AddRowTonexthop",1) %=% mkVInt(1,1))
+                %=>% ((Hole("?AddRowToipv6_fib",1) %=% mkVInt(1,1))
+                      %&% (Hole("?ActInipv6_fib",1) %=% mkVInt(0,1))
+                      %&% (Hole("n", 32) %=% Hole("?l3_metadata__nexthop_index",32))
+                      %&% (Hole("n", 32) %<>% mkVInt(0,32))
+               ))
+               %&% ((Hole("?AddRowToipv6_fib",1) %=% mkVInt(1,1))
+                %=>% ((Hole("?AddRowToprocess_lag",1) %=% mkVInt(1,1))
+                      %&% (Hole("?ActInprocess_lag",1) %=% mkVInt(0,1))
+                      %&% (Hole("f", 16) %=% Hole("?ingress_metadata__egress_ifindex",16))
+                      %&% (Hole("?ingress_metadata__egress_ifindex",16) %<>% mkVInt(0,16))
+                      %&% (Hole("?ingress_metadata__egress_ifindex_mask",16) %=% mkVInt(65535,16))
+                      %&% (Hole("f", 16) %<>% mkVInt(0,16))
+               ))
+               %&% (if List.exists (Problem.phys_edits problem)
+                        ~f:(fun e -> Tables.Edit.table e = "l3_rewrite")
+                   then
+                       Hole("?AddRowTol3_rewrite",1) %=% mkVInt(0,1)
+                    else True )
+               %&% (if List.exists (Problem.phys_edits problem)
+                        ~f:(fun e -> Tables.Edit.table e = "ipv6_fib")
+                   then
+                       Hole("?AddRowToipv6_fib",1) %=% mkVInt(0,1)
+                    else True)
+               (* %&% (Hole("?AddRowTosmac_rewrite",1) %=% mkVInt(0,1)) *)
+             else True)
+            %&%
+            active_domain_restrict %&% query_test in
           (* Printf.printf "outtest_computed\n%!"; *)
           let () = if params.debug then Printf.printf "test is \n   %s\n\n%!" (string_of_test out_test) in
           Some (out_test, hints)) in
@@ -182,7 +313,7 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
 
 let holes_for_table table phys =
   match get_schema_of_table table phys with
-  | None -> failwith ""
+  | None -> failwith @@ Printf.sprintf "couldn't find schema for %s\n%!" table
   | Some (ks, acts, _) ->
      List.bind ks ~f:(fun (k,_) ->
          let lo,hi = Hole.match_holes_range table k in
@@ -195,7 +326,7 @@ let holes_for_table table phys =
 
 let holes_for_other_actions table phys actId =
   match get_schema_of_table table phys with
-  | None -> failwith ""
+  | None -> failwith @@ Printf.sprintf"couldnt find schema for %s\n%!" table
   | Some (ks, acts, _) ->
      List.foldi acts ~init:[]
        ~f:(fun i acc (params,_) ->
