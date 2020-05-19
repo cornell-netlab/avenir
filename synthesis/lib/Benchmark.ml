@@ -703,7 +703,7 @@ let running_example gas widening =
               ]
             , Skip)
   in
-  let params = Parameters.({default with widening; gas}) in
+  let params = Parameters.({default with widening}) in
   let problem  =
     Problem.make ~log ~phys
       ~fvs:["src", 2; "dst", 2; "smac", 2; "dmac", 2; "out", 2 ]
@@ -883,7 +883,7 @@ let onf_representative gas widening =
       ; "skip_next" %<-% mkVInt(0,1)
       ]
   in
-  let params = Parameters.({default with widening; gas}) in
+  let params = Parameters.({default with widening}) in
   let problem =
     Problem.make
       ~log:(init_metadata %:% logical)
@@ -1002,7 +1002,6 @@ let generate_pipe1_edits cb_rules : Edit.t list list =
   ip_table
     
 let of_to_pipe1 widening gas fp () =
-  let gas = match gas with None -> 1000 | Some g -> g in
   let init_no_drop = sequence ["drop" %<-% mkVInt(0,1); "out_port" %<-% mkVInt(0,9)]  in
   let drop = Skip in 
   let of_table =
@@ -1039,7 +1038,7 @@ let of_to_pipe1 widening gas fp () =
             ] in
   (* let of_insertions = parse_classbench fp |> generate_edits in *)
   let pipe_insertions = parse_classbench fp |> generate_pipe1_edits in
-  let params = Parameters.({default with widening; gas}) in
+  let params = Parameters.({default with widening}) in
   let problem = Problem.make ~fvs
                   ~log:pipe
                   ~phys:of_table

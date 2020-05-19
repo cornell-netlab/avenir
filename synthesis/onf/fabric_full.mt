@@ -9,7 +9,21 @@ fabric_metadata__is_multicast := 0#1;
 fabric_metadata__vlan_id := 0#12;
 fabric_metadata__is_controller_packet_out := 0#1;
 
+
+hdr__mpls__isValid := 0#1;
+hdr__vlan_tag__isValid := 0#1;
+hdr__ipv4__isValid := 0#1;
+hdr__ipv4__version := 0#4;
+hdr__ipv4__ttl := 0#8;
+hdr__ipv4__dst_addr := 0#32;
+hdr__ipv4__src_addr := 0#32;
+hdr__ipv6__isValid := 1#1;
+hdr__packet_in__isValid := 0#1;
+hdr__packet_out__isValid := 0#1;
+fabric_metadata__vlan_id := 4096#12;
+fabric_metadata__eth_type := 34525#16;
 ipv6_next_header := 0#8;
+
 fabric_metadata__ip_proto := ipv6_next_header#8;
 if ordered
   ipv6_next_header#8 = 6#8
@@ -22,14 +36,6 @@ if ordered
   true -> skip []
 fi;
 
-hdr__mpls__isValid := 0#1;
-hdr__vlan_tag__isValid := 0#1;
-hdr__ipv4__isValid := 0#1;
-hdr__ipv6__isValid := 1#1;
-hdr__packet_in__isValid := 0#1;
-hdr__packet_out__isValid := 0#1;
-fabric_metadata__vlan_id := 4096#12;
-fabric_metadata__eth_type := 34525#16;
 
 if ordered
    hdr__packet_out__isValid#1 = 1#1 ->
@@ -102,7 +108,7 @@ if ordered
             fabric_metadata__l4_sport#16,
             fabric_metadata__l4_dport#16,
             hdr__ethernet__dst_addr#48,
-            hdr__ethernet__src_adr#48,
+            hdr__ethernet__src_addr#48,
             hdr__vlan_tag__vlan_id#12,
             hdr__eth_typ__value#16,
             hdr__ipv4__src_addr#32,
@@ -185,21 +191,22 @@ fi;
 if ordered
   out_port#9 = 0#9 ->
       standard_metadata__ingress_port := 0#9;
+      out_port := 0#9;
       ipv6_dst := 0#128;
       ipv6_src := 0#128;
       ipv6_next_header := 0#8;
       ipv6_hop_count := 0#8;
-      out_port := 0#9;
+      hdr__ipv6_base__traffic_class := 0#8;
       hdr__vlan_tag__isValid := 0#1;
       hdr__vlan_tag__vlan_id := 0#12;
       hdr__vlan_tag__pri := 0#3;
       hdr__vlan_tag__cfi := 0#1;
       hdr__ethernet__dst_addr := 0#48;
-      hdr__ethernet__src_adr := 0#48;
-      hdr__vlan_tag__vlan_id := 0#12;
+      hdr__ethernet__src_addr := 0#48;
       hdr__eth_typ__value := 0#16;
       hdr__ipv4__src_addr := 0#32;
       hdr__ipv4__dst_addr := 0#32;
+      hdr__ipv4__proto := 0#8;
       hdr__icmp__icmp_type := 0#8;
       hdr__icmp__icmp_code := 0#8;
       hdr__tcp__sport := 0#16;

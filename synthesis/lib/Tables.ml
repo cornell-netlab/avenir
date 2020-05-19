@@ -14,14 +14,12 @@ module Match = struct
   let to_string m =
     match m with
     | Exact x -> string_of_value x
-    | Between (lo,hi) -> Printf.sprintf "[%s:%s]#%d"
-                           (get_int lo |> Bigint.Hex.to_string)
-                           (get_int hi |> Bigint.Hex.to_string)
-                           (size_of_value hi)
-    | Mask (v,m) -> Printf.sprintf "%s&%s#%d"
-                      (get_int v |> Bigint.Hex.to_string)
-                      (get_int m |> Bigint.Hex.to_string)
-                      (size_of_value v)
+    | Between (lo,hi) -> Printf.sprintf "[%s,%s]" (string_of_value lo) (string_of_value hi)
+    | Mask ((Int(i,sz) as v), (Int(j,sz') as m)) ->
+       if Bigint.(i = zero && j = zero ) then
+         Printf.sprintf "*"
+       else
+         Printf.sprintf "%s & %s" (string_of_value v) (string_of_value m)
 
   let to_test k m =
     match m with

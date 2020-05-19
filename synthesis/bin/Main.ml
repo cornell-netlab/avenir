@@ -32,46 +32,96 @@ let parse_fvs fp =
        )
 
 
-
 module Solver = struct
   let spec = Command.Spec.(
-      empty
+      (empty
       +> anon ("logical" %: string)
       +> anon ("real" %: string)
       +> anon ("logical_edits" %: string)
       +> anon ("physical_edits" %: string)
       +> anon ("fvs" %: string)
       +> flag "-data" (required string) ~doc:"The logical experiment to run"
-      +> flag "-p" no_arg ~doc:"Print synthesized program"
-      +> flag "-w" no_arg ~doc:"Do widening"
-      +> flag "-s" no_arg ~doc:"Do slicing optimization"
-      +> flag "-m" no_arg ~doc:"Prune rows with no holes"
-      +> flag "-inj" no_arg ~doc:"Try injection optimization"
-      +> flag "-g" (required int) ~doc:"max number of CEGIS reps"
       +> flag "-DEBUG" no_arg ~doc:"Print Debugging commands"
-      +> flag "-i" no_arg ~doc:"Interactive Mode"
-      +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly"
-      +> flag "-no-cache" no_arg ~doc:"Disable query and edit caching"
+      +> flag "-i" no_arg ~doc:"interactive mode"
+      +> flag "-p" no_arg ~doc:"Print synthesized program"
       +> flag "-measure" no_arg ~doc:"Produce a CSV of data to stdout"
       +> flag "-onos" no_arg ~doc:"Parse logical edits as onos insertions"
-      +> flag "--del-pushdown" no_arg ~doc:"interpret deletions as pushdowns when possible"
-      +> flag "--phys-drop-spec" (optional string) ~doc:"fast counter-examples are restricted to admitted packets"
-      +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
-      +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn")
 
-  let run logical real logical_edits physical_edits fvs data print_res widening do_slice monotonic injection gas debug interactive fastcx no_cache measure onos del_pushdown p_drop_spec above minimize () =
+       +> flag "-w" no_arg ~doc:"Do widening"
+       +> flag "-s" no_arg ~doc:"Do slicing optimization"
+       +> flag "-e" (required int) ~doc:"maximum number of physical edits"
+       +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
+       +> flag "-m" no_arg ~doc:"Prune rows with no holes"
+       +> flag "--inj" no_arg ~doc:"Try injection optimization"
+       +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
+       +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
+       +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
+       +> flag "--shortening" no_arg ~doc:"shorten queries"
+       +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
+       +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
+       +> flag "--hints" no_arg ~doc:"Use syntactic hints"
+       +> flag "--holes" no_arg ~doc:"Holes only"
+       +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
+       +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
+       +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
+       +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
+       +> flag "--restrict-masks" no_arg ~doc:"Restrict masks")
+             )
+
+  let run
+        logical
+        real
+        logical_edits
+        physical_edits
+        fvs
+        data
+        debug
+        print_res
+        interactive
+        measure
+        onos
+        widening
+        do_slice
+        edits_depth
+        search_width
+        monotonic
+        injection
+        fastcx
+        vcache
+        ecache
+        shortening
+        above
+        minimize
+        hints
+        only_holes
+        allow_annotations
+        nlp
+        unique_edits
+        domain
+        restrict_mask () =
     let params = Parameters.({widening;
                               do_slice;
-                              gas;
+                              edits_depth;
+                              search_width;
                               debug;
                               monotonic;
-                              injection;
                               interactive;
+                              injection;
                               fastcx;
-                              cache = not no_cache;
-                              del_pushdown;
+                              vcache;
+                              ecache;
+                              shortening;
                               above;
-                              minimize}) in
+                              minimize;
+                              hints;
+                              only_holes;
+                              allow_annotations;
+                              nlp;
+                              unique_edits;
+                              domain;
+                              restrict_mask;
+
+                 }) in
     let log = parse_file logical in
     let phys = parse_file real in
     let log_inst = Runtime.parse logical_edits |> Instance.(update_list params empty) in
@@ -80,7 +130,7 @@ module Solver = struct
                     else Runtime.parse data |> List.(map ~f:return)  in
     let phys_inst = Runtime.parse physical_edits |> Instance.(update_list params empty) in
     let fvs = parse_fvs fvs in
-    let phys_drop_spec = Option.(p_drop_spec >>| fun dp -> parse_file dp |> Ast.get_test_from_assume)in
+    let phys_drop_spec = None in
     if measure then
       let open Motley.Instance in
       let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits:[] ~fvs ~phys_drop_spec () in
@@ -133,15 +183,51 @@ module RunTest = struct
   let spec = Command.Spec.(
       empty
       +> anon ("test_file" %: string)
-      +> flag "-w" no_arg ~doc:"Do widening"
-      +> flag "-s" no_arg ~doc:"Do slicing optimization"
-      +> flag "-m" no_arg ~doc:"Prune rows with no holes"
-      +> flag "-inj" no_arg ~doc:"Attempt an injection"
-      +> flag "-g" (required int) ~doc:"max number of CEGIS reps"
-      +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly")
+      +> flag "-DEBUG" no_arg ~doc:"DEBUG"
+      +> flag "-i" no_arg ~doc:"Interactive mode"
+       +> flag "-w" no_arg ~doc:"Do widening"
+       +> flag "-s" no_arg ~doc:"Do slicing optimization"
+       +> flag "-e" (required int) ~doc:"maximum number of physical edits"
+       +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
+       +> flag "-m" no_arg ~doc:"Prune rows with no holes"
+       +> flag "--inj" no_arg ~doc:"Try injection optimization"
+       +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
+       +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
+       +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
+       +> flag "--shortening" no_arg ~doc:"shorten queries"
+       +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
+       +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
+       +> flag "--hints" no_arg ~doc:"Use syntactic hints"
+       +> flag "--holes" no_arg ~doc:"Holes only"
+       +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
+       +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
+       +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
+       +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
+       +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
+             )
 
-
-  let run test_file widening do_slice monotonic injection gas fastcx () =
+  let run test_file
+        debug
+        interactive
+        widening
+        do_slice
+        edits_depth
+        search_width
+        monotonic
+        injection
+        fastcx
+        vcache
+        ecache
+        shortening
+        above
+        minimize
+        hints
+        only_holes
+        allow_annotations
+        nlp
+        unique_edits
+        domain
+        restrict_mask() =
     In_channel.read_lines test_file
     |> List.iter
          ~f:(fun line ->
@@ -150,18 +236,28 @@ module RunTest = struct
               let log = parse_file log_str in
               let phys = parse_file phys_str in
               let log_edits = Runtime.parse edits_str in
-              let params = Parameters.({widening;
-                                        do_slice;
-                                        gas;
-                                        monotonic;
-                                        fastcx;
-                                        injection;
-                                        debug = false;
-                                        cache = true;
-                                        interactive = false;
-                                        del_pushdown = false;
-                                        above = false;
-                                        minimize = false;
+              let params = Parameters.({
+                              widening;
+                              do_slice;
+                              edits_depth;
+                              search_width;
+                              debug;
+                              monotonic;
+                              interactive;
+                              injection;
+                              fastcx;
+                              vcache;
+                              ecache;
+                              shortening;
+                              above;
+                              minimize;
+                              hints;
+                              only_holes;
+                              allow_annotations;
+                              nlp;
+                              unique_edits;
+                              domain;
+                              restrict_mask;
                            }) in
               let problem = Problem.make ~log ~phys ~log_edits
                               ~log_inst:Instance.empty
@@ -203,33 +299,75 @@ module Bench = struct
       +> anon ("varsize" %: int)
       +> anon ("num_tables" %: int)
       +> anon ("max_inserts" %: int)
-      +> flag "-w" no_arg ~doc:"perform widening"
-      +> flag "-s" no_arg ~doc:"perform slicing optimization"
-      +> flag "-m" no_arg ~doc:"eliminate non-hole branches"
-      +> flag "-i" no_arg ~doc:"interactive mode"
-      +> flag "-inj" no_arg ~doc:"try injection optimization"
       +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
-      +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly"
-      +> flag "--del-pushdown" no_arg ~doc:"interpret deletions as pushdowns when possible"
-      +> flag "--above" no_arg ~doc:"insert new edits above old instance instead of below"
-      +> flag "--min"   no_arg ~doc:"minimize a synthesized solution")
+      +> flag "-i" no_arg ~doc:"interactive mode"
+       +> flag "-w" no_arg ~doc:"Do widening"
+       +> flag "-s" no_arg ~doc:"Do slicing optimization"
+       +> flag "-e" (required int) ~doc:"maximum number of physical edits"
+       +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
+       +> flag "-m" no_arg ~doc:"Prune rows with no holes"
+       +> flag "--inj" no_arg ~doc:"Try injection optimization"
+       +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
+       +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
+       +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
+       +> flag "--shortening" no_arg ~doc:"shorten queries"
+       +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
+       +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
+       +> flag "--hints" no_arg ~doc:"Use syntactic hints"
+       +> flag "--holes" no_arg ~doc:"Holes only"
+       +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
+       +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
+       +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
+       +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
+       +> flag "--restrict-masks" no_arg ~doc:"Restrict masks")
 
-  let run varsize num_tables max_inserts widening do_slice monotonic interactive injection debug fastcx del_pushdown above minimize () =
+  let run varsize num_tables max_inserts
+        debug
+        interactive
+        widening
+        do_slice
+        edits_depth
+        search_width
+        monotonic
+        injection
+        fastcx
+        vcache
+        ecache
+        shortening
+        above
+        minimize
+        hints
+        only_holes
+        allow_annotations
+        nlp
+        unique_edits
+        domain
+        restrict_mask () =
     let params =
       Parameters.(
-        { widening;
+        {
+          widening;
           do_slice;
+          edits_depth;
+          search_width;
+          debug;
           monotonic;
           interactive;
           injection;
-          debug;
           fastcx;
-          gas = 10;
-          del_pushdown;
+          vcache;
+          ecache;
+          shortening;
           above;
-          cache = true;
-          minimize
-      })
+          minimize;
+          hints;
+          only_holes;
+          allow_annotations;
+          nlp;
+          unique_edits;
+          domain;
+          restrict_mask
+        })
     in
     ignore(Benchmark.reorder_benchmark varsize num_tables max_inserts params : Tables.Edit.t list)
 end
@@ -245,25 +383,76 @@ let benchmark : Command.t =
 module ONF = struct
   let spec = Command.Spec.(
       empty
-      +> flag "-gas" (required int) ~doc:"how many cegis iterations?"
-      +> flag "-w" no_arg ~doc:"perform widening"
-      +> flag "-s" no_arg ~doc:"perform slicing optimization"
-      +> flag "-m" no_arg ~doc:"eliminate non-hole branches"
-      +> flag "-i" no_arg ~doc:"interactive mode"
-      +> flag "-inj" no_arg ~doc:"try injection optimization"
-      +> flag "-p" no_arg ~doc:"show_result_at_end"
       +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
+      +> flag "-i" no_arg ~doc:"interactive mode"
       +> flag "-data" (required string) ~doc:"the input log"
-      +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly"
-      +> flag "--del-pushdown" no_arg ~doc:"interpret deletions as pushdowns when possible"
-      +> flag "--above" no_arg ~doc:"insert new edits above instance, not below"
-      +> flag "--min" no_arg ~doc:"minimize synthesized solutions" )
+      +> flag "-p" no_arg ~doc:"show_result_at_end"
+       +> flag "-w" no_arg ~doc:"Do widening"
+       +> flag "-s" no_arg ~doc:"Do slicing optimization"
+       +> flag "-e" (required int) ~doc:"maximum number of physical edits"
+       +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
+       +> flag "-m" no_arg ~doc:"Prune rows with no holes"
+       +> flag "--inj" no_arg ~doc:"Try injection optimization"
+       +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
+       +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
+       +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
+       +> flag "--shortening" no_arg ~doc:"shorten queries"
+       +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
+       +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
+       +> flag "--hints" no_arg ~doc:"Use syntactic hints"
+       +> flag "--holes" no_arg ~doc:"Holes only"
+       +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
+       +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
+       +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
+       +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
+       +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"  )
 
 
-  let run gas widening do_slice monotonic interactive injection print debug data_fp fastcx del_pushdown above minimize () =
+  let run debug interactive data print
+        widening
+        do_slice
+        edits_depth
+        search_width
+        monotonic
+        injection
+        fastcx
+        vcache
+        ecache
+        shortening
+        above
+        minimize
+        hints
+        only_holes
+        allow_annotations
+        nlp
+        unique_edits
+        domain
+        restrict_mask
+    () =
     let res = Benchmark.basic_onf_ipv4
-              Parameters.({widening;do_slice;gas;monotonic;injection;interactive;debug;fastcx;del_pushdown;above; cache = true; minimize})
-              data_fp
+              Parameters.({
+          widening;
+          do_slice;
+          edits_depth;
+          search_width;
+          debug;
+          monotonic;
+          interactive;
+          injection;
+          fastcx;
+          vcache;
+          ecache;
+          shortening;
+          above;
+          minimize;
+          hints;
+          only_holes;
+          allow_annotations;
+          nlp;
+          unique_edits;
+          domain;
+          restrict_mask})
+              data
     in
     if print then
       List.iter res ~f:(fun edit ->
@@ -320,18 +509,10 @@ module Equality = struct
     let log_edits = Runtime.parse log_edits in
     let phys_edits = Runtime.parse phys_edits in
     let params = Parameters.(
-        { debug;
-          interactive = false;
-          do_slice = false;
-          widening = false;
-          gas = 1;
-          monotonic = false;
-          fastcx = false;
-          injection = false;
-          del_pushdown = false;
-          above = false;
-          cache = true;
-          minimize = false}) in
+        { default with
+          debug;
+          ecache = true;
+          vcache = true}) in
     let data = ProfData.zero () in
     let log_inst = Instance.empty in
     let phys_inst = Instance.empty in
@@ -355,9 +536,22 @@ module Equality = struct
        Printf.printf "--\n%!";
        printer "Log" inpkt log_out;
        Printf.printf "--\n%!";
-       printer "Phys" inpkt phys_out
-
-
+       printer "Phys" inpkt phys_out;
+       Printf.printf "\n\nDifferences\t\tlog\tphys\n";
+       List.iter fvs
+         ~f:(fun (fv,_) ->
+           match Motley.Util.StringMap.find log_out fv
+               , Motley.Util.StringMap.find phys_out fv with
+           | None, None -> ()
+           | Some (Int(v,_)), None -> Printf.printf "\t%s\t%s\tundefined\n"
+                                         fv (Bigint.Hex.to_string v)
+           | None, Some (Int(v,_)) -> Printf.printf "\t%s\tundefined\t%s\n"
+                                         fv (Bigint.Hex.to_string v)
+           | Some (Int(vl,_)), Some(Int(vp,_)) ->
+              if Bigint.(vl <> vp) then
+                Printf.printf "\t%s\t%s\t%s\n"
+                  fv (Bigint.Hex.to_string vl) (Bigint.Hex.to_string vp)
+         )
 
 end
 

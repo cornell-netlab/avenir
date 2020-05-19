@@ -10,11 +10,11 @@ hdr__vlan_tag__vlan_id#12
 hdr__vlan_tag__pri#3
 hdr__vlan_tag__cfi#1
 hdr__ethernet__dst_addr#48
-hdr__ethernet__src_adr#48
-hdr__vlan_tag__vlan_id#12
+hdr__ethernet__src_addr#48
 hdr__eth_typ__value#16
 hdr__ipv4__src_addr#32
 hdr__ipv4__dst_addr#32
+hdr__ipv4__proto#8
 hdr__icmp__icmp_type#8
 hdr__icmp__icmp_code#8
 hdr__tcp__sport#16

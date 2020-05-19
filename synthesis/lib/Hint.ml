@@ -116,8 +116,13 @@ let tbl_hole encode_tag (keys: (string * size) list) tbl row_hole act_hole i act
   let default_match_holes =
     List.fold ~init:True
       ~f:(fun acc (x,sz) ->
-        acc %&% Hole.match_holes encode_tag tbl x sz) in
+        acc %&% if x = "l3_metadata__nexthop_index" then
+                  Hole.match_holes `Exact tbl x sz
+                else Hole.match_holes encode_tag tbl x sz) in
   let matches_holes =
+    if List.exists ["acl";"vlan"] ~f:(fun x -> String.is_substring tbl ~substring:x)
+    then False
+    else
     match List.find hs ~f:(fun h -> Stdlib.(h.table = tbl)) with
     | Some h (*when String.(tbl <> "punt")*) ->
        begin match encode_match keys h encode_tag with
