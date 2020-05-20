@@ -8,9 +8,9 @@ open Tables
 module IntMap = Map.Make(Int)
 
 
-let rec run_experiment iter seq phys_seq (params : Parameters.t) hints (problem : Problem.t) =
+let rec run_experiment iter seq (phys_seq : Edit.t list) (params : Parameters.t) hints (problem : Problem.t) =
   match seq with
-  | [] -> phys_seq
+  | [] -> Some phys_seq
   | edit::edits ->
      (* Printf.printf "==== BENCHMARKING INSERTION OF (%s) =====\n%!"
       *   (string_of_edit edit); *)
@@ -19,9 +19,9 @@ let rec run_experiment iter seq phys_seq (params : Parameters.t) hints (problem 
      let st = Time.now () in
      assert (List.length (Problem.phys_edits problem_inner) = 0);
      match cegis_math params data problem_inner with
-     | None ->
-        (* let _ : Edit.t list option = cegis_math {params with debug = true} data problem_inner in *)
-        failwith "example failed"
+     | None -> None
+        (* (\* let _ : Edit.t list option = cegis_math {params with debug = true} data problem_inner in *\)
+         * failwith "example failed" *)
      | Some pedits ->
         !data.time := Time.(diff (now()) st);
         !data.log_inst_size :=  Problem.log_inst problem |> Instance.size ;
@@ -1050,6 +1050,10 @@ let of_to_pipe1 widening gas fp () =
   measure params None problem pipe_insertions
 
 
+let restart_timer (params : Parameters.t) st =
+  match params.timeout with
+  | None -> params
+  | Some (_,dur) -> {params with timeout = Some(st,dur)}
 
 let mk_ith_meta i = Printf.sprintf "m%d" i
 let mk_ith_var i =  Printf.sprintf "x%d" i
@@ -1063,7 +1067,10 @@ let mk_ith_keys sz num_xs ith_meta =
   List.map (range_ex 0 (num_xs+1))
     ~f:(fun i ->
       if i <= ith_meta then
-        (mk_ith_meta i, sz)
+        if ith_meta > num_xs then
+          (mk_ith_meta ((ith_meta - num_xs) + i), sz)
+        else
+          (mk_ith_meta i, sz)
       else
         (mk_ith_var i,sz)
     )
@@ -1076,7 +1083,7 @@ let mk_ith_table sz num_tables tbl_idx num_xs num_ms =
              mk_ith_keys sz num_xs (tbl_idx - idx_of_min_mtbl - 1)
           else
             mk_normal_keys sz num_xs),
-          (if tbl_idx >= num_tables - num_ms && tbl_idx < num_tables - 1
+          (if tbl_idx >= num_tables - num_ms - 1 && tbl_idx < num_tables - 1
            then [[Printf.sprintf "d%i" tbl_idx, sz], mk_ith_meta (tbl_idx - idx_of_min_mtbl) %<-% Var(Printf.sprintf "d%i" tbl_idx, sz)]
            else [[Printf.sprintf "d%i" tbl_idx, 9], "out" %<-% Var(Printf.sprintf "d%i" tbl_idx, 9)]),
           Skip)
@@ -1100,9 +1107,39 @@ let create_bench sz num_tables num_xs num_ms =
     ]
 
 
-exception Timeout
+let match_row sz num_xs ~ith ~has_value =
+  let open Match in
+  let wildcard =  Mask(mkInt(0,32),mkInt(0,32)) in
+  let matches =
+    Util.repeat (ith) wildcard
+    @ [ Exact(mkInt(has_value,sz)) ]
+    @ Util.repeat (num_xs - ith) wildcard
+  in
+  Edit.Add("logical",(matches, [mkInt(has_value,9)], 0))
 
-let square_bench sz n =
+let match_row_easier sz num_xs ~has_value =
+  let open Match in
+  let wildcard =  Mask(mkInt(0,32),mkInt(0,32)) in
+  let matches =
+    Exact(mkInt(has_value,sz)) :: Util.repeat (num_xs) wildcard
+  in
+  Edit.Add("logical",(matches, [mkInt(has_value,9)], 0))
+
+
+let rec create_log_edits_easier sz i max_edits num_xs=
+  if i = max_edits then []
+  else
+    match_row_easier sz num_xs ~has_value:i
+    :: create_log_edits_easier sz (i + 1) max_edits num_xs
+
+
+let rec create_log_edits sz i max_edits num_xs =
+  if i = max_edits then []
+  else
+    match_row sz num_xs ~ith:(i mod num_xs) ~has_value:(i / num_xs)
+    :: create_log_edits sz (i + 1) max_edits num_xs
+
+let square_bench params sz n max_edits =
   let fvs = ("out",9) :: mk_normal_keys sz n in
   let logical_table =
     mkApply("logical",
@@ -1114,25 +1151,65 @@ let square_bench sz n =
   let physical_tables =
     List.fold (range_ex 0 n) ~init:[]
     ~f:(fun init num_xs ->
-      List.fold(range_ex 0 (num_xs + 1)) ~init
+      List.fold(range_ex 0 n) ~init
         ~f:(fun acc num_ms ->
           let p = create_bench sz n num_xs num_ms in
           Printf.printf "\n\n-------%d---%d----------\n%s\n--------------\n\n%!"num_xs num_ms (string_of_cmd p);
           acc @ [(num_xs, num_ms), p]))
   in
-  let matches = Match.Exact(mkInt(1,32))::List.map (range_ex 0 (n)) ~f:(fun _ -> Match.Mask(mkInt(0,32),mkInt(0,32))) in
   let log_edits =
-    [Edit.Add("logical", (matches, [mkInt(8,9)], 0))]
+    create_log_edits_easier 32 0 max_edits n |> List.map ~f:(List.return)
   in
   let problem phys = Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
   List.fold physical_tables ~init:"numxs,num_ms,time"
     ~f:(fun acc ((xs,ms),phys) ->
       Printf.printf "\n------%d,%d-----\n" xs ms;
-      if xs = 10 && ms = 8 then acc else
+      (* if xs = 10 && ms = 8 then acc else *)
+      Synthesis.edit_cache := EAbstr.make ();
       let st = Time.now () in
-      let es = measure Parameters.({default with edits_depth = 2; widening = true; restrict_mask = true; hints = true })  None (problem phys) [log_edits] in
+      let es = measure (restart_timer params st) None (problem phys) log_edits in
       let nd = Time.now () in
       let dur = Time.diff nd st in
-      Printf.sprintf "%s\n%d,%d,%f" acc xs ms (Time.Span.to_ms dur)
+      match es with
+      | None ->
+         Printf.sprintf "%s\n%d,%d,TIMEOUT" acc xs ms
+      | Some _ ->
+         Printf.sprintf "%s\n%d,%d,%f" acc xs ms (Time.Span.to_ms dur)
     )
   |> Printf.printf "%s\n"
+
+
+
+(****************************************
+ *     Representative pipeline          *
+ ****************************************)
+
+let rep params data nrules =
+  let log =
+    sequence [
+        mkApply ("obt",
+                 ["ipv4_src",32;"ipv4_dst",32],
+                 [["o",9], "out" %<-% Var("o",9)],
+                 Skip)
+      ]
+  in
+  let phys =
+    sequence [
+        mkApply("validation",
+                ["ipv4_src",32],
+                [["ov",9], "out" %<-% Var("ov",9)],
+                Skip) ;
+        mkOrdered [
+            Var("out",9) %=% mkVInt(0,9), Skip ;
+            True,
+              mkApply("fwd",
+                      ["ipv4_dst",32],
+                      [["of",9], "out" %<-% Var("of",9) ],
+                      Skip)
+          ]
+      ]
+  in
+  let fvs = ["ipv4_src",32; "ipv4_dst",32; "out", 9] in
+  let problem = Problem.make ~log:log ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
+  let data = classbench data in
+  measure (restart_timer params (Time.now())) None problem data

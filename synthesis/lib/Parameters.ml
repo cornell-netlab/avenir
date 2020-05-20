@@ -24,6 +24,7 @@ type t =
     unique_edits : bool;
     domain : bool;
     restrict_mask : bool;
+    timeout : (Time.t * Time.Span.t ) option
   }
 
 let default =
@@ -48,4 +49,5 @@ let default =
     nlp = false;
     unique_edits = false;
     domain = false;
+    timeout = None;
   }

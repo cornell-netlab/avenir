@@ -238,7 +238,7 @@ let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref)
   ProfData.update_time !data.make_vc_time st_mk_cond;
   let condition = equivalent ~neg Problem.(fvs problem) log phys in
   let cv_st = Time.now () in
-  let model_opt, z3time = if params.do_slice then check_valid_cached params condition else check_valid params condition in
+  let model_opt, z3time = if params.vcache then check_valid_cached params condition else check_valid params condition in
   ProfData.update_time !data.check_valid_time cv_st;
   ProfData.update_time_val !data.eq_time z3time;
   !data.tree_sizes :=  num_nodes_in_test condition :: !(!data.tree_sizes);
@@ -590,8 +590,11 @@ let minimize_solution params data problem =
 
 let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (Edit.t list option) =
   (* Printf.printf "\tcegis_math\n%!"; *)
+  match params.timeout with
+  | Some (st,dur) when Time.(Span.(dur < diff(now()) st))  -> None
+  | _ ->
   if params.ecache then
-    let () = Printf.printf "\ttrying cache \n%!"in
+    (* let () = Printf.printf "\ttrying cache \n%!"in *)
     solve_math 1 params data problem
   else
     let st = Time.now () in
@@ -599,7 +602,7 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
     (* ProfData.update_time !data.impl_time st; *)
     match cex with
     | `Yes ->
-       (*if params.debug then*) Printf.printf "\tNo CEX to be found -- programs are equiv\n%!";
+       (* (\*if params.debug then*\) Printf.printf "\tNo CEX to be found -- programs are equiv\n%!"; *)
        let problem = if params.minimize then minimize_solution params data problem else problem in
        edit_cache := EAbstr.update !edit_cache (Problem.log_edits problem |> List.hd_exn) (Problem.phys_edits problem);
        if params.interactive then begin
@@ -640,6 +643,9 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
   (* if params.debug then
    *   Printf.printf "+Model Space+\n%!"; *)
   (* Printf.printf "\tSolving for %d more iters\n%!" i; *)
+  match params.timeout with
+  | Some (st,dur) when Time.(Span.(dur < diff(now()) st))  -> None
+  | _ ->
   if i = 0 then
     (* let () = Printf.printf "The jig is up\n%!" in *)
     None
@@ -663,6 +669,9 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
           else
             let st = Time.now () in
             let rec loop i problem searcher =
+              match params.timeout with
+              | Some (st,dur) when Time.(Span.(dur < diff(now()) st))  -> None
+              | _ ->
               if i = 0 then
                 (* let () = Printf.printf "The jig is up\n%!" in *)
                 None else

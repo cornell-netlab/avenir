@@ -503,7 +503,7 @@ let rec repeat c n =  if n = 0 then "" else c ^ repeat c (n-1)
                     
 let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
   match e with
-  | Skip -> "skip"
+  | Skip ->    repeat "\t" depth ^ "skip"
   | While (cond, body) ->
     "\n" ^ repeat "\t" depth ^
     "while(" ^ string_of_test cond ^ ") {\n"
@@ -512,19 +512,20 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
       ^ "\n" ^ repeat "\t" depth
       ^ "}\n" ^ repeat "\t" depth
   | Seq (firstdo, thendo) ->
-    string_of_cmd ~depth firstdo ^ "; "
+     string_of_cmd ~depth firstdo ^ ";\n "
     ^ string_of_cmd ~depth thendo
   | Assert t ->
-    (* repeat "\t" depth ^ *)
+    repeat "\t" depth ^
     "assert (" ^ string_of_test t ^ ")"
   | Assume t ->
-    (* repeat "\t" depth ^ *)
+    repeat "\t" depth ^
     "assume (" ^ string_of_test t ^ ")"
   | Assign (field, expr) ->
     field ^ " := " ^ string_of_expr expr
   | Select (styp, es) ->
     let modifier = (string_of_select_typ styp) in
-    "if " ^ modifier ^
+    repeat "\t" depth ^
+      "if " ^ modifier ^
     List.fold_left es ~init:"" ~f:(fun str (cond, act)->
         str ^ "\n" ^
         repeat "\t" (depth + 1)
@@ -532,7 +533,8 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
       )
     ^ "\n" ^ repeat "\t" depth ^ "fi"
   | Apply t ->
-      "apply (" ^ t.name ^ ",("
+     repeat "\t" depth ^
+       "apply (" ^ t.name ^ ",("
       ^ List.fold_left t.keys ~init:""
           ~f:(fun str (k,sz) ->
             str ^ "," ^ k ^ "#" ^ string_of_int sz) ^ ")"
