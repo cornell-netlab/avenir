@@ -247,9 +247,7 @@ control Next (inout parsed_headers_t hdr,
     }
 
     apply {
-#ifdef WITH_SIMPLE_NEXT
         simple.apply();
-#endif // WITH_SIMPLE_NEXT
     }
 }
 

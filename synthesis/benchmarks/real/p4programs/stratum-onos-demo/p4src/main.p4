@@ -431,9 +431,9 @@ control l3_fwd(inout parsed_packet_t hdr,
     table l3_fwd_table {
         key = {
             local_metadata.vrf_id     : exact;
-            hdr.ipv4_base.dst_addr    : lpm;
-            hdr.ipv4_base.src_addr    : selector;
-            hdr.ipv4_base.protocol    : selector;
+            hdr.ipv6.dst_addr    : lpm;
+            hdr.ipv6.src_addr    : selector;
+            //hdr.ipv4_base.protocol    : selector;
             local_metadata.l4_src_port: selector;
             local_metadata.l4_dst_port: selector;
         }
