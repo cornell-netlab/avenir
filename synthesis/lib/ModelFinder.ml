@@ -280,7 +280,7 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                    *   acc *)
               )
           in
-          Printf.printf "active domain restr \n %s\n%!" (string_of_test active_domain_restrict);
+          if params.debug then Printf.printf "active domain restr \n %s\n%!" (string_of_test active_domain_restrict);
           let out_test =
             (if opts.annot then
                ((Hole("?AddRowTonexthop",1) %=% Hole("?AddRowToipv6_fib",1))

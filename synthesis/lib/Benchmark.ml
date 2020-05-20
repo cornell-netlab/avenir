@@ -1048,3 +1048,91 @@ let of_to_pipe1 widening gas fp () =
                   ()
   in
   measure params None problem pipe_insertions
+
+
+
+let mk_ith_meta i = Printf.sprintf "m%d" i
+let mk_ith_var i =  Printf.sprintf "x%d" i
+
+
+let mk_normal_keys sz num_xs =
+  List.map (range_ex 0 (num_xs+1)) ~f:(fun i ->
+      mk_ith_var i, sz)
+
+let mk_ith_keys sz num_xs ith_meta =
+  List.map (range_ex 0 (num_xs+1))
+    ~f:(fun i ->
+      if i <= ith_meta then
+        (mk_ith_meta i, sz)
+      else
+        (mk_ith_var i,sz)
+    )
+
+
+let mk_ith_table sz num_tables tbl_idx num_xs num_ms =
+  let idx_of_min_mtbl = num_tables - num_ms -1 in
+  mkApply(Printf.sprintf "physical%d" tbl_idx,
+          (if tbl_idx > idx_of_min_mtbl then
+             mk_ith_keys sz num_xs (tbl_idx - idx_of_min_mtbl - 1)
+          else
+            mk_normal_keys sz num_xs),
+          (if tbl_idx >= num_tables - num_ms && tbl_idx < num_tables - 1
+           then [[Printf.sprintf "d%i" tbl_idx, sz], mk_ith_meta (tbl_idx - idx_of_min_mtbl) %<-% Var(Printf.sprintf "d%i" tbl_idx, sz)]
+           else [[Printf.sprintf "d%i" tbl_idx, 9], "out" %<-% Var(Printf.sprintf "d%i" tbl_idx, 9)]),
+          Skip)
+
+
+
+let initialize_ms sz num_ms =
+  if num_ms = 0 then Skip else
+  List.map (range_ex 0 num_ms)
+    ~f:(fun i -> mk_ith_meta i %<-% mkVInt (0,sz))
+  |> sequence
+
+
+let create_bench sz num_tables num_xs num_ms =
+  sequence [ initialize_ms sz num_ms
+           ; sequence @@
+               List.map (range_ex 0 num_tables)
+                 ~f:(fun tbl_idx ->
+                   mk_ith_table sz num_tables tbl_idx num_xs num_ms
+                 )
+    ]
+
+
+exception Timeout
+
+let square_bench sz n =
+  let fvs = ("out",9) :: mk_normal_keys sz n in
+  let logical_table =
+    mkApply("logical",
+            mk_normal_keys sz n,
+            [["o", 9], "out" %<-% Var("o", 9)],
+            Skip)
+  in
+  Printf.printf "Logical table: \n %s\n\n" (string_of_cmd logical_table);
+  let physical_tables =
+    List.fold (range_ex 0 n) ~init:[]
+    ~f:(fun init num_xs ->
+      List.fold(range_ex 0 (num_xs + 1)) ~init
+        ~f:(fun acc num_ms ->
+          let p = create_bench sz n num_xs num_ms in
+          Printf.printf "\n\n-------%d---%d----------\n%s\n--------------\n\n%!"num_xs num_ms (string_of_cmd p);
+          acc @ [(num_xs, num_ms), p]))
+  in
+  let matches = Match.Exact(mkInt(1,32))::List.map (range_ex 0 (n)) ~f:(fun _ -> Match.Mask(mkInt(0,32),mkInt(0,32))) in
+  let log_edits =
+    [Edit.Add("logical", (matches, [mkInt(8,9)], 0))]
+  in
+  let problem phys = Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
+  List.fold physical_tables ~init:"numxs,num_ms,time"
+    ~f:(fun acc ((xs,ms),phys) ->
+      Printf.printf "\n------%d,%d-----\n" xs ms;
+      if xs = 10 && ms = 8 then acc else
+      let st = Time.now () in
+      let es = measure Parameters.({default with edits_depth = 2; widening = true; restrict_mask = true; hints = true })  None (problem phys) [log_edits] in
+      let nd = Time.now () in
+      let dur = Time.diff nd st in
+      Printf.sprintf "%s\n%d,%d,%f" acc xs ms (Time.Span.to_ms dur)
+    )
+  |> Printf.printf "%s\n"

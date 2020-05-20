@@ -75,8 +75,8 @@ module Solver = struct
         fvs
         data
         debug
-        print_res
         interactive
+        print_res
         measure
         onos
         widening
@@ -615,6 +615,19 @@ let meta : Command.t =
     Meta.spec
     Meta.run
 
+module SqBench = struct
+  let spec = Command.Spec.(empty)
+  let run () = Benchmark.square_bench 32 12
+
+end
+
+let sqbench : Command.t =
+  Command.basic_spec
+    ~summary:"run square benchmark"
+    SqBench.spec
+    SqBench.run
+
+
 let main : Command.t =
   Command.group
     ~summary:"Invokes the specified Motley Command"
@@ -622,6 +635,7 @@ let main : Command.t =
     ; ("encode-p4", encode_cmd)
     ; ("runtest", runtest_cmd)
     ; ("bench", benchmark)
+    ; ("square", sqbench)
     ; ("onf", onf)
     ; ("eq", equality)
     ; ("ex", running_example)

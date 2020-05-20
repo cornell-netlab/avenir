@@ -608,7 +608,7 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
          end;
        Problem.phys_edits problem |> Some
     | `NoAndCE counter ->
-       Printf.printf "\tCEX found \n%!";
+       (* Printf.printf "\tCEX found \n%!"; *)
        (* (Time.(Span.(diff (now()) st |> to_ms))); *)
        let problem = Problem.add_cex problem counter in
        let counter = (
@@ -639,9 +639,9 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
 and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
   (* if params.debug then
    *   Printf.printf "+Model Space+\n%!"; *)
-  Printf.printf "\tSolving for %d more iters\n%!" i;
+  (* Printf.printf "\tSolving for %d more iters\n%!" i; *)
   if i = 0 then
-    let () = Printf.printf "The jig is up\n%!" in
+    (* let () = Printf.printf "The jig is up\n%!" in *)
     None
   else
     if params.ecache then
@@ -658,21 +658,22 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
          || (check_sat params (Problem.model_space problem) |> fst |> Option.is_some)
       then begin
           if (Problem.phys_edits problem |> List.length > params.edits_depth)
-          then let () = Printf.printf "too many edits\n%!" in None
+          then (* let () = Printf.printf "too many edits\n%!" in *)
+               None
           else
             let st = Time.now () in
             let rec loop i problem searcher =
               if i = 0 then
-                let () = Printf.printf "The jig is up\n%!" in
+                (* let () = Printf.printf "The jig is up\n%!" in *)
                 None else
-                let () = Printf.printf "\tlooping\n%!" in
+                (* let () = Printf.printf "\tlooping\n%!" in *)
                 let model_opt = ModelFinder.search params data problem searcher in
                 (*get_model params datproblem in*)
                 ProfData.update_time !data.model_search_time st;
                 match model_opt with
                 | None ->
                    (* if params.debug || params.interactive then *)
-                   Printf.printf "No model could be found\n%!";
+                   (* Printf.printf "No model could be found\n%!"; *)
                    if params.interactive then
                      ignore(Stdio.In_channel.(input_char stdin) : char option);
                    if params.debug then None
@@ -698,7 +699,7 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
                      (* if List.exists es ~f:(fun e -> List.exists (Problem.phys_edits problem) ~f:(fun e' -> e = e') ) then
                       *   None
                       * else *)
-                     let () = if true then begin
+                     let () = if params.debug then begin
                          (* Printf.printf "\tCEX in %s\n" (Packet.string__packet @@ fst @@ List.hd_exn @@ Problem.cexs problem); *)
                          Printf.printf "\t***Edits***\n%!";
                          Problem.phys_edits problem |>
@@ -736,13 +737,13 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
                                              |> reset_model_space
                                              |> reset_attempts) in
                      let continue () =
-                       Printf.printf "\tmodel didnt work\n";
+                       (* Printf.printf "\tmodel didnt work\n"; *)
                        let model_space = Problem.model_space problem %&% negate_model model in
                        let problem = Problem.set_model_space problem model_space in
                        match loop (i - 1) problem searcher with
                        | Some es -> Some es
                        | None ->
-                          Printf.printf "\tBacktracking\n%!";
+                          (* Printf.printf "\tBacktracking\n%!"; *)
                           (* if params.interactive then
                            *   ignore(Stdio.In_channel.(input_char stdin) : char option); *)
                           ProfData.incr !data.num_backtracks;
