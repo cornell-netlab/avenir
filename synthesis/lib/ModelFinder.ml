@@ -170,6 +170,7 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
           (* let widening_constraint =
            *   if opts.mask then
            *     List.fold (holes_of_test in_pkt_wp)  ~init:True
+
            *       ~f:(fun acc (hole, sz) ->
            *         match String.chop_suffix hole ~suffix:"_mask" with
            *         | Some _ ->
@@ -236,11 +237,11 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                           then
                             Hole(h,sz) %=% mkVInt(0,sz) %+% (Hole(h,sz) %=% mkVInt(1,sz))
                           else
-                            False                                                                                          )
+                            False)
                         ~f:(fun acci (i,szi) ->
                           acci %+% if sz = szi
-                                      && opts.nlp && not (List.exists ["ttl";"limit";"count"]
-                                                       ~f:(fun s -> String.is_substring h ~substring:s))
+                                      && (not opts.nlp ||  (not (List.exists ["ttl";"limit";"count"]
+                                                       ~f:(fun s -> String.is_substring h ~substring:s))))
                                    then Hole(h,sz) %=% Value(Int(i,szi))
                                    else False)
                     in
@@ -279,7 +280,7 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                    *   acc *)
               )
           in
-          (* Printf.printf "active domain restr \n %s\n%!" (string_of_test active_domain_restrict); *)
+          Printf.printf "active domain restr \n %s\n%!" (string_of_test active_domain_restrict);
           let out_test =
             (if opts.annot then
                ((Hole("?AddRowTonexthop",1) %=% Hole("?AddRowToipv6_fib",1))

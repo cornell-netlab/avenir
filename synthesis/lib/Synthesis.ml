@@ -639,7 +639,7 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
 and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
   (* if params.debug then
    *   Printf.printf "+Model Space+\n%!"; *)
-  Printf.printf "\tSolving\n%!";
+  Printf.printf "\tSolving for %d more iters\n%!" i;
   if i = 0 then
     let () = Printf.printf "The jig is up\n%!" in
     None
@@ -781,7 +781,7 @@ let cegis_math_sequence (params : Parameters.t) data problem =
       | None -> None
       | Some (problem, pedits) ->
           let problem = Problem.replace_log_edits problem [ledit] in
-          (* Printf.printf "\n\n\n%s\n\n\n" (Problem.to_string problem); *)
+          Printf.printf "\n\n\n%s\n\n\n" (Problem.to_string params problem);
           match cegis_math params data problem with
           | None -> None
           | Some phys_edits ->

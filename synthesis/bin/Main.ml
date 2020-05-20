@@ -141,6 +141,7 @@ module Solver = struct
     else
       let log_edits = List.join log_edits in
       let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits ~fvs ~phys_drop_spec () in
+      Printf.printf "PROBLEM: %s \n" (Problem.to_string params problem);
       match Synthesis.cegis_math_sequence params (ProfData.zero ()) problem with
       | None -> failwith "failed"
       | Some (solution, phys_edits) ->
