@@ -779,6 +779,15 @@ and assign_constants (type_ctx : Declaration.t list) (decl : Declaration.t list)
                               | _ -> None ) in
   List.fold es ~f:mkSeq ~init:Skip
 
+and gather_constants (type_ctx : Declaration.t list) (decl : Declaration.t list) =
+  let es = List.filter_map decl
+              ~f:(fun t -> match t with
+                              | (_, Constant { name = n; typ = t; value = e}) ->
+                                  let w = lookup_type_width_exn type_ctx t in
+                                  Some(snd n, encode_expression_to_value_with_width w type_ctx e)
+                              | _ -> None ) in
+  es  
+
 and encode_program (Program(top_decls) as prog : program ) =
   let open Declaration in
   match List.find top_decls ~f:(fun d -> match snd d with
@@ -792,9 +801,10 @@ and encode_program (Program(top_decls) as prog : program ) =
     let type_cxt2 = List.map c.params ~f:(update_typ_ctx_from_param type_cxt) @ type_cxt in
     (* let _ = printf "type_cxt\n%s\n" (Sexp.to_string ([%sexp_of: Declaration.t list] type_cxt)) in *)
     let assign_consts = assign_constants type_cxt2 top_decls in
-    assign_consts %:% assign_rv %:% encode_control prog c.locals type_cxt2 rv c.apply
+    let consts = gather_constants type_cxt2 top_decls in
+    replace_consts consts (assign_rv %:% encode_control prog c.locals type_cxt2 rv c.apply)
   | Some _ -> failwith "Found a module called MyIngress, but it wasn't a control module"
-    
+ 
 and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) (name : P4String.t) (props : Table.property list) : cmd =
   let open Table in
   let p4keys, p4actions, p4customs = List.fold_left props ~init:([], [], [])
@@ -836,6 +846,47 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
 
   let xxx_keys = printf "keys = %s\n" (Sexp.to_string ([%sexp_of: (string * int) list] str_keys)) in
   init_action_run %:% Apply { name = snd name; keys = str_keys; actions =  action_cmds; default =  enc_def_act }
+
+and replace_consts (consts : (string * expr)  list) (prog : cmd) =
+  match prog with
+  | Skip -> Skip
+  | Assign(v, e) -> Assign(v, replace_consts_expr consts e)
+  | Assert t -> Assert(replace_consts_test consts t)
+  | Assume t -> Assume(replace_consts_test consts t)
+  | Seq(c1, c2) -> Seq(replace_consts consts c1, replace_consts consts c2)
+  | While(t, c) -> While(replace_consts_test consts t, replace_consts consts c)
+  | Select(st, tc) ->
+    Select(st,  List.map tc ~f:(fun (t, c) -> replace_consts_test consts t, replace_consts consts c))
+  | Apply{name; keys; actions; default} ->
+    let actions' = List.map actions ~f:(fun (s, c) -> (s, replace_consts consts c)) in
+    let default' = replace_consts consts default in
+    Apply{name; keys; actions = actions'; default = default'}
+
+and replace_consts_expr (consts : (string * expr)  list) (e : expr) =
+  match e with
+  | Value v -> Value v
+  | Var(v, w) ->
+    begin match List.find consts ~f:(fun (n, _) -> n = v) with
+    | Some (_, e) -> e
+    | None -> Var(v, w)
+    end
+  | Hole h -> Hole h
+  | Plus(e1, e2) -> Plus(replace_consts_expr consts e1, replace_consts_expr consts e2)
+  | Times(e1, e2) -> Times(replace_consts_expr consts e1, replace_consts_expr consts e2)
+  | Minus(e1, e2) -> Minus(replace_consts_expr consts e1, replace_consts_expr consts e2)
+  | Mask(e1, e2) -> Mask(replace_consts_expr consts e1, replace_consts_expr consts e2)
+
+and replace_consts_test (consts : (string * expr) list) (t : test) =
+  match t with
+  | True -> True
+  | False -> False
+  | Eq(e1, e2) -> Eq(replace_consts_expr consts e1, replace_consts_expr consts e2)
+  | Le(e1, e2) -> Le(replace_consts_expr consts e1, replace_consts_expr consts e2)
+  | And(t1, t2) -> And(replace_consts_test consts t1, replace_consts_test consts t2)
+  | Or(t1, t2) -> Or(replace_consts_test consts t1, replace_consts_test consts t2)
+  | Impl(t1, t2) -> Impl(replace_consts_test consts t1, replace_consts_test consts t2)
+  | Iff(t1, t2) -> Iff(replace_consts_test consts t1, replace_consts_test consts t2)
+  | Neg t1 -> Neg (replace_consts_test consts t1)
 
 let read_lines filename =
   let chan = In_channel.create filename in
