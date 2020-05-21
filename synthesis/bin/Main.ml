@@ -890,11 +890,10 @@ module Classbench = struct
                     || uppercase expname = "ETHIPTCP"
                     || uppercase expname = "OF") then
       ignore(Benchmark.rep_of params data : Tables.Edit.t list option)
-    else if String.(uppercase expname = "ALL") then begin
-        ignore(Benchmark.rep params data : Tables.Edit.t list option);
-        ignore(Benchmark.rep_middle params data : Tables.Edit.t list option)
-      end
-    else failwith @@ Printf.sprintf "Unrecognized experiment parameter %s" expname
+    else if String.(uppercase expname = "PAR") then
+      ignore(Benchmark.rep_par params data : Tables.Edit.t list option)
+    else
+      failwith @@ Printf.sprintf "Unrecognized experiment parameter %s" expname
 
 
 end

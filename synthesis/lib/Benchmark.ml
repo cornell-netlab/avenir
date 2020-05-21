@@ -1380,12 +1380,12 @@ let rep_of params data =
                      | Mask(_,m) -> Bigint.(get_int m = zero)
                      | _ -> false)
            then
-             let () = Printf.printf "\tthrowing out %s\n" (Edit.to_string (Add("obt",(matches, [], -1)))) in
+             (* let () = Printf.printf "\tthrowing out %s\n" (Edit.to_string (Add("obt",(matches, [], -1)))) in *)
              acc
            else
              let outp = generate_out acc cb_row in
              let e =  Add("obt", (matches, [Int(outp,9)], 0)) in
-             let () = Printf.printf "Keeping %s\n" (Edit.to_string e) in
+             (* let () = Printf.printf "Keeping %s\n" (Edit.to_string e) in *)
              acc @ [e]
          )
   in
@@ -1426,6 +1426,92 @@ let rep_of params data =
                 ["eth_dst",48;"ip_dst",32; "proto",8; "tcp_dport",16],
                 [["of",9], "out" %<-% Var("of",9) ],
                 Skip);
+        mkApply("acl",
+                ["in_port", 9;"eth_src",48; "eth_dst",48; "eth_typ",16; "ip_src",32; "ip_dst",32; "proto",8; "tcp_sport", 16; "tcp_dport", 16],
+                [["oa",9], "out" %<-% Var("oa", 9)],
+                Skip);
+        mkOrdered [
+            Var("out",9) %=% mkVInt(0,9),
+            List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
+                acc %:% (fv %<-% mkVInt(0,sz))
+              );
+            True, Skip
+          ]
+      ]
+  in
+  let problem = Problem.make ~log:log ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
+  measure (restart_timer params (Time.now())) None problem (List.(gen_data >>| return))
+
+
+
+let rep_par params data =
+  let fvs = ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16] in
+  let cb_fvs = List.map ~f:fst fvs in
+  let gen_data : Edit.t list =
+    let cb_rows = parse_classbench_of data in
+    Printf.printf "There are %d rows \n%!" (List.length cb_rows);
+    List.fold cb_rows ~init:([] : Edit.t list)
+         ~f:(fun acc cb_row ->
+           let open Edit in
+           let fields = cb_fvs in
+           let matches = project cb_row fields |> (cb_to_matches "logical" fvs) in
+           if List.exists acc ~f:(function
+                  | Add (_,(ms,_,_)) -> List.(ms = matches)
+                  | _ -> false)
+              || List.for_all matches ~f:(function
+                     | Mask(_,m) -> Bigint.(get_int m = zero)
+                     | _ -> false)
+           then
+             (* let () = Printf.printf "\tthrowing out %s\n" (Edit.to_string (Add("obt",(matches, [], -1)))) in *)
+             acc
+           else
+             let outp = generate_out acc cb_row in
+             let e =  Add("obt", (matches, [Int(outp,9)], 0)) in
+             (* let () = Printf.printf "Keeping %s\n" (Edit.to_string e) in *)
+             acc @ [e]
+         )
+  in
+  Printf.printf "there are %d cleaned rules\n%!" (List.length gen_data);
+  let fvs = ("out", 9) :: fvs in
+  let log =
+    sequence [
+        "out" %<-% mkVInt(0,9);
+        mkApply ("obt",
+                 ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16],
+                 [["o",9], "out" %<-% Var("o",9)],
+                 Skip);
+        mkOrdered [
+            Var("out",9) %=% mkVInt(0,9),
+            List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
+                acc %:% (fv %<-% mkVInt(0,sz))
+              );
+            True, Skip
+          ]
+      ]
+  in
+  let phys =
+    sequence [
+        "out" %<-% mkVInt(0,9);
+        mkApply("station",
+                ["in_port", 9;"eth_src",48],
+                [["n",9], "next_tbl" %<-% Var("ov",2)],
+                "next_tbl" %<-% mkVInt(0,2)) ;
+        mkOrdered [
+            Var("next_tbl",2) %=% mkVInt(1,2), mkApply("l3",
+                                                       ["ip_dst",32],
+                                                       [["of",9], "out" %<-% Var("of",9) ],
+                                                       Skip);
+            Var("next_tbl",2) %=% mkVInt(2,2), mkApply("l2",
+                                                       ["eth_dst",32],
+                                                       [["o2",9], "out" %<-% Var("o2",9) ],
+                                                       Skip);
+
+            Var("next_tbl",2) %=% mkVInt(3,2), mkApply("l4",
+                                                        ["tcp_dst",32],
+                                                        [["o4",9], "out" %<-% Var("o4",9)],
+                                                        Skip);
+            True , Skip
+          ];
         mkApply("acl",
                 ["in_port", 9;"eth_src",48; "eth_dst",48; "eth_typ",16; "ip_src",32; "ip_dst",32; "proto",8; "tcp_sport", 16; "tcp_dport", 16],
                 [["oa",9], "out" %<-% Var("oa", 9)],
