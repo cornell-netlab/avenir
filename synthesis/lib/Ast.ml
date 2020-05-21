@@ -527,7 +527,7 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
     let modifier = (string_of_select_typ styp) in
     repeat "\t" depth ^
       "if " ^ modifier ^
-    List.fold_left es ~init:"" ~f:(fun str (cond, act)->
+    List.fold es ~init:"" ~f:(fun str (cond, act)->
         str ^ "\n" ^
         repeat "\t" (depth + 1)
         ^ string_of_test cond  ^ " ->\n " ^ string_of_cmd ~depth:(depth+2) act ^ " []"
@@ -536,12 +536,15 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
   | Apply t ->
      repeat "\t" depth ^
        "apply (" ^ t.name ^ ",("
-      ^ List.fold_left t.keys ~init:""
+      ^ List.fold t.keys ~init:""
           ~f:(fun str (k,sz) ->
-            str ^ "," ^ k ^ "#" ^ string_of_int sz) ^ ")"
-      ^ "," ^ List.fold_left t.actions ~init:""
-                ~f:(fun str a ->
-                  str ^ " | { fun (SOME ACTION DATA) -> " ^ string_of_cmd (snd a) ^ "}")
+            str ^ k ^ "#" ^ string_of_int sz ^ ",") ^ ")"
+      ^ "," ^ List.foldi t.actions ~init:""
+                ~f:(fun i str a ->
+                  str ^ " | { fun ("^
+                    List.fold (List.nth_exn t.actions i |> fst) ~init:""
+                    ~f:(fun acc (x,sz) -> Printf.sprintf "%s%s#%d," acc x sz)
+                  ^") -> " ^ string_of_cmd (snd a) ^ "}")
       ^ ", {" ^ string_of_cmd t.default ^ "})"
                                        
             
