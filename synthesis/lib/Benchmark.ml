@@ -697,7 +697,7 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
   measure params None problem (log_edits :: onos_to_edits data_file "routing_v6")
 
 and zero_init fvs cmd =
-  let vs = variables cmd in
+  let vs = variables cmd |> List.dedup_and_sort ~compare:(fun (v1, _) (v2, _) -> String.compare v1 v2) in
   let zi = List.filter vs ~f:(fun v -> List.mem fvs v (=) |> not) in
   List.map zi ~f:(fun (v, w) ->  mkAssn v  (mkVInt(0, w)))
   |> List.fold ~init:cmd ~f:(fun c1 c2 -> c2 %:% c1)
