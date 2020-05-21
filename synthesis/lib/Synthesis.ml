@@ -242,6 +242,7 @@ let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref)
   ProfData.update_time !data.check_valid_time cv_st;
   ProfData.update_time_val !data.eq_time z3time;
   !data.tree_sizes :=  num_nodes_in_test condition :: !(!data.tree_sizes);
+  ProfData.incr !data.eq_num_z3_calls;
   let st = Time.now () in
   let pkt_opt = match model_opt with
     | None  -> if params.debug then Printf.printf "++++++++++valid+++++++++++++\n%!";
@@ -569,7 +570,7 @@ let rec minimize_edits params data problem certain uncertain =
   match uncertain with
   | [] -> certain
   | e::es ->
-     Printf.printf "\t%s" (Edit.to_string e);
+     (* Printf.printf "\t%s" (Edit.to_string e); *)
      match implements params data (Problem.replace_phys_edits problem (certain @ es)) with
      | `Yes -> minimize_edits params data problem certain es
      | `NoAndCE _ -> minimize_edits params data problem (certain@[e]) es
@@ -578,13 +579,13 @@ let rec minimize_edits params data problem certain uncertain =
 
 
 let minimize_solution params data problem =
-  let es = Printf.printf "\tminimizing\n";
+  let es = (* Printf.printf "\tminimizing\n"; *)
            Problem.phys_edits problem
            |> minimize_edits params data problem [] in
-  List.iter es
-    ~f:(fun e ->
-      Printf.printf "\t%s\n%!" (Edit.to_string e)
-    );
+  (* List.iter es
+   *   ~f:(fun e ->
+   *     Printf.printf "\t%s\n%!" (Edit.to_string e)
+   *   ); *)
   Problem.replace_phys_edits problem es
 
 
@@ -604,7 +605,8 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
     | `Yes ->
        (* (\*if params.debug then*\) Printf.printf "\tNo CEX to be found -- programs are equiv\n%!"; *)
        let problem = if params.minimize then minimize_solution params data problem else problem in
-       edit_cache := EAbstr.update !edit_cache (Problem.log_edits problem |> List.hd_exn) (Problem.phys_edits problem);
+       if not params.ecache then
+         edit_cache := EAbstr.update !edit_cache (Problem.log_edits problem |> List.hd_exn) (Problem.phys_edits problem);
        if params.interactive then begin
            Printf.printf "%s\n%!" (Problem.phys_gcl_program params problem |> string_of_cmd);
            ignore(Stdio.In_channel.(input_char stdin) : char option)

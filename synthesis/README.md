@@ -28,7 +28,7 @@ dune external-lib-deps --missing @all
   Currently, running the below command will build the project:
 
 ```
-opam pin add z3 https://github.com/priyasrikumar/ocaml-z3.git
+opam pin add z3 https://github.com/priyasrikumar/ocaml-z3.git#no-successes
 ```
 
 + If you get `libz3.so` error try addding the Z3 library to  your path. In Mac, this can be achieved by setting the DYLD_LIBRARY_PATH variable:

@@ -16,10 +16,37 @@ let well_formed (hint : t) : bool =
   | _     , None  , Some _ -> false (*Action Data without id is bad*)
 
 
+
+let subset_list ks vs =
+  let open List in
+  for_all ks ~f:(fun k -> exists vs ~f:((=) k))
+
 let get_poss_injections keys phys e : string list =
-  get_tables_vars ~keys_only:true phys
-  |> List.filter_map
-       ~f:(fun (t,vars) -> if nonempty_inter keys vars then Some t else None)
+  match e with
+  | Edit.Del _ -> []
+  | Edit.Add (_, (matches, _,_)) ->
+     let relevant_keys =
+       List.fold2_exn keys matches ~init:[]
+         ~f:(fun acc k m ->
+           match m with
+           | Exact _ -> acc @ [k]
+           | Mask (v,m) ->
+              if Bigint.(get_int m = zero)
+              then acc
+              else acc @ [k]
+           | Between (Int(lo,sz),Int(hi,_)) ->
+              if Bigint.(lo = zero) && Bigint.(hi = pow (of_int 2) (of_int sz) - one)
+              then acc
+              else acc @ [k]
+         )
+     in
+     get_tables_vars ~keys_only:true phys
+     |> List.filter_map
+          ~f:(fun (t,vars) ->
+            if List.is_empty relevant_keys && keys = vars
+               || subset_list relevant_keys vars
+            then Some t
+            else None)
 
 
 let make edit table (log_keys, log_acts, log_def) (phys_keys, phys_acts, phys_def) =
@@ -120,16 +147,16 @@ let tbl_hole encode_tag (keys: (string * size) list) tbl row_hole act_hole i act
                   Hole.match_holes `Exact tbl x sz
                 else Hole.match_holes encode_tag tbl x sz) in
   let matches_holes =
-    if List.exists ["acl";"vlan"] ~f:(fun x -> String.is_substring tbl ~substring:x)
+(*     if List.exists ["acl";"vlan"] ~f:(fun x -> String.is_substring tbl ~substring:x)
     then False
-    else
+    else *)
     match List.find hs ~f:(fun h -> Stdlib.(h.table = tbl)) with
     | Some h (*when String.(tbl <> "punt")*) ->
        begin match encode_match keys h encode_tag with
        | None ->  default_match_holes keys
        | Some phi -> phi
        end
-    (*| None when List.length hs > 0 -> False *)
+    | None when List.length hs > 0 -> False
     | _ -> default_match_holes keys
  in
   matches_holes

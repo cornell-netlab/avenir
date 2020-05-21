@@ -158,7 +158,7 @@ let rec string_of_test t =
   | Impl (assum, conseq) -> "(" ^ string_of_test assum ^ " ==> " ^ string_of_test conseq ^ ")\n"
   | Iff (left, right) -> "(" ^ string_of_test left ^ " <==> " ^ string_of_test right ^ ")\n"
   | Or (left, right) -> "(" ^ string_of_test left ^ " || " ^ string_of_test right ^ ")"
-  | And (left, right) -> "(" ^ string_of_test left ^ "&&" ^ string_of_test right ^ ")"
+  | And (left, right) -> "(" ^ string_of_test left ^ " && " ^ string_of_test right ^ ")"
   | Neg (Le(left, right)) ->
      Printf.sprintf "(%s < %s)" (string_of_expr right) (string_of_expr left)
   | Neg(Eq(left,right)) ->
@@ -521,6 +521,7 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
     repeat "\t" depth ^
     "assume (" ^ string_of_test t ^ ")"
   | Assign (field, expr) ->
+    repeat "\t" depth ^
     field ^ " := " ^ string_of_expr expr
   | Select (styp, es) ->
     let modifier = (string_of_select_typ styp) in
@@ -529,7 +530,7 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
     List.fold_left es ~init:"" ~f:(fun str (cond, act)->
         str ^ "\n" ^
         repeat "\t" (depth + 1)
-        ^ string_of_test cond  ^ " -> " ^ string_of_cmd ~depth:(depth+2) act ^ " []"
+        ^ string_of_test cond  ^ " ->\n " ^ string_of_cmd ~depth:(depth+2) act ^ " []"
       )
     ^ "\n" ^ repeat "\t" depth ^ "fi"
   | Apply t ->

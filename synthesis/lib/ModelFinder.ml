@@ -38,9 +38,9 @@ let rec make_schedule ({injection;hints;paths;only_holes;mask} as opt) =
      * else if hints || injection then
      *   make_schedule {opt with injection = false; hints = false}
      * else *)
-    if injection || hints || paths || only_holes then
-      [{opt with injection=false;hints=false;paths=false;only_holes=false}]
-    else
+    (* if injection || hints || paths || only_holes then
+     *   [{opt with injection=false;hints=false;paths=false;only_holes=false}]
+     * else *)
       []
 
 let make_searcher (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : t =
@@ -125,7 +125,7 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                           (* |> refine_counter params problem in *)
   (* let () = Printf.printf "in : %s \n out: %s\n%!" (string_of_map in_pkt) (string_of_map out_pkt) in *)
   let st = Time.now () in
-  let deletions = compute_deletions in_pkt problem in
+  let deletions = [] in (*compute_deletions in_pkt problem in*)
   let hints = if opts.hints then
                 let open Problem in
                 Hint.construct (log problem) (phys problem) (log_edits problem |> List.hd_exn)
@@ -213,11 +213,15 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                   acc %&% ((Hole(h, sz) %=% Value(Int(allfs, sz))) %+%
                              (if opts.nlp && (List.exists ["ttl";"limit";"count"]
                                           ~f:(fun s -> String.is_substring h ~substring:s))
-                             then True
+                             then False
                              else
-                               ((Hole(h,sz) %=% mkVInt(0,sz))
-                                %&% (Hole(String.chop_suffix_exn h ~suffix:"_mask",sz) %=% mkVInt(0,sz)))))
+                               let m = ((Hole(h,sz) %=% mkVInt(0,sz))
+                                        %&% (Hole(String.chop_suffix_exn h ~suffix:"_mask",sz) %=% mkVInt(0,sz))) in
+                               (* Printf.printf "\tmask restr %s \n%!" (string_of_test m); *)
+                               m
+                          ))
                 else
+
                   (* if List.exists (Problem.fvs problem) ~f:(fun (v,_) ->  String.is_substring h ~substring:v || not (String.is_substring h ~substring:"?"))
                    * then *)
                   (* let is_mask_val =
@@ -272,15 +276,21 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                       else if opts.nlp && is_addr && not(String.is_substring h ~substring:"_mask")
                       then let t = (Hole(h,sz) %<>% mkVInt(0,sz)) %=>%
                                      (Hole(h ^ "_mask",sz) %=% mkVInt(0,sz)) in
-                           Printf.printf "asserting %s \n" (sexp_string_of_test t);
+                           (* Printf.printf "asserting %s \n" (sexp_string_of_test t); *)
                            t
                       else True)
+                    (* %&% ((Hole.add_row_hole "validation" %=% mkVInt(1,1)) %=>% ((Hole.add_row_hole "fwd" %=% mkVInt(0,1))
+                     *                                                             %&% (Hole.add_row_hole "acl" %=% mkVInt(0,1))))
+                     * %&% ((Hole.add_row_hole "fwd" %=% mkVInt(1,1)) %=>% ((Hole.add_row_hole "validation" %=% mkVInt(0,1))
+                     *                                                      %&% (Hole.add_row_hole "acl" %=% mkVInt(0,1))))
+                     * %&% ((Hole.add_row_hole "acl" %=% mkVInt(1,1)) %=>% ((Hole.add_row_hole "fwd" %=% mkVInt(0,1))
+                     *                                                      %&% (Hole.add_row_hole "acl" %=% mkVInt(0,1)))) *)
                     %&% acc %&% restr
                   (* else
                    *   acc *)
               )
           in
-          if params.debug then Printf.printf "active domain restr \n %s\n%!" (string_of_test active_domain_restrict);
+          (* if params.debug then Printf.printf "active domain restr \n %s\n%!" (string_of_test active_domain_restrict); *)
           let out_test =
             (if opts.annot then
                ((Hole("?AddRowTonexthop",1) %=% Hole("?AddRowToipv6_fib",1))
@@ -382,7 +392,9 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
   | (test,hints)::search_space, schedule ->
      (* Printf.printf "Check sat\n%!"; *)
      (* if params.debug then Printf.printf "MODELSPACE:\n%s\nTEST\n%s\n%!" (Problem.model_space problem |> string_of_test) (test |> string_of_test); *)
-     let model_opt, _ = check_sat params (Problem.model_space problem %&% test) in
+     let model_opt, dur = check_sat params (Problem.model_space problem %&% test) in
+     ProfData.incr !data.model_z3_calls;
+     ProfData.update_time_val !data.model_z3_time dur;
      (* Printf.printf "Sat Checked\n%!\n"; *)
      match model_opt with
      | Some model ->

@@ -7,6 +7,7 @@ module Synthesis = Motley.Synthesis
 module Encode = Motley.Encode
 module Manip = Motley.Manip
 module Benchmark = Motley.Benchmark
+module Classbenching = Motley.Classbenching
 module CheckAndSet = Motley.CheckAndSet
 module Parameters = Motley.Parameters
 module ProfData = Motley.ProfData
@@ -592,24 +593,109 @@ let wp_cmd : Command.t =
     WeakestPrecondition.spec
     WeakestPrecondition.run
 
-
-module OFBench = struct
+module Classbench = struct
   let spec = Command.Spec.(
       empty
-      +> anon ("file" %: string)
-      +> flag "-w" no_arg ~doc:"do widening"
-      +> flag "-gas" (optional int) ~doc:"how many cegis iterations?")
+      +> anon ("EXPNAME" %: string)
+      +> flag "-data" (required string) ~doc:"path to classbench data"
+      +> flag "-DEBUG" no_arg ~doc:"debug"
+      +> flag "-i" no_arg ~doc:"interactive mode"
+      +> flag "-w" no_arg ~doc:"Do widening"
+      +> flag "-s" no_arg ~doc:"Do slicing optimization"
+      +> flag "-e" (required int) ~doc:"maximum number of physical edits"
+      +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
+      +> flag "-m" no_arg ~doc:"Prune rows with no holes"
+      +> flag "--inj" no_arg ~doc:"Try injection optimization"
+      +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
+      +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
+      +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
+      +> flag "--shortening" no_arg ~doc:"shorten queries"
+      +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
+      +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
+      +> flag "--hints" no_arg ~doc:"Use syntactic hints"
+      +> flag "--holes" no_arg ~doc:"Holes only"
+      +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
+      +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
+      +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
+      +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
+      +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
+      +> flag "--timeout" (optional float) ~doc:"Optional timeout in seconds"
+             )
+  let run
+        expname
+        data
+        debug
+        interactive
+        widening
+        do_slice
+        edits_depth
+        search_width
+        monotonic
+        injection
+        fastcx
+        vcache
+        ecache
+        shortening
+        above
+        minimize
+        hints
+        only_holes
+        allow_annotations
+        nlp
+        unique_edits
+        domain
+        restrict_mask
+        timeout
+        () =
+    let params =
+      Parameters.({
+                     widening;
+                     do_slice;
+                     edits_depth;
+                     search_width;
+                     debug;
+                     monotonic;
+                     interactive;
+                     injection;
+                     fastcx;
+                     vcache;
+                     ecache;
+                     shortening;
+                     above;
+                     minimize;
+                     hints;
+                     only_holes;
+                     allow_annotations;
+                     nlp;
+                     unique_edits;
+                     domain;
+                     restrict_mask;
+                     timeout = Option.(timeout >>= fun s -> Some(Time.now(), (Time.Span.of_sec s)))
+      })
+    in
+    if String.(uppercase expname = "IPONLY") then
+      ignore(Benchmark.rep params data : Tables.Edit.t list option)
+    else if String.(uppercase expname = "TCPIP" || uppercase expname = "IPTCP") then
+      ignore(Benchmark.rep_middle params data : Tables.Edit.t list option)
+    else if String.(uppercase expname = "FULL"
+                    || uppercase expname = "ETHTCPIP"
+                    || uppercase expname = "ETHIPTCP"
+                    || uppercase expname = "OF") then
+      ignore(Benchmark.rep_of params data : Tables.Edit.t list option)
+    else if String.(uppercase expname = "ALL") then begin
+        ignore(Benchmark.rep params data : Tables.Edit.t list option);
+        ignore(Benchmark.rep_middle params data : Tables.Edit.t list option)
+      end
+    else failwith @@ Printf.sprintf "Unrecognized experiment parameter %s" expname
 
-  let run classbench_file widening gas () =
-    ignore(Benchmark.of_to_pipe1 widening gas classbench_file () : Tables.Edit.t list option)
+
 end
 
-
-let of_bench : Command.t =
+let classbench_cmd : Command.t =
   Command.basic_spec
-    ~summary:"benchmarks against of tables"
-    OFBench.spec
-    OFBench.run
+    ~summary:"benchmarks generated insertions"
+    Classbench.spec
+    Classbench.run
 
 module Meta = struct
   let spec = Command.Spec.(empty)
@@ -724,6 +810,7 @@ let main : Command.t =
     ; ("runtest", runtest_cmd)
     ; ("bench", benchmark)
     ; ("square", sqbench)
+    ; ("classbench", classbench_cmd)
     ; ("onf", onf)
     ; ("eq", equality)
     ; ("ex", running_example)
