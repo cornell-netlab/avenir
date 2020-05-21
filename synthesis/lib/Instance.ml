@@ -92,15 +92,20 @@ let rec apply ?no_miss:(no_miss = false)
           List.foldi rows ~init:[]
             ~f:(fun i acc (matches, data, action) ->
               let prev_tst = False in
-              let tst = Match.list_to_test t.keys matches
-                        %&% match tag with
-                            | WithHoles (ds,_) ->
-                               (* Hole.delete_hole i t.name %=% mkVInt(0,1) *)
-                               let i = List.length rows - i - 1 in
-                               if List.exists ds ~f:((=) (t.name, i))
-                               then (Hole.delete_hole i t.name %=% mkVInt(0,1))
-                               else True
-                            | _ -> True in
+              let tst =
+                (* Printf.printf "Trying to encode:%s \n as             :%s\n"
+                 *   (List.fold t.keys ~init:"" ~f:(fun acc (k,_) -> Printf.sprintf "%s %s" acc k))
+                 *   (List.fold matches ~init:"" ~f:(fun acc m -> Printf.sprintf "%s %s" acc (Match.to_string m)))
+                 *   ; *)
+                Match.list_to_test t.keys matches
+                %&% match tag with
+                    | WithHoles (ds,_) ->
+                       (* Hole.delete_hole i t.name %=% mkVInt(0,1) *)
+                       let i = List.length rows - i - 1 in
+                       if List.exists ds ~f:((=) (t.name, i))
+                       then (Hole.delete_hole i t.name %=% mkVInt(0,1))
+                       else True
+                    | _ -> True in
               if action >= List.length t.actions then
                 acc
               else begin

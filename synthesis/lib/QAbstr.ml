@@ -139,7 +139,7 @@ let cache_check params ({seen;generals} : t) test =
      | Some _ ->
         ({seen; generals}, `HitAbs)
      | None ->
-        Printf.printf "%s\n%!" (string_of_map m);
+        (* Printf.printf "%s\n%!" (string_of_map m); *)
         ({seen; generals}, `AddAbs q)
 
 

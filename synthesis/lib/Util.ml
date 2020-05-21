@@ -75,7 +75,11 @@ let liftL2 f al bl =
   return (f a b)
 
 let mkCons x xs = x :: xs
-          
+
+let rec repeat i a =
+  if i <= 0 then []
+  else a :: repeat (i - 1) a
+
 let rec range_ex lo hi =
   if lo = hi then []
   else

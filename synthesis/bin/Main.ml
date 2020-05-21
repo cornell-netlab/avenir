@@ -7,6 +7,7 @@ module Synthesis = Motley.Synthesis
 module Encode = Motley.Encode
 module Manip = Motley.Manip
 module Benchmark = Motley.Benchmark
+module Classbenching = Motley.Classbenching
 module CheckAndSet = Motley.CheckAndSet
 module Parameters = Motley.Parameters
 module ProfData = Motley.ProfData
@@ -79,8 +80,8 @@ module Solver = struct
         fvs
         data
         debug
-        print_res
         interactive
+        print_res
         measure
         onos
         widening
@@ -123,7 +124,7 @@ module Solver = struct
                               unique_edits;
                               domain;
                               restrict_mask;
-
+                              timeout = None
                  }) in
     let log = Benchmark.parse_file logical in
     let phys = Benchmark. parse_file real in
@@ -137,14 +138,16 @@ module Solver = struct
     if measure then
       let open Motley.Instance in
       let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits:[] ~fvs ~phys_drop_spec () in
-      let soln = Benchmark.measure params None problem log_edits in
-      (* if print_res then *)
-      Printf.printf "EDITS:\n%!";
-      List.iter soln ~f:(fun e -> Printf.printf "%s\n%!" (Tables.Edit.to_string e))
-      (* else () *)
+      match Benchmark.measure params None problem log_edits with
+      |  None -> Printf.printf "No solution could be found \n%!"
+      | Some soln when print_res ->
+         Printf.printf "EDITS:\n%!";
+         List.iter soln ~f:(fun e -> Printf.printf "%s\n%!" (Tables.Edit.to_string e))
+      | _ -> ()
     else
       let log_edits = List.join log_edits in
       let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits ~fvs ~phys_drop_spec () in
+      Printf.printf "PROBLEM: %s \n" (Problem.to_string params problem);
       match Synthesis.cegis_math_sequence params (ProfData.zero ()) problem with
       | None -> failwith "failed"
       | Some (solution, phys_edits) ->
@@ -261,6 +264,7 @@ module RunTest = struct
                               unique_edits;
                               domain;
                               restrict_mask;
+                              timeout = None;
                            }) in
               let problem = Problem.make ~log ~phys ~log_edits
                               ~log_inst:Instance.empty
@@ -369,10 +373,11 @@ module Bench = struct
           nlp;
           unique_edits;
           domain;
-          restrict_mask
+          restrict_mask;
+          timeout = None;
         })
     in
-    ignore(Benchmark.reorder_benchmark varsize num_tables max_inserts params : Tables.Edit.t list)
+    ignore(Benchmark.reorder_benchmark varsize num_tables max_inserts params : Tables.Edit.t list option)
 end
 
 
@@ -454,14 +459,18 @@ module ONF = struct
           nlp;
           unique_edits;
           domain;
-          restrict_mask})
+          restrict_mask;
+          timeout = None})
               data
     in
-    if print then
-      List.iter res ~f:(fun edit ->
-          Tables.Edit.to_string edit
-          |> Printf.printf "%s\n%!"
-        )
+    match res with
+    | None -> Printf.printf "no example could be found\n"
+    | Some r when print ->
+       List.iter r ~f:(fun edit ->
+           Tables.Edit.to_string edit
+           |> Printf.printf "%s\n%!"
+         )
+    | _ -> ()
 end
 
 module ONFReal = struct
@@ -788,24 +797,109 @@ let wp_cmd : Command.t =
     WeakestPrecondition.spec
     WeakestPrecondition.run
 
-
-module OFBench = struct
+module Classbench = struct
   let spec = Command.Spec.(
       empty
-      +> anon ("file" %: string)
-      +> flag "-w" no_arg ~doc:"do widening"
-      +> flag "-gas" (optional int) ~doc:"how many cegis iterations?")
+      +> anon ("EXPNAME" %: string)
+      +> flag "-data" (required string) ~doc:"path to classbench data"
+      +> flag "-DEBUG" no_arg ~doc:"debug"
+      +> flag "-i" no_arg ~doc:"interactive mode"
+      +> flag "-w" no_arg ~doc:"Do widening"
+      +> flag "-s" no_arg ~doc:"Do slicing optimization"
+      +> flag "-e" (required int) ~doc:"maximum number of physical edits"
+      +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
+      +> flag "-m" no_arg ~doc:"Prune rows with no holes"
+      +> flag "--inj" no_arg ~doc:"Try injection optimization"
+      +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
+      +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
+      +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
+      +> flag "--shortening" no_arg ~doc:"shorten queries"
+      +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
+      +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
+      +> flag "--hints" no_arg ~doc:"Use syntactic hints"
+      +> flag "--holes" no_arg ~doc:"Holes only"
+      +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
+      +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
+      +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
+      +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
+      +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
+      +> flag "--timeout" (optional float) ~doc:"Optional timeout in seconds"
+             )
+  let run
+        expname
+        data
+        debug
+        interactive
+        widening
+        do_slice
+        edits_depth
+        search_width
+        monotonic
+        injection
+        fastcx
+        vcache
+        ecache
+        shortening
+        above
+        minimize
+        hints
+        only_holes
+        allow_annotations
+        nlp
+        unique_edits
+        domain
+        restrict_mask
+        timeout
+        () =
+    let params =
+      Parameters.({
+                     widening;
+                     do_slice;
+                     edits_depth;
+                     search_width;
+                     debug;
+                     monotonic;
+                     interactive;
+                     injection;
+                     fastcx;
+                     vcache;
+                     ecache;
+                     shortening;
+                     above;
+                     minimize;
+                     hints;
+                     only_holes;
+                     allow_annotations;
+                     nlp;
+                     unique_edits;
+                     domain;
+                     restrict_mask;
+                     timeout = Option.(timeout >>= fun s -> Some(Time.now(), (Time.Span.of_sec s)))
+      })
+    in
+    if String.(uppercase expname = "IPONLY") then
+      ignore(Benchmark.rep params data : Tables.Edit.t list option)
+    else if String.(uppercase expname = "TCPIP" || uppercase expname = "IPTCP") then
+      ignore(Benchmark.rep_middle params data : Tables.Edit.t list option)
+    else if String.(uppercase expname = "FULL"
+                    || uppercase expname = "ETHTCPIP"
+                    || uppercase expname = "ETHIPTCP"
+                    || uppercase expname = "OF") then
+      ignore(Benchmark.rep_of params data : Tables.Edit.t list option)
+    else if String.(uppercase expname = "ALL") then begin
+        ignore(Benchmark.rep params data : Tables.Edit.t list option);
+        ignore(Benchmark.rep_middle params data : Tables.Edit.t list option)
+      end
+    else failwith @@ Printf.sprintf "Unrecognized experiment parameter %s" expname
 
-  let run classbench_file widening gas () =
-    ignore(Benchmark.of_to_pipe1 widening gas classbench_file () : Tables.Edit.t list)
+
 end
 
-
-let of_bench : Command.t =
+let classbench_cmd : Command.t =
   Command.basic_spec
-    ~summary:"benchmarks against of tables"
-    OFBench.spec
-    OFBench.run
+    ~summary:"benchmarks generated insertions"
+    Classbench.spec
+    Classbench.run
 
 module Meta = struct
   let spec = Command.Spec.(empty)
@@ -818,6 +912,100 @@ let meta : Command.t =
     Meta.spec
     Meta.run
 
+module SqBench = struct
+  let spec = Command.Spec.(
+      empty
+      +> anon ("SIZE" %: int)
+      +> anon ("NTABLES" %: int)
+      +> anon ("NEDITS" %: int)
+      +> flag "-DEBUG" no_arg ~doc:"debug"
+      +> flag "-i" no_arg ~doc:"interactive mode"
+      +> flag "-w" no_arg ~doc:"Do widening"
+      +> flag "-s" no_arg ~doc:"Do slicing optimization"
+      +> flag "-e" (required int) ~doc:"maximum number of physical edits"
+      +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
+      +> flag "-m" no_arg ~doc:"Prune rows with no holes"
+      +> flag "--inj" no_arg ~doc:"Try injection optimization"
+      +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
+      +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
+      +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
+      +> flag "--shortening" no_arg ~doc:"shorten queries"
+      +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
+      +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
+      +> flag "--hints" no_arg ~doc:"Use syntactic hints"
+      +> flag "--holes" no_arg ~doc:"Holes only"
+      +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
+      +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
+      +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
+      +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
+      +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
+      +> flag "--timeout" (optional float) ~doc:"Optional timeout in seconds"
+             )
+  let run
+        sz
+        ntbls
+        nedits
+        debug
+        interactive
+        widening
+        do_slice
+        edits_depth
+        search_width
+        monotonic
+        injection
+        fastcx
+        vcache
+        ecache
+        shortening
+        above
+        minimize
+        hints
+        only_holes
+        allow_annotations
+        nlp
+        unique_edits
+        domain
+        restrict_mask
+        timeout
+        ()
+    =    let params =
+      Parameters.(
+        {
+          widening;
+          do_slice;
+          edits_depth;
+          search_width;
+          debug;
+          monotonic;
+          interactive;
+          injection;
+          fastcx;
+          vcache;
+          ecache;
+          shortening;
+          above;
+          minimize;
+          hints;
+          only_holes;
+          allow_annotations;
+          nlp;
+          unique_edits;
+          domain;
+          restrict_mask;
+          timeout = Option.(timeout >>= fun s -> Some(Time.now(), (Time.Span.of_sec s)))
+        })
+    in
+    Benchmark.square_bench params sz ntbls nedits
+
+end
+
+let sqbench : Command.t =
+  Command.basic_spec
+    ~summary:"run square benchmark"
+    SqBench.spec
+    SqBench.run
+
+
 let main : Command.t =
   Command.group
     ~summary:"Invokes the specified Motley Command"
@@ -825,6 +1013,8 @@ let main : Command.t =
     ; ("encode-p4", encode_cmd)
     ; ("runtest", runtest_cmd)
     ; ("bench", benchmark)
+    ; ("square", sqbench)
+    ; ("classbench", classbench_cmd)
     ; ("onf", onf)
     ; ("onf-real", onf_real)
     ; ("eq", equality)

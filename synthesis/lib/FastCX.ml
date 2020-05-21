@@ -92,8 +92,8 @@ let unreachable params (problem : Problem.t) (test : Ast.test) =
   let rec loop i phi =
     let mk_query t = holify_test (List.map ~f:fst @@ free_vars_of_test t) t in
     let query = mk_query @@ test %&% phi in
-    (* if params.debug then *)
-    Printf.printf "FAST CX QUERY %d : \n %s\n%!" (n - i) (string_of_test query);
+    if params.debug then
+      Printf.printf "FAST CX QUERY %d : \n %s\n%!" (n - i) (string_of_test query);
     match attempt_model query with
     | Some in_pkt -> makecexloop params problem i in_pkt phi
     | None ->
@@ -118,7 +118,7 @@ let unreachable params (problem : Problem.t) (test : Ast.test) =
 
 let get_cex ?neg:(neg = True) params data (problem : Problem.t) =
   let open Problem in
-  Printf.printf "\t   a fast Cex\n%!";
+  if params.debug then Printf.printf "\t   a fast Cex\n%!";
   let e = log_edits problem |> List.hd_exn in
   (neg %&% hits_pred params data (log problem) (log_inst problem) (log_edits problem) e)
   |> unreachable params problem

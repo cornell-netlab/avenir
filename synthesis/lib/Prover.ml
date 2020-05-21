@@ -199,14 +199,14 @@ let check_valid_cached (params : Parameters.t) (test : Ast.test) =
        (* (Time.(diff (now()) st |> Span.to_ms)); *)
      (None, Time.(diff (now ()) st))
   | `Miss test | `Hit test ->
-     Printf.printf "\tCouldn't abstract a thing from %d previous tests!\n" (List.length !cache.seen);
+     (* Printf.printf "\tCouldn't abstract a thing from %d previous tests!\n" (List.length !cache.seen); *)
      let dur' = Time.(diff (now()) st) in
      let (m , dur) = check_valid_inner params test in
      if Option.is_none m then
        cache := QAbstr.add_test test !cache;
      (m, Time.Span.(dur + dur'))
   | `AddAbs q ->
-     Printf.printf "\tChecking abstraction from %d previous tests and %d abstractions!\n%!" (List.length !cache.seen) (List.length !cache.generals);
+     (* Printf.printf "\tChecking abstraction from %d previous tests and %d abstractions!\n%!" (List.length !cache.seen) (List.length !cache.generals); *)
      let dur' = Time.(diff (now()) st) in
      let (m , dur) = if List.length !cache.seen > 0 then
                        check_valid_inner {params with debug = true} q
