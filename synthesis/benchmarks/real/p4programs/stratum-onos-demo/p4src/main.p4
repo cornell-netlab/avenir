@@ -103,7 +103,7 @@ header tcp_t {
     bit<32> seq_no;
     bit<32> ack_no;
     bit<4>  data_offset;
-    bit<3>  res;
+    bit<4>  res2;
     bit<8>  flags;
     bit<16> window;
     bit<16> checksum;
@@ -433,7 +433,7 @@ control l3_fwd(inout parsed_packet_t hdr,
             local_metadata.vrf_id     : exact;
             hdr.ipv6.dst_addr    : lpm;
             hdr.ipv6.src_addr    : selector;
-            //hdr.ipv4_base.protocol    : selector;
+            hdr.ipv6.next_header    : selector;
             local_metadata.l4_src_port: selector;
             local_metadata.l4_dst_port: selector;
         }

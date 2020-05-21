@@ -692,7 +692,7 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
       ~log  ~phys ~fvs
       ~log_inst: StringMap.(set empty ~key:"ipv6" ~data:[])
       ~phys_inst:StringMap.(set empty ~key:"l3_fwd" ~data:[])
-      ~log_edits ()
+      ~log_edits:[] ()
   in
   measure params None problem (log_edits :: onos_to_edits data_file "routing_v6")
 

@@ -703,12 +703,24 @@ module EqualityReal = struct
       +> anon ("log_edits" %: string)
       +> anon ("phys_edits" %: string)
       +> anon ("fvs" %: string)
+      +> anon ("assume" %: string)
       +> flag "-DEBUG" no_arg ~doc:"Debugging messages" )
 
 
-  let run log phys log_incs phys_incs log_edits phys_edits fvs_fp debug () =
-    let log = Encode.encode_from_p4 log_incs log false in
+  let run log_p4 phys_p4  log_incs phys_incs log_edits phys_edits fvs_fp assume_fp debug () =
+    let fvs = Benchmark.parse_fvs fvs_fp in
+    let assume = Benchmark.parse_file assume_fp in
+
+    let print_fvs = printf "fvs = %s" (Sexp.to_string ([%sexp_of: (string * int) list] fvs)) in
+
+    let open Ast in
+    let log = (assume %:% Encode.encode_from_p4 log_incs log_p4 false) |> Benchmark.zero_init fvs in
+    let phys = (assume %:% Encode.encode_from_p4 phys_incs phys_p4 false) |> Benchmark.zero_init fvs in
+
+          
+    (* let log = Encode.encode_from_p4 log_incs log false in
     let phys = Encode.encode_from_p4 phys_incs phys false in
+    *)
     let log_edits = Runtime.parse log_edits in
     let phys_edits = Runtime.parse phys_edits in
     let params = Parameters.(
@@ -719,7 +731,7 @@ module EqualityReal = struct
     let data = ProfData.zero () in
     let log_inst = Instance.empty in
     let phys_inst = Instance.empty in
-    let fvs = Benchmark.parse_fvs fvs_fp in
+    (*let fvs = Benchmark.parse_fvs fvs_fp in *)
     let problem =
       Problem.make ~log ~phys ~fvs
         ~log_inst ~phys_inst
