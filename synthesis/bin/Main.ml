@@ -554,14 +554,18 @@ module ONFReal = struct
           nlp;
           unique_edits;
           domain;
-          restrict_mask})
+          restrict_mask;
+          timeout = None})
               data logical_p4 physical_p4 log_edits phys_edits fvs assume logical_inc physical_inc
     in
-    if print then
-      List.iter res ~f:(fun edit ->
-          Tables.Edit.to_string edit
-          |> Printf.printf "%s\n%!"
-        )
+    match res with
+    | None -> Printf.printf "no example could be found\n"
+    | Some r when print ->
+       List.iter r ~f:(fun edit ->
+           Tables.Edit.to_string edit
+           |> Printf.printf "%s\n%!"
+         )
+
 end
 
 (*
