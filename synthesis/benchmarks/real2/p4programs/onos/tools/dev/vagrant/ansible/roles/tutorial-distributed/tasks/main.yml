@@ -1,0 +1,19 @@
+---
+#
+# Adds distributed tutorial specific configurations
+#
+- name: Cloning byon app repo
+  git:
+    repo: "{{ tutorials.distributed.byon_app_repo_url }}"
+    dest: "/home/{{ tutorials.distributed.user }}/onos-byon"
+  # Check out master version
+  # version: "{{ tutorials.distributed.byon_app_version }}"
+
+- name: Setting byon app directory permissions
+  file:
+    path: "/home/{{ tutorials.distributed.user }}/onos-byon"
+    state: directory
+    mode: 0777
+    owner: "{{ tutorials.distributed.user }}"
+    group: "{{ tutorials.distributed.user }}"
+    recurse: yes

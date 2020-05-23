@@ -1,0 +1,78 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# Generates a catalog for publishing ONOS artifacts to a Maven repository.
+# -----------------------------------------------------------------------------
+
+libsOnly=false
+
+# Process any usage options
+while getopts lh? o; do
+    case "$o" in
+        l) libsOnly=true;;
+        *) echo "usage: $(basename $0) [-l]" >&2; exit 1;;
+    esac
+done
+let OPC=$OPTIND-1
+shift $OPC
+
+set -e -o pipefail
+
+CATALOG=${1:-/tmp/onos.catalog}
+
+rm -f $CATALOG
+
+# Required to avoid having Bazel re-build stuff unnecessarily
+export SHLVL=1
+
+function writeCatalog {
+    if ! bazel build $* --aspects tools/build/bazel/publish_catalog.bzl%publish_catalog >/tmp/onos.catalog.bazel.out 2>&1; then
+        echo Bazel build of catalog failed
+        cat /tmp/onos.catalog.bazel.out
+        exit 1
+    fi
+
+    egrep "^DEBUG: .*/publish_catalog.bzl:" /tmp/onos.catalog.bazel.out | cut -d\  -f3- >> $CATALOG
+}
+
+function jars {
+    egrep -v '(\#)' tools/build/publish-target-list
+}
+
+function testJars {
+    egrep -v '(\#)' tools/build/publish-test-target-list
+}
+
+function sources {
+    egrep -v '(\#|build/conf|dependencies)' tools/build/publish-target-list
+}
+
+echo "Cataloging jar files..."
+writeCatalog $(jars)
+
+echo "Cataloging test jars..."
+writeCatalog $(testJars)
+
+echo "Cataloging pom files..."
+writeCatalog $(jars | sed 's/$/-pom/')
+
+[ $libsOnly = true ] && exit 0
+
+echo "Cataloging source jars..."
+writeCatalog $(sources | sed 's/$/-sources/')
+echo "Cataloging javadoc jars..."
+writeCatalog $(sources | sed 's/$/-javadoc/')
+
+echo "Cataloging oar files..."
+writeCatalog $(bazel query 'kind("_onos_oar rule", //...)')
+
+# Extract the version from the Bazel variables file
+VERSION=$(egrep ONOS_VERSION tools/build/bazel/variables.bzl | cut -d\" -f2)
+
+# Inject the onos-dependencies pom, ONOS tar, admin tar and test tar.
+echo "Cataloging tar files..."
+cat >> $CATALOG <<EOF
+bazel-bin/onos.tar.gz	org/onosproject/onos-releases/$VERSION/onos-$VERSION.tar.gz
+bazel-bin/onos-admin.tar.gz	org/onosproject/onos-releases/$VERSION/onos-admin-$VERSION.tar.gz
+bazel-bin/onos-test.tar.gz	org/onosproject/onos-releases/$VERSION/onos-test-$VERSION.tar.gz
+bazel-bin/tools/build/conf/libonos-build-conf.jar	org/onosproject/onos-build-conf/$VERSION/onos-build-conf-$VERSION.jar
+EOF

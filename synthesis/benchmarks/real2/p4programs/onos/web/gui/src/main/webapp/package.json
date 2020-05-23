@@ -1,0 +1,22 @@
+{
+  "name": "onos-gui",
+  "version": "1.0.0",
+  "description": "The GUI interface for ONOS",
+  "main": "index.html",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "bs": "browser-sync start  --config bs-config.js",
+    "dev-server": "node --harmony_destructuring dev_server.js",
+    "start": "parallelshell \"npm run dev-server\" \"npm run bs\""
+  },
+  "author": "Open Networking Foundation",
+  "license": "Apache 2.0",
+  "devDependencies": {
+    "browser-sync": "^2.12.8",
+    "express": "^4.14.0",
+    "parallelshell": "^2.0.0",
+    "serve-static": "^1.10.2"
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "type": "object",
+  "title": "createIntent",
+  "required": [
+    "ingressPoint",
+    "egressPoint"
+  ],
+  "properties": {
+    "appId": {
+      "type": "string",
+      "example": "org.onosproject.optical-rest"
+    },
+    "ingressPoint": {
+      "type": "object",
+      "title": "ingressPoint",
+      "required": [
+        "device",
+        "port"
+      ],
+      "properties": {
+        "device": {
+          "type": "string",
+          "example": "netconf:10.10.255.14:2022"
+        },
+        "port": {
+          "type": "string",
+          "example": "10102"
+        }
+      }
+    },
+    "egressPoint": {
+      "type": "object",
+      "title": "egressPoint",
+      "required": [
+        "device",
+        "port"
+      ],
+      "properties": {
+        "device": {
+          "type": "string",
+          "example": "netconf:10.10.255.15:2022"
+        },
+        "port": {
+          "type": "string",
+          "example": "10102"
+        }
+      }
+    },
+    "bidirectional": {
+      "type": "boolean",
+      "example": false
+    },
+    "signal": {
+      "type": "object",
+      "title": "signal",
+      "required": [
+        "channelSpacing",
+        "gridType",
+        "spacingMultiplier",
+        "slotGranularity"
+      ],
+      "properties": {
+        "channelSpacing": {
+          "type": "string",
+          "enum": [
+            "CHL_100GHZ",
+            "CHL_50GHZ",
+            "CHL_25GHZ",
+            "CHL_12P5GHZ",
+            "CHL_6P25GHZ"
+          ],
+          "example": "CHL_50GHZ"
+        },
+        "gridType": {
+          "type": "string",
+          "enum": [
+            "DWDM",
+            "CWDM",
+            "FLEX"
+          ],
+          "example": "DWDM"
+        },
+        "spacingMultiplier": {
+          "type": "integer",
+          "format": "int32",
+          "example": 12
+        },
+        "slotGranularity": {
+          "type": "integer",
+          "format": "int32",
+          "example": 4
+        }
+      }
+    },
+    "suggestedPath": {
+      "type": "object",
+      "title": "suggestedPath",
+      "required": [
+        "links"
+      ],
+      "properties": {
+        "links": {
+          "type": "array",
+          "title": "suggestedPath",
+          "required": [
+            "link"
+          ],
+          "items": {
+            "type": "object",
+            "title": "link",
+            "required": [
+              "src",
+              "dst"
+            ],
+            "properties" : {
+              "src": {
+                "type": "string",
+                "example": "netconf:10.10.255.14:2022/10102"
+              },
+              "dst": {
+                "type": "string",
+                "example": "netconf:10.10.255.15:2022/10102"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

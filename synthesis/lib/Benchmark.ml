@@ -7,6 +7,20 @@ open Tables
 open Classbenching
 module IntMap = Map.Make(Int)
 
+let parse_file (filename : string) : Ast.cmd =
+  let cts = In_channel.read_all filename in
+  let lexbuf = Lexing.from_string cts in
+  Parser.main Lexer.tokens lexbuf
+
+let parse_fvs fp =
+  In_channel.read_lines fp
+  |> List.map ~f:(fun line ->
+         match String.lsplit2 line ~on:'#' with
+         | None -> Printf.sprintf "Malformed FV line %s" line
+                   |> failwith
+         | Some (x, sz) -> (x, int_of_string sz)
+       )
+
 
 let rec run_experiment iter seq (phys_seq : Edit.t list) (params : Parameters.t) hints (problem : Problem.t) =
   match seq with
@@ -233,9 +247,9 @@ let local_metadata_egress_spec_at_punt_match = "local_metadata.egress_spec_at_pu
 let local_metadata_egress_spec_at_punt_match = Var(local_metadata_egress_spec_at_punt_match, 9)
 
     
-let onos_to_edits filename =
+let onos_to_edits filename tbl_nm =
   let lines = In_channel.read_lines filename in
-  let make_edit tbl_nm data : Edit.t =
+  let make_edit data : Edit.t =
     match data with
     | [ts; "ADD"; _; ipv6; id] ->
        Add (tbl_nm, ([Match.mk_ipv6_match ipv6], [Int(Bigint.of_string id, 32)], 0))
@@ -249,11 +263,9 @@ let onos_to_edits filename =
   let edits =
     List.map lines ~f:(fun line ->
         [String.split line ~on:','
-         |> make_edit "ipv6"]
+         |> make_edit]
       ) in
-  edits
-
-                                                      
+  edits    
 
 let fwd_classifier_table =
   mkApply(
@@ -661,10 +673,77 @@ let basic_onf_ipv4 params filename =
       ~log_edits:[]
       ~phys_inst:StringMap.(set empty ~key:"l3_fwd" ~data:[]) ()
   in
-  measure params None problem (onos_to_edits filename)
+  measure params None problem (onos_to_edits filename "ipv6")
 
+let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_edits_file fvs_file assume_file log_inc phys_inc = 
+  let fvs = parse_fvs fvs_file in
+  let assume = parse_file assume_file in
 
+  let print_fvs = printf "fvs = %s" (Sexp.to_string ([%sexp_of: (string * int) list] fvs)) in
 
+  let log = (assume %:% Encode.encode_from_p4 log_inc log_p4 false) |> zero_init fvs in
+  let phys = (assume %:% Encode.encode_from_p4 phys_inc phys_p4 false) |> zero_init fvs in
+  
+  let open Match in
+  let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in
+  (* let fvs = parse_fvs fvs in *)
+  let log_edits = Runtime.parse log_edits_file in
+  let problem =
+    Problem.make
+      ~log  ~phys ~fvs
+      ~log_inst: StringMap.(set empty ~key:"ipv6" ~data:[])
+      ~phys_inst:StringMap.(set empty ~key:"l3_fwd" ~data:[])
+      ~log_edits:[] ()
+  in
+  measure params None problem (log_edits :: onos_to_edits data_file "routing_v6")
+
+and zero_init fvs cmd =
+  let vs = variables cmd |> List.dedup_and_sort ~compare:(fun (v1, _) (v2, _) -> String.compare v1 v2) in
+  let zi = List.filter vs ~f:(fun v -> List.mem fvs v (=) |> not) in
+  List.map zi ~f:(fun (v, w) ->  mkAssn v  (mkVInt(0, w)))
+  |> List.fold ~init:cmd ~f:(fun c1 c2 -> c2 %:% c1)
+
+and variables cmd =
+  match cmd with
+  | Skip -> []
+  | Assign(s, e) -> (s, get_width e) :: variables_expr e
+  | Seq (c1, c2) -> variables c1 @ variables c2
+  | While(_, c1) -> variables c1
+  | Select(_, tc) -> List.concat_map tc ~f:(fun (t, c) -> variables_test t @  variables c)
+  | Apply {keys} -> keys
+  | _ -> []
+
+and variables_expr e =
+  match e with
+  | Value _ -> []
+  | Var(n, w) -> [(n, w)]
+  | Hole _ -> []
+  | Plus(e1, e2) -> variables_expr e1 @ variables_expr e2
+  | Times(e1, e2) -> variables_expr e1 @ variables_expr e2
+  | Minus(e1, e2) -> variables_expr e1 @ variables_expr e2
+  | Mask(e1, e2) -> variables_expr e1 @ variables_expr e2
+
+and variables_test t =
+  match t with
+  | True
+  | False -> []
+  | Eq(e1, e2)
+  | Le(e1, e2) -> variables_expr e1 @ variables_expr e2
+  | And(t1, t2)
+  | Or(t1, t2)
+  | Impl(t1, t2)
+  | Iff(t1, t2) -> variables_test t1 @ variables_test t2
+  | Neg(t1) -> variables_test t1
+
+and get_width e =
+  match e with
+  | Value(Int(_, w)) -> w
+  | Var(_, w) -> w
+  | Hole(_, w) -> w
+  | Plus(e1, _) -> get_width e1
+  | Times(e1, _) -> get_width e1
+  | Minus(e1, _) -> get_width e1
+  | Mask(e1, _) -> get_width e1
 
 let parse_rule_to_update line =
   let columns = String.split line in columns 

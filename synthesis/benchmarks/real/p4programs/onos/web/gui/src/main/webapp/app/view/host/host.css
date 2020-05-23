@@ -1,0 +1,103 @@
+/*
+ * Copyright 2015-present Open Networking Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/*
+ ONOS GUI -- Host View -- CSS file
+ */
+
+#ov-host h2 {
+    display: inline-block;
+}
+
+#ov-host div.ctrl-btns {
+    width: 45px;
+}
+
+/* More in generic panel.css */
+
+#host-details-panel.floatpanel {
+    z-index: 0;
+}
+
+
+#host-details-panel .container {
+    padding: 8px 12px;
+}
+
+#host-details-panel .close-btn {
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    cursor: pointer;
+}
+
+#host-details-panel .host-icon {
+    display: inline-block;
+    padding: 0 6px 0 0;
+    vertical-align: middle;
+}
+
+#host-details-panel h2 {
+    display: inline-block;
+    margin: 8px 0;
+}
+
+
+#host-details-panel h2 input {
+    font-size: 0.90em;
+    width: 112%;
+}
+
+#host-details-panel .top-tables {
+    font-size: 10pt;
+}
+
+#host-details-panel .top div.left {
+    float: left;
+    padding: 0 18px 0 0;
+}
+#host-details-panel .top div.right {
+    display: inline-block;
+}
+
+#host-details-panel td.label {
+    font-weight: bold;
+    text-align: right;
+    padding-right: 6px;
+}
+
+#host-details-panel .actionBtns div {
+    padding: 12px 6px;
+}
+
+#host-details-panel hr {
+    width: 100%;
+    margin: 2px auto;
+}
+
+#host-details-panel .bottom table {
+    border-spacing: 0;
+}
+
+#host-details-panel .bottom th {
+    letter-spacing: 0.02em;
+}
+
+#host-details-panel .bottom th,
+#host-details-panel .bottom td {
+    padding: 6px 12px;
+    text-align: center;
+}

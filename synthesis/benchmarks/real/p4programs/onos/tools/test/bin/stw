@@ -1,0 +1,55 @@
+#!/bin/bash
+#-------------------------------------------------------------------------------
+# Loops the System Test Coordinator invocations while success/until failure.
+#-------------------------------------------------------------------------------
+
+count=0
+unset doSetup doTeardown
+
+# Scan arguments for user/password or other options...
+while getopts c:st o; do
+    case "$o" in
+        c) count=$OPTARG;;
+        s) doSetup=true;;
+        t) toTeardown=true;;
+    esac
+done
+let OPC=$OPTIND-1
+shift $OPC
+
+if [ -n "$doSetup" ]; then
+    printf "Setting up...\n"
+    stc setup || exit 1
+fi
+
+# Iterate the specified number of times, or indefinitely if count not given
+let run=1
+while [ $count -le 0 -o $run -le $count ]; do
+    export stcTitle="STC Run #$run; "
+    printf "Starting run %d...\n" $run
+
+    # If we're running on a borrowed cell, refresh the reservation
+    [ "$ONOS_CELL" = "borrow" ] && onos-cell $ONOS_CELL 120 >/dev/null
+
+    # Iterate over all listed scenarios
+    let status=0
+    for scenario in "${@:-smoke}"; do
+        if [[ $scenario =~ ^[0-9]*$ ]]; then
+            printf "Waiting %d seconds...\n" $scenario
+            sleep $scenario
+        else
+            printf "Running scenario %s...\n" $scenario
+            stc $scenario || let status=status+$?
+        fi
+        [ $status -ne 0 ] && break
+    done
+
+    printf "Finished run %d...\n" $run
+    [ $status -ne 0 ] && exit $status
+    let run=run+1
+done
+
+if [ -n "$doTeardown" ]; then
+    printf "Tearing down...\n"
+    stc teardown || exit 1
+fi

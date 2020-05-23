@@ -1,0 +1,35 @@
+#
+# Copyright 2017-present Open Networking Foundation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+#
+
+bundle core.fw.Nav
+
+alias cv core.view
+
+from core.fw.Nav import *
+
+from cv.App import nav_item_app
+from cv.Settings import nav_item_settings
+from cv.Cluster import nav_item_cluster
+from cv.Processor import nav_item_processor
+from cv.Partition import nav_item_partition
+from cv.Topo import nav_item_topo
+from cv.Topo2 import nav_item_topo2
+from cv.Device import nav_item_device
+from cv.Link import nav_item_link
+from cv.Host import nav_item_host
+from cv.Intent import nav_item_intent
+from cv.Tunnel import nav_item_tunnel

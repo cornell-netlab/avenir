@@ -1,0 +1,17 @@
+---
+#
+# Creates the user sdn, installs Java, configures ONOS bridges and LXC
+#
+- name: Include vars
+  hosts: localhost
+  tasks:
+  - include_vars: vars/global_vars.yml
+
+- hosts: localhost
+  remote_user: vagrant
+  serial: 1
+  roles:
+    - user-sdn
+    - brctl
+    - java8-oracle
+    - lxc

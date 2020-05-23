@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright 2017-present Open Networking Foundation
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+<drivers>
+    <driver name="default"
+            manufacturer="IETF" hwVersion="LISP Reference Router" swVersion=".*">
+        <behaviour api="org.onosproject.lisp.ctl.ExtensionMappingAddressInterpreter"
+                   impl="org.onosproject.drivers.lisp.extensions.LispExtensionMappingAddressInterpreter"/>
+        <behaviour api="org.onosproject.mapping.addresses.ExtensionMappingAddressResolver"
+                   impl="org.onosproject.drivers.lisp.extensions.LispExtensionMappingAddressInterpreter"/>
+    </driver>
+
+    <!-- OpenLISP software router
+         https://github.com/lip6-lisp/data-plane -->
+    <driver name="openlisp" extends="default"
+            manufacturer="LIP6" hwVersion="OpenLISP Router" swVersion=".*">
+    </driver>
+</drivers>
+

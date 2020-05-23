@@ -1,0 +1,109 @@
+<!-- Intent partial HTML -->
+<div id="ov-intent">
+    <div class="tabular-header">
+        <h2>
+            Intents ({{tableData.length}} total)
+        </h2>
+        <div class="ctrl-btns">
+            <div class="refresh" ng-class="{active: autoRefresh}"
+                 icon icon-size="42" icon-id="refresh"
+                 tooltip tt-msg="autoRefreshTip"
+                 ng-click="toggleRefresh()"></div>
+
+            <div class="separator"></div>
+
+            <span ng-if="brief">
+            <div class="active"
+                 icon icon-id="plus" icon-size="42"
+                 tooltip tt-msg="detailTip"
+                 ng-click="briefToggle()"> </div>
+            </span>
+
+            <span ng-if="!brief">
+            <div class="active"
+                 icon icon-id="minus" icon-size="42"
+                 tooltip tt-msg="briefTip"
+                 ng-click="briefToggle()"> </div>
+            </span>
+
+            <div class="separator"></div>
+
+            <div class="show-intent-btn">
+                <div ng-class="{active: canShowIntent()}"
+                     icon icon-id="topo" icon-size="42"
+                     tooltip tt-msg="topoTip"
+                     ng-click="showIntent()">
+                </div>
+                <div class="dropdown"></div>
+            </div>
+
+            <div ng-class="{'active': !!selId && isIntentWithdrawn()}"
+                 icon icon-id="play" icon-size="42"
+                 tooltip tt-msg="resubmitTip"
+                 ng-click="(!!selId && isIntentWithdrawn()) ? resubmitIntent():''"></div>
+
+            <div ng-class="{'active': !!selId && isIntentInstalled()}"
+                 icon icon-id="stop" icon-size="42"
+                 tooltip tt-msg="deactivateTip"
+                 ng-click="(!!selId && isIntentInstalled()) ? deactivateIntent():''"></div>
+
+            <div ng-class="{'active': !!selId && isIntentWithdrawn()}"
+                 icon icon-id="garbage" icon-size="42"
+                 tooltip tt-msg="purgeTip"
+                 ng-click="(!!selId && isIntentWithdrawn()) ? purgeIntent():''"></div>
+
+            <div ng-class="{'active': isHavingWithdrawn()}"
+                 icon icon-id="garbage" icon-size="47"
+                 tooltip tt-msg="purgeAllTip"
+                 ng-click="(isHavingWithdrawn()) ? purgeIntents():''"></div>
+
+        </div>
+    </div>
+
+    <div class="summary-list" onos-table-resize>
+        <div class="table-header" onos-sortable-header>
+            <table>
+                <tr>
+                    <td colId="appId" sortable>Application ID </td>
+                    <td colId="key" sortable>Key </td>
+                    <td colId="type" sortable>Type </td>
+                    <td colId="priority" sortable>Priority </td>
+                    <td colId="state" sortable>State </td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="table-body">
+            <table onos-flash-changes id-prop="key">
+                <tr ng-if="!tableData.length" class="no-data">
+                    <td colspan="5">
+                        {{annots.no_rows_msg}}
+                    </td>
+                </tr>
+
+                <tr ng-repeat-start="intent in tableData track by $index"
+                    ng-click="selectCallback($event, intent)"
+                    ng-class="{selected: intent.key === selId}"
+                    ng-repeat-complete row-id="{{intent.key}}">
+                    <td>{{intent.appId}}</td>
+                    <td>{{intent.key}}</td>
+                    <td>{{intent.type}}</td>
+                    <td>{{intent.priority}}</td>
+                    <td>{{intent.state}}</td>
+                </tr>
+                <tr ng-click="selectCallback($event, intent)"
+                    ng-class="{selected: intent.key === selId}"
+                    row-id="{{intent.key}}" ng-hide="brief" >
+                    <td class="resources" colspan="5">{{intent.resources}}</td>
+                </tr>
+                <tr ng-click="selectCallback($event, intent)"
+                    ng-class="{selected: intent.key === selId}"
+                    row-id="{{intent.key}}" ng-hide="brief" ng-repeat-end>
+                    <td class="details" colspan="5">{{intent.details}}</td>
+                </tr>
+            </table>
+        </div>
+
+    </div>
+
+</div>

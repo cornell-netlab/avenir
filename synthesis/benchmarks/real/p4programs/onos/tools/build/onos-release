@@ -1,0 +1,66 @@
+#!/bin/bash -ex
+# -----------------------------------------------------------------------------
+# Drives the ONOS release process.
+# -----------------------------------------------------------------------------
+
+[ ! -d "$ONOS_ROOT" ] && echo "ONOS_ROOT is not defined" >&2 && exit 1
+. $ONOS_ROOT/tools/build/envDefaults
+
+set -e
+
+export NEW_VERSION=${1:-$ONOS_VERSION}
+DRY_RUN=${2:-""}
+dryRun=0
+if [ "${DRY_RUN}" == "--dry-run" ]; then
+    dryRun=1
+fi
+
+[ -z "$NEW_VERSION" ] && echo "New ONOS version not specified" && exit 1
+
+export NEW_VERSION_SHORT=${NEW_VERSION%-SNAPSHOT}
+[ "$NEW_VERSION" != "$NEW_VERSION_SHORT" ] && echo "Version is a SNAPSHOT" && exit 1;
+
+cd $ONOS_ROOT
+
+# Change the version
+onos-change-version $NEW_VERSION
+export ONOS_VERSION=$NEW_VERSION
+
+# Validate integrity of the versioning
+onos-validate-change-version
+
+# Build ONOS & deploy to staging repo using the release profile.
+bazel build onos
+
+# Build ONOS docs
+bazel build //docs:external
+
+if [ $dryRun -eq 0 ]; then
+    publish_url="oss.sonatype.org"
+else
+    publish_url=""
+fi
+
+# Create artifact catalog
+onos-publish-catalog publishing-catalog
+
+# publish artifacts
+onos-upload-artifacts.py publishing-catalog ${publish_url}
+
+# Build ONOS archetypes & deploy to staging repo using the release profile.
+# Note that release of the staging repository is a separate manual step.
+if [ $dryRun -eq 0 ]; then
+    pushd tools/package/archetypes/
+    mvn -q -B -Pstaging clean install && onos-archetypes-test -Pstaging && mvn -Pstaging -Prelease clean deploy
+    popd
+else
+    pushd tools/package/archetypes/
+    mvn -q -B clean install && onos-archetypes-test
+    popd
+fi
+
+if [ $dryRun -eq 0 ]; then
+    # Commit newly versioned artifacts and issue a tag.
+    git commit -a -m"Tagging $NEW_VERSION"
+    git tag -sm"Tagging $NEW_VERSION" $NEW_VERSION #signed tag
+fi

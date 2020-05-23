@@ -1,0 +1,36 @@
+{
+    "tapi-connectivity:input":
+    {
+        "end-point" : [
+            {
+                "layer-protocol-name" : "DSR",
+                "service-interface-point": {
+                    "service-interface-point-uuid" : "00000001-0000-0000-0000-000000000001"
+                },
+                "capacity" : {
+                },
+                "direction" : "BIDIRECTIONAL",
+                "role" : "UNKNOWN",
+                "protection-role" : "WORK",
+                "local-id": "00000001-0000-0000-0000-000000000001"
+            }
+            ,
+            {
+                "layer-protocol-name" : "DSR",
+                "service-interface-point": {
+                    "service-interface-point-uuid" : "00000001-0000-0000-0000-000000000002"
+                },
+                "capacity" : {
+                },
+                "direction" : "BIDIRECTIONAL",
+                "role" : "UNKNOWN",
+                "protection-role" : "WORK",
+                "local-id": "00000001-0000-0000-0000-000000000002"
+            }
+        ],
+        "connectivity-constraint" : {},
+        "topology-constraint" : {},
+        "resilience-constraint" : [ ]
+    }
+}
+

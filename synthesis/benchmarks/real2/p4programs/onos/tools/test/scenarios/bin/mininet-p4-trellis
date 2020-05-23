@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# -----------------------------------------------------------------------------
+# Starts mininet in the network machine with the Trellis P4 topology
+# -----------------------------------------------------------------------------
+
+set -x
+
+[[ ! -d "$ONOS_ROOT" ]] && echo "ONOS_ROOT is not defined" >&2 && exit 1
+. $ONOS_ROOT/tools/build/envDefaults
+
+remote="$ONOS_USER@$OCN"
+log="screenlog.0"
+trellisp4Sh="/tmp/start_trellisp4.sh"
+stratumRoot="/home/sdn/stratum"
+
+ssh -tt ${remote} "
+    rm -f $log && echo logfile flush 1 > ~/.screenrc && \
+    echo \"cd ~/routing/trellis && \
+        sudo -E env PYTHONPATH=/tmp/bmv2_py STRATUM_ROOT=${stratumRoot} \
+            ONOS_WEB_USER=$ONOS_WEB_USER ONOS_WEB_PASS=$ONOS_WEB_PASS \
+        python trellisp4.py --onos-ip $OC1 --agent stratum\" \
+    > ${trellisp4Sh} && chmod +x ${trellisp4Sh}
+"
+
+(
+    ssh -t -t ${remote} "screen -L -S mininet ${trellisp4Sh}"
+    scp ${ONOS_USER}@[${OCN}]:$log /tmp/mininet.log
+    ssh ${remote} rm -f $log
+) &
+
+
+
+
+

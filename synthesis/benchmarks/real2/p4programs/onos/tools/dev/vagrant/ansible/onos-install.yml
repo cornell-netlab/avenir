@@ -1,0 +1,14 @@
+---
+#
+# Installs and compiles ONOS
+#
+- name: Include vars
+  hosts: localhost
+  tasks:
+  - include_vars: vars/global_vars.yml
+
+- hosts: localhost
+  remote_user: vagrant
+  serial: 1
+  roles:
+    - onos-install

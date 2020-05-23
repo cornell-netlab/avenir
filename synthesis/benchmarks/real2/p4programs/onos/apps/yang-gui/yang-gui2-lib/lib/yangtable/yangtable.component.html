@@ -1,0 +1,92 @@
+<!--
+~ Copyright 2018-present Open Networking Foundation
+~
+~ Licensed under the Apache License, Version 2.0 (the "License");
+~ you may not use this file except in compliance with the License.
+~ You may obtain a copy of the License at
+~
+~     http://www.apache.org/licenses/LICENSE-2.0
+~
+~ Unless required by applicable law or agreed to in writing, software
+~ distributed under the License is distributed on an "AS IS" BASIS,
+~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+~ See the License for the specific language governing permissions and
+~ limitations under the License.
+-->
+
+<!-- YANG Model partial HTML -->
+<div id="ov-yang-model" (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
+    <onos-flash id="appMsgFlash" message="{{ alertMsg }}" dwell="5000" warning="true" (closed)="alertMsg = ''"></onos-flash>
+    <onos-loading [theme]="'light'" [running]="loadingIconShown"></onos-loading>
+    <div class="tabular-header">
+        <h2>YANG Models ({{tableData.length}} total)</h2>
+        <div class="ctrl-btns">
+            <div class="refresh" (click)="toggleRefresh()">
+            <onos-icon [classes]="autoRefresh?'active refresh':'refresh'"
+                       [iconId]="'refresh'" [iconSize]="36"
+                       [toolTip]="autoRefreshTip"></onos-icon>
+            </div>
+            <div class="separator"></div>
+            <div class="active"  (click)="triggerForm()">
+                <onos-icon [classes]="'details-icon upload'" [iconSize]="36"
+                           [iconId]="'nav_yang'" [toolTip]="'Upload a YANG file (.zip,.jar,.yang)'"></onos-icon>
+            </div>
+            <form #inputYangFileForm="ngForm">
+                <input id="uploadYangFile" hidden
+                       type="file" size="50" accept=".zip,.jar,.yang"
+                       name="yangFile" (change)="fileEvent($event)">
+            </form>
+        </div>
+
+        <div class="search">
+            <input id="searchinput" [(ngModel)]="tableDataFilter.queryStr" type="search" #search placeholder="Search"/>
+            <!--(keyup)="onSearch(search.value)" (search)="onSearch(search.value)"/>-->
+            <select [(ngModel)]="tableDataFilter.queryBy">
+                <!--(change)="onSearchBy($event)" (change)="search.value = ''">-->
+                <option value="" disabled>Search By</option>
+                <option value="$">All Fields</option>
+                <option value="id">ModelId</option>
+                <option value="module">Module</option>
+                <option value="revision">Revision</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="summary-list" onosTableResize>
+        <div class="table-header">
+            <table>
+                <tr>
+                    <th colId="modelId" [ngStyle]="{width: '32px'}" class="table-icon" (click)="onSort('modelId')">Model ID
+                        <onos-icon classes="active-sort" [iconSize]="10" [iconId]="sortIcon('modelId')"></onos-icon>
+                    </th>
+                    <th colId="id" [ngStyle]="{width: '32px'}" class="table-icon" (click)="onSort('id')">Module
+                        <onos-icon classes="active-sort" [iconSize]="10" [iconId]="sortIcon('id')"></onos-icon>
+                    </th>
+                    <th colId="revision" [ngStyle]="{width: '32px'}" class="table-icon" (click)="onSort('revision')">Revision
+                        <onos-icon classes="active-sort" [iconSize]="10" [iconId]="sortIcon('revision')"></onos-icon>
+                    </th>
+                </tr>
+            </table>
+        </div>
+
+        <div class="table-body">
+            <table>
+                <tr class="table-body" *ngIf="tableData.length === 0" class="no-data">
+                    <td colspan="9">{{ annots.noRowsMsg }}</td>
+                </tr>
+                <tr *ngFor="let ymodel of tableData | filter: tableDataFilter"
+                    (click)="selectCallback($event, ymodel)"
+                    [ngClass]="{selected: ymodel.id === selId, 'data-change': isChanged(ymodel.id)}">
+                    <td>{{ymodel.modelId}}</td>
+                    <td>{{ymodel.id}}</td>
+                    <td>{{ymodel.revision}}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <onos-yangdetails class="floatpanels" [id]="selId" [modelId]="selectedModel?.modelId" [revision]="selectedModel?.revision"
+                      (closeEvent)="deselectRow($event)"></onos-yangdetails>
+
+</div>
+

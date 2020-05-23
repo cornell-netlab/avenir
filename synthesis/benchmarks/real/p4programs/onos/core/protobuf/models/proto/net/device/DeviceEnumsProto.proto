@@ -1,0 +1,50 @@
+/*
+ * Copyright 2017-present Open Networking Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+syntax = "proto3";
+option java_package = "org.onosproject.grpc.net.device.models";
+
+package net.device;
+
+enum DeviceTypeProto {
+    OTHER = 0;
+    SWITCH = 1;
+    ROUTER = 2;
+    ROADM = 3;
+    OTN = 4;
+    ROADM_OTN = 5;
+    FIREWALL = 6;
+    BALANCER = 7;
+    IPS = 8;
+    IDS = 9;
+    CONTROLLER = 10;
+    VIRTUAL_DEVICE = 11;
+    FIBER_SWITCH = 12;
+    MICROWAVE = 13;
+    OLS = 14;
+    TERMINAL_DEVICE = 15;
+}
+
+enum DeviceEventTypeProto {
+    DEVICE_ADDED = 0;
+    DEVICE_UPDATED = 1;
+    DEVICE_REMOVED = 2;
+    DEVICE_SUSPENDED = 3;
+    DEVICE_AVAILABILITY_CHANGED = 4;
+    PORT_ADDED = 5;
+    PORT_UPDATED = 6;
+    PORT_REMOVED = 7;
+    PORT_STATS_UPDATED = 8;
+}

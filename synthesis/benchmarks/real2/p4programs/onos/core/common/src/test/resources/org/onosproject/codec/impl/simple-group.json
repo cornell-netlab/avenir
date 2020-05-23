@@ -1,0 +1,18 @@
+{
+  "type": "ALL",
+  "deviceId": "of:0000000000000001",
+  "appCookie": "0x1234abCD",
+  "id": "1",
+  "buckets": [
+    {
+      "treatment": {
+        "instructions": [
+          {
+            "type": "OUTPUT",
+            "port": 2
+          }
+        ]
+      }
+    }
+  ]
+}

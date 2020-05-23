@@ -1,0 +1,13 @@
+{
+  "devices" : {
+    "of:0000000000000001" : {
+      "annotations" : {
+        "entries" : {
+          "foo" : "bar",
+          "empty" : null,
+          "number" : 123
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,80 @@
+<!--
+~ Copyright 2019-present Open Networking Foundation
+~
+~ Licensed under the Apache License, Version 2.0 (the "License");
+~ you may not use this file except in compliance with the License.
+~ You may obtain a copy of the License at
+~
+~     http://www.apache.org/licenses/LICENSE-2.0
+~
+~ Unless required by applicable law or agreed to in writing, software
+~ distributed under the License is distributed on an "AS IS" BASIS,
+~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+~ See the License for the specific language governing permissions and
+~ limitations under the License.
+-->
+<div id="topo2-p-detail" class="floatpanel topo2-p"
+     [@detailsPanelState]="on && selectedNodes.length > 0">
+    <!-- Template explanation - Create a HTML header which has an SVG icon along
+    side title text. -->
+    <div class="header">
+        <div class="icon clickable">
+            <onos-icon
+                    [iconSize]="26"
+                    [iconId]="showDetails?.glyphId">
+            </onos-icon>
+        </div>
+        <h2 class="clickable">{{ showDetails?.title }}</h2>
+    </div>
+    <div class="body">
+        <table>
+            <tbody>
+            <!-- Template explanation - Inside a HTML table, create a row per
+            item in the propOrder array returned through the WSS showDetails.
+            If the row name contains only '-' then draw a horiz rule otherwise
+            create a cell for the name and another for the value -->
+                <tr *ngFor="let p of showDetails?.propOrder">
+                    <td *ngIf="showDetails?.propLabels[p] !== '-'"
+                        class="label">{{showDetails?.propLabels[p]}} :</td>
+                    <td *ngIf="showDetails?.propLabels[p] !== '-'"
+                        class="value">{{ showDetails?.propValues[p]}}</td>
+                    <!-- If the label is '-' then insert a horiz line -->
+                    <td *ngIf="showDetails?.propLabels[p] === '-'"
+                        colspan="2"><hr></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="footer">
+        <hr>
+        <div class="actionBtns">
+            <!-- Template explanation - Inside the panel footer, create an SVG icon
+            per entry in the buttons array returned from the WSS showDetails
+            The icons used here are loaded in the ForceSvgComponent
+            -->
+            <div *ngFor="let btn of showDetails?.buttons" class="actionBtn">
+                <onos-icon id="topo2-p-detail-core-{{ btn }}"
+                           (click)="navto(buttonAttribs(btn).path)"
+                        [iconSize]="25"
+                        [iconId]="buttonAttribs(btn).gid"
+                        [toolTip]="lionFnTopo(buttonAttribs(btn).tt)"
+                        classes="button icon selected">
+                </onos-icon>
+            </div>
+            <div *ngIf="showDetails?.buttons?.includes('showDeviceView')" class="actionBtn">
+                <onos-icon id="topo2-p-detail-core-alarms"
+                           (click)="navto('alarmTable')"
+                           [iconSize]="25"
+                           [iconId]="'clock'"
+                           classes="button icon selected">
+                </onos-icon>
+                <onos-icon id="topo2-p-detail-core-pipeconf"
+                           (click)="navto('pipeconf')"
+                           [iconSize]="25"
+                           [iconId]="'pipeconfTable'"
+                           classes="button icon selected">
+                </onos-icon>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,51 @@
+{
+  "hostname": "compute-01",
+  "type": "COMPUTE",
+  "managementIp": "172.16.130.4",
+  "dataIp": "172.16.130.4",
+  "integrationBridge": "of:00000000000000a1",
+  "phyIntfs": [
+    {
+      "network": "mgmtnetwork",
+      "intf": "eth3"
+    },
+    {
+      "network": "oamnetwork",
+      "intf": "eth4"
+    }
+  ],
+  "sshAuth": {
+    "id": "sdn",
+    "password": "sdn"
+  },
+  "controllers": [
+    {
+      "ip": "10.10.10.2",
+      "port": 6653
+    },
+    {
+      "ip": "10.10.10.3",
+      "port": 6663
+    }
+  ],
+  "dpdkConfig" : {
+    "datapathType" : "netdev",
+    "socketDir" : "/var/lib/libvirt/qemu",
+    "dpdkIntfs" : [
+      {
+        "intf" : "dpdk0",
+        "mtu" : 1500,
+        "deviceName" : "br-int",
+        "pciAddress" : "0000:85:00.0",
+        "type" : "dpdk"
+      },
+      {
+        "intf" : "dpdk1",
+        "mtu" : 1500,
+        "deviceName" : "br-tun",
+        "pciAddress" : "0000:85:00.0",
+        "type" : "dpdk"
+      }
+    ]
+  }
+}

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright 2016-present Open Networking Foundation
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+<drivers>
+    <!-- T100 supports 96 (50 GHz) or 128 (37.5 GHz) C-band channels,
+     although this driver only enables 80 50 GHz channels. -->
+    <driver name="fujitsu-netconf" manufacturer="Fujitsu" hwVersion="T100" swVersion="01-01-X">
+        <behaviour api="org.onosproject.net.optical.OpticalDevice"
+                   impl="org.onosproject.net.optical.DefaultOpticalDevice"/>
+        <behaviour api="org.onosproject.net.device.DeviceDescriptionDiscovery"
+                   impl="org.onosproject.drivers.fujitsu.FujitsuT100DeviceDescription"/>
+        <behaviour api="org.onosproject.net.behaviour.LambdaQuery"
+                   impl="org.onosproject.driver.optical.query.CBand50LambdaQuery"/>
+    </driver>
+    <driver name="fujitsu-volt-netconf" manufacturer="Fujitsu" hwVersion="svkOLT" swVersion="v1.0">
+        <behaviour api="org.onosproject.net.behaviour.ControllerConfig"
+                   impl="org.onosproject.drivers.fujitsu.FujitsuVoltControllerConfig"/>
+        <behaviour api="org.onosproject.drivers.fujitsu.behaviour.VoltPonLinkConfig"
+                   impl="org.onosproject.drivers.fujitsu.FujitsuVoltPonLinkConfig"/>
+        <behaviour api="org.onosproject.drivers.fujitsu.behaviour.VoltOnuConfig"
+                   impl="org.onosproject.drivers.fujitsu.FujitsuVoltOnuConfig"/>
+        <behaviour api="org.onosproject.drivers.fujitsu.behaviour.VoltOnuOperConfig"
+                   impl="org.onosproject.drivers.fujitsu.FujitsuVoltOnuOperConfig"/>
+        <behaviour api="org.onosproject.drivers.fujitsu.behaviour.VoltAlertConfig"
+                   impl="org.onosproject.drivers.fujitsu.FujitsuVoltAlertConfig"/>
+        <behaviour api="org.onosproject.drivers.fujitsu.behaviour.VoltFwdlConfig"
+                   impl="org.onosproject.drivers.fujitsu.FujitsuVoltFwdlConfig"/>
+        <behaviour api="org.onosproject.drivers.fujitsu.behaviour.VoltNeConfig"
+                   impl="org.onosproject.drivers.fujitsu.FujitsuVoltNeConfig"/>
+        <behaviour api="org.onosproject.drivers.fujitsu.behaviour.VoltNniLinkConfig"
+                   impl="org.onosproject.drivers.fujitsu.FujitsuVoltNniLinkConfig"/>
+        <behaviour api="org.onosproject.alarm.AlarmConsumer"
+                   impl="org.onosproject.drivers.fujitsu.FujitsuVoltAlarmConsumer"/>
+    </driver>
+</drivers>

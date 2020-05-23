@@ -16,6 +16,8 @@ module Tables = Motley.Tables
 module Instance = Motley.Instance
 module Runtime = Motley.Runtime
 
+(* <<<<<<< HEAD
+=======
 
 let parse_file (filename : string) : Ast.cmd =
   let cts = In_channel.read_all filename in
@@ -31,6 +33,8 @@ let parse_fvs fp =
          | Some (x, sz) -> (x, int_of_string sz)
        )
 
+
+>>>>>>> master *)
 
 module Solver = struct
   let spec = Command.Spec.(
@@ -122,14 +126,14 @@ module Solver = struct
                               restrict_mask;
                               timeout = None
                  }) in
-    let log = parse_file logical in
-    let phys = parse_file real in
+    let log = Benchmark.parse_file logical in
+    let phys = Benchmark. parse_file real in
     let log_inst = Runtime.parse logical_edits |> Instance.(update_list params empty) in
     let log_edits = if onos
-                    then Benchmark.onos_to_edits data
+                    then Benchmark.onos_to_edits data "ipv6"
                     else Runtime.parse data |> List.(map ~f:return)  in
     let phys_inst = Runtime.parse physical_edits |> Instance.(update_list params empty) in
-    let fvs = parse_fvs fvs in
+    let fvs = Benchmark.parse_fvs fvs in
     let phys_drop_spec = None in
     if measure then
       let open Motley.Instance in
@@ -235,8 +239,8 @@ module RunTest = struct
          ~f:(fun line ->
            match String.split line ~on:',' with
            | [log_str;phys_str;edits_str] ->
-              let log = parse_file log_str in
-              let phys = parse_file phys_str in
+              let log = Benchmark.parse_file log_str in
+              let phys = Benchmark.parse_file phys_str in
               let log_edits = Runtime.parse edits_str in
               let params = Parameters.({
                               widening;
@@ -469,6 +473,138 @@ module ONF = struct
     | _ -> ()
 end
 
+module ONFReal = struct
+  let spec = Command.Spec.(
+      empty
+      +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
+      +> flag "-i" no_arg ~doc:"interactive mode"
+      +> flag "-data" (required string) ~doc:"the input log"
+      +> flag "-p" no_arg ~doc:"show_result_at_end"
+       +> flag "-w" no_arg ~doc:"Do widening"
+       +> flag "-s" no_arg ~doc:"Do slicing optimization"
+       +> flag "-e" (required int) ~doc:"maximum number of physical edits"
+       +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
+       +> flag "-m" no_arg ~doc:"Prune rows with no holes"
+       +> flag "--inj" no_arg ~doc:"Try injection optimization"
+       +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
+       +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
+       +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
+       +> flag "--shortening" no_arg ~doc:"shorten queries"
+       +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
+       +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
+       +> flag "--hints" no_arg ~doc:"Use syntactic hints"
+       +> flag "--holes" no_arg ~doc:"Holes only"
+       +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
+       +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
+       +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
+       +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
+       +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
+       +> anon ("p4file1" %: string)
+       +> anon ("p4file2" %: string)
+       +> anon ("log_edits" %: string)
+       +> anon ("phys_edits" %: string)
+       +> anon ("fvs" %: string)
+       +> anon ("assume" %: string)
+       +> flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
+       +> flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file")
+
+
+
+  let run debug interactive data print
+        widening
+        do_slice
+        edits_depth
+        search_width
+        monotonic
+        injection
+        fastcx
+        vcache
+        ecache
+        shortening
+        above
+        minimize
+        hints
+        only_holes
+        allow_annotations
+        nlp
+        unique_edits
+        domain
+        restrict_mask
+        logical_p4 physical_p4 log_edits phys_edits fvs assume logical_inc physical_inc
+    () =
+    let res = Benchmark.basic_onf_ipv4_real
+              Parameters.({
+          widening;
+          do_slice;
+          edits_depth;
+          search_width;
+          debug;
+          monotonic;
+          interactive;
+          injection;
+          fastcx;
+          vcache;
+          ecache;
+          shortening;
+          above;
+          minimize;
+          hints;
+          only_holes;
+          allow_annotations;
+          nlp;
+          unique_edits;
+          domain;
+          restrict_mask;
+          timeout = None})
+              data logical_p4 physical_p4 log_edits phys_edits fvs assume logical_inc physical_inc
+    in
+    match res with
+    | None -> Printf.printf "no example could be found\n"
+    | Some r when print ->
+       List.iter r ~f:(fun edit ->
+           Tables.Edit.to_string edit
+           |> Printf.printf "%s\n%!"
+         )
+
+end
+
+(*
+module ONFReal = struct
+  let spec = Command.Spec.(
+      empty       
+      +> flag "-gas" (required int) ~doc:"how many cegis iterations?"
+      +> flag "-w" no_arg ~doc:"perform widening"
+      +> flag "-s" no_arg ~doc:"perform slicing optimization"
+      +> flag "-m" no_arg ~doc:"eliminate non-hole branches"
+      +> flag "-i" no_arg ~doc:"interactive mode"
+      +> flag "-inj" no_arg ~doc:"try injection optimization"
+      +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
+      +> flag "-data" (required string) ~doc:"the input log" 
+      +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly" 
+      +> flag "--del-pushdown" no_arg ~doc:"interpret deletions as pushdowns when possible"
+      +> flag "--above" no_arg ~doc:"insert new edits above instance, not below"
+      +> anon ("p4file1" %: string)
+      +> anon ("p4file2" %: string)
+      +> anon ("log_edits" %: string)
+      +> anon ("phys_edits" %: string)
+      +> anon ("fvs" %: string)
+      +> anon ("assume" %: string)
+      +> flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
+      +> flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file")
+  
+
+  let run gas widening do_slice monotonic interactive injection debug data_fp fastcx del_pushdown above logical_p4 physical_p4 log_edits phys_edits fvs assume logical_inc physical_inc() =
+          ignore (Benchmark.basic_onf_ipv4_real 
+                        Parameters.({widening;do_slice;gas;monotonic;injection;interactive;debug;fastcx;del_pushdown;above; cache = true})
+                        data_fp logical_p4 physical_p4 log_edits phys_edits fvs assume logical_inc physical_inc : Tables.Edit.t list)
+    (* Benchmark.onf_representative gas widening |> ignore *)
+end *)
+
+let onf_real : Command.t =
+  Command.basic_spec
+    ~summary: "Run the onf benchmark on the real p4 programs"
+    ONFReal.spec
+    ONFReal.run
 
 let onf : Command.t =
   Command.basic_spec
@@ -512,8 +648,8 @@ module Equality = struct
 
 
   let run log phys log_edits phys_edits fvs_fp debug () =
-    let log = parse_file log in
-    let phys = parse_file phys in
+    let log = Benchmark.parse_file log in
+    let phys = Benchmark.parse_file phys in
     let log_edits = Runtime.parse log_edits in
     let phys_edits = Runtime.parse phys_edits in
     let params = Parameters.(
@@ -524,7 +660,7 @@ module Equality = struct
     let data = ProfData.zero () in
     let log_inst = Instance.empty in
     let phys_inst = Instance.empty in
-    let fvs = parse_fvs fvs_fp in
+    let fvs = Benchmark.parse_fvs fvs_fp in
     let problem =
       Problem.make ~log ~phys ~fvs
         ~log_inst ~phys_inst
@@ -563,12 +699,84 @@ module Equality = struct
 
 end
 
-
 let equality : Command.t =
   Command.basic_spec
     ~summary: "Check equivalence"
     Equality.spec
     Equality.run
+
+
+module EqualityReal = struct
+  let spec = Command.Spec.(
+      empty
+      +> anon ("log" %: string)
+      +> anon ("phys" %: string)
+      +> flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
+      +> flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file"
+      +> anon ("log_edits" %: string)
+      +> anon ("phys_edits" %: string)
+      +> anon ("fvs" %: string)
+      +> anon ("assume" %: string)
+      +> flag "-DEBUG" no_arg ~doc:"Debugging messages" )
+
+
+  let run log_p4 phys_p4  log_incs phys_incs log_edits phys_edits fvs_fp assume_fp debug () =
+    let fvs = Benchmark.parse_fvs fvs_fp in
+    let assume = Benchmark.parse_file assume_fp in
+
+    let print_fvs = printf "fvs = %s" (Sexp.to_string ([%sexp_of: (string * int) list] fvs)) in
+
+    let open Ast in
+    let log = (assume %:% Encode.encode_from_p4 log_incs log_p4 false) |> Benchmark.zero_init fvs in
+    let phys = (assume %:% Encode.encode_from_p4 phys_incs phys_p4 false) |> Benchmark.zero_init fvs in
+
+          
+    (* let log = Encode.encode_from_p4 log_incs log false in
+    let phys = Encode.encode_from_p4 phys_incs phys false in
+    *)
+    let log_edits = Runtime.parse log_edits in
+    let phys_edits = Runtime.parse phys_edits in
+    let params = Parameters.(
+        { default with
+          debug;
+          ecache = true;
+          vcache = true}) in
+    let data = ProfData.zero () in
+    let log_inst = Instance.empty in
+    let phys_inst = Instance.empty in
+    (*let fvs = Benchmark.parse_fvs fvs_fp in *)
+    let problem =
+      Problem.make ~log ~phys ~fvs
+        ~log_inst ~phys_inst
+        ~log_edits ()
+      |> Motley.Util.flip Problem.replace_phys_edits phys_edits
+    in
+    match Synthesis.implements params data problem with
+    | `Yes -> Printf.printf "Equivalent\n%!"
+    | `NoAndCE (inpkt,_) ->
+       let printer p i o =
+         Printf.printf "%s\n  in: %s\n  out: %s\n" p
+           (Motley.Packet.string__packet i)
+           (Motley.Packet.string__packet o)
+       in
+       let log_out = Motley.Semantics.eval_act (Problem.log_gcl_program params problem) inpkt in
+       let phys_out = Motley.Semantics.eval_act (Problem.phys_gcl_program params problem) inpkt in
+       Printf.printf "--\n%!";
+       printer "Log" inpkt log_out;
+       Printf.printf "--\n%!";
+       printer "Phys" inpkt phys_out
+
+
+
+end
+
+
+
+let equality_real : Command.t =
+  Command.basic_spec
+    ~summary: "Check equivalence"
+    EqualityReal.spec
+    EqualityReal.run
 
 
 module WeakestPrecondition = struct
@@ -578,7 +786,7 @@ module WeakestPrecondition = struct
       +> flag "-z3" no_arg ~doc: "z3-ready output")
 
   let run file z3 () =
-    let cmd = parse_file file in
+    let cmd = Benchmark.parse_file file in
     let _ : unit = Printf.printf "PROGRAM: %s \n%!" (Ast.string_of_cmd cmd) in
     let wp = Synthesis.symb_wp cmd in
     if z3 then
@@ -1007,7 +1215,9 @@ let main : Command.t =
     ; ("metadata", metadata_cmd)
     ; ("classbench", classbench_cmd)
     ; ("onf", onf)
+    ; ("onf-real", onf_real)
     ; ("eq", equality)
+    ; ("eq-real", equality_real)
     ; ("ex", running_example)
     ; ("meta", meta)
     ; ("wp", wp_cmd)]

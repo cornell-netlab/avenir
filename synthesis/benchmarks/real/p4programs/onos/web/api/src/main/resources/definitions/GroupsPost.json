@@ -1,0 +1,80 @@
+{
+  "type": "object",
+  "title": "group",
+  "required": [
+    "type",
+    "appCookie",
+    "groupId",
+    "buckets"
+  ],
+  "properties": {
+    "type": {
+      "type": "string",
+      "example": "ALL"
+    },
+    "appCookie": {
+      "type": "string",
+      "description": "application cookie. Arbitrary length byte array represented in hex string",
+      "example": "0x1234abcd"
+    },
+    "groupId": {
+      "type": "string",
+      "example": "1"
+    },
+    "buckets": {
+      "type": "array",
+      "xml": {
+        "name": "buckets",
+        "wrapped": true
+      },
+      "items": {
+        "type": "object",
+        "title": "buckets",
+        "required": [
+          "treatment",
+          "weight",
+          "watchPort",
+          "watchGroup"
+        ],
+        "properties": {
+          "treatment": {
+            "type": "object",
+            "title": "treatment",
+            "required": [
+              "instructions",
+              "deferred"
+            ],
+            "properties": {
+              "instructions": {
+                "type": "array",
+                "title": "treatment",
+                "required": [
+                  "properties",
+                  "port"
+                ],
+                "items": {
+                  "type": "object",
+                  "title": "instructions",
+                  "required": [
+                    "type",
+                    "port"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "OUTPUT"
+                    },
+                    "port": {
+                      "type": "string",
+                      "example": "2"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

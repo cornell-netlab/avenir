@@ -1,0 +1,52 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# Checks that all intents in the system have a given state.
+# -----------------------------------------------------------------------------
+
+[ ! -d "$ONOS_ROOT" ] && echo "ONOS_ROOT is not defined" >&2 && exit 1
+. $ONOS_ROOT/tools/build/envDefaults
+
+aux=/tmp/stc/stc-$$.log
+trap "rm -f $aux 2>/dev/null" EXIT
+target=${1:-$OCI}
+
+echo onos-check-intent: $*
+
+set -x
+
+# $1: target host
+# $2: intent key
+# $3: intent state
+# $4: number of expected intents
+re='^[0-9]+$'
+[[ $4 =~ $re ]] && numIntentsExpected=$4 # silently ignore if not positive
+
+for i in {1..15}; do
+    echo "Attempt #$i"
+    onos $target date
+    onos $target "onos:intents --filter $2" | tee $aux
+    if  [ -z "$numIntentsExpected" ]; then
+        ( cat $aux | egrep "Key.*$2" && cat $aux | egrep "State.*$3" ) && cat $aux && exit 0
+    else
+        # exit 0 only if expected number of intents (with required key)
+        # are present and all intents match state (if expected no. of intents > 0)
+        numIntents=`egrep "Key.*$2" $aux | wc -l`
+        numIntentsOfState=0
+        [ $numIntentsExpected -gt 0 ] && numIntentsOfState=`egrep "Key.*$2" $aux | egrep "State.*$3" | wc -l`
+        [ $numIntents -eq $numIntentsOfState ] \
+            && [ $numIntents -eq $numIntentsExpected ] \
+            && cat $aux && exit 0
+    fi
+    onos $target "onos:flows -s -n"
+    sleep 2
+done
+
+# failed. print informations
+echo "Failed print information for debugging"
+onos $target date
+onos $target "onos:intents"
+onos $target "onos:intent-details"
+onos $target "onos:flows -s -n"
+
+cat $aux
+exit 1

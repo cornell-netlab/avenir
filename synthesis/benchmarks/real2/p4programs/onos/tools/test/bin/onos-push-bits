@@ -1,0 +1,93 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# Remotely pushes bits to a remote node in preparation for install.
+# -----------------------------------------------------------------------------
+function _usage () {
+cat << _EOF_
+usage:
+ $(basename $0) [node]
+
+options:
+- [node] : the target node to prime for installation
+
+summary:
+ Remotely pushes bits to a remote node in preparation for install.
+
+ $(basename $0) is invoked as part of 'onos-install', and shouldn't be
+ directly invoked for the most part.
+
+_EOF_
+}
+
+[ $# -gt 1 ] || [ "$1" = "-h" ] && _usage && exit 0
+[ ! -d "$ONOS_ROOT" ] && echo "ONOS_ROOT isn't set correctly" >&2 && exit 1
+set -e
+set -u
+. $ONOS_ROOT/tools/build/envDefaults
+[ ! -f "$ONOS_TAR" ] && echo "$ONOS_TAR does not exist - run onos-package?" >&2 && exit 1
+
+node=${1:-$OCI}
+remote=$ONOS_USER@$node
+remote_with_bracket=$ONOS_USER@[$node]
+SSH_OPTIONS=" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+ -o ControlMaster=auto -o ControlPath=~/.ssh/mux-%r@%h:%p \
+ -o ControlPersist=300 "
+
+USE_RSYNC=${USE_RSYNC:-'false'}
+if [ "$USE_RSYNC" = "true" ]; then
+  if ssh $remote $SSH_OPTIONS which rsync >&2 > /dev/null; then
+    echo "Using rsync"
+  else
+    echo "Installing rsync"
+    # TODO check remote OS and use proper method to install rsync
+    ssh $remote sudo apt-get install -y rsync || USE_RSYNC='false'
+  fi
+fi
+
+if [ "$USE_RSYNC" = "clean" ]; then
+  # clean remote rsync stage directory
+  ssh $remote rm -rf "/tmp/$ONOS_BITS"
+fi
+
+if [ "$USE_RSYNC" = "true" ]; then
+  # local rsync stage directory
+  RSYNC_STAGE=`mktemp -d -t onostar` || exit 1
+  trap "rm -rf $RSYNC_STAGE" EXIT
+
+  tar xf $ONOS_TAR -C $RSYNC_STAGE
+  tar tf $ONOS_TAR > $RSYNC_STAGE/files
+  touch -r $ONOS_TAR $RSYNC_STAGE/files
+
+  # initialize remote stage with remote ONOS tar.
+  # This is a workaround to benefit from onos-push-bits-through-proxy.
+  # TODO would like to use tar hash to skip rsync when possible,
+  # but couldn't due to tarball chksum mismatch, described below.
+  ssh $remote $SSH_OPTIONS \
+         "mkdir -p \"/tmp/$ONOS_BITS\" && \
+          tar xzf \"/tmp/`basename ${ONOS_TAR}`\" -C \"/tmp/$ONOS_BITS\" || exit 0 "
+
+  # sync contents of $ONOS_TAR
+  rsync -az --delete --checksum --omit-dir-times --progress \
+        -e "ssh $SSH_OPTIONS" \
+        --rsync-path="mkdir -p /tmp/$ONOS_BITS/ && rsync" \
+        $RSYNC_STAGE/ [$ONOS_USER@$node]:/tmp/$ONOS_BITS
+                      # rsync < 3.0.6 cannot parse $ONOS_USER@[$node]
+                      #  https://bugzilla.samba.org/show_bug.cgi?id=6067
+
+  # create $ONOS_TAR equivalent tar ball remotely
+  # TODO hash will not be the same as local one, probably due to different uid, etc.
+  echo "Rebuilding ONOS tar on $node"
+  ssh $remote $SSH_OPTIONS tar czf "/tmp/`basename ${ONOS_TAR}`" -C "/tmp/$ONOS_BITS" --no-recursion -T "/tmp/$ONOS_BITS/files"
+else
+  echo "Using scp"
+
+  locHash=$(cksum $ONOS_TAR | cut -d' ' -f1,2)
+  remHash=$(ssh $remote cksum $ONOS_TAR 2>/dev/null | cut -d' ' -f1,2)
+
+  if [ -n "$locHash" ] && [ "$locHash" = "$remHash" ]; then
+      echo "ONOS bits $ONOS_TAR already up-to-date on $node..."
+  else
+      ssh $remote rm -f $ONOS_TAR
+      scp -q $ONOS_TAR $remote_with_bracket:/tmp
+  fi
+fi

@@ -1,0 +1,12 @@
+.idea
+**/*.iml
+.DS_Store
+.vscode
+.classpath
+.project
+.settings
+app/src/main/resources/p4c-out
+app/target
+mininet/tmp
+p4src/build
+.DS_Store
