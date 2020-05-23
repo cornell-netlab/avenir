@@ -27,10 +27,11 @@ let rec run_experiment iter seq (phys_seq : Edit.t list) (params : Parameters.t)
         !data.log_inst_size :=  Problem.log_inst problem |> Instance.size ;
         !data.phys_inst_size := Problem.phys_inst problem |> Instance.size;
         Printf.printf "%s\n%!" (ProfData.to_string !data);
+        (* if iter > 531 then None else *)
         run_experiment (iter + 1)
           edits
           (phys_seq @ pedits)
-          (if false then {params with debug = true; interactive = true} else params )
+          (if false then {params with debug = true} else params )
           hints
           Problem.(problem
                    |> flip (apply_edits_to_log params) edit
@@ -1065,7 +1066,7 @@ let match_row_easier sz num_xs ~has_value =
   Edit.Add("logical",(matches, [mkInt(has_value,9)], 0))
 
 
-let rec create_log_edits_easier sz i max_edits num_xs=
+let rec create_log_edits_easier sz i max_edits num_xs =
   if i = max_edits then []
   else
     match_row_easier sz num_xs ~has_value:i
@@ -1132,13 +1133,15 @@ let generate_out acc cb_row  =
   let open Edit in
   let biggest = List.fold acc ~init:Bigint.one ~f:(fun max_so_far curr ->
                     match curr with
-                    | Add(_,(_,[Int(i,sz)],_)) when Bigint.(i > max_so_far) -> i
+                    | Add(_,(_,[Int(i,_)],_)) when Bigint.(i > max_so_far) -> i
                     | _ -> max_so_far
                   ) in
-  Bigint.(biggest + one)
+  Bigint.(if (biggest + one) % (of_int 512) = zero
+          then biggest + one + one
+          else biggest + one)
 
   
-let rep params data =
+let rep params data nrules =
   let fvs = ["ip_src",32; "ip_dst",32] in
   let cb_fvs = List.map ~f:fst fvs in
   let gen_data : Edit.t list =
@@ -1161,6 +1164,7 @@ let rep params data =
          )
   in
   Printf.printf "there are cleaned rules %d\n%!" (List.length gen_data);
+  let gen_data = List.filteri gen_data ~f:(fun i _ -> i < nrules) in
   let fvs = ("out", 9) :: fvs in
   let log =
     sequence [
@@ -1206,7 +1210,7 @@ let rep params data =
   measure (restart_timer params (Time.now())) None problem (List.(gen_data >>| return))
 
 
-let rep_middle params data =
+let rep_middle params data nrules =
   let fvs = ["ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16] in
   let cb_fvs = List.map ~f:fst fvs in
   let gen_data : Edit.t list =
@@ -1229,6 +1233,7 @@ let rep_middle params data =
          )
   in
   Printf.printf "there are cleaned rules %d\n%!" (List.length gen_data);
+  let gen_data = List.filteri gen_data ~f:(fun i _ -> i < nrules) in
   let fvs = ("out", 9) :: fvs in
   let log =
     sequence [
@@ -1283,8 +1288,21 @@ let rep_middle params data =
 
 
 
-let rep_of params data =
-  let fvs = ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16] in
+let exactify_matches =
+  let open Tables in
+  List.map ~f:(fun m ->
+      if Match.is_wildcard m then m else
+      match m with
+      | Mask (v,_) | Exact (v) -> Exact v
+      | Between (lo,hi) ->
+         if Bigint.(get_int lo = zero)
+         then Exact hi
+         else Exact lo
+    )
+
+
+let rep_of params exactify data nrules =
+  let fvs = ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16;"vlan", 12; "pcp", 3] in
   let cb_fvs = List.map ~f:fst fvs in
   let gen_data : Edit.t list =
     let cb_rows = parse_classbench_of data in
@@ -1294,6 +1312,7 @@ let rep_of params data =
            let open Edit in
            let fields = cb_fvs in
            let matches = project cb_row fields |> (cb_to_matches "logical" fvs) in
+           let matches = if exactify then exactify_matches matches else matches in
            if List.exists acc ~f:(function
                   | Add (_,(ms,_,_)) -> List.(ms = matches)
                   | _ -> false)
@@ -1311,12 +1330,13 @@ let rep_of params data =
          )
   in
   Printf.printf "there are %d cleaned rules\n%!" (List.length gen_data);
+  let gen_data = List.filteri gen_data ~f:(fun i _ -> i < nrules) in
   let fvs = ("out", 9) :: fvs in
   let log =
     sequence [
         "out" %<-% mkVInt(0,9);
         mkApply ("obt",
-                 ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16],
+                 ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16; "vlan", 12; "pcp", 3],
                  [["o",9], "out" %<-% Var("o",9)],
                  Skip);
         mkOrdered [
@@ -1331,14 +1351,6 @@ let rep_of params data =
   let phys =
     sequence [
         "out" %<-% mkVInt(0,9);
-        (* mkOrdered [
-         *     Var("proto",8) %=% mkVInt(6,8),
-         *     sequence [
-         *         "tcp_sport" %<-% mkVInt(0,16);
-         *         "tcp_dport" %<-% mkVInt(0,16)
-         *       ];
-         *     True , Skip
-         *   ]; *)
         mkApply("validation",
                 ["in_port", 9;"eth_src",48;"eth_typ",16;"ip_src",32],
                 [["ov",9], "out" %<-% Var("ov",9)],
@@ -1348,7 +1360,7 @@ let rep_of params data =
                 [["of",9], "out" %<-% Var("of",9) ],
                 Skip);
         mkApply("acl",
-                ["in_port", 9;"eth_src",48; "eth_dst",48; "eth_typ",16; "ip_src",32; "ip_dst",32; "proto",8; "tcp_sport", 16; "tcp_dport", 16],
+                ["in_port", 9;"eth_src",48; "eth_dst",48; "eth_typ",16; "ip_src",32; "ip_dst",32; "proto",8; "tcp_sport", 16; "tcp_dport", 16; "vlan", 12; "pcp", 3],
                 [["oa",9], "out" %<-% Var("oa", 9)],
                 Skip);
         mkOrdered [
@@ -1365,34 +1377,35 @@ let rep_of params data =
 
 
 
-let rep_par params data =
+let rep_par params data nrules =
   let fvs = ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16] in
   let cb_fvs = List.map ~f:fst fvs in
   let gen_data : Edit.t list =
     let cb_rows = parse_classbench_of data in
     Printf.printf "There are %d rows \n%!" (List.length cb_rows);
     List.fold cb_rows ~init:([] : Edit.t list)
-         ~f:(fun acc cb_row ->
-           let open Edit in
-           let fields = cb_fvs in
-           let matches = project cb_row fields |> (cb_to_matches "logical" fvs) in
-           if List.exists acc ~f:(function
-                  | Add (_,(ms,_,_)) -> List.(ms = matches)
+      ~f:(fun acc cb_row ->
+        let open Edit in
+        let fields = cb_fvs in
+        let matches = project cb_row fields |> (cb_to_matches "logical" fvs) in
+        if List.exists acc ~f:(function
+               | Add (_,(ms,_,_)) -> List.(ms = matches)
+               | _ -> false)
+           || List.for_all matches ~f:(function
+                  | Mask(_,m) -> Bigint.(get_int m = zero)
                   | _ -> false)
-              || List.for_all matches ~f:(function
-                     | Mask(_,m) -> Bigint.(get_int m = zero)
-                     | _ -> false)
-           then
-             (* let () = Printf.printf "\tthrowing out %s\n" (Edit.to_string (Add("obt",(matches, [], -1)))) in *)
-             acc
-           else
-             let outp = generate_out acc cb_row in
-             let e =  Add("obt", (matches, [Int(outp,9)], 0)) in
-             (* let () = Printf.printf "Keeping %s\n" (Edit.to_string e) in *)
-             acc @ [e]
-         )
+        then
+          (* let () = Printf.printf "\tthrowing out %s\n" (Edit.to_string (Add("obt",(matches, [], -1)))) in *)
+          acc
+        else
+          let outp = generate_out acc cb_row in
+          let e =  Add("obt", (matches, [Int(outp,9)], 0)) in
+          (* let () = Printf.printf "Keeping %s\n" (Edit.to_string e) in *)
+          acc @ [e]
+      )
   in
   Printf.printf "there are %d cleaned rules\n%!" (List.length gen_data);
+  let gen_data = List.filteri gen_data ~f:(fun i _ -> i < nrules) in
   let fvs = ("out", 9) :: fvs in
   let log =
     sequence [
@@ -1428,9 +1441,9 @@ let rep_par params data =
                                                        Skip);
 
             Var("next_tbl",2) %=% mkVInt(3,2), mkApply("l4",
-                                                        ["tcp_dst",32],
-                                                        [["o4",9], "out" %<-% Var("o4",9)],
-                                                        Skip);
+                                                       ["tcp_dst",32],
+                                                       [["o4",9], "out" %<-% Var("o4",9)],
+                                                       Skip);
             True , Skip
           ];
         mkApply("acl",
@@ -1448,3 +1461,114 @@ let rep_par params data =
   in
   let problem = Problem.make ~log:log ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
   measure (restart_timer params (Time.now())) None problem (List.(gen_data >>| return))
+
+
+
+(********************************
+ *     Benchmark # headers
+ *********************************)
+
+let headers params sz ntables max_headers max_edits =
+  let physical_tables =
+    List.fold (range_ex 0 max_headers) ~init:[]
+      ~f:(fun acc num_xs ->
+        let fvs = ("out",9) :: mk_normal_keys sz ntables in
+        let logical_table =
+          mkApply("logical",
+                  mk_normal_keys sz ntables,
+                  [["o", 9], "out" %<-% Var("o", 9)],
+                  Skip)
+        in
+        let phys = create_bench sz ntables num_xs 0 in
+        let log_edits =
+          create_log_edits 32 0 max_edits ntables |> List.map ~f:(List.return)
+        in
+        let problem = Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
+        acc @ [num_xs,problem,log_edits ])
+  in
+  List.fold physical_tables ~init:"numxs,num_ms,time"
+    ~f:(fun acc (num_xs,problem,log_edits) ->
+      Synthesis.edit_cache := EAbstr.make ();
+      let st = Time.now () in
+      let es = measure (restart_timer params st) None problem log_edits in
+      let nd = Time.now () in
+      let dur = Time.diff nd st in
+      match es with
+      | None ->
+         Printf.sprintf "%s\n%d,TIMEOUT" acc num_xs
+      | Some _ ->
+         Printf.sprintf "%s\n%d,%f" acc num_xs (Time.Span.to_ms dur)
+    )
+  |> Printf.printf "%s\n"
+
+
+
+(***************************************
+ *        Benchmark Metadata           *
+ ***************************************)
+
+let metadata params sz nmeta nedits =
+  let problems =
+    List.fold (range_ex 0 nmeta) ~init:[]
+      ~f:(fun acc num_ms ->
+        let fvs = [("out",9) ; ("x",sz)] in
+        let logical_table =
+          sequence [
+              "out" %<-% mkVInt(0,9);
+              mkApply("logical",
+                      ["x", sz],
+                      [["o", 9], "out" %<-% Var("o", 9)],
+                      Skip)
+            ]
+        in
+        let phys =
+          "out" %<-% mkVInt(0,9) ::
+            List.map (range_ex 0 nmeta)
+              ~f:(fun i -> Printf.sprintf "m%d" i %<-% mkVInt(0,sz))
+          @
+          List.map (range_ex 0 nmeta)
+            ~f:(fun table_idx ->
+              if table_idx = 0 then
+                mkApply("phys0", ["x",sz], [["d0",sz], "m0" %<-% Var("d0",sz) ], Skip)
+              else if table_idx + 1 = nmeta then
+                  mkApply(Printf.sprintf "phys%d"  table_idx,
+                          [Printf.sprintf "m%d" (table_idx - 1), sz],
+                          [[Printf.sprintf "d%d" table_idx, 9],
+                           "out" %<-% Var(Printf.sprintf "d%d" table_idx, 9)
+                          ],
+                          Skip)
+              else
+                mkApply(Printf.sprintf "phys%d"  table_idx,
+                        [Printf.sprintf "m%d" (table_idx - 1), sz],
+                        [[Printf.sprintf "d%d" table_idx, sz],
+                         Printf.sprintf "m%d" table_idx %<-% Var(Printf.sprintf "d%d" table_idx, sz)
+                        ],
+                        Skip)
+
+            ) |> sequence
+        in
+        let log_edits =
+          List.map (range_ex 0 nedits)
+            ~f:(fun i ->
+              [Edit.Add("logical", ([Match.Exact(mkInt(i,sz))], [mkInt(i,9)],0)) ]
+            )
+        in
+        Printf.printf "Log:\n%s\n%!" (string_of_cmd logical_table);
+        Printf.printf "Phys:\n%s\n%!" (string_of_cmd phys);
+        let problem = Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
+        acc @ [ num_ms, problem, log_edits ])
+  in
+  List.fold problems ~init:"num_ms,time"
+    ~f:(fun acc (num_xs,problem,log_edits) ->
+      Synthesis.edit_cache := EAbstr.make ();
+      let st = Time.now () in
+      let es = measure (restart_timer params st) None problem log_edits in
+      let nd = Time.now () in
+      let dur = Time.diff nd st in
+      match es with
+      | None ->
+         Printf.sprintf "%s\n%d,TIMEOUT" acc num_xs
+      | Some _ ->
+         Printf.sprintf "%s\n%d,%f" acc num_xs (Time.Span.to_ms dur)
+    )
+  |> Printf.printf "%s\n"

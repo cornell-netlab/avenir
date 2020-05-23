@@ -8,9 +8,9 @@ let print_debug = false
 
 let debug term =
   if print_debug then
+
     let res = Smtlib.term_to_sexp term |> Smtlib.sexp_to_string in
     Printf.printf "TERM: %s\n%!" res
-  else ()
 
 let test_str test =
   if false then
@@ -140,13 +140,16 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
   if params.debug && print_debug then Printf.printf "Got a Result\n%!";
   let model =
     if response = Sat then
+      (* let () = Printf.printf "Sat\n%!" in *)
       let model = get_model sat_prover
                   |> model_to_packet
                   |> Shortener.unshorten_model shortener in
       if params.debug && print_debug then
         Printf.printf "MODEL: %s\n%!" (Packet.string__packet model);
       Some model
-    else None
+      else if response = Unknown then
+        failwith "UNKNOWN"
+      else None
   in reset sat_prover; (model, dur)
 
 
@@ -214,13 +217,13 @@ let check_valid_cached (params : Parameters.t) (test : Ast.test) =
                        check_valid_inner params q in
      match m with
      | Some _ ->
-        Printf.printf "\tAbstraction Failed\n%!";
+        (* Printf.printf "\tAbstraction Failed\n%!"; *)
         (* Printf.printf "\t%s\n%!" (string_of_test q); *)
         let dur' = Time.(diff (now()) st) in
         let (m , dur) = check_valid_inner params test in
         (m, Time.Span.(dur + dur'))
      | None ->
-        Printf.printf "\tAbstraction successful\n%!";
+        (* Printf.printf "\tAbstraction successful\n%!"; *)
         cache := QAbstr.add_abs q test !cache;
         (m, Time.Span.(dur + dur'))
 

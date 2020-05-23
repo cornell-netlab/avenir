@@ -99,18 +99,40 @@ let debug (q, w, e, r, t) = (Tables.Match.to_string q) ^ " " ^ (Tables.Match.to_
 
 
 
+let get_mask = function
+  | Some Match.Mask(_,m) -> get_int m
+  | Some Match.Exact(v) -> Bigint.of_string ("0b"^String.make (size_of_value v) '1')
+  | Some Match.Between(lo,hi) -> Bigint.(get_int hi - get_int lo)
+  | None -> Bigint.zero
+
+let to_mask_tuple cb =
+  let open Bigint in
+  get_mask cb.in_port
+  + get_mask cb.ip_dst
+  + get_mask cb.ip_src
+  + get_mask cb.eth_dst
+  + get_mask cb.eth_src
+  + get_mask cb.tcp_dport
+  + get_mask cb.tcp_sport
+  + get_mask cb.eth_typ
+  + get_mask cb.vlan
+  + get_mask cb.pcp
+  + get_mask cb.proto
+
+
 
 let parse_classbench fp =
-  In_channel.read_lines fp
-  |> List.fold ~init:[]
-       ~f:(fun rows line ->
-         let vars = String.split line ~on:'\t' in
-         let ip_src = List.nth_exn vars 0 |> parse_ip_mask |> Some in
-         let ip_dst = List.nth_exn vars 1 |> parse_ip_mask |> Some in
-         let tcp_sport = List.nth_exn vars 2 |> parse_port_range |> Some in
-         let tcp_dport = List.nth_exn vars 3 |> parse_port_range |> Some  in
-         let proto = List.nth_exn vars 4 |> parse_proto |> Some in
-         rows @ [{default with ip_src; ip_dst; tcp_sport; tcp_dport; proto}])
+  let rules = In_channel.read_lines fp
+              |> List.fold ~init:[]
+                   ~f:(fun rows line ->
+                     let vars = String.split line ~on:'\t' in
+                     let ip_src = List.nth_exn vars 0 |> parse_ip_mask |> Some in
+                     let ip_dst = List.nth_exn vars 1 |> parse_ip_mask |> Some in
+                     let tcp_sport = List.nth_exn vars 2 |> parse_port_range |> Some in
+                     let tcp_dport = List.nth_exn vars 3 |> parse_port_range |> Some  in
+                     let proto = List.nth_exn vars 4 |> parse_proto |> Some in
+                     rows @ [{default with ip_src; ip_dst; tcp_sport; tcp_dport; proto}]) in
+  rules
 
 
 
@@ -131,7 +153,7 @@ let parse_of ident line : Match.t option =
        | "dl_src" | "dl_dst" -> parse_eth_addr data
        | _ -> failwith @@ Printf.sprintf "unrecognized header %s" ident
      in
-     Printf.printf "From %s \n extract %s and %s \n convert to %s~%s\n%!" line data1 data ident (Match.to_string out);
+     (* Printf.printf "From %s \n extract %s and %s \n convert to %s~%s\n%!" line data1 data ident (Match.to_string out); *)
      Some(out)
 
   

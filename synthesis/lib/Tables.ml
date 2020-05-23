@@ -17,7 +17,7 @@ module Match = struct
     | Between (lo,hi) -> Printf.sprintf "[%s,%s]" (string_of_value lo) (string_of_value hi)
     | Mask ((Int(i,sz) as v), (Int(j,sz') as m)) ->
        if Bigint.(i = zero && j = zero ) then
-         Printf.sprintf "*"
+         Printf.sprintf "*#%d" sz
        else
          Printf.sprintf "%s & %s" (string_of_value v) (string_of_value m)
 

@@ -130,25 +130,25 @@ let rec apply ?no_miss:(no_miss = false)
      in
      let dflt_row =
        let cond = match tag with
-         | OnlyHoles _ ->
-            if no_miss
-            then False
-            else List.foldi rows ~init:(True)
-                   ~f:(fun i acc (ms,_,act) ->
-                     let i = List.length rows - i in
-                     acc %&%
-                       if act >= List.length t.actions then True else
-                         !%(Match.list_to_test t.keys ms
-                            %&% match tag with
-                                | WithHoles (ds,_) when List.exists ds ~f:((=) (t.name, i))
-                                  -> Hole.delete_hole i t.name %=% mkVInt(0,1)
-                                | _ -> True))
+         | OnlyHoles _ -> True
+            (* if no_miss
+             * then False
+             * else List.foldi rows ~init:(True)
+             *        ~f:(fun i acc (ms,_,act) ->
+             *          let i = List.length rows - i in
+             *          acc %&%
+             *            if act >= List.length t.actions then True else
+             *              !%(Match.list_to_test t.keys ms
+             *                 %&% match tag with
+             *                     | WithHoles (ds,_) when List.exists ds ~f:((=) (t.name, i))
+             *                       -> Hole.delete_hole i t.name %=% mkVInt(0,1)
+             *                     | _ -> True)) *)
          | _ -> True
        in
        [(cond, t.default)]
      in
      let mk_select = match tag with
-       | OnlyHoles _ -> mkPartial
+       | OnlyHoles _ -> mkOrdered
        | _ -> mkOrdered
      in
      let tbl_select = (if params.above then holes @ selects else selects @ holes) @ dflt_row |> mk_select in

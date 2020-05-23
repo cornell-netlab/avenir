@@ -22,26 +22,46 @@ type t = {
     search_space : (test * Hint.t list) list;
   }
 
-let string_of_opts ({injection;hints;paths;only_holes;mask} : opts) : string =
-  let s = if injection then "injection  " else "" in
-  let s = if hints then s^"hints  " else s in
-  let s = if paths then s^"paths  " else s in
-  let s = if only_holes then s^"only holes  " else s in
-  let s = if mask then s^"mask" else s in
+let string_of_opts (opts) : string =
+  let s = if opts.injection then "injection  " else "" in
+  let s = if opts.hints then s^"hints  " else s in
+  let s = if opts.paths then s^"paths  " else s in
+  let s = if opts.only_holes then s^"only holes  " else s in
+  let s = if opts.mask then s^"mask " else s in
+  let s = if opts.restrict_mask then s^"restrict_mask" else s in
+  let s = if opts.nlp then s^"nlp" else s in
+  let s = if opts.annot then s^"annot" else s in
+  let s = if opts.single then s^"single" else s in
+  let s = if opts.domain then s^"domain_restrict" else s in
   if s = "" then "none" else s
 
+let no_opts =
+  {injection = false;
+   hints = false;
+   paths = false;
+   only_holes = false;
+   mask = false;
+   restrict_mask = false;
+   nlp = false;
+   annot = false;
+   single = false;
+   domain = false;
+  }
+
+
 (* None > Mask > Paths > Injection > Hints > Only_Holes *)
-let rec make_schedule ({injection;hints;paths;only_holes;mask} as opt) =
+let rec make_schedule ({injection;hints;paths;only_holes;mask;restrict_mask;nlp;domain} as opt) =
   opt ::
     (* if only_holes then
      *   make_schedule {opt with only_holes = false}
      * else if hints || injection then
      *   make_schedule {opt with injection = false; hints = false}
      * else *)
-    (* if injection || hints || paths || only_holes then
-     *   [{opt with injection=false;hints=false;paths=false;only_holes=false}]
-     * else *)
-      []
+    if injection || hints || paths || only_holes || nlp || domain then
+      [{opt with injection=false;hints=false;paths=false;only_holes=false; nlp=false;domain = false}]
+    else if mask && restrict_mask then
+      [no_opts]
+    else  [no_opts]
 
 let make_searcher (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : t =
   let schedule = make_schedule {
@@ -125,7 +145,7 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                           (* |> refine_counter params problem in *)
   (* let () = Printf.printf "in : %s \n out: %s\n%!" (string_of_map in_pkt) (string_of_map out_pkt) in *)
   let st = Time.now () in
-  let deletions = [] in (*compute_deletions in_pkt problem in*)
+  let deletions = compute_deletions in_pkt problem in
   let hints = if opts.hints then
                 let open Problem in
                 Hint.construct (log problem) (phys problem) (log_edits problem |> List.hd_exn)
@@ -326,7 +346,7 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
             %&%
             active_domain_restrict %&% query_test in
           (* Printf.printf "outtest_computed\n%!"; *)
-          let () = if params.debug then Printf.printf "test is \n   %s\n\n%!" (string_of_test out_test) in
+          (* let () = if params.debug then Printf.printf "test is \n   %s\n\n%!" (string_of_test out_test) in *)
           Some (out_test, hints)) in
   tests
 
@@ -376,6 +396,9 @@ let minimize_model (model : value StringMap.t) (phys : cmd) : value StringMap.t 
 
 
 let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t) option)=
+  match params.timeout with
+  | Some (st,dur) when Time.(Span.(diff (now()) st > dur)) -> None
+  | _ ->
   match t.search_space, t.schedule with
   | [], [] ->
      if params.debug then Printf.printf "Search failed\n%!";
@@ -392,7 +415,7 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
   | (test,hints)::search_space, schedule ->
      (* Printf.printf "Check sat\n%!"; *)
      (* if params.debug then Printf.printf "MODELSPACE:\n%s\nTEST\n%s\n%!" (Problem.model_space problem |> string_of_test) (test |> string_of_test); *)
-     let model_opt, dur = check_sat params (Problem.model_space problem %&% test) in
+     let model_opt, dur = check_sat params ((*Problem.model_space problem %&%*) test) in
      ProfData.incr !data.model_z3_calls;
      ProfData.update_time_val !data.model_z3_time dur;
      (* Printf.printf "Sat Checked\n%!\n"; *)

@@ -597,6 +597,7 @@ module Classbench = struct
   let spec = Command.Spec.(
       empty
       +> anon ("EXPNAME" %: string)
+      +> anon ("NRULES" %: int)
       +> flag "-data" (required string) ~doc:"path to classbench data"
       +> flag "-DEBUG" no_arg ~doc:"debug"
       +> flag "-i" no_arg ~doc:"interactive mode"
@@ -623,6 +624,7 @@ module Classbench = struct
              )
   let run
         expname
+        nrules
         data
         debug
         interactive
@@ -674,16 +676,16 @@ module Classbench = struct
       })
     in
     if String.(uppercase expname = "IPONLY") then
-      ignore(Benchmark.rep params data : Tables.Edit.t list option)
+      ignore(Benchmark.rep params data nrules : Tables.Edit.t list option)
     else if String.(uppercase expname = "TCPIP" || uppercase expname = "IPTCP") then
-      ignore(Benchmark.rep_middle params data : Tables.Edit.t list option)
+      ignore(Benchmark.rep_middle params data nrules : Tables.Edit.t list option)
     else if String.(uppercase expname = "FULL"
                     || uppercase expname = "ETHTCPIP"
                     || uppercase expname = "ETHIPTCP"
                     || uppercase expname = "OF") then
-      ignore(Benchmark.rep_of params data : Tables.Edit.t list option)
+      ignore(Benchmark.rep_of params false data nrules : Tables.Edit.t list option)
     else if String.(uppercase expname = "PAR") then
-      ignore(Benchmark.rep_par params data : Tables.Edit.t list option)
+      ignore(Benchmark.rep_par params data nrules : Tables.Edit.t list option)
     else
       failwith @@ Printf.sprintf "Unrecognized experiment parameter %s" expname
 
@@ -801,6 +803,198 @@ let sqbench : Command.t =
     SqBench.run
 
 
+
+module NumHdrs = struct
+  let spec = Command.Spec.(
+      empty
+      +> anon ("SIZE" %: int)
+      +> anon ("NTABLES" %: int)
+      +> anon ("NHEADERS" %: int)
+      +> anon ("NRULES" %: int)
+      +> flag "-DEBUG" no_arg ~doc:"debug"
+      +> flag "-i" no_arg ~doc:"interactive mode"
+      +> flag "-w" no_arg ~doc:"Do widening"
+      +> flag "-s" no_arg ~doc:"Do slicing optimization"
+      +> flag "-e" (required int) ~doc:"maximum number of physical edits"
+      +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
+      +> flag "-m" no_arg ~doc:"Prune rows with no holes"
+      +> flag "--inj" no_arg ~doc:"Try injection optimization"
+      +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
+      +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
+      +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
+      +> flag "--shortening" no_arg ~doc:"shorten queries"
+      +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
+      +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
+      +> flag "--hints" no_arg ~doc:"Use syntactic hints"
+      +> flag "--holes" no_arg ~doc:"Holes only"
+      +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
+      +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
+      +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
+      +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
+      +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
+      +> flag "--timeout" (optional float) ~doc:"Optional timeout in seconds"
+             )
+  let run
+        sz
+        ntables
+        nheaders
+        nrules
+        debug
+        interactive
+        widening
+        do_slice
+        edits_depth
+        search_width
+        monotonic
+        injection
+        fastcx
+        vcache
+        ecache
+        shortening
+        above
+        minimize
+        hints
+        only_holes
+        allow_annotations
+        nlp
+        unique_edits
+        domain
+        restrict_mask
+        timeout
+        () =
+    let params =
+      Parameters.({
+                     widening;
+                     do_slice;
+                     edits_depth;
+                     search_width;
+                     debug;
+                     monotonic;
+                     interactive;
+                     injection;
+                     fastcx;
+                     vcache;
+                     ecache;
+                     shortening;
+                     above;
+                     minimize;
+                     hints;
+                     only_holes;
+                     allow_annotations;
+                     nlp;
+                     unique_edits;
+                     domain;
+                     restrict_mask;
+                     timeout = Option.(timeout >>= fun s -> Some(Time.now(), (Time.Span.of_sec s)))
+      })
+    in
+    Benchmark.headers params sz ntables nheaders nrules
+
+
+end
+
+let nhdrs_cmd : Command.t =
+  Command.basic_spec
+    ~summary:"benchmarks generated insertions"
+    NumHdrs.spec
+    NumHdrs.run
+
+
+
+
+module MetadataBench = struct
+  let spec = Command.Spec.(
+      empty
+      +> anon ("SIZE" %: int)
+      +> anon ("NMETA" %: int)
+      +> anon ("NRULES" %: int)
+      +> flag "-DEBUG" no_arg ~doc:"debug"
+      +> flag "-i" no_arg ~doc:"interactive mode"
+      +> flag "-w" no_arg ~doc:"Do widening"
+      +> flag "-s" no_arg ~doc:"Do slicing optimization"
+      +> flag "-e" (required int) ~doc:"maximum number of physical edits"
+      +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
+      +> flag "-m" no_arg ~doc:"Prune rows with no holes"
+      +> flag "--inj" no_arg ~doc:"Try injection optimization"
+      +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
+      +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
+      +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
+      +> flag "--shortening" no_arg ~doc:"shorten queries"
+      +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
+      +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
+      +> flag "--hints" no_arg ~doc:"Use syntactic hints"
+      +> flag "--holes" no_arg ~doc:"Holes only"
+      +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
+      +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
+      +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
+      +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
+      +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
+      +> flag "--timeout" (optional float) ~doc:"Optional timeout in seconds"
+             )
+  let run
+        sz
+        nmeta
+        nrules
+        debug
+        interactive
+        widening
+        do_slice
+        edits_depth
+        search_width
+        monotonic
+        injection
+        fastcx
+        vcache
+        ecache
+        shortening
+        above
+        minimize
+        hints
+        only_holes
+        allow_annotations
+        nlp
+        unique_edits
+        domain
+        restrict_mask
+        timeout
+        () =
+    let params =
+      Parameters.({
+                     widening;
+                     do_slice;
+                     edits_depth;
+                     search_width;
+                     debug;
+                     monotonic;
+                     interactive;
+                     injection;
+                     fastcx;
+                     vcache;
+                     ecache;
+                     shortening;
+                     above;
+                     minimize;
+                     hints;
+                     only_holes;
+                     allow_annotations;
+                     nlp;
+                     unique_edits;
+                     domain;
+                     restrict_mask;
+                     timeout = Option.(timeout >>= fun s -> Some(Time.now(), (Time.Span.of_sec s)))
+      })
+    in
+    Benchmark.metadata params sz nmeta nrules
+
+
+end
+
+let metadata_cmd : Command.t =
+  Command.basic_spec
+    ~summary:"benchmarks generated insertions"
+    MetadataBench.spec
+    MetadataBench.run
+
 let main : Command.t =
   Command.group
     ~summary:"Invokes the specified Motley Command"
@@ -809,6 +1003,8 @@ let main : Command.t =
     ; ("runtest", runtest_cmd)
     ; ("bench", benchmark)
     ; ("square", sqbench)
+    ; ("headers", nhdrs_cmd)
+    ; ("metadata", metadata_cmd)
     ; ("classbench", classbench_cmd)
     ; ("onf", onf)
     ; ("eq", equality)

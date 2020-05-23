@@ -227,7 +227,7 @@ let symb_wp ?fvs:(fvs=[]) cmd =
   |> wp cmd
 
 let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t)
-  : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
+    : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
   let st_mk_cond = Time.now () in
   let log = Problem.log_gcl_program params problem in
   let phys = Problem.phys_gcl_program params problem in
@@ -591,6 +591,7 @@ let minimize_solution params data problem =
 
 let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (Edit.t list option) =
   (* Printf.printf "\tcegis_math\n%!"; *)
+  (* Printf.printf "%s\n%!" (List.hd_exn (Problem.log_edits problem) |> Edit.to_string); *)
   match params.timeout with
   | Some (st,dur) when Time.(Span.(dur < diff(now()) st))  -> None
   | _ ->
@@ -646,7 +647,7 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
    *   Printf.printf "+Model Space+\n%!"; *)
   (* Printf.printf "\tSolving for %d more iters\n%!" i; *)
   match params.timeout with
-  | Some (st,dur) when Time.(Span.(dur < diff(now()) st))  -> None
+  | Some (st,dur) when Time.(Span.(dur < diff(now()) st)) -> Printf.printf "Timeout\n%!"; None
   | _ ->
   if i = 0 then
     (* let () = Printf.printf "The jig is up\n%!" in *)
@@ -655,12 +656,11 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
     if params.ecache then
       match EAbstr.infer !edit_cache (Problem.log_edits problem |> List.hd_exn) with
       | None ->
-         Printf.printf "\tedit cache miss\n";
          cegis_math {params with ecache = false} data problem
       | Some ps ->
-         match cegis_math {params with fastcx = false; ecache = false; minimize = false} data (Problem.replace_phys_edits problem ps) with
-         | Some ps -> Some ps
-         | None -> cegis_math {params with ecache = false} data problem
+         match get_cex {params with fastcx = false} data (Problem.replace_phys_edits problem ps) with
+         | `Yes -> Some ps
+         | `NoAndCE _ -> cegis_math {params with ecache = false} data problem
     else
       if Problem.model_space problem = True
          || (check_sat params (Problem.model_space problem) |> fst |> Option.is_some)
@@ -672,7 +672,7 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
             let st = Time.now () in
             let rec loop i problem searcher =
               match params.timeout with
-              | Some (st,dur) when Time.(Span.(dur < diff(now()) st))  -> None
+              | Some (st,dur) when Time.(Span.(dur < diff(now()) st))  ->  Printf.printf "Timeout\n%!";None
               | _ ->
               if i = 0 then
                 (* let () = Printf.printf "The jig is up\n%!" in *)
@@ -758,11 +758,12 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
                           (* if params.interactive then
                            *   ignore(Stdio.In_channel.(input_char stdin) : char option); *)
                           ProfData.incr !data.num_backtracks;
-                          match (1, get_new_cex params data problem) with
-                          | 0, Some problem ->
-                             Printf.printf "\tnew cex\n%!";
-                             solve_math (i - 1) params data problem
-                          | _, _ -> solve_math (i - 1) params data problem
+                          (* match (1, get_new_cex params data problem) with
+                           * | 0, Some problem ->
+                           *    Printf.printf "\tnew cex\n%!";
+                           *    solve_math (i - 1) params data problem
+                           * | _, _ -> *)
+                          solve_math (i - 1) params data problem
 
                      in
                      if params.debug then begin

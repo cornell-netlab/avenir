@@ -40,9 +40,9 @@ let similar (eold : Edit.t) (enew : Edit.t) =
               (* let () = Printf.printf "\t[MTCH] %s identical, moving on\n%!" (Match.to_string om) in *)
               Some acc
             else
-              if Match.is_wildcard om || Match.is_wildcard nm then
-                None
-              else
+              (* if Match.is_wildcard om || Match.is_wildcard nm then
+               *   None
+               * else *)
                 let om_s = Match.to_string om in
                 begin match StringMap.find acc om_s with
                 | Some nm' when nm' = nm -> Some acc
