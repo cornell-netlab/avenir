@@ -421,7 +421,7 @@ control l3_fwd(inout parsed_packet_t hdr,
         local_metadata.dst_vlan = dst_vlan;
         hdr.ethernet.src_addr = smac;
         hdr.ethernet.dst_addr = dmac;
-        hdr.ipv4_base.ttl = hdr.ipv4_base.ttl - 1;
+        hdr.ipv6.hop_limit = hdr.ipv6.hop_limit - 1;
     }
 
     @max_group_size(8)
@@ -519,7 +519,7 @@ control MyIngress(inout parsed_packet_t hdr,
     }
 }
 
-control egress(inout parsed_packet_t hdr,
+control MyEgress(inout parsed_packet_t hdr,
                inout local_metadata_t local_metadata,
                inout standard_metadata_t standard_metadata) {
     apply {

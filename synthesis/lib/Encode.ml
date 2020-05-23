@@ -439,7 +439,7 @@ let lookup_exn (Program(top_decls) : program) (ctx : Declaration.t list) (ident 
     List.find ~f:(fun d -> safe_name d = Some (snd name)) in
   match find ident ctx with
   | None -> begin match find ident top_decls with
-      | None -> failwith ("[Error: UseBeforeDef] Couldnt find " ^ snd ident ^ " from " ^ Petr4.Info.to_string (fst ident))
+      | None -> failwith ("[Error: UseBeforeDef] Couldn't find " ^ snd ident ^ " from " ^ Petr4.Info.to_string (fst ident))
       | Some d -> d
     end
   | Some d -> d
@@ -482,6 +482,9 @@ let rec dispatch prog ctx type_ctx rv members =
 
   | _ when Option.map (List.last members) ~f:snd = Some "setInvalid" ->
     `Motley ((validity_bit members) %<-% mkVInt(0,1), false, false)
+  | _ when Option.map (List.last members) ~f:snd = Some "setValid" ->
+    `Motley ((validity_bit members) %<-% mkVInt(1,1), false, false)
+
 
   | [member] ->
     let act, xs = lookup_action_exn prog ctx member in
@@ -789,15 +792,18 @@ and gather_constants (type_ctx : Declaration.t list) (decl : Declaration.t list)
   es  
 
 and encode_program (Program(top_decls) as prog : program ) =
+  let type_cxt = get_type_decls top_decls in
+  encode_pipeline type_cxt prog "MyIngress" %:% encode_pipeline type_cxt prog "MyEgress"
+
+and encode_pipeline (type_cxt : Declaration.t list) (Program(top_decls) as prog:program ) (pn : string) =
   let open Declaration in
   match List.find top_decls ~f:(fun d -> match snd d with
-                                            | Control{name;_} -> snd name = "MyIngress"
+                                            | Control{name;_} -> snd name = pn
                                             | _ -> false) with
-  | None -> failwith "Could not find control module MyIngress"
+  | None -> failwith ("Could not find control module " ^ pn)
   | Some (_, Control c) ->
     let rv = get_return_value () in
     let assign_rv = mkAssn (return_bit rv) (mkVInt(1, 1)) in
-    let type_cxt = get_type_decls top_decls in
     let type_cxt2 = List.map c.params ~f:(update_typ_ctx_from_param type_cxt) @ type_cxt in
     (* let _ = printf "type_cxt\n%s\n" (Sexp.to_string ([%sexp_of: Declaration.t list] type_cxt)) in *)
     let assign_consts = assign_constants type_cxt2 top_decls in
