@@ -84,7 +84,7 @@ header ipv6_t {
     bit<8>      traffic_class;
     bit<20>     flow_label;
     bit<16>     payload_length;
-    bit<8>      next_header;
+    bit<8>      next_hdr;
     bit<8>      hop_limit;
     IPv6Address src_addr;
     IPv6Address dst_addr;
@@ -243,7 +243,7 @@ parser pkt_parser(packet_in pk,
 
     state parse_ipv6 {
         pk.extract(hdr.ipv6);
-        transition select(hdr.ipv6.next_header) {
+        transition select(hdr.ipv6.next_hdr) {
             IP_PROTOCOLS_ICMPv6: parse_icmp;
             IP_PROTOCOLS_TCP: parse_tcp;
             IP_PROTOCOLS_UDP: parse_udp;
@@ -381,7 +381,7 @@ control punt(inout parsed_packet_t hdr,
             hdr.ipv6.src_addr     : ternary;
             hdr.ipv6.dst_addr     : ternary;
             // hdr.ipv4_base.protocol        : ternary;
-            hdr.ipv6.next_header  : ternary;
+            hdr.ipv6.next_hdr  : ternary;
             // hdr.arp.target_proto_addr  : ternary;
             // local_metadata.icmp_code      : ternary;
             hdr.vlan_tag[0].vid           : ternary;
@@ -433,7 +433,7 @@ control l3_fwd(inout parsed_packet_t hdr,
             local_metadata.vrf_id     : exact;
             hdr.ipv6.dst_addr    : lpm;
             hdr.ipv6.src_addr    : selector;
-            hdr.ipv6.next_header    : selector;
+            hdr.ipv6.next_hdr    : selector;
             local_metadata.l4_src_port: selector;
             local_metadata.l4_dst_port: selector;
         }
