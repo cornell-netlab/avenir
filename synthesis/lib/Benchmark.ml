@@ -703,12 +703,10 @@ and zero_init fvs cmd =
   |> List.fold ~init:cmd ~f:(fun c1 c2 -> c2 %:% c1)
 
 and drop_handle fvs cmd =
-  let vs = variables cmd |> List.dedup_and_sort ~compare:(fun (v1, _) (v2, _) -> String.compare v1 v2) in
-  let zs = List.filter vs ~f:(fun v -> List.mem fvs v (=)) in
-  let c_end = List.map zs ~f:(fun (v, w) -> mkAssn v (mkVInt(0, w)))
+  let c_end = List.map fvs ~f:(fun (v, w) -> mkAssn v (mkVInt(0, w)))
               |> List.fold ~init:Skip ~f:(fun c1 c2 -> c1 %:% c2)
   in
-  cmd %:% mkOrdered [ Var("drop", 1) %=% mkVInt(1, 1), c_end; True, Skip]
+  cmd %:% mkOrdered [ Var("standard_metadata.egress_spec", 9) %=% mkVInt(0, 9), c_end; True, Skip]
 
 and variables cmd =
   match cmd with

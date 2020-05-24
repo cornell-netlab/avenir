@@ -61,7 +61,7 @@
 
 // ADDED
 
-//const bit<9> CPU_PORT = 64;
+const bit<9> CPU_PORT = 64;
 
 // END ADDED
 
@@ -81,6 +81,14 @@ control MyIngress (inout parsed_headers_t hdr,
     apply {
         _PRE_INGRESS
         filtering.apply(hdr, fabric_metadata, standard_metadata);
+        if (fabric_metadata.skip_forwarding == _FALSE) {
+            forwarding.apply(hdr, fabric_metadata, standard_metadata);
+        }
+        acl.apply(hdr, fabric_metadata, standard_metadata);
+        if (fabric_metadata.skip_next == _FALSE) {
+            next.apply(hdr, fabric_metadata, standard_metadata);
+        }
+
     }
 }
 

@@ -477,7 +477,7 @@ let get_return_value =
 let rec dispatch prog ctx type_ctx rv members =
   match members with
   | [] -> failwith "[RuntimeException] Tried to Dispatch an empty list of names"
-  | [(_,"mark_to_drop")] -> `Motley ("drop" %<-% mkVInt(1,1), false, false)
+  | [(_,"mark_to_drop")] -> `Motley ("standard_metadata.egress_spec" %<-% mkVInt(0,9), false, false)
   | [(_,"clone3")] -> `Motley (Skip, false, false) (* TODO: Anything we can do with this?  Seems out of scope for now... *)
 
   | _ when Option.map (List.last members) ~f:snd = Some "setInvalid" ->
@@ -793,9 +793,8 @@ and gather_constants (type_ctx : Declaration.t list) (decl : Declaration.t list)
 
 and encode_program (Program(top_decls) as prog : program ) =
   let type_cxt = get_type_decls top_decls in
-    mkAssn "drop" (mkVInt(0, 1))
-    %:%encode_pipeline type_cxt prog "MyIngress"
-    %:% mkOrdered [ Var("drop", 1) %=% mkVInt(0, 1), encode_pipeline type_cxt prog "MyEgress"; True, Skip ]
+    encode_pipeline type_cxt prog "MyIngress"
+    %:% mkOrdered [ Var("standard_metadata.egress_spec", 9) %<>% mkVInt(0, 9), encode_pipeline type_cxt prog "MyEgress"; True, Skip ]
 
 and encode_pipeline (type_cxt : Declaration.t list) (Program(top_decls) as prog:program ) (pn : string) =
   let open Declaration in
@@ -815,7 +814,6 @@ and encode_pipeline (type_cxt : Declaration.t list) (Program(top_decls) as prog:
  
 and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) (name : P4String.t) (props : Table.property list) : cmd =
   let open Table in
-  let xxx_print = printf "props = %s" (Sexp.to_string ([%sexp_of: Table.property list] props)) in
   let p4keys, p4actions, p4customs = List.fold_left props ~init:([], [], [])
       ~f:(fun (acc_keys, acc_actions, acc_customs) prop ->
           match snd prop with
