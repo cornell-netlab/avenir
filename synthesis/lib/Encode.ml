@@ -828,12 +828,14 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
   
   let lookup_and_encode_action i (_,a) =
     let (body, ad) = lookup_action_exn prog ctx a.name in
-    let action_data = List.map ad ~f:(fun (_,p) -> Parameter.(p.variable)) in
+    let action_data = List.map ad ~f:(fun (_,p) -> Parameter.(p.variable, p.typ)) in
+    let action_data_names = List.map action_data ~f:fst in
     (* Set up an action run variable so we can use it to figure out which action ran in switch statements *)
     let set_action_run = mkAssn (snd name ^ action_run_suffix) (mkVInt(i + 1, 1)) in
     let add_tctx = List.map ad ~f:(update_typ_ctx_from_param type_ctx) in 
     let type_ctx2 = add_tctx @ type_ctx in
-    List.map action_data ~f:(fun (_, ad) -> ad, -1), set_action_run %:% encode_action prog ctx type_ctx2 rv body ~action_data
+    List.map action_data ~f:(fun ((_, ad), t) -> ad, lookup_type_width_exn type_ctx t)
+            , set_action_run %:% encode_action prog ctx type_ctx2 rv body ~action_data:action_data_names
   in
   let action_cmds = List.mapi p4actions ~f:lookup_and_encode_action in
 
