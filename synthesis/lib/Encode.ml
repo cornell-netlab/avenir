@@ -804,7 +804,7 @@ and encode_pipeline (type_cxt : Declaration.t list) (Program(top_decls) as prog:
   | None -> failwith ("Could not find control module " ^ pn)
   | Some (_, Control c) ->
     let rv = get_return_value () in
-    let assign_rv = mkAssn (return_bit rv) (mkVInt(1, 1)) in
+    let assign_rv = mkAssn (return_bit rv) (mkVInt(0, 1)) in
     let type_cxt2 = List.map c.params ~f:(update_typ_ctx_from_param type_cxt) @ type_cxt in
     (* let _ = printf "type_cxt\n%s\n" (Sexp.to_string ([%sexp_of: Declaration.t list] type_cxt)) in *)
     let assign_consts = assign_constants type_cxt2 top_decls in
