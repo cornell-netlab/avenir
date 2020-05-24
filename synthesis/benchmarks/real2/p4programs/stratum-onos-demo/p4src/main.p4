@@ -172,6 +172,9 @@ struct local_metadata_t {
     bit<1>  l3_admit;
     @switchstack("field_type: P4_FIELD_TYPE_VLAN_VID")
     bit<12> dst_vlan;
+
+    bit<32> pos;
+
 }
 
 struct parsed_packet_t {
@@ -422,6 +425,7 @@ control l3_fwd(inout parsed_packet_t hdr,
         hdr.ethernet.src_addr = smac;
         hdr.ethernet.dst_addr = dmac;
         hdr.ipv6.hop_limit = hdr.ipv6.hop_limit - 1;
+	local_metadata.pos = 3;
     }
 
     @max_group_size(8)
@@ -495,7 +499,8 @@ control MyIngress(inout parsed_packet_t hdr,
     }
 
     apply {
-        if (hdr.packet_out.isValid()) {
+        local_metadata.pos = 0;
+	if (hdr.packet_out.isValid()) {
             standard_metadata.egress_spec = hdr.packet_out.egress_physical_port;
             hdr.packet_out.setInvalid();
         }
@@ -503,8 +508,10 @@ control MyIngress(inout parsed_packet_t hdr,
         if (standard_metadata.egress_spec == 0 ||
                 standard_metadata.egress_spec == LOOPBACK_PORT) {
             // Egress port not valid or not a packet out.
+	    local_metadata.pos = 1;
             my_station_table.apply();
             if (local_metadata.l3_admit == 1w1) {
+	        local_metadata.pos = 2;
                 l3_fwd.apply(hdr, local_metadata, standard_metadata);
             }
             else {

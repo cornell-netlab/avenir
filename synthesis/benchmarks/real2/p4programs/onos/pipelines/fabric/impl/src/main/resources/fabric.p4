@@ -80,14 +80,34 @@ control MyIngress (inout parsed_headers_t hdr,
 
     apply {
         _PRE_INGRESS
+#ifdef WITH_SPGW
+        spgw_normalizer.apply(hdr.gtpu.isValid(), hdr.gtpu_ipv4, hdr.gtpu_udp,
+                              hdr.ipv4, hdr.udp, hdr.inner_ipv4, hdr.inner_udp);
+#endif // WITH_SPGW
+        pkt_io_ingress.apply(hdr, fabric_metadata, standard_metadata);
         filtering.apply(hdr, fabric_metadata, standard_metadata);
+#ifdef WITH_SPGW
+        spgw_ingress.apply(hdr.gtpu_ipv4, hdr.gtpu_udp, hdr.gtpu,
+                           hdr.ipv4, hdr.udp, fabric_metadata, standard_metadata);
+#endif // WITH_SPGW
         if (fabric_metadata.skip_forwarding == _FALSE) {
             forwarding.apply(hdr, fabric_metadata, standard_metadata);
         }
         acl.apply(hdr, fabric_metadata, standard_metadata);
         if (fabric_metadata.skip_next == _FALSE) {
             next.apply(hdr, fabric_metadata, standard_metadata);
+#ifdef WITH_PORT_COUNTER
+            // FIXME: we're not counting pkts punted to cpu or forwarded via
+            // multicast groups. Remove when gNMI support will be there.
+            port_counters_control.apply(hdr, fabric_metadata, standard_metadata);
+#endif // WITH_PORT_COUNTER
+#if defined(WITH_INT_SOURCE) || defined(WITH_INT_SINK)
+            process_set_source_sink.apply(hdr, fabric_metadata, standard_metadata);
+#endif
         }
+#ifdef WITH_BNG
+        bng_ingress.apply(hdr, fabric_metadata, standard_metadata);
+#endif // WITH_BNG
 
     }
 }
@@ -101,7 +121,18 @@ control MyEgress (inout parsed_headers_t hdr,
 
     apply {
         _PRE_EGRESS
+        pkt_io_egress.apply(hdr, fabric_metadata, standard_metadata);
         egress_next.apply(hdr, fabric_metadata, standard_metadata);
+#ifdef WITH_SPGW
+        spgw_egress.apply(hdr.ipv4, hdr.gtpu_ipv4, hdr.gtpu_udp, hdr.gtpu,
+                          fabric_metadata, standard_metadata);
+#endif // WITH_SPGW
+#ifdef WITH_BNG
+        bng_egress.apply(hdr, fabric_metadata, standard_metadata);
+#endif // WITH_BNG
+#ifdef WITH_INT
+        process_int_main.apply(hdr, fabric_metadata, standard_metadata);
+#endif
     }
 }
 

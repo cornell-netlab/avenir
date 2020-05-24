@@ -1,0 +1,11 @@
+ADD,ingress_port_vlan,0&0#9;0&0#1;0&0#12,,1
+ADD,fwd_classifier,0&0#9;0&0#48;0&0#16;0&0#16,4#3,0
+ADD,simple,1017#32,17#9,0
+ADD,simple,1018#32,18#9,0
+ADD,simple,1010#32,10#9,0
+ADD,simple,1012#32,12#9,0
+ADD,simple,1011#32,11#9,0
+ADD,simple,1008#32,8#9,0
+ADD,simple,1003#32,3#9,0
+ADD,simple,1019#32,19#9,0
+ADD,routing_v6,42541956123771093561836753585742836378#128,1008#32,0
