@@ -815,6 +815,7 @@ and encode_pipeline (type_cxt : Declaration.t list) (Program(top_decls) as prog:
  
 and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) (name : P4String.t) (props : Table.property list) : cmd =
   let open Table in
+  let xxx_print = printf "props = %s" (Sexp.to_string ([%sexp_of: Table.property list] props)) in
   let p4keys, p4actions, p4customs = List.fold_left props ~init:([], [], [])
       ~f:(fun (acc_keys, acc_actions, acc_customs) prop ->
           match snd prop with
@@ -848,7 +849,12 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
                         let action_data = List.map ad ~f:(fun (_,p) -> Parameter.(p.variable)) in
                         let add_tctx = List.map ad ~f:(update_typ_ctx_from_param type_ctx) in
                         let type_ctx2 = add_tctx @ type_ctx in
-                        encode_action prog ctx type_ctx2 rv def_act_body ~action_data
+                        let args = functioncall_args type_ctx da in
+                        let bind = List.map (List.zip_exn action_data args)
+                                   ~f:(fun ((_, n), a) -> mkAssn n a)
+                                   |> List.fold ~init:Skip ~f:(%:%)
+                        in
+                        bind %:% encode_action prog ctx type_ctx2 rv def_act_body ~action_data
                       | None -> Skip
   in
 
@@ -856,6 +862,14 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
 
   let xxx_keys = printf "keys = %s\n" (Sexp.to_string ([%sexp_of: (string * int) list] str_keys)) in
   init_action_run %:% Apply { name = snd name; keys = str_keys; actions =  action_cmds; default =  enc_def_act }
+
+and functioncall_args type_ctx (fc : Expression.t) =
+  match fc with
+  | (_, Expression.FunctionCall{args;_}) ->
+    List.map args ~f:(fun a -> match a with
+                               | (_, Argument.Expression{value}) -> encode_expression_to_value type_ctx value
+                               | _ -> failwith "functioncall_args: bad arg")
+  | _ -> []
 
 and replace_consts (consts : (string * expr)  list) (prog : cmd) =
   match prog with

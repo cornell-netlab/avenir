@@ -105,9 +105,6 @@ control Filtering (inout parsed_headers_t hdr,
     }
 
     apply {
-        // Initialize lookup metadata. Packets without a VLAN header will be
-        // treated as belonging to a default VLAN ID (see parser).
-        fabric_metadata.fwd_type = 4;
-	//fwd_classifier.apply();
+        fwd_classifier.apply();
     }
 }

@@ -36,6 +36,23 @@
 #include <core.p4>
 #include <v1model.p4>
 
+const bit<2> METER_GREEN = 0;
+
+const bit<16> ETHERTYPE_VLAN1 = 0x8100;
+const bit<16> ETHERTYPE_VLAN2 = 0x9100;
+const bit<16> ETHERTYPE_VLAN3 = 0x9200;
+const bit<16> ETHERTYPE_VLAN4 = 0x9300;
+const bit<16> ETHERTYPE_IPV4 = 0x800;
+const bit<16> ETHERTYPE_IPV6 = 0x86dd;
+const bit<16> ETHERTYPE_ARP = 0x806;
+const bit<16> ETHERTYPE_ND = 0x6007;
+const bit<16> ETHERTYPE_LLDP = 0x88cc;
+
+const bit<8> IP_PROTOCOLS_TCP = 6;
+const bit<8> IP_PROTOCOLS_UDP = 17;
+const bit<8> IP_PROTOCOLS_ICMP = 1;
+const bit<8> IP_PROTOCOLS_ICMPv6 = 58;
+
 typedef bit<48> EthernetAddress;
 typedef bit<32> IPv4Address;
 typedef bit<128> IPv6Address;
@@ -67,7 +84,7 @@ header ipv6_t {
     bit<8>      traffic_class;
     bit<20>     flow_label;
     bit<16>     payload_length;
-    bit<8>      next_header;
+    bit<8>      next_hdr;
     bit<8>      hop_limit;
     IPv6Address src_addr;
     IPv6Address dst_addr;
@@ -86,7 +103,7 @@ header tcp_t {
     bit<32> seq_no;
     bit<32> ack_no;
     bit<4>  data_offset;
-    bit<3>  res;
+    bit<4>  res2;
     bit<8>  flags;
     bit<16> window;
     bit<16> checksum;
@@ -226,7 +243,7 @@ parser pkt_parser(packet_in pk,
 
     state parse_ipv6 {
         pk.extract(hdr.ipv6);
-        transition select(hdr.ipv6.next_header) {
+        transition select(hdr.ipv6.next_hdr) {
             IP_PROTOCOLS_ICMPv6: parse_icmp;
             IP_PROTOCOLS_TCP: parse_tcp;
             IP_PROTOCOLS_UDP: parse_udp;
@@ -364,7 +381,7 @@ control punt(inout parsed_packet_t hdr,
             hdr.ipv6.src_addr     : ternary;
             hdr.ipv6.dst_addr     : ternary;
             // hdr.ipv4_base.protocol        : ternary;
-            hdr.ipv6.next_header  : ternary;
+            hdr.ipv6.next_hdr  : ternary;
             // hdr.arp.target_proto_addr  : ternary;
             // local_metadata.icmp_code      : ternary;
             hdr.vlan_tag[0].vid           : ternary;
@@ -404,7 +421,7 @@ control l3_fwd(inout parsed_packet_t hdr,
         local_metadata.dst_vlan = dst_vlan;
         hdr.ethernet.src_addr = smac;
         hdr.ethernet.dst_addr = dmac;
-        hdr.ipv4_base.ttl = hdr.ipv4_base.ttl - 1;
+        hdr.ipv6.hop_limit = hdr.ipv6.hop_limit - 1;
     }
 
     @max_group_size(8)
@@ -414,9 +431,9 @@ control l3_fwd(inout parsed_packet_t hdr,
     table l3_fwd_table {
         key = {
             local_metadata.vrf_id     : exact;
-            hdr.ipv4_base.dst_addr    : lpm;
-            hdr.ipv4_base.src_addr    : selector;
-            hdr.ipv4_base.protocol    : selector;
+            hdr.ipv6.dst_addr    : lpm;
+            hdr.ipv6.src_addr    : selector;
+            hdr.ipv6.next_hdr    : selector;
             local_metadata.l4_src_port: selector;
             local_metadata.l4_dst_port: selector;
         }
@@ -478,23 +495,31 @@ control MyIngress(inout parsed_packet_t hdr,
     }
 
     apply {
-//        if (hdr.packet_out.isValid()) {
-//            standard_metadata.egress_spec = hdr.packet_out.egress_physical_port;
-//            hdr.packet_out.setInvalid();
-//        }
+        if (hdr.packet_out.isValid()) {
+            standard_metadata.egress_spec = hdr.packet_out.egress_physical_port;
+            hdr.packet_out.setInvalid();
+        }
 
-//        if (standard_metadata.egress_spec == 0 ||
-//                standard_metadata.egress_spec == LOOPBACK_PORT) {
+        if (standard_metadata.egress_spec == 0 ||
+                standard_metadata.egress_spec == LOOPBACK_PORT) {
             // Egress port not valid or not a packet out.
             my_station_table.apply();
+            if (local_metadata.l3_admit == 1w1) {
+                l3_fwd.apply(hdr, local_metadata, standard_metadata);
+            }
+            else {
                 l2_fwd.apply(hdr, local_metadata, standard_metadata);
-//        }
+            }
+        }
+        else {
+            exit;
+        }
 
         punt.apply(hdr, local_metadata, standard_metadata);
     }
 }
 
-control egress(inout parsed_packet_t hdr,
+control MyEgress(inout parsed_packet_t hdr,
                inout local_metadata_t local_metadata,
                inout standard_metadata_t standard_metadata) {
     apply {

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2017-present Open Networking Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 // ADDED
 
 #ifndef WITH_IPV6
@@ -6,6 +22,10 @@
 
 #ifndef WITH_SIMPLE_NEXT
 #define WITH_SIMPLE_NEXT
+#endif
+
+#ifndef WITH_IPV6
+#define WITH_IPV6
 #endif
 
 // END ADDED
@@ -41,7 +61,7 @@
 
 // ADDED
 
-// const bit<8> CPU_PORT = 64;
+//const bit<9> CPU_PORT = 64;
 
 // END ADDED
 
@@ -59,14 +79,12 @@ control MyIngress (inout parsed_headers_t hdr,
 #endif // WITH_PORT_COUNTER
 
     apply {
-        fabric_metadata.fwd_type = 4;
-        forwarding.apply(hdr, fabric_metadata, standard_metadata);
-        next.apply(hdr, fabric_metadata, standard_metadata);
-
+        _PRE_INGRESS
+        filtering.apply(hdr, fabric_metadata, standard_metadata);
     }
 }
 
-control FabricEgress (inout parsed_headers_t hdr,
+control MyEgress (inout parsed_headers_t hdr,
                       inout fabric_metadata_t fabric_metadata,
                       inout standard_metadata_t standard_metadata) {
 
@@ -75,18 +93,7 @@ control FabricEgress (inout parsed_headers_t hdr,
 
     apply {
         _PRE_EGRESS
-        pkt_io_egress.apply(hdr, fabric_metadata, standard_metadata);
         egress_next.apply(hdr, fabric_metadata, standard_metadata);
-#ifdef WITH_SPGW
-        spgw_egress.apply(hdr.ipv4, hdr.gtpu_ipv4, hdr.gtpu_udp, hdr.gtpu,
-                          fabric_metadata, standard_metadata);
-#endif // WITH_SPGW
-#ifdef WITH_BNG
-        bng_egress.apply(hdr, fabric_metadata, standard_metadata);
-#endif // WITH_BNG
-#ifdef WITH_INT
-        process_int_main.apply(hdr, fabric_metadata, standard_metadata);
-#endif
     }
 }
 

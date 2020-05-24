@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#ifndef WITH_IPV6
+#define WITH_IPV6
+#endif
+
 #include <core.p4>
 #include <v1model.p4>
 
@@ -247,7 +251,18 @@ control Next (inout parsed_headers_t hdr,
     }
 
     apply {
+#ifdef WITH_XCONNECT
+        // xconnect might set a new next_id.
+        xconnect.apply();
+#endif // WITH_XCONNECT
+#ifdef WITH_SIMPLE_NEXT
         simple.apply();
+#endif // WITH_SIMPLE_NEXT
+#ifdef WITH_HASHED_NEXT
+        hashed.apply();
+#endif // WITH_HASHED_NEXT
+        multicast.apply();
+        next_vlan.apply();
     }
 }
 
@@ -321,53 +336,7 @@ control EgressNextControl (inout parsed_headers_t hdr,
     }
 
     apply {
-        if (fabric_metadata.is_multicast == _TRUE
-             && standard_metadata.ingress_port == standard_metadata.egress_port) {
-            mark_to_drop(standard_metadata);
-        }
-
-        if (fabric_metadata.mpls_label == 0) {
-            if (hdr.mpls.isValid()) pop_mpls_if_present();
-        } else {
-            set_mpls();
-        }
-
-#ifdef WITH_DOUBLE_VLAN_TERMINATION
-        if (fabric_metadata.push_double_vlan == _TRUE) {
-            // Double VLAN termination.
-            push_vlan();
-            push_inner_vlan();
-        } else {
-            // If no push double vlan, inner_vlan_tag must be popped
-            hdr.inner_vlan_tag.setInvalid();
-#endif // WITH_DOUBLE_VLAN_TERMINATION
-            // Port-based VLAN tagging (by default all
-            // ports are assumed tagged)
-            if (!egress_vlan.apply().hit) {
-                // Push VLAN tag if not the default one.
-                if (fabric_metadata.vlan_id != DEFAULT_VLAN_ID) {
-                    push_vlan();
-                }
-            }
-#ifdef WITH_DOUBLE_VLAN_TERMINATION
-        }
-#endif // WITH_DOUBLE_VLAN_TERMINATION
-
-        // TTL decrement and check.
-        if (hdr.mpls.isValid()) {
-            hdr.mpls.ttl = hdr.mpls.ttl - 1;
-            if (hdr.mpls.ttl == 0) mark_to_drop(standard_metadata);
-        } else {
-            if(hdr.ipv4.isValid()) {
-                hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
-                if (hdr.ipv4.ttl == 0) mark_to_drop(standard_metadata);
-            }
-#ifdef WITH_IPV6
-            else if (hdr.ipv6.isValid()) {
-                hdr.ipv6.hop_limit = hdr.ipv6.hop_limit - 1;
-                if (hdr.ipv6.hop_limit == 0) mark_to_drop(standard_metadata);
-            }
-#endif // WITH_IPV6
-        }
+                mark_to_drop(standard_metadata);
+        
     }
 }

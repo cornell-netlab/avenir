@@ -730,7 +730,9 @@ module EqualityReal = struct
     let log = (assume %:% Encode.encode_from_p4 log_incs log_p4 false) |> Benchmark.zero_init fvs |> Benchmark.drop_handle fvs in
     let phys = (assume %:% Encode.encode_from_p4 phys_incs phys_p4 false) |> Benchmark.zero_init fvs |> Benchmark.drop_handle fvs in
 
-          
+    Format.printf "Log Encoded Program: \n%!\n %s%! \n%!" (string_of_cmd log);
+    Format.printf "Phys Encoded Program: \n%!\n %s%! \n%!" (string_of_cmd phys);
+
     (* let log = Encode.encode_from_p4 log_incs log false in
     let phys = Encode.encode_from_p4 phys_incs phys false in
     *)
