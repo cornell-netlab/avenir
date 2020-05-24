@@ -793,7 +793,9 @@ and gather_constants (type_ctx : Declaration.t list) (decl : Declaration.t list)
 
 and encode_program (Program(top_decls) as prog : program ) =
   let type_cxt = get_type_decls top_decls in
-  encode_pipeline type_cxt prog "MyIngress" %:% encode_pipeline type_cxt prog "MyEgress"
+    mkAssn "drop" (mkVInt(0, 1))
+    %:%encode_pipeline type_cxt prog "MyIngress"
+    %:% mkOrdered [ Var("drop", 1) %=% mkVInt(0, 1), encode_pipeline type_cxt prog "MyEgress"; True, Skip ]
 
 and encode_pipeline (type_cxt : Declaration.t list) (Program(top_decls) as prog:program ) (pn : string) =
   let open Declaration in
