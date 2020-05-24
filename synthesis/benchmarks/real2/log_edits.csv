@@ -1,5 +1,5 @@
-ADD,ingress_port_vlan,0/0#9;0/0#1;0/0#12,,1
-ADD,fwd_classifier,0/0#9;0/0#48;0/0#16;0/0#16,4#3,0
+ADD,ingress_port_vlan,0&0#9;0&0#1;0&0#12,,1
+ADD,fwd_classifier,0&0#9;0&0#48;0&0#16;0&0#16,4#3,0
 ADD,simple,1017#32,17#9,0
 ADD,simple,1018#32,18#9,0
 ADD,simple,1010#32,10#9,0

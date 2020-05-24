@@ -24,6 +24,10 @@
 #define WITH_SIMPLE_NEXT
 #endif
 
+#ifndef WITH_IPV6
+#define WITH_IPV6
+#endif
+
 // END ADDED
 
 #include <core.p4>
@@ -57,7 +61,7 @@
 
 // ADDED
 
-const bit<8> CPU_PORT = 64;
+const bit<9> CPU_PORT = 64;
 
 // END ADDED
 
@@ -108,7 +112,7 @@ control MyIngress (inout parsed_headers_t hdr,
     }
 }
 
-control FabricEgress (inout parsed_headers_t hdr,
+control MyEgress (inout parsed_headers_t hdr,
                       inout fabric_metadata_t fabric_metadata,
                       inout standard_metadata_t standard_metadata) {
 

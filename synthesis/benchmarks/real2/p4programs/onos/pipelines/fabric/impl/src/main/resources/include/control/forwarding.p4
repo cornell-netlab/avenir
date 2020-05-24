@@ -147,11 +147,11 @@ control Forwarding (inout parsed_headers_t hdr,
 #endif // WITH_IPV6
 
     apply {
-//        if (fabric_metadata.fwd_type == FWD_BRIDGING) bridging.apply();
-//        else if (fabric_metadata.fwd_type == FWD_MPLS) mpls.apply();
-//        else if (fabric_metadata.fwd_type == FWD_IPV4_UNICAST) routing_v4.apply();
+        if (fabric_metadata.fwd_type == FWD_BRIDGING) bridging.apply();
+        else if (fabric_metadata.fwd_type == FWD_MPLS) mpls.apply();
+        else if (fabric_metadata.fwd_type == FWD_IPV4_UNICAST) routing_v4.apply();
 #ifdef WITH_IPV6
-        if (fabric_metadata.fwd_type == 4) routing_v6.apply();
+        else if (fabric_metadata.fwd_type == FWD_IPV6_UNICAST) routing_v6.apply();
 #endif // WITH_IPV6
     }
 }

@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#ifndef WITH_IPV6
+#define WITH_IPV6
+#endif
+
 #include <core.p4>
 #include <v1model.p4>
 

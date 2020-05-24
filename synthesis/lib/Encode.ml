@@ -439,7 +439,7 @@ let lookup_exn (Program(top_decls) : program) (ctx : Declaration.t list) (ident 
     List.find ~f:(fun d -> safe_name d = Some (snd name)) in
   match find ident ctx with
   | None -> begin match find ident top_decls with
-      | None -> failwith ("[Error: UseBeforeDef] Couldnt find " ^ snd ident ^ " from " ^ Petr4.Info.to_string (fst ident))
+      | None -> failwith ("[Error: UseBeforeDef] Couldn't find " ^ snd ident ^ " from " ^ Petr4.Info.to_string (fst ident))
       | Some d -> d
     end
   | Some d -> d
@@ -477,11 +477,14 @@ let get_return_value =
 let rec dispatch prog ctx type_ctx rv members =
   match members with
   | [] -> failwith "[RuntimeException] Tried to Dispatch an empty list of names"
-  | [(_,"mark_to_drop")] -> `Motley ("drop" %<-% mkVInt(1,1), false, false)
+  | [(_,"mark_to_drop")] -> `Motley ("standard_metadata.egress_spec" %<-% mkVInt(0,9), false, false)
   | [(_,"clone3")] -> `Motley (Skip, false, false) (* TODO: Anything we can do with this?  Seems out of scope for now... *)
 
   | _ when Option.map (List.last members) ~f:snd = Some "setInvalid" ->
     `Motley ((validity_bit members) %<-% mkVInt(0,1), false, false)
+  | _ when Option.map (List.last members) ~f:snd = Some "setValid" ->
+    `Motley ((validity_bit members) %<-% mkVInt(1,1), false, false)
+
 
   | [member] ->
     let act, xs = lookup_action_exn prog ctx member in
@@ -789,15 +792,19 @@ and gather_constants (type_ctx : Declaration.t list) (decl : Declaration.t list)
   es  
 
 and encode_program (Program(top_decls) as prog : program ) =
+  let type_cxt = get_type_decls top_decls in
+    encode_pipeline type_cxt prog "MyIngress"
+    %:% mkOrdered [ Var("standard_metadata.egress_spec", 9) %<>% mkVInt(0, 9), encode_pipeline type_cxt prog "MyEgress"; True, Skip ]
+
+and encode_pipeline (type_cxt : Declaration.t list) (Program(top_decls) as prog:program ) (pn : string) =
   let open Declaration in
   match List.find top_decls ~f:(fun d -> match snd d with
-                                            | Control{name;_} -> snd name = "MyIngress"
+                                            | Control{name;_} -> snd name = pn
                                             | _ -> false) with
-  | None -> failwith "Could not find control module MyIngress"
+  | None -> failwith ("Could not find control module " ^ pn)
   | Some (_, Control c) ->
     let rv = get_return_value () in
     let assign_rv = mkAssn (return_bit rv) (mkVInt(1, 1)) in
-    let type_cxt = get_type_decls top_decls in
     let type_cxt2 = List.map c.params ~f:(update_typ_ctx_from_param type_cxt) @ type_cxt in
     (* let _ = printf "type_cxt\n%s\n" (Sexp.to_string ([%sexp_of: Declaration.t list] type_cxt)) in *)
     let assign_consts = assign_constants type_cxt2 top_decls in
@@ -820,12 +827,14 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
   
   let lookup_and_encode_action i (_,a) =
     let (body, ad) = lookup_action_exn prog ctx a.name in
-    let action_data = List.map ad ~f:(fun (_,p) -> Parameter.(p.variable)) in
+    let action_data = List.map ad ~f:(fun (_,p) -> Parameter.(p.variable, p.typ)) in
+    let action_data_names = List.map action_data ~f:fst in
     (* Set up an action run variable so we can use it to figure out which action ran in switch statements *)
     let set_action_run = mkAssn (snd name ^ action_run_suffix) (mkVInt(i + 1, 1)) in
     let add_tctx = List.map ad ~f:(update_typ_ctx_from_param type_ctx) in 
     let type_ctx2 = add_tctx @ type_ctx in
-    List.map action_data ~f:(fun (_, ad) -> ad, -1), set_action_run %:% encode_action prog ctx type_ctx2 rv body ~action_data
+    List.map action_data ~f:(fun ((_, ad), t) -> ad, lookup_type_width_exn type_ctx t)
+            , set_action_run %:% encode_action prog ctx type_ctx2 rv body ~action_data:action_data_names
   in
   let action_cmds = List.mapi p4actions ~f:lookup_and_encode_action in
 
@@ -838,7 +847,12 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
                         let action_data = List.map ad ~f:(fun (_,p) -> Parameter.(p.variable)) in
                         let add_tctx = List.map ad ~f:(update_typ_ctx_from_param type_ctx) in
                         let type_ctx2 = add_tctx @ type_ctx in
-                        encode_action prog ctx type_ctx2 rv def_act_body ~action_data
+                        let args = functioncall_args type_ctx da in
+                        let bind = List.map (List.zip_exn action_data args)
+                                   ~f:(fun ((_, n), a) -> mkAssn n a)
+                                   |> List.fold ~init:Skip ~f:(%:%)
+                        in
+                        bind %:% encode_action prog ctx type_ctx2 rv def_act_body ~action_data
                       | None -> Skip
   in
 
@@ -846,6 +860,14 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
 
   let xxx_keys = printf "keys = %s\n" (Sexp.to_string ([%sexp_of: (string * int) list] str_keys)) in
   init_action_run %:% Apply { name = snd name; keys = str_keys; actions =  action_cmds; default =  enc_def_act }
+
+and functioncall_args type_ctx (fc : Expression.t) =
+  match fc with
+  | (_, Expression.FunctionCall{args;_}) ->
+    List.map args ~f:(fun a -> match a with
+                               | (_, Argument.Expression{value}) -> encode_expression_to_value type_ctx value
+                               | _ -> failwith "functioncall_args: bad arg")
+  | _ -> []
 
 and replace_consts (consts : (string * expr)  list) (prog : cmd) =
   match prog with

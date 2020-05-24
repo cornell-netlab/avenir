@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#ifndef WITH_IPV6
+#define WITH_IPV6
+#endif
+
 #include <core.p4>
 #include <v1model.p4>
 
@@ -247,7 +251,18 @@ control Next (inout parsed_headers_t hdr,
     }
 
     apply {
+#ifdef WITH_XCONNECT
+        // xconnect might set a new next_id.
+        xconnect.apply();
+#endif // WITH_XCONNECT
+#ifdef WITH_SIMPLE_NEXT
         simple.apply();
+#endif // WITH_SIMPLE_NEXT
+#ifdef WITH_HASHED_NEXT
+        hashed.apply();
+#endif // WITH_HASHED_NEXT
+        multicast.apply();
+        next_vlan.apply();
     }
 }
 
