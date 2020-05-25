@@ -329,10 +329,10 @@ let slice_conclusive (params : Parameters.t) (data : ProfData.t ref) (problem : 
             || exists_in_table params (Problem.phys problem) (Problem.phys_inst problem) (Problem.phys_edits problem) e
           )
     then
-      let () = Printf.printf "\nquick sliceable check succeeded in %fms!\n%!" Time.(Span.(diff(now()) st |> to_ms))  in
+      (* let () = Printf.printf "\nquick sliceable check succeeded in %fms!\n%!" Time.(Span.(diff(now()) st |> to_ms))  in *)
       true
     else
-      let () = Printf.printf "\nquick sliceable check FAILED!\n%!" in
+      (* let () = Printf.printf "\nquick sliceable check FAILED!\n%!" in *)
       let log_eqs  = FastCX.hits_list_pred params data (log problem) (log_inst problem) (log_edits problem) in
       let phys_eqs = FastCX.hits_list_pred params data (phys problem) (phys_inst problem) (phys_edits problem) in
       if log_eqs = phys_eqs
@@ -628,14 +628,18 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
     if params.ecache then
       match EAbstr.infer !edit_cache (Problem.log_edits problem |> List.hd_exn) with
       | None ->
-         Printf.printf "\nEdit Cache failed\n%!";
+         (* Printf.printf "\nEdit Cache failed\n%!"; *)
          cegis_math {params with ecache = false; do_slice = false} data problem
       | Some ps ->
-         Printf.printf "\nEdit Cache Succeeded\n%! Guessing\n";
-         List.iter ps ~f:(fun e -> Printf.printf "\t%s\n%!" (Edit.to_string e));
+         (* Printf.printf "\nEdit Cache Succeeded\n%! Guessing\n";
+          * List.iter ps ~f:(fun e -> Printf.printf "\t%s\n%!" (Edit.to_string e)); *)
          match get_cex {params with fastcx = false; do_slice  = true} data (Problem.replace_phys_edits problem ps) with
-         | `Yes -> Printf.printf "Successful%!\n"; Some ps
-         | `NoAndCE _ -> Printf.printf "Failed%!\n"; cegis_math {params with ecache = false} data problem
+         | `Yes ->
+            (* Printf.printf "Successful%!\n"; *)
+            Some ps
+         | `NoAndCE _ ->
+            (* Printf.printf "Failed%!\n"; *)
+            cegis_math {params with ecache = false} data problem
     else
       if Problem.model_space problem = True
          || (check_sat params (Problem.model_space problem) |> fst |> Option.is_some)
