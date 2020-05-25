@@ -284,20 +284,63 @@ let rec solve_concrete
     ProfData.update_time !data.model_search_time st;
     Edit.extract (Problem.phys problem) model
 
+let unique_in_table params prog inst edits e =
+  let open Edit in
+  match e with
+  | Del _ -> false
+  | Add (tbl, (ms, ds, a)) ->
+     let index_of_e = List.findi edits ~f:(fun _ e' -> e = e') |> Option.value_exn |> fst in
+     let earlier_edits = List.filteri edits ~f:(fun i _ -> i < index_of_e) in
+     let inst' = Instance.update_list params inst earlier_edits in
+     let earlier_rows = Instance.get_rows inst' tbl in
+     List.for_all earlier_rows ~f:(fun (ms', _, _) ->
+         not (Match.has_inter_l ms ms')
+       )
+
+let exists_in_table params prog inst edits e =
+  let open Edit in
+  match e with
+  | Del _ -> false
+  | Add (tbl, (ms, ds, a)) ->
+     let index_of_e = List.findi edits ~f:(fun _ e' -> e = e') |> Option.value_exn |> fst in
+     let earlier_edits = List.filteri edits ~f:(fun i _ -> i < index_of_e) in
+     let inst' = Instance.update_list params inst earlier_edits in
+     let earlier_rows = Instance.get_rows inst' tbl in
+     List.exists earlier_rows ~f:(fun (ms', _, _) ->
+         List.equal (fun m m' -> Match.equal m m') ms ms'
+       )
+
+
+
 (* The truth of a slice implies the truth of the full programs when
  * the inserted rules are disjoint with every previous rule (i.e. no overlaps or deletions)
  * Here we only check that the rules are exact, which implies this property given the assumption that every insertion is reachable
 *)
 let slice_conclusive (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
   let st = Time.now () in
+  let log_edit = Problem.log_edits problem |> List.hd_exn in
   let res =
     let open Problem in
-    let log_eqs  = FastCX.hits_list_pred params data (log problem) (log_inst problem) (log_edits problem) in
-    let phys_eqs = FastCX.hits_list_pred params data (phys problem) (phys_inst problem) (phys_edits problem) in
-    if log_eqs = phys_eqs then true else
-    check_valid params (List.reduce_exn ~f:mkOr log_eqs %<=>% List.reduce_exn ~f:mkOr phys_eqs)
-    |> fst
-    |> Option.is_none
+    if
+      unique_in_table params (Problem.log problem) (Problem.log_inst problem) (Problem.log_edits problem) log_edit
+      &&
+        List.for_all (Problem.phys_edits problem) ~f:(fun e ->
+            unique_in_table params (Problem.phys problem) (Problem.phys_inst problem) (Problem.phys_edits problem) e
+            || exists_in_table params (Problem.phys problem) (Problem.phys_inst problem) (Problem.phys_edits problem) e
+          )
+    then
+      let () = Printf.printf "\nquick sliceable check succeeded in %fms!\n%!" Time.(Span.(diff(now()) st |> to_ms))  in
+      true
+    else
+      let () = Printf.printf "\nquick sliceable check FAILED!\n%!" in
+      let log_eqs  = FastCX.hits_list_pred params data (log problem) (log_inst problem) (log_edits problem) in
+      let phys_eqs = FastCX.hits_list_pred params data (phys problem) (phys_inst problem) (phys_edits problem) in
+      if log_eqs = phys_eqs
+      then true
+      else
+        check_valid params (List.reduce_exn ~f:mkOr log_eqs %<=>% List.reduce_exn ~f:mkOr phys_eqs)
+        |> fst
+        |> Option.is_none
   in
   ProfData.update_time !data.check_sliceable_time st;
   (* Printf.printf "\tSlice is %s\n%!" (if res then "conclusive" else "inconclusive"); *)

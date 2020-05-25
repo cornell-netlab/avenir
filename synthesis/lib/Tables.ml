@@ -11,6 +11,14 @@ module Match = struct
     | Between of value * value
     | Mask of value * value
 
+  let equal m m' =
+    match m, m' with
+    | Exact v, Exact v' -> veq v v'
+    | Between (lo, hi), Between (lo',hi') -> veq lo lo' && veq hi hi'
+    | Mask (v,msk), Mask (v',msk') -> veq v v' && veq msk msk'
+    | _,_ -> false
+
+
   let to_string m =
     match m with
     | Exact x -> string_of_value x
@@ -130,24 +138,32 @@ module Match = struct
 
 
 
-  let has_inter (m : t) (m' : t) : bool =
+  let rec has_inter (m : t) (m' : t) : bool =
+    if is_wildcard m || is_wildcard m' then true else
     match m, m' with
-    | Exact x, Exact y -> veq x y
+    | Exact x, Exact y
+      -> veq x y
     | Exact x, Between (lo, hi)
-    | Between(lo,hi), Exact(x)
+      | Between(lo,hi), Exact(x)
       -> vleq lo x && vleq x hi
+
     | Between(lo, hi), Between(lo',hi')
       -> Stdlib.max lo lo' <= Stdlib.min hi hi'
-    | Mask _, _ | _, Mask _ ->
-      failwith "Dont know how to intersect masks"
 
+    | Mask(v,msk), Exact(v')
+      | Exact (v'), Mask(v,msk)
+      -> Bigint.(get_int v land get_int msk = get_int v' land get_int msk)
 
+    | Mask (v,msk),mm | mm, Mask (v,msk)
+      -> if Bigint.(get_int msk >= pow (of_int 2) (of_int @@ size_of_value msk) - one)
+         then has_inter (Exact v) mm
+         else failwith "Cant' tell"
 
   let has_inter_l (ms : t list) (ms' : t list) : bool =
-    if ms = [] && ms' = [] then false
-    else
-      List.fold2_exn ms ms' ~init:true
-        ~f:(fun acc m m' -> acc && has_inter m m')
+    (* if ms = [] && ms' = [] then false
+     * else *)
+    List.fold2_exn ms ms' ~init:true
+      ~f:(fun acc m m' -> acc && has_inter m m')
 
 
   let is_subset (m : t) (m': t) : bool =

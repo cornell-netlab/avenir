@@ -1,0 +1,10 @@
+nw_src=7.221.28.32/32, nw_dst=140.181.119.11/32, tp_src=445, tp_dst=35051, dl_dst=fa:16:3e:76:f2:1c
+nw_src=7.221.28.32/32, nw_dst=140.181.119.11/32, tp_src=445, tp_dst=58117, dl_dst=fa:16:3e:77:7e:8a
+nw_src=7.221.28.32/32, nw_dst=140.181.119.11/32, tp_src=445, tp_dst=57537, dl_dst=fa:16:3e:20:22:b5
+nw_src=7.221.28.32/32, nw_dst=140.181.119.11/32, tp_src=445, tp_dst=56055, dl_dst=fa:16:3e:c0:31:0c
+nw_src=7.221.28.32/32, nw_dst=140.181.119.11/32, tp_src=445, tp_dst=34728, dl_dst=fa:16:3e:ec:a9:94
+nw_src=7.221.28.32/32, nw_dst=140.181.119.11/32, tp_src=445, tp_dst=33112, dl_dst=fa:16:3e:4b:b3:33
+nw_src=7.221.28.32/32, nw_dst=140.181.119.11/32, tp_src=445, tp_dst=60417, dl_dst=fa:16:3e:bc:7f:06
+nw_src=7.221.28.32/32, nw_dst=140.181.119.11/32, tp_src=445, tp_dst=59474, dl_dst=fa:16:3e:f4:2b:f3
+nw_src=7.221.28.32/32, nw_dst=140.181.119.11/32, tp_src=445, tp_dst=58400, dl_dst=fa:16:3e:35:90:64
+nw_src=7.221.28.32/32, nw_dst=140.181.119.11/32, tp_src=445, tp_dst=59118, dl_dst=fa:16:3e:df:3b:f9
