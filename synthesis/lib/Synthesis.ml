@@ -386,7 +386,7 @@ let remove_missed_edits params data problem es =
       let cex = List.hd_exn (Problem.cexs problem) in
       let check = Packet.to_test ~fvs:(Problem.fvs problem) (fst cex)
                   %=>% FastCX.hits_pred params data (Problem.phys problem) (Problem.phys_inst problem) (Problem.phys_edits problem) e in
-      match check_valid_cached params check with
+      match check_valid params check with
       | None,_ ->
          (* Printf.printf "Checked \n%s\n" (string_of_test check); *)
          acc @ [e]
@@ -424,7 +424,7 @@ let rec get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref)
     end
   else
     if params.do_slice && not( List.is_empty (Problem.phys_edits problem)) then
-      (* let () = Printf.printf "\tSLICING\n%!" in *)
+      let () = Printf.printf "\tSLICING\n%!" in
       let st = Time.now () in
       let res = implements ~neg params data (Problem.slice params problem) in
       ProfData.update_time !data.impl_time st;
@@ -433,6 +433,7 @@ let rec get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref)
       | `Yes when slice_conclusive params data problem -> `Yes
       | `Yes -> implements ~neg params data problem
     else
+      let () = Printf.printf "\tNormal Eq Check %d edits \n%!" (Problem.phys_edits problem |> List.length)in
       let st = Time.now () in
       let res = implements ~neg params data problem in
       ProfData.update_time !data.impl_time st;
@@ -523,7 +524,7 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
     (* let () = Printf.printf "\ttrying cache \n%!"in *)
     solve_math 1 params data problem
   else
-    let st = Time.now () in
+    (* let st = Time.now () in *)
     let cex = get_cex params data problem in
     (* ProfData.update_time !data.impl_time st; *)
     match cex with
@@ -584,11 +585,14 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
     if params.ecache then
       match EAbstr.infer !edit_cache (Problem.log_edits problem |> List.hd_exn) with
       | None ->
+         Printf.printf "\nEdit Cache failed\n%!";
          cegis_math {params with ecache = false; do_slice = false} data problem
       | Some ps ->
-         match get_cex {params with fastcx = false} data problem with
+         Printf.printf "\nEdit Cache Succeeded\n%! Guessing\n";
+         List.iter ps ~f:(fun e -> Printf.printf "\t%s\n%!" (Edit.to_string e));
+         match get_cex {params with fastcx = false; do_slice  = true} data (Problem.replace_phys_edits problem ps) with
          | `Yes -> Printf.printf "Successful%!\n"; Some ps
-         | `NoAndCE _ -> cegis_math {params with ecache = false} data problem
+         | `NoAndCE _ -> Printf.printf "Failed%!\n"; cegis_math {params with ecache = false} data problem
     else
       if Problem.model_space problem = True
          || (check_sat params (Problem.model_space problem) |> fst |> Option.is_some)

@@ -146,7 +146,7 @@ let sub_consts (adata : value StringMap.t option) (map : Match.t StringMap.t) (e
 
 
 let infer (cache : t) (e : Edit.t) =
-  (* Printf.printf "Processing edit %s\n%!" (Edit.to_string e); *)
+  Printf.printf "Log edits\n\t%s\n%!" (Edit.to_string e);
   List.find_map cache
     ~f:(fun (log_edit, phys_edits) ->
       match similar log_edit e with
@@ -165,7 +165,7 @@ let infer (cache : t) (e : Edit.t) =
 
 
 let update (cache : t) (log : Edit.t) (physs : Edit.t list) : t =
-  (* Printf.printf "Caching %s\n%!" (Edit.to_string log); *)
+  Printf.printf "Caching %s\n%!" (Edit.to_string log);
   if List.exists cache ~f:(fun (_,ps) ->  ps = physs)
   then cache
   else (log, physs) :: cache

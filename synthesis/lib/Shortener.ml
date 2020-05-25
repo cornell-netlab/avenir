@@ -31,8 +31,6 @@ let rec shorten (bht : Bishtbl.t) (t : test) : test =
     | Impl (t1,t2) -> shorten bht t1 %=>% shorten bht t2
     | Neg t1 -> mkNeg @@ shorten bht t1
 
-
-
 let rec unshorten_expr (bht : Bishtbl.t) (e : expr) : expr =
   if disable then e else
     let unget key = Bishtbl.get_back bht ~key in
