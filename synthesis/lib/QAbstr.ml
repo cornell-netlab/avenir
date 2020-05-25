@@ -87,7 +87,7 @@ let rec abstracted_expr (e1 : expr) (e2 : expr) : bool =
     abstracted_expr e11 e21 && abstracted_expr e12 e22
   in
   match e1, e2 with
-  | Value(v1), Value(v2) -> veq v1 v2
+  | Value(Int(v1,sz1)), Value(Int(v2,sz2)) -> sz1 = sz2 && v2 = v1
   | Value(v), Var(x) -> true (*BUG :: This is wrong -- need to keep a map*)
   | Var s1, Var s2 | Hole s1, Hole s2 -> Stdlib.(s1 = s2)
   | Plus  (e11, e12), Plus  (e21, e22) -> recurse e11 e12 e21 e22

@@ -39,6 +39,26 @@ module Match = struct
     | Mask (v, m) ->
        (Ast.mkMask (Var k) (Value m)) %=% Value v
 
+  let to_test_hole tbl k m =
+    match m with
+    | Exact (Int(x,sz) as v) ->
+       Hole (Hole.match_hole_exact tbl k,sz) %=% Value(v)
+    | Between((Int(lo,lsz) as l), (Int(hi,hsz) as h)) ->
+       assert (lsz = hsz);
+       let (loh, hih) = Hole.match_holes_range tbl k in
+       (Hole(loh,lsz) %=% Value l) %&% (Hole(hih,hsz) %=% Value h)
+    | Mask ((Int(v,vsz) as vint), (Int(m,msz) as mask)) ->
+       assert (vsz = msz);
+       let (vh, mh) = Hole.match_holes_mask tbl k in
+       (Hole(vh,vsz) %=% Value vint) %&% (Hole(mh,msz) %=% Value mask)
+
+  let test_hole_of_lists tbl ks ms =
+    List.fold2_exn ks ms ~init:True
+      ~f:(fun acc (k,_) m ->
+        acc %&% to_test_hole tbl k m
+      )
+
+
   let list_to_string : t list -> string =
     List.fold ~init:"" ~f:(fun acc m -> Printf.sprintf "%s %s" acc (to_string m))
 
@@ -157,6 +177,13 @@ module Row = struct
        |> Option.value ~default:"")
       actid
 
+  let test_of_data (vars : (string * size) list) (vals : action_data) =
+    List.fold2_exn vars vals ~init:True
+      ~f:(fun acc (x,sz) v ->
+        assert (sz = size_of_value v);
+        acc %&% (Hole(x, sz) %=% Value v)
+      )
+
   let intersects (m1s, _,_ : t) (m2s, _, _ : t) : bool =
     List.fold2_exn m1s m2s ~init:true
       ~f:(fun acc m1 m2 -> acc && Match.has_inter m1 m2)
@@ -214,7 +241,8 @@ module Row = struct
               ~f:(fun acc (p,sz) ->
                   match StringMap.find match_model p with
                   | None ->
-                    acc @ [Int (Random.int (pow 2 sz) |> Bigint.of_int_exn, sz)]
+                     (* Printf.printf "Cannot find expected key %s in %s \n%!" p (string_of_map match_model);*)
+                     acc @ [Int (Random.int (pow 2 sz) |> Bigint.of_int_exn, sz)]
                   | Some v -> acc @ [v]
                 )
       in
@@ -270,6 +298,24 @@ module Edit = struct
                         | Del (n,i) -> Some (n,i)
                       )
 
+  let to_test phys e =
+    match e with
+    | Del(t,i) -> Hole.delete_hole i t %=% mkVInt(1,1)
+    | Add(t,(ms,ds,i)) ->
+       match get_schema_of_table t phys with
+       | None -> failwith @@ Printf.sprintf "Couldn't find table %s" t
+       | Some (keys,actions,def) ->
+          let actSize = max (log2 (List.length actions)) 1 in
+          Hole.add_row_hole t %=% mkVInt(1,1)
+          %&%
+            (Hole.which_act_hole t actSize  %=% mkVInt(i,actSize))
+          %&%
+            (Match.test_hole_of_lists t keys ms)
+          %&%
+            (Row.test_of_data (List.nth_exn actions i |> fst) ds)
+
+  let test_of_list phys es =
+    List.(map es ~f:(to_test phys) |> reduce_exn ~f:(%&%))
 
   let to_string e =
     match e with
@@ -288,8 +334,10 @@ module Edit = struct
     | Del (s, row) -> None
 
   let extract phys (m : value StringMap.t)  : t list =
-   let dels, adds =  StringMap.fold m ~init:([],[]) (*Deletions, additions*)
-      ~f:(fun ~key ~data acc ->
+    let dels, adds =
+      StringMap.fold m ~init:([],[]) (*Deletions, additions*)
+        ~f:(fun ~key ~data acc ->
+          (* Printf.printf "%s\n" (string_of_map m); *)
         match Hole.find_add_row key with
         | None -> begin
             match Hole.find_delete_row key with
@@ -305,6 +353,7 @@ module Edit = struct
                   Printf.sprintf "WARNING:: Couldn't find %s even though I found %s to be true\n%!"  (Hole.which_act_hole_name tbl) key
                   |> failwith
                | Some v -> get_int v |> Bigint.to_int_exn in
+             (* Printf.printf "Making new row from \n %s \n in tbl %s and action %d \n%!" (string_of_map m) tbl act; *)
              match Row.mk_new_row m phys tbl None act with
              | None -> failwith (Printf.sprintf "Couldn't make new row in table %s\n" tbl)
              | Some row ->

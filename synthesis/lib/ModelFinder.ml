@@ -59,9 +59,9 @@ let rec make_schedule ({injection;hints;paths;only_holes;mask;restrict_mask;nlp;
      * else *)
     if injection || hints || paths || only_holes || nlp || domain then
       [{opt with injection=false;hints=false;paths=false;only_holes=false; nlp=false;domain = false}]
-    else if mask && restrict_mask then
-      [no_opts]
-    else  [no_opts]
+    else [] (* if mask && restrict_mask then
+     *   [no_opts]
+     * else[no_opts] *)
 
 let make_searcher (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : t =
   let schedule = make_schedule {
@@ -145,7 +145,7 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                           (* |> refine_counter params problem in *)
   (* let () = Printf.printf "in : %s \n out: %s\n%!" (string_of_map in_pkt) (string_of_map out_pkt) in *)
   let st = Time.now () in
-  let deletions = compute_deletions in_pkt problem in
+  let deletions = [] in (*compute_deletions in_pkt problem in*)
   let hints = if opts.hints then
                 let open Problem in
                 Hint.construct (log problem) (phys problem) (log_edits problem |> List.hd_exn)
@@ -166,19 +166,18 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
     if opts.paths then
       wp_paths ~no_negations:true phys out_pkt_form
     else
-      [phys, wp phys out_pkt_form]
+      [phys, in_pkt_form %=>% wp phys out_pkt_form]
   in
   ProfData.update_time !data.search_wp_time st;
   let tests =
     List.filter_map wp_list
-      ~f:(fun (cmd, in_pkt_wp) ->
-        if in_pkt_wp = False || not (has_hole_test in_pkt_wp) then None else
+      ~f:(fun (cmd, spec) ->
+        if spec = False || not (has_hole_test spec) then None else
           (* let st = Time.now() in *)
           (* Printf.printf "\n\nWP: %s\n\n%!" (string_of_test in_pkt_wp); *)
 
           let () = if params.debug then
                      Printf.printf "Checking path with hole!\n  %s\n\n%!" (string_of_cmd cmd) in
-          let spec = in_pkt_form %=>% in_pkt_wp in
           (* let () = if params.debug then
            *            Printf.printf "test starts:\n%!  %s\n\n%!" (string_of_test spec) in *)
           let wf_holes = List.fold (Problem.phys problem |> get_tables_actsizes) ~init:True
@@ -372,27 +371,27 @@ let holes_for_other_actions table phys actId =
          acc @ if i = Bigint.to_int_exn actId then [] else List.map params ~f:fst
        )
 
-let minimize_model (model : value StringMap.t) (phys : cmd) : value StringMap.t =
-  StringMap.keys model
-  |> List.filter ~f:(fun k -> String.is_prefix k ~prefix:Hole.add_row_prefix)
-  |> List.fold ~init:model
-       ~f:(fun model key ->
-         match StringMap.find model key with
-         | Some Int(v,_) when v = Bigint.zero ->
-            let table = String.chop_prefix_exn key ~prefix:Hole.add_row_prefix in
-            holes_for_table table phys
-            |> List.fold ~init:model ~f:(StringMap.remove)
-         | Some Int(v,_) when v = Bigint.one ->
-            let table = String.chop_prefix_exn key ~prefix:Hole.add_row_prefix in
-            begin
-              match (StringMap.find model (Hole.which_act_hole_name table)) with
-              | Some (Int (actId, _)) ->
-                 holes_for_other_actions table phys actId
-                 |> List.fold ~init:model ~f:(StringMap.remove)
-              | None -> model
-            end
-         | _ -> model
-       )
+let minimize_model (model : value StringMap.t) (phys : cmd) : value StringMap.t = model
+  (* StringMap.keys model
+   * |> List.filter ~f:(fun k -> String.is_prefix k ~prefix:Hole.add_row_prefix)
+   * |> List.fold ~init:model
+   *      ~f:(fun model key ->
+   *        match StringMap.find model key with
+   *        | Some Int(v,_) when v = Bigint.zero ->
+   *           let table = String.chop_prefix_exn key ~prefix:Hole.add_row_prefix in
+   *           holes_for_table table phys
+   *           |> List.fold ~init:model ~f:(StringMap.remove)
+   *        | Some Int(v,_) when v = Bigint.one ->
+   *           let table = String.chop_prefix_exn key ~prefix:Hole.add_row_prefix in
+   *           begin
+   *             match (StringMap.find model (Hole.which_act_hole_name table)) with
+   *             | Some (Int (actId, _)) ->
+   *                holes_for_other_actions table phys actId
+   *                |> List.fold ~init:model ~f:(StringMap.remove)
+   *             | None -> model
+   *           end
+   *        | _ -> model
+   *      ) *)
 
 
 let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t) option)=
@@ -415,7 +414,7 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
   | (test,hints)::search_space, schedule ->
      (* Printf.printf "Check sat\n%!"; *)
      (* if params.debug then Printf.printf "MODELSPACE:\n%s\nTEST\n%s\n%!" (Problem.model_space problem |> string_of_test) (test |> string_of_test); *)
-     let model_opt, dur = check_sat params ((*Problem.model_space problem %&%*) test) in
+     let model_opt, dur = check_sat params (Problem.model_space problem %&% test) in
      ProfData.incr !data.model_z3_calls;
      ProfData.update_time_val !data.model_z3_time dur;
      (* Printf.printf "Sat Checked\n%!\n"; *)

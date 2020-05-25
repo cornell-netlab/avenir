@@ -45,7 +45,7 @@ let hits_pred params data prog inst edits e : test =
   | Edit.Del (_, _) -> failwith "unimplemented"
 
 let hits_list_pred params data prog inst edits =
-  Printf.printf "\tThere are %d edits to check\n" (List.length edits);
+  (* Printf.printf "\tThere are %d edits to check\n" (List.length edits); *)
   List.fold edits ~init:[]
     ~f:(fun acc e -> hits_pred params data prog inst edits e :: acc)
 

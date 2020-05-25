@@ -290,15 +290,15 @@ let rec solve_concrete
 *)
 let slice_conclusive (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
   let st = Time.now () in
-  let res = true in
-  (*   let open Problem in
-   *   let log_eqs  = FastCX.hits_list_pred params data (log problem) (log_inst problem) (log_edits problem) in
-   *   let phys_eqs = FastCX.hits_list_pred params data (phys problem) (phys_inst problem) (phys_edits problem) in
-   *   if log_eqs = phys_eqs then true else
-   *   check_valid params (List.reduce_exn ~f:mkOr log_eqs %<=>% List.reduce_exn ~f:mkOr phys_eqs)
-   *   |> fst
-   *   |> Option.is_none
-   * in *)
+  let res =
+    let open Problem in
+    let log_eqs  = FastCX.hits_list_pred params data (log problem) (log_inst problem) (log_edits problem) in
+    let phys_eqs = FastCX.hits_list_pred params data (phys problem) (phys_inst problem) (phys_edits problem) in
+    if log_eqs = phys_eqs then true else
+    check_valid params (List.reduce_exn ~f:mkOr log_eqs %<=>% List.reduce_exn ~f:mkOr phys_eqs)
+    |> fst
+    |> Option.is_none
+  in
   ProfData.update_time !data.check_sliceable_time st;
   (* Printf.printf "\tSlice is %s\n%!" (if res then "conclusive" else "inconclusive"); *)
   res
@@ -369,6 +369,9 @@ let synthesize ~iter (params : Parameters.t) (hints : (CandidateMap.trace -> Can
 
 
 (* A Reimplementation of the core algorithm using the math from the paper *)
+
+
+
 let negate_model (model : value StringMap.t) : test =
   !%( StringMap.fold model
         ~init:True
@@ -378,97 +381,18 @@ let negate_model (model : value StringMap.t) : test =
     )
 
 
-let complete_model (holes : (string * size) list) (model : value StringMap.t) : value StringMap.t =
-  model
-  (* let bound_vars = StringMap.keys model in
-   * let unbound_vars = List.filter holes
-   *                      ~f:(fun (x,_) ->
-   *                        List.for_all bound_vars ~f:((<>) x)) in
-   * List.fold unbound_vars ~init:model
-   *   ~f:(fun acc (key,sz) ->
-   *     let data =
-   *       Int (Bigint.random Bigint.(pow (of_int 2) (of_int sz)), sz)
-   *     in
-   *     StringMap.set acc ~key ~data
-   *   ) *)
+let remove_missed_edits params data problem es =
+  List.fold es ~init:[] ~f:(fun acc e ->
+      let cex = List.hd_exn (Problem.cexs problem) in
+      let check = Packet.to_test ~fvs:(Problem.fvs problem) (fst cex)
+                  %=>% FastCX.hits_pred params data (Problem.phys problem) (Problem.phys_inst problem) (Problem.phys_edits problem) e in
+      match check_valid_cached params check with
+      | None,_ ->
+         (* Printf.printf "Checked \n%s\n" (string_of_test check); *)
+         acc @ [e]
+      | Some _,_ -> acc)
 
-(* let get_model (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (value StringMap.t option * Hint.t list) =
- *   let (in_pkt, out_pkt) = Problem.cexs problem |> List.hd_exn in
- *   let st = Time.now () in
- *   let deletions = [] in
- *   let hints = Hint.construct (Problem.log problem) (Problem.phys problem) (Problem.log_edits problem |> List.hd_exn) in
- *   let hole_protocol = Instance.WithHoles (deletions, hints) in
- *   let hole_type =  if params.widening then `Mask else `Exact in
- *   let phys = Problem.phys_gcl_holes problem hole_protocol hole_type  in
- *   ProfData.update_time !data.model_holes_time st;
- *   let st = Time.now () in
- *   let fvs = List.(free_vars_of_cmd phys
- *                   |> filter ~f:(fun x -> exists (Problem.fvs problem) ~f:(Stdlib.(=) x))) in
- *   (\* let fvs = problem.fvs in *\)
- *   let in_pkt_form, out_pkt_form = Packet.to_test in_pkt ~fvs, Packet.to_test out_pkt ~fvs in
- *   let wp_list =
- *     (if params.monotonic then
- *       wp_paths ~no_negations:true phys out_pkt_form
- *     else
- *       []) @  [Skip, wp phys out_pkt_form]
- *   in
- *   ProfData.update_time !data.search_wp_time st;
- *   let model =
- *     List.find_map wp_list
- *       ~f:(fun (_,in_pkt_wp) ->
- *         if in_pkt_wp = False || not (has_hole_test in_pkt_wp) then
- *           let () = if params.debug then Printf.printf "WP was False or holeless\n%!" in
- *           None
- *         else
- *         let st = Time.now() in
- *         (\* Printf.printf "\n\nWP: %s\n\n%!" (string_of_test in_pkt_wp); *\)
- *         let spec = in_pkt_form %=>% in_pkt_wp in
- *         let wf_holes = List.fold (Problem.phys problem |> get_tables_actsizes) ~init:True
- *                          ~f:(fun acc (tbl,num_acts) ->
- *                            acc %&%
- *                              (Hole.which_act_hole tbl (max (log2 num_acts) 1)
- *                               %<=% mkVInt(num_acts-1,max (log2 num_acts) 1))) in
- *         let widening_constraint =
- *           if params.widening then
- *             List.fold (holes_of_test in_pkt_wp)  ~init:True
- *               ~f:(fun acc (hole, sz) ->
- *                 match String.chop_suffix hole ~suffix:"_mask" with
- *                 | Some hole_val ->
- *                    Hole(hole_val,sz) %=% (mkMask (Hole(hole_val,sz)) (Hole(hole, sz)))
- *                    %&% ((Hole(hole,sz) %=% mkVInt(0, sz))
- *                         %+% (Hole(hole,sz) %=% Value(Int(Bigint.((pow (of_int 2) (of_int sz)) - one), sz))))
- *                 | None -> acc
- *
- *               )
- *           else True
- *         in
- *         let pre_condition =
- *           (Problem.model_space problem) %&% wf_holes %&% spec
- *           |> Injection.optimization params problem
- *         in
- *         let wf_condition = wf_holes %&% widening_constraint %&% pre_condition in
- *         ProfData.update_time !data.model_cond_time st;
- *         if params.debug || params.interactive then
- *                     Printf.printf "phys to check\n--\nInput:%s\n--\n%s\n--\nOutput:%s\n--\nWP:\n%s--\n%!"
- *                       (Packet.string__packet in_pkt)
- *                       (string_of_cmd phys)
- *                       (Packet.string__packet out_pkt)
- *                       (string_of_test spec);
- *         let model, dur = check_sat params wf_condition in
- *         ProfData.update_time_val !data.model_z3_time dur;
- *         ProfData.incr !data.model_z3_calls;
- *         !data.tree_sizes := num_nodes_in_test wf_condition :: !(!data.tree_sizes) ;
- *         Option.(model >>| complete_model (holes_of_test wf_condition))
- *       )
- *   in
- *   if params.interactive then begin
- *       ignore(Stdio.In_channel.(input_char stdin) : char option)
- *     end;
- *   begin match model with
- *   | None -> Printf.printf "All Attempts Failed\n%!"
- *   | Some _ -> ()
- *   end;
- *   (model,hints) *)
+
 
 
 let edit_cache = ref @@ EAbstr.make ()
@@ -566,6 +490,7 @@ let suspect_model params problem es model =
          else true
     )
 
+
 let rec minimize_edits params data problem certain uncertain =
   match uncertain with
   | [] -> certain
@@ -577,9 +502,8 @@ let rec minimize_edits params data problem certain uncertain =
 
 
 
-
 let minimize_solution params data problem =
-  let es = (* Printf.printf "\tminimizing\n"; *)
+  let es = Printf.printf "\tminimizing\n";
            Problem.phys_edits problem
            |> minimize_edits params data problem [] in
   (* List.iter es
@@ -605,7 +529,11 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
     match cex with
     | `Yes ->
        (* (\*if params.debug then*\) Printf.printf "\tNo CEX to be found -- programs are equiv\n%!"; *)
-       let problem = if params.minimize then minimize_solution params data problem else problem in
+       let problem =
+         if params.minimize
+         then minimize_solution params data problem
+         else problem
+       in
        if not params.ecache then
          edit_cache := EAbstr.update !edit_cache (Problem.log_edits problem |> List.hd_exn) (Problem.phys_edits problem);
        if params.interactive then begin
@@ -656,10 +584,10 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
     if params.ecache then
       match EAbstr.infer !edit_cache (Problem.log_edits problem |> List.hd_exn) with
       | None ->
-         cegis_math {params with ecache = false} data problem
+         cegis_math {params with ecache = false; do_slice = false} data problem
       | Some ps ->
-         match get_cex {params with fastcx = false} data (Problem.replace_phys_edits problem ps) with
-         | `Yes -> Some ps
+         match get_cex {params with fastcx = false} data problem with
+         | `Yes -> Printf.printf "Successful%!\n"; Some ps
          | `NoAndCE _ -> cegis_math {params with ecache = false} data problem
     else
       if Problem.model_space problem = True
@@ -710,14 +638,16 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
                      (* if List.exists es ~f:(fun e -> List.exists (Problem.phys_edits problem) ~f:(fun e' -> e = e') ) then
                       *   None
                       * else *)
+                     let es = remove_missed_edits params data problem es in
                      let () = if params.debug then begin
                          (* Printf.printf "\tCEX in %s\n" (Packet.string__packet @@ fst @@ List.hd_exn @@ Problem.cexs problem); *)
-                         Printf.printf "\t***Edits***\n%!";
+                         Printf.printf "\n\t***Edits***\n%!";
                          Problem.phys_edits problem |>
                            List.iter ~f:(fun e -> Printf.printf "\t %s\n%!" (Edit.to_string e));
                          Printf.printf "\t*** New ***\n%!";
                          List.iter es ~f:(fun e -> Printf.printf "\t %s\n%!" (Edit.to_string e));
-                         Printf.printf "\t***     ***\n"
+                         Printf.printf "\t***     ***\n";
+                         (* ignore(Stdio.In_channel.(input_char stdin) : char option); *)
                        end in
                      (* let es =
                       *   if params.del_pushdown then
@@ -749,7 +679,9 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
                                              |> reset_attempts) in
                      let continue () =
                        (* Printf.printf "\tmodel didnt work\n"; *)
-                       let model_space = Problem.model_space problem %&% negate_model model in
+                       let negated_edits = !%(Edit.test_of_list (Problem.phys problem) es) in
+                       (* Printf.printf "%s\n%!" (string_of_test negated_edits); *)
+                       let model_space = Problem.model_space problem %&% negated_edits in
                        let problem = Problem.set_model_space problem model_space in
                        match loop (i - 1) problem searcher with
                        | Some es -> Some es
