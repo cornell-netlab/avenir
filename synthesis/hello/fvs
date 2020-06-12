@@ -1,0 +1,6 @@
+hdr.ipv4_valid#1
+hdr.ethernet.srcAddr#48
+hdr.ethernet.dstAddr#48
+hdr.ipv4.ttl#8
+hdr.ipv4.dstAddr#32
+standard_metadata.egress_spec#9

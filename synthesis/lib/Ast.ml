@@ -542,13 +542,15 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
       ^ List.fold t.keys ~init:""
           ~f:(fun str (k,sz) ->
             str ^ k ^ "#" ^ string_of_int sz ^ ",") ^ ")"
-      ^ "," ^ List.foldi t.actions ~init:""
+      ^ ",(" ^ List.foldi t.actions ~init:""
                 ~f:(fun i str a ->
-                  str ^ " | { fun ("^
+                  str ^ (if i > 0 then " |" else "") ^ " { " ^
+                    (if List.length (List.nth_exn t.actions i |> fst) > 0 then "\\ ("^
                     List.fold (List.nth_exn t.actions i |> fst) ~init:""
                     ~f:(fun acc (x,sz) -> Printf.sprintf "%s%s#%d," acc x sz)
-                  ^") -> " ^ string_of_cmd (snd a) ^ "}")
-      ^ ", {" ^ string_of_cmd t.default ^ "})"
+                    ^") -> " else "")
+                    ^ string_of_cmd (snd a) ^ "}")
+      ^ "), {" ^ string_of_cmd t.default ^ "})"
                                        
             
   

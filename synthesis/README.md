@@ -31,19 +31,19 @@ dune external-lib-deps --missing @all
 opam pin add z3 https://github.com/priyasrikumar/ocaml-z3.git#no-successes
 ```
 
-+ If you get `libz3.so` error try addding the Z3 library to  your path. In Mac, this can be achieved by setting the DYLD_LIBRARY_PATH variable:
+<!-- + If you get `libz3.so` error try addding the Z3 library to  your path. In Mac, this can be achieved by setting the DYLD_LIBRARY_PATH variable: -->
 
-```
-export DYLD_LIBRARY_PATH=`opam config var z3:lib`
-```
+<!-- ``` -->
+<!-- export DYLD_LIBRARY_PATH=`opam config var z3:lib` -->
+<!-- ``` -->
 
-on GNU/Linux systems the same can be done via the LD_LIBRARY_PATH environment variable:
+<!-- on GNU/Linux systems the same can be done via the LD_LIBRARY_PATH environment variable: -->
 
-```
-export LD_LIBRARY_PATH=`opam config var z3:lib`
-```
+<!-- ``` -->
+<!-- export LD_LIBRARY_PATH=`opam config var z3:lib` -->
+<!-- ``` -->
 
-+ If you get linking errors from Z3 and your Z3 installation in opam is 4.8.* try switching back to 4.7.*.
+<!-- + If you get linking errors from Z3 and your Z3 installation in opam is 4.8.* try switching back to 4.7.*. -->
 
 # Running the code
 
@@ -56,8 +56,35 @@ make
 which will create an executable `motley` in your current directory. To run the executable, run
 
 ```
-./motley <command here>
+./avenir <command here>
 ```
+
+## Verification
+
+For an abstract program `hello/abstract.p4` and a target program
+`hello/target.p4`, we will verify a set of target insertions
+(`hello/solution.csv`) that implement the behavior indicated by the the
+abstract insertions in `hello/inserts.csv`.
+
+To verify equivalence, run the following commands
+```
+cd hello
+../avenir eq-real abstract.p4 target.p4 inserts.csv solution.csv fvs noassume -I1 includes -I2 includes
+```
+This will print the IR encoding of `abstract.p4` and `target.p4` followed by
+either `Equivalent`, or a counterexample. In this case you should see
+`Equivalent`. 
+
+## Synthesis
+
+To synthesize the same insertions whose correctness we just verified, make sure you are still in the `hello` directory and run 
+
+```
+../avenir synth abstract.p4 target.p4 no_edits.csv no_edits.csv fvs -b 1000 -e 10 -data inserts.csv -I1 includes -I2 includes -P4 -p
+```
+You should again see the IR encoding of the pipeline programs, and then a line
+that says `Target operations`, and the same (possibly reordered) operations as
+are in `hello/solution.csv`. Try `cat`ing this file to verify this.
 
 
 # Running Experiments from ONF
@@ -65,39 +92,15 @@ which will create an executable `motley` in your current directory. To run the e
 To run the ONF experiments, run
 
 ```
-./motley onf -data <onf/csv/file> -gas 1
-```
+./avenir onf-real benchmarks/real/p4programs/onos/pipelines/fabric/impl/src/main/resources/fabric.p4 benchmarks/real/p4programs/stratum-onos-demo/p4src/main.p4 benchmarks/real/log_edits.csv benchmarks/real/phys_edits.csv benchmarks/real/onos_fvs_full.csv benchmarks/real/assume.mt -I1 benchmarks/real/p4programs/onos/pipelines/fabric/impl/src/main/resources/include -I1 benchmarks/real/p4includes/ -I2 benchmarks/real/p4programs/stratum-onos-demo/ -I2 benchmarks/real/p4includes/ -data benchmarks/onos_201_adds.csv -b 100 -e 3 --fastcx --restrict-masks -w --domain-restr --hints -s --cache-edits --min --cache-queries
 
-Using the datafile checked into the repository you can run
-
-```
-./motley onf -data ./benchmarks/onos_201_adds.csv -gas 1
 ```
 
 However this might take too long, or you may want some intermediate
 results. You can truncate the file using, e.g. `head -100` or `head -1000`
-to create a new file.
+to create a new file and run:
 
 ```
 head -200 ./benchmarks/onos_201_adds.csv > ./benchmarks/onos_201_200_adds.csv
-./motley onf -data ./benchmarks/onos_201_200_adds.csv -gas 1
 ```
 
-If you get an `"OUT OF GAS"` failure, try increasing the value of the
-`-gas` parameter.
-
-
-# Writing and Running Tests
-
-The current Testing framework uses `inline_tests`, which means you can write tests anywhere in your code. Currently all of the tests are localized in the `Test.ml` file. To write a test simply write
-
-```
-let%test _ = <boolean expression>
-```
-if the boolean expression returns `true`, the test passes, if it returns `false`, the test fails.
-
-To run all of the tests written in the the library (`lib/`),  execute the following command
-
-```
-dune runtest
-```

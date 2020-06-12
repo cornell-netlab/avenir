@@ -21,3 +21,5 @@ query.smt
 **/*.o
 **/*.cmx
 **/*.cmi
+avenir
+

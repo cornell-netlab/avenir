@@ -39,11 +39,15 @@ let parse_fvs fp =
 module Solver = struct
   let spec = Command.Spec.(
       (empty
-      +> anon ("logical" %: string)
-      +> anon ("real" %: string)
-      +> anon ("logical_edits" %: string)
-      +> anon ("physical_edits" %: string)
-      +> anon ("fvs" %: string)
+       +> anon ("logical" %: string)
+       +> anon ("real" %: string)
+       +> anon ("logical_edits" %: string)
+       +> anon ("physical_edits" %: string)
+       +> anon ("fvs" %: string)
+       +> flag "-P4" no_arg ~doc:"input full P4 programs"
+       +> flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
+       +> flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file")
+
       +> flag "-data" (required string) ~doc:"The logical experiment to run"
       +> flag "-DEBUG" no_arg ~doc:"Print Debugging commands"
       +> flag "-i" no_arg ~doc:"interactive mode"
@@ -51,26 +55,25 @@ module Solver = struct
       +> flag "-measure" no_arg ~doc:"Produce a CSV of data to stdout"
       +> flag "-onos" no_arg ~doc:"Parse logical edits as onos insertions"
 
-       +> flag "-w" no_arg ~doc:"Do widening"
-       +> flag "-s" no_arg ~doc:"Do slicing optimization"
-       +> flag "-e" (required int) ~doc:"maximum number of physical edits"
-       +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
-       +> flag "-m" no_arg ~doc:"Prune rows with no holes"
-       +> flag "--inj" no_arg ~doc:"Try injection optimization"
-       +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
-       +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
-       +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
-       +> flag "--shortening" no_arg ~doc:"shorten queries"
-       +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
-       +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
-       +> flag "--hints" no_arg ~doc:"Use syntactic hints"
-       +> flag "--holes" no_arg ~doc:"Holes only"
-       +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
-       +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
-       +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
-       +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
-       +> flag "--restrict-masks" no_arg ~doc:"Restrict masks")
-             )
+      +> flag "-w" no_arg ~doc:"Do widening"
+      +> flag "-s" no_arg ~doc:"Do slicing optimization"
+      +> flag "-e" (required int) ~doc:"maximum number of physical edits"
+      +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
+      +> flag "-m" no_arg ~doc:"Prune rows with no holes"
+      +> flag "--inj" no_arg ~doc:"Try injection optimization"
+      +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
+      +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
+      +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
+      +> flag "--shortening" no_arg ~doc:"shorten queries"
+      +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
+      +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
+      +> flag "--hints" no_arg ~doc:"Use syntactic hints"
+      +> flag "--holes" no_arg ~doc:"Holes only"
+      +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
+      +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
+      +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
+      +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
+      +> flag "--restrict-masks" no_arg ~doc:"Restrict masks")
 
   let run
         logical
@@ -78,6 +81,9 @@ module Solver = struct
         logical_edits
         physical_edits
         fvs
+        p4
+        log_incl
+        phys_incl
         data
         debug
         interactive
@@ -126,14 +132,20 @@ module Solver = struct
                               restrict_mask;
                               timeout = None
                  }) in
-    let log = Benchmark.parse_file logical in
-    let phys = Benchmark. parse_file real in
+    let fvs = Benchmark.parse_fvs fvs in
+    let log = if p4
+              then Encode.encode_from_p4 log_incl logical false
+                   |> Benchmark.zero_init fvs |> Benchmark.drop_handle fvs
+              else Benchmark.parse_file logical in
+    let phys = if p4
+               then Encode.encode_from_p4 phys_incl real false
+                    |> Benchmark.zero_init fvs |> Benchmark.drop_handle fvs
+               else Benchmark.parse_file real in
     let log_inst = Runtime.parse logical_edits |> Instance.(update_list params empty) in
     let log_edits = if onos
                     then Benchmark.onos_to_edits data "ipv6"
                     else Runtime.parse data |> List.(map ~f:return)  in
     let phys_inst = Runtime.parse physical_edits |> Instance.(update_list params empty) in
-    let fvs = Benchmark.parse_fvs fvs in
     let phys_drop_spec = None in
     if measure then
       let open Motley.Instance in
@@ -154,8 +166,8 @@ module Solver = struct
          if print_res
          then
            begin
-             Printf.printf "Synthesized Program (%d edits made)\n%!" (List.length phys_edits);
-             Printf.printf "%s\n%!" (Problem.phys_gcl_program params solution |> Ast.string_of_cmd)
+             Printf.printf "Target operations:\n%!";
+             List.iter phys_edits ~f:(fun e -> Printf.printf "%s\n%!" (Tables.Edit.to_string e))
            end
          else ()
 end
@@ -167,7 +179,6 @@ let synthesize_cmd : Command.t =
     Solver.spec
     Solver.run
 
-
 module Encoder = struct
   let spec = Command.Spec.(
       empty
@@ -176,7 +187,9 @@ module Encoder = struct
       +> anon ("p4_file" %: string))
 
   let run include_dirs verbose p4_file () =
-    ignore(Encode.encode_from_p4 include_dirs p4_file verbose : Ast.cmd)
+    Encode.encode_from_p4 include_dirs p4_file verbose
+    |> Ast.string_of_cmd
+    |> Printf.printf "%s"
 end
 
 let encode_cmd : Command.t =
