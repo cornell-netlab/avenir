@@ -1,0 +1,10 @@
+There are 5743 rows 
+there are 5678 cleaned rules
+log_inst_size,time,fast_cex_time,impl_time,check_valid_time,eq_time,make_vc_time,check_sliceable_time,eq_num_z3_calls,model_search_time,model_holes_time,model_cond_time,search_wp_time,model_z3_time,model_z3_calls,num_backtracks
+	SLICING
+	SLICING
+Caching ADD,obt,*#9;*#48;0xfa163e76f21c#48;*#16;0x7dd1c20#32;0x8cb577b#32;*#8;*#16;0x1bd#16;*#12;*#3,0x2#9,0
+0,83.686829,8.538246,25.082111,24.682522,14.555931,0.053167,0.004292,2,83.735943,0.026703,0.000000,0.108719,37.961006,3,0
+	SLICING
+Caching ADD,obt,*#9;*#48;0xfa163e777e8a#48;*#16;0x7dd1c20#32;0x8cb577b#32;*#8;*#16;0x1bd#16;*#12;*#3,0x3#9,0
+1,43.822289,7.630825,15.387774,15.202999,10.555029,0.014067,0.008106,1,13.946533,0.012159,0.000000,0.058889,12.671471,1,0

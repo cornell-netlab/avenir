@@ -679,13 +679,13 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
   let fvs = parse_fvs fvs_file in
   let assume = parse_file assume_file in
 
-  let print_fvs = printf "fvs = %s" (Sexp.to_string ([%sexp_of: (string * int) list] fvs)) in
+  (* let print_fvs = printf "fvs = %s" (Sexp.to_string ([%sexp_of: (string * int) list] fvs)) in *)
 
   let log = (assume %:% Encode.encode_from_p4 log_inc log_p4 false) |> zero_init fvs |> drop_handle fvs in
   let phys = (assume %:% Encode.encode_from_p4 phys_inc phys_p4 false) |> zero_init fvs |> drop_handle fvs in
   
   let open Match in
-  let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in
+  (* let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in *)
   (* let fvs = parse_fvs fvs in *)
   let log_edits = Runtime.parse log_edits_file in
   let problem =
@@ -1644,6 +1644,101 @@ let metadata params sz nmeta nedits =
         acc @ [ num_ms, problem, log_edits ])
   in
   List.fold problems ~init:"num_ms,time"
+    ~f:(fun acc (num_xs,problem,log_edits) ->
+      Synthesis.edit_cache := EAbstr.make ();
+      let st = Time.now () in
+      let es = measure (restart_timer params st) None problem log_edits in
+      let nd = Time.now () in
+      let dur = Time.diff nd st in
+      match es with
+      | None ->
+         Printf.sprintf "%s\n%d,TIMEOUT" acc num_xs
+      | Some _ ->
+         Printf.sprintf "%s\n%d,%f" acc num_xs (Time.Span.to_ms dur)
+    )
+  |> Printf.printf "%s\n"
+
+
+(***************************************
+ *        Benchmark Length           *
+ ***************************************)
+
+let tables params sz max_tables nheaders max_edits =
+  let physical_tables =
+    List.fold (range_ex 1 max_tables) ~init:[]
+      ~f:(fun acc ntables ->
+        let fvs = ("out",9) :: mk_normal_keys sz nheaders in
+        let logical_table =
+          mkApply("logical",
+                  mk_normal_keys sz nheaders,
+                  [["o", 9], "out" %<-% Var("o", 9)],
+                  Skip)
+        in
+        let phys = create_bench sz ntables nheaders 0   in
+        Printf.printf "phys \n%s\n%!" (string_of_cmd phys);
+        let log_edits =
+          create_log_edits 32 0 max_edits nheaders |> List.map ~f:(List.return)
+        in
+        let problem = Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
+        acc @ [ntables,problem,log_edits ])
+  in
+  List.fold physical_tables ~init:"ntables,time"
+    ~f:(fun acc (num_xs,problem,log_edits) ->
+      Synthesis.edit_cache := EAbstr.make ();
+      let st = Time.now () in
+      let es = measure (restart_timer params st) None problem log_edits in
+      let nd = Time.now () in
+      let dur = Time.diff nd st in
+      match es with
+      | None ->
+         Printf.sprintf "%s\n%d,TIMEOUT" acc num_xs
+      | Some _ ->
+         Printf.sprintf "%s\n%d,%f" acc num_xs (Time.Span.to_ms dur)
+    )
+  |> Printf.printf "%s\n"
+
+
+
+(***************************************
+ *        Benchmark Breadth           *
+ ***************************************)
+
+let create_par_bench sz num_tables num_xs num_ms =
+  let tblsize = max (log2 (num_tables + 2)) 1 in
+  sequence [ initialize_ms sz num_ms
+           ; mkApply("stage",
+                     mk_normal_keys sz num_xs,
+                     [["stg",tblsize], "table_id" %<-% Var("stg",tblsize)],
+                     "table_id" %<-% mkVInt(num_tables + 1, tblsize))
+           ; mkOrdered @@
+               List.map (range_ex 0 num_tables)
+                 ~f:(fun tbl_idx ->
+                   mkVInt(tbl_idx,tblsize) %=% Var("table_id",tblsize),
+                   mk_ith_table sz num_tables tbl_idx num_xs num_ms
+                 )
+    ]
+
+
+let breadth params sz max_tables nheaders max_edits =
+  let physical_tables =
+    List.fold (range_ex 1 max_tables) ~init:[]
+      ~f:(fun acc ntables ->
+        let fvs = ("out",9) :: mk_normal_keys sz nheaders in
+        let logical_table =
+          mkApply("logical",
+                  mk_normal_keys sz nheaders,
+                  [["o", 9], "out" %<-% Var("o", 9)],
+                  Skip)
+        in
+        let phys = create_par_bench sz ntables nheaders 0 in
+        Printf.printf "phys \n%s\n%!" (string_of_cmd phys);
+        let log_edits =
+          create_log_edits 32 0 max_edits nheaders |> List.map ~f:(List.return)
+        in
+        let problem = Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
+        acc @ [ntables,problem,log_edits ])
+  in
+  List.fold physical_tables ~init:"ntables,time"
     ~f:(fun acc (num_xs,problem,log_edits) ->
       Synthesis.edit_cache := EAbstr.make ();
       let st = Time.now () in

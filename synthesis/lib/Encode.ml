@@ -858,7 +858,7 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
 
   let init_action_run = mkAssn (snd name ^ action_run_suffix) (mkVInt(0, 1)) in
 
-  let xxx_keys = printf "keys = %s\n" (Sexp.to_string ([%sexp_of: (string * int) list] str_keys)) in
+  (* let xxx_keys = printf "keys = %s\n" (Sexp.to_string ([%sexp_of: (string * int) list] str_keys)) in *)
   init_action_run %:% Apply { name = snd name; keys = str_keys; actions =  action_cmds; default =  enc_def_act }
 
 and functioncall_args type_ctx (fc : Expression.t) =
@@ -965,11 +965,11 @@ let parse_p4 include_dirs p4_file verbose =
 
 
 let encode_from_p4 include_dirs p4_file verbose : Ast.cmd =
-  Format.printf "encoding file %s\n%!" p4_file;
+  (* Format.printf "encoding file %s\n%!" p4_file; *)
   match parse_p4 include_dirs p4_file verbose with
   | `Error (info, _) ->
      raise (Failure (Format.sprintf "at %s @\n%!" (Info.to_string info)))
   | `Ok p4_program ->
      let cmd = encode_program p4_program in
-    Format.printf "Encoded Program: \n%!\n %s%! \n%!" (string_of_cmd cmd);
+    (* Format.printf "Encoded Program: \n%!\n %s%! \n%!" (string_of_cmd cmd); *)
     cmd

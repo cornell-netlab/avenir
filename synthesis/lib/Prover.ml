@@ -4,7 +4,7 @@ open Util
 open Packet
 open Z3
 
-let print_debug = false
+let print_debug = true
 
 let debug term =
   if print_debug then
@@ -34,16 +34,27 @@ let rec expr_to_term_help expr styp : Smtlib.term =
      Smtlib.bbv (num) sz
   | Var (v, sz) -> quantify v `Var styp
   | Hole (h, sz) -> quantify h `Hole styp
-  | Plus (e1, e2) -> Smtlib.bvadd
-                       (expr_to_term_help e1 styp)
-                       (expr_to_term_help e2 styp)
-  | Times (e1, e2) -> Smtlib.bvmul
-                        (expr_to_term_help e1 styp)
-                        (expr_to_term_help e2 styp)
-  | Minus (e1, e2) -> Smtlib.bvsub
-                        (expr_to_term_help e1 styp)
-                        (expr_to_term_help e2 styp)
+  | Plus (e1, e2) ->
+     if size_of_expr e1 <> size_of_expr e2
+     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     Smtlib.bvadd
+       (expr_to_term_help e1 styp)
+       (expr_to_term_help e2 styp)
+  | Times (e1, e2) ->
+     if size_of_expr e1 <> size_of_expr e2
+     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     Smtlib.bvmul
+       (expr_to_term_help e1 styp)
+       (expr_to_term_help e2 styp)
+  | Minus (e1, e2) ->
+     if size_of_expr e1 <> size_of_expr e2
+     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     Smtlib.bvsub
+       (expr_to_term_help e1 styp)
+       (expr_to_term_help e2 styp)
   | Mask (e1,e2) ->
+     if size_of_expr e1 <> size_of_expr e2
+     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
      let sexp = Smtlib.bvand
                   (expr_to_term_help e1 styp)
                   (expr_to_term_help e2 styp) in
@@ -55,12 +66,18 @@ let rec test_to_term_help test styp : Smtlib.term =
   match test with
   | True -> Smtlib.bool_to_term true
   | False -> Smtlib.bool_to_term false
-  | Eq (e1, e2) -> Smtlib.equals
-                     (expr_to_term_help e1 styp)
-                     (expr_to_term_help e2 styp)
-  | Le (e1, e2) -> Smtlib.bvule
-                     (expr_to_term_help e1 styp)
-                     (expr_to_term_help e2 styp)
+  | Eq (e1, e2) ->
+     if size_of_expr e1 <> size_of_expr e2
+     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     Smtlib.equals
+       (expr_to_term_help e1 styp)
+       (expr_to_term_help e2 styp)
+  | Le (e1, e2) ->
+     if size_of_expr e1 <> size_of_expr e2
+     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     Smtlib.bvule
+       (expr_to_term_help e1 styp)
+       (expr_to_term_help e2 styp)
   | And (t1, t2) -> Smtlib.and_
                       (test_to_term_help t1 styp)
                       (test_to_term_help t2 styp)
@@ -198,18 +215,18 @@ let check_valid_cached (params : Parameters.t) (test : Ast.test) =
   cache := cache';
   match res with
   | `HitAbs ->
-     Printf.printf "\tCache_hit after %fms!\n%!"
-       (Time.(diff (now()) st |> Span.to_ms));
+     (* Printf.printf "\tCache_hit after %fms!\n%!" *)
+       (* (Time.(diff (now()) st |> Span.to_ms)); *)
      (None, Time.(diff (now ()) st))
   | `Miss test | `Hit test ->
-     Printf.printf "\tCouldn't abstract a thing from %d previous tests!\n" (List.length !cache.seen);
+     (* Printf.printf "\tCouldn't abstract a thing from %d previous tests!\n" (List.length !cache.seen); *)
      let dur' = Time.(diff (now()) st) in
      let (m , dur) = check_valid_inner params test in
      if Option.is_none m then
        cache := QAbstr.add_test test !cache;
      (m, Time.Span.(dur + dur'))
   | `AddAbs q ->
-     Printf.printf "\tChecking abstraction from %d previous tests and %d abstractions!\n%!" (List.length !cache.seen) (List.length !cache.generals);
+     (* Printf.printf "\tChecking abstraction from %d previous tests and %d abstractions!\n%!" (List.length !cache.seen) (List.length !cache.generals); *)
      let dur' = Time.(diff (now()) st) in
      let (m , dur) = if List.length !cache.seen > 0 then
                        check_valid_inner {params with debug = true} q
@@ -217,7 +234,7 @@ let check_valid_cached (params : Parameters.t) (test : Ast.test) =
                        check_valid_inner params q in
      match m with
      | Some _ ->
-        Printf.printf "\tAbstraction Failed\n%!";
+        (* Printf.printf "\tAbstraction Failed\n%!"; *)
         (* Printf.printf "\t%s\n%!" (string_of_test q); *)
         let dur' = Time.(diff (now()) st) in
         let (m , dur) = check_valid_inner params test in

@@ -1,0 +1,4 @@
+There are 5743 rows 
+there are 5678 cleaned rules
+log_inst_size,time,fast_cex_time,impl_time,check_valid_time,eq_time,make_vc_time,check_sliceable_time,eq_num_z3_calls,model_search_time,model_holes_time,model_cond_time,search_wp_time,model_z3_time,model_z3_calls,num_backtracks
+0,44.391155,0.000000,26.248217,25.729179,14.590502,0.037909,0.006437,2,14.067173,0.015259,0.000000,0.053167,12.655497,1,0

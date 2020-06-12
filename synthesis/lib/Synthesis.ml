@@ -455,7 +455,7 @@ let rec get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref)
            Printf.printf "New rule is not reachable\n%!";
          `Yes
       | `NotFound _ ->
-         Printf.printf "\t     but it failed\n%!";
+         (* Printf.printf "\t     but it failed\n%!"; *)
          if params.debug then
            Printf.printf "No cex to be found rapidly, check full equivalence\n%!";
          let st = Time.now () in
@@ -467,7 +467,7 @@ let rec get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref)
     end
   else
     if params.do_slice && not( List.is_empty (Problem.phys_edits problem)) then
-      let () = Printf.printf "\tSLICING\n%!" in
+      (* let () = Printf.printf "\tSLICING\n%!" in *)
       let st = Time.now () in
       let res = implements ~neg params data (Problem.slice params problem) in
       ProfData.update_time !data.impl_time st;
@@ -476,7 +476,7 @@ let rec get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref)
       | `Yes when slice_conclusive params data problem -> `Yes
       | `Yes -> implements ~neg params data problem
     else
-      let () = Printf.printf "\tNormal Eq Check %d edits \n%!" (Problem.phys_edits problem |> List.length)in
+      (* let () = Printf.printf "\tNormal Eq Check %d edits \n%!" (Problem.phys_edits problem |> List.length)in *)
       let st = Time.now () in
       let res = implements ~neg params data problem in
       ProfData.update_time !data.impl_time st;
@@ -619,7 +619,9 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
    *   Printf.printf "+Model Space+\n%!"; *)
   (* Printf.printf "\tSolving for %d more iters\n%!" i; *)
   match params.timeout with
-  | Some (st,dur) when Time.(Span.(dur < diff(now()) st)) -> Printf.printf "Timeout\n%!"; None
+  | Some (st,dur) when Time.(Span.(dur < diff(now()) st)) ->
+     Printf.printf "Timeout\n%!";
+     None
   | _ ->
   if i = 0 then
     (* let () = Printf.printf "The jig is up\n%!" in *)
@@ -633,7 +635,7 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
       | Some ps ->
          (* Printf.printf "\nEdit Cache Succeeded\n%! Guessing\n";
           * List.iter ps ~f:(fun e -> Printf.printf "\t%s\n%!" (Edit.to_string e)); *)
-         match get_cex {params with fastcx = false; do_slice  = true} data (Problem.replace_phys_edits problem ps) with
+         match get_cex {params with fastcx = false} data (Problem.replace_phys_edits problem ps) with
          | `Yes ->
             (* Printf.printf "Successful%!\n"; *)
             Some ps

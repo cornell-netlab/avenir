@@ -1,0 +1,196 @@
+
+
+
+
+There are 5743 rows 
+there are 5678 cleaned rules
+log_inst_size,time,fast_cex_time,impl_time,check_valid_time,eq_time,make_vc_time,check_sliceable_time,eq_num_z3_calls,model_search_time,model_holes_time,model_cond_time,search_wp_time,model_z3_time,model_z3_calls,num_backtracks
+-------------------------------------------
+out := 0x0#9;
+ if ordered
+	(((eth_dst#48 = 0xfa163e76f21c#48 && ip_src#32 = 0x7dd1c20#32) && ip_dst#32 = 0x8cb577b#32) && tcp_dport#16 = 0x1bd#16) ->
+ 		out := 0x2#9 []
+	true ->
+ 		skip []
+fi;
+ if ordered
+	out#9 = 0x0#9 ->
+ 		out := 0x0#9;
+ 		in_port := 0x0#9;
+ 		eth_src := 0x0#48;
+ 		eth_dst := 0x0#48;
+ 		eth_typ := 0x0#16;
+ 		ip_src := 0x0#32;
+ 		ip_dst := 0x0#32;
+ 		proto := 0x0#8;
+ 		tcp_sport := 0x0#16;
+ 		tcp_dport := 0x0#16 []
+	true ->
+ 		skip []
+fi 
+???====?=====????
+ out := 0x0#9;
+ if ordered
+	true ->
+ 		next_tbl := 0x0#2 []
+fi;
+ if ordered
+	next_tbl#2 = 0x1#2 ->
+ 		if ordered
+			true ->
+ 				skip []
+		fi []
+	next_tbl#2 = 0x2#2 ->
+ 		if ordered
+			true ->
+ 				skip []
+		fi []
+	next_tbl#2 = 0x3#2 ->
+ 		if ordered
+			true ->
+ 				skip []
+		fi []
+	true ->
+ 		skip []
+fi;
+ if ordered
+	true ->
+ 		skip []
+fi;
+ if ordered
+	out#9 = 0x0#9 ->
+ 		out := 0x0#9;
+ 		in_port := 0x0#9;
+ 		eth_src := 0x0#48;
+ 		eth_dst := 0x0#48;
+ 		eth_typ := 0x0#16;
+ 		ip_src := 0x0#32;
+ 		ip_dst := 0x0#32;
+ 		proto := 0x0#8;
+ 		tcp_sport := 0x0#16;
+ 		tcp_dport := 0x0#16 []
+	true ->
+ 		skip []
+fi
+-------------------------------------
+----------invalid----------------
+ CE_in = (eth_dst,0xfa163e76f21c#48,eth_src,0x0#48,eth_typ,0x0#16,in_port,0x0#9,ip_dst,0x8cb577b#32,ip_src,0x7dd1c20#32,out,0x0#9,proto,0x0#8,tcp_dport,0x1bd#16,tcp_sport,0x0#16,)
+ log_out  = (eth_dst,0xfa163e76f21c#48,eth_src,0x0#48,eth_typ,0x0#16,in_port,0x0#9,ip_dst,0x8cb577b#32,ip_src,0x7dd1c20#32,out,0x2#9,proto,0x0#8,tcp_dport,0x1bd#16,tcp_sport,0x0#16,)
+ phys_out = (eth_dst,0x0#48,eth_src,0x0#48,eth_typ,0x0#16,in_port,0x0#9,ip_dst,0x0#32,ip_src,0x0#32,next_tbl,0x0#2,out,0x0#9,proto,0x0#8,tcp_dport,0x0#16,tcp_sport,0x0#16,)
+Counterexample found!
+in: (eth_dst,0xfa163e76f21c#48,eth_src,0x0#48,eth_typ,0x0#16,in_port,0x0#9,ip_dst,0x8cb577b#32,ip_src,0x7dd1c20#32,out,0x0#9,proto,0x0#8,tcp_dport,0x1bd#16,tcp_sport,0x0#16,)
+log:  (eth_dst,0xfa163e76f21c#48,eth_src,0x0#48,eth_typ,0x0#16,in_port,0x0#9,ip_dst,0x8cb577b#32,ip_src,0x7dd1c20#32,out,0x2#9,proto,0x0#8,tcp_dport,0x1bd#16,tcp_sport,0x0#16,)
+phys:  (eth_dst,0x0#48,eth_src,0x0#48,eth_typ,0x0#16,in_port,0x0#9,ip_dst,0x0#32,ip_src,0x0#32,next_tbl,0x0#2,out,0x0#9,proto,0x0#8,tcp_dport,0x0#16,tcp_sport,0x0#16,)
+
+
+using optimization to |none|
+
+NEW Phys
+ out := 0x0#9;
+ if ordered
+	(((in_port#9 = ??in_port_station#9 && eth_src#48 = ??eth_src_station#48) && ??AddRowTostation#1 = 0x1#1) && ??ActInstation#1 = 0x0#1) ->
+ 		next_tbl := ov#2 []
+	true ->
+ 		next_tbl := 0x0#2 []
+fi;
+ if ordered
+	next_tbl#2 = 0x1#2 ->
+ 		if ordered
+			((ip_dst#32 = ??ip_dst_l3#32 && ??AddRowTol3#1 = 0x1#1) && ??ActInl3#1 = 0x0#1) ->
+ 				out := ?of#9 []
+			true ->
+ 				skip []
+		fi []
+	next_tbl#2 = 0x2#2 ->
+ 		if ordered
+			((eth_dst#32 = ??eth_dst_l2#32 && ??AddRowTol2#1 = 0x1#1) && ??ActInl2#1 = 0x0#1) ->
+ 				out := ?o2#9 []
+			true ->
+ 				skip []
+		fi []
+	next_tbl#2 = 0x3#2 ->
+ 		if ordered
+			((tcp_dst#32 = ??tcp_dst_l4#32 && ??AddRowTol4#1 = 0x1#1) && ??ActInl4#1 = 0x0#1) ->
+ 				out := ?o4#9 []
+			true ->
+ 				skip []
+		fi []
+	true ->
+ 		skip []
+fi;
+ if ordered
+	((((((((((in_port#9 = ??in_port_acl#9 && eth_src#48 = ??eth_src_acl#48) && eth_dst#48 = ??eth_dst_acl#48) && eth_typ#16 = ??eth_typ_acl#16) && ip_src#32 = ??ip_src_acl#32) && ip_dst#32 = ??ip_dst_acl#32) && proto#8 = ??proto_acl#8) && tcp_sport#16 = ??tcp_sport_acl#16) && tcp_dport#16 = ??tcp_dport_acl#16) && ??AddRowToacl#1 = 0x1#1) && ??ActInacl#1 = 0x0#1) ->
+ 		out := ?oa#9 []
+	true ->
+ 		skip []
+fi;
+ if ordered
+	out#9 = 0x0#9 ->
+ 		out := 0x0#9;
+ 		in_port := 0x0#9;
+ 		eth_src := 0x0#48;
+ 		eth_dst := 0x0#48;
+ 		eth_typ := 0x0#16;
+ 		ip_src := 0x0#32;
+ 		ip_dst := 0x0#32;
+ 		proto := 0x0#8;
+ 		tcp_sport := 0x0#16;
+ 		tcp_dport := 0x0#16 []
+	true ->
+ 		skip []
+fi
+Checking path with hole!
+  out := 0x0#9;
+ if ordered
+	(((in_port#9 = ??in_port_station#9 && eth_src#48 = ??eth_src_station#48) && ??AddRowTostation#1 = 0x1#1) && ??ActInstation#1 = 0x0#1) ->
+ 		next_tbl := ov#2 []
+	true ->
+ 		next_tbl := 0x0#2 []
+fi;
+ if ordered
+	next_tbl#2 = 0x1#2 ->
+ 		if ordered
+			((ip_dst#32 = ??ip_dst_l3#32 && ??AddRowTol3#1 = 0x1#1) && ??ActInl3#1 = 0x0#1) ->
+ 				out := ?of#9 []
+			true ->
+ 				skip []
+		fi []
+	next_tbl#2 = 0x2#2 ->
+ 		if ordered
+			((eth_dst#32 = ??eth_dst_l2#32 && ??AddRowTol2#1 = 0x1#1) && ??ActInl2#1 = 0x0#1) ->
+ 				out := ?o2#9 []
+			true ->
+ 				skip []
+		fi []
+	next_tbl#2 = 0x3#2 ->
+ 		if ordered
+			((tcp_dst#32 = ??tcp_dst_l4#32 && ??AddRowTol4#1 = 0x1#1) && ??ActInl4#1 = 0x0#1) ->
+ 				out := ?o4#9 []
+			true ->
+ 				skip []
+		fi []
+	true ->
+ 		skip []
+fi;
+ if ordered
+	((((((((((in_port#9 = ??in_port_acl#9 && eth_src#48 = ??eth_src_acl#48) && eth_dst#48 = ??eth_dst_acl#48) && eth_typ#16 = ??eth_typ_acl#16) && ip_src#32 = ??ip_src_acl#32) && ip_dst#32 = ??ip_dst_acl#32) && proto#8 = ??proto_acl#8) && tcp_sport#16 = ??tcp_sport_acl#16) && tcp_dport#16 = ??tcp_dport_acl#16) && ??AddRowToacl#1 = 0x1#1) && ??ActInacl#1 = 0x0#1) ->
+ 		out := ?oa#9 []
+	true ->
+ 		skip []
+fi;
+ if ordered
+	out#9 = 0x0#9 ->
+ 		out := 0x0#9;
+ 		in_port := 0x0#9;
+ 		eth_src := 0x0#48;
+ 		eth_dst := 0x0#48;
+ 		eth_typ := 0x0#16;
+ 		ip_src := 0x0#32;
+ 		ip_dst := 0x0#32;
+ 		proto := 0x0#8;
+ 		tcp_sport := 0x0#16;
+ 		tcp_dport := 0x0#16 []
+	true ->
+ 		skip []
+fi
+
