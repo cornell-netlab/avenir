@@ -118,34 +118,41 @@ let avenir_stub op : op list =
                 |> Problem.commit_edits_phys !params;
      List.map es ~f:op_of_edit
 
-   (* VERY REAL FUNCTION *)
-
-let verify_stub abstract_ops physical_ops = [] (* 100% finished imp *)
-  (*inputs are already parsed*)
+let verify_stub abstract_ops physical_ops =
+  let problem_ =
+    Problem.append_log_edits !problem
+    @@ List.map abstract_ops ~f:(edit_of_op) in
+  let problem_ =
+    Problem.append_phys_edits problem_
+    @@ List.map physical_ops ~f:(edit_of_op) in
+  match Synthesis.implements !params (ProfData.zero ()) problem_ with
+  | `Yes -> true
+  | _ -> false
 
 
 let handle_op_request (op : op) =
   (* some magic occurs *)
   let ops = avenir_stub op
             |> List.map ~f:op_to_json in
-    `List (ops)
-
-let handle_verify_request abstract_ops physical_ops =
-  let ops = verify_stub abstract_ops physical_ops |> List.map ~f:op_to_json in
-    `List (ops)
-
+  `List (ops)
 
 let process_post_request body =
 try
   let parsed_request = parse_json body in
-  let response_ops_list = (match parsed_request with
-        | Op (op) -> handle_op_request op
-        | Verify (absOps, physOps) -> handle_verify_request absOps physOps) in
+    match parsed_request with
+    | Op (op) ->
     `Assoc [
-      ("PhysOps", response_ops_list);
+      ("PhysOps", handle_op_request op);
       ("OK", `Bool (true));
       ("Error", `String ("")) ]
       |> Yojson.Basic.to_string ~std:true
+    | Verify (absOps, physOps) ->
+    `Assoc [
+      ("PhysOps", `List []);
+      ("OK", `Bool (verify_stub absOps physOps));
+      ("Error", `String ("")) ]
+      |> Yojson.Basic.to_string ~std:true
+
 with Failure (e) ->
     `Assoc [
       ("PhysOps", `List []);

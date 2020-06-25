@@ -39,6 +39,7 @@ val phys_drop_spec : t -> test option
 val slice : Parameters.t -> t -> t
 val update_log : t -> cmd -> t
 val update_phys : t -> cmd -> t
+val append_log_edits : t -> Edit.t list -> t
 val append_phys_edits : t -> Edit.t list -> t
 val replace_log_edits : t -> Edit.t list -> t
 val replace_phys_edits : t -> Edit.t list -> t

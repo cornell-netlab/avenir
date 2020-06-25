@@ -73,6 +73,10 @@ let slice params (p : t) : t =
 let append_phys_edits (p : t) (es : Edit.t list) : t =
   {p with phys = Switch.append_edits p.phys es}
 
+let append_log_edits (p : t) (es : Edit.t list) : t =
+  {p with log = Switch.append_edits p.log es}
+
+
 let replace_log_edits (p : t) (log_edits : Edit.t list) : t =
   {p with log = Switch.replace_edits p.log log_edits}
 
