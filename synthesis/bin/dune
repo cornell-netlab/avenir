@@ -1,4 +1,4 @@
 (executable
  (name main)
- (libraries core motley)
+ (libraries core async motley cohttp-async yojson)
  (preprocess (pps ppx_jane)))

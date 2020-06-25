@@ -910,9 +910,8 @@ and replace_consts_test (consts : (string * expr) list) (t : test) =
   | Iff(t1, t2) -> Iff(replace_consts_test consts t1, replace_consts_test consts t2)
   | Neg t1 -> Neg (replace_consts_test consts t1)
 
-let read_lines filename =
-  let chan = In_channel.create filename in
-  Std.input_list chan
+let read_lines filename = In_channel.read_lines filename
+
 
 let apply_model_from_file (c : cmd) (model_file : string) : cmd =
   let lines = read_lines model_file in

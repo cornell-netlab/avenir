@@ -122,7 +122,7 @@ let lfill c n str =
 
 (** Bytes and Stuff **)
 let rec bytes_of_hex_string str : char list =
-  let str = String.chop_prefix_exn str "0x" in
+  let str = String.chop_prefix_exn str ~prefix:"0x" in
   if String.length str = 0 then [] else
     let first_byte = String.prefix str 2 in
     let rest = String.drop_prefix str 2 in

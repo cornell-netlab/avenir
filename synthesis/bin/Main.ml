@@ -1,4 +1,6 @@
 open Core
+open Async
+open Async_command
 module Ast = Motley.Ast
 module Parser = Motley.Parser
 module Lexer = Motley.Lexer
@@ -8,13 +10,13 @@ module Encode = Motley.Encode
 module Manip = Motley.Manip
 module Benchmark = Motley.Benchmark
 module Classbenching = Motley.Classbenching
-module CheckAndSet = Motley.CheckAndSet
 module Parameters = Motley.Parameters
 module ProfData = Motley.ProfData
 module Problem = Motley.Problem
 module Tables = Motley.Tables
 module Instance = Motley.Instance
 module Runtime = Motley.Runtime
+module Server = Motley.Server
 
 (* <<<<<<< HEAD
 =======
@@ -28,7 +30,7 @@ let parse_fvs fp =
   In_channel.read_lines fp
   |> List.map ~f:(fun line ->
          match String.lsplit2 line ~on:'#' with
-         | None -> Printf.sprintf "Malformed FV line %s" line
+         | None -> Core.Printf.sprintf "Malformed FV line %s" line
                    |> failwith
          | Some (x, sz) -> (x, int_of_string sz)
        )
@@ -151,23 +153,23 @@ module Solver = struct
       let open Motley.Instance in
       let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits:[] ~fvs ~phys_drop_spec () in
       match Benchmark.measure params None problem log_edits with
-      |  None -> Printf.printf "No solution could be found \n%!"
+      |  None -> Core.Printf.printf "No solution could be found \n%!"
       | Some soln when print_res ->
-         Printf.printf "EDITS:\n%!";
-         List.iter soln ~f:(fun e -> Printf.printf "%s\n%!" (Tables.Edit.to_string e))
+         Core.Printf.printf "EDITS:\n%!";
+         List.iter soln ~f:(fun e -> Core.Printf.printf "%s\n%!" (Tables.Edit.to_string e))
       | _ -> ()
     else
       let log_edits = List.join log_edits in
       let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits ~fvs ~phys_drop_spec () in
-      Printf.printf "PROBLEM: %s \n" (Problem.to_string params problem);
+      Core.Printf.printf "PROBLEM: %s \n" (Problem.to_string params problem);
       match Synthesis.cegis_math_sequence params (ProfData.zero ()) problem with
       | None -> failwith "failed"
       | Some (solution, phys_edits) ->
          if print_res
          then
            begin
-             Printf.printf "Target operations:\n%!";
-             List.iter phys_edits ~f:(fun e -> Printf.printf "%s\n%!" (Tables.Edit.to_string e))
+             Core.Printf.printf "Target operations:\n%!";
+             List.iter phys_edits ~f:(fun e -> Core.Printf.printf "%s\n%!" (Tables.Edit.to_string e))
            end
          else ()
 end
@@ -189,7 +191,7 @@ module Encoder = struct
   let run include_dirs verbose p4_file () =
     Encode.encode_from_p4 include_dirs p4_file verbose
     |> Ast.string_of_cmd
-    |> Printf.printf "%s"
+    |> Core.Printf.printf "%s"
 end
 
 let encode_cmd : Command.t =
@@ -289,16 +291,16 @@ module RunTest = struct
                 try
                      match Synthesis.cegis_math_sequence params data problem with
                      | Some _  ->
-                        Printf.printf " ✔✔ %s\n%!" line
+                        Core.Printf.printf " ✔✔ %s\n%!" line
                      | None ->
-                        Printf.printf " ✗✗ %s\n%!" line
+                        Core.Printf.printf " ✗✗ %s\n%!" line
                 with _ ->
-                  Printf.printf " ✗✗  %s |---> Threw an exception\n%!" line
+                  Core.Printf.printf " ✗✗  %s |---> Threw an exception\n%!" line
 
 
               end
            | _ ->
-              Printf.sprintf "Cannot recognize string %s" line
+              Core.Printf.sprintf "Cannot recognize string %s" line
               |> failwith
          )
 
@@ -477,11 +479,11 @@ module ONF = struct
               data
     in
     match res with
-    | None -> Printf.printf "no example could be found\n"
+    | None -> Core.Printf.printf "no example could be found\n"
     | Some r when print ->
        List.iter r ~f:(fun edit ->
            Tables.Edit.to_string edit
-           |> Printf.printf "%s\n%!"
+           |> Core.Printf.printf "%s\n%!"
          )
     | _ -> ()
 end
@@ -572,12 +574,13 @@ module ONFReal = struct
               data logical_p4 physical_p4 log_edits phys_edits fvs assume logical_inc physical_inc
     in
     match res with
-    | None -> Printf.printf "no example could be found\n"
+    | None -> Core.Printf.printf "no example could be found\n"
     | Some r when print ->
        List.iter r ~f:(fun edit ->
            Tables.Edit.to_string edit
-           |> Printf.printf "%s\n%!"
+           |> Core.Printf.printf "%s\n%!"
          )
+    | Some _ -> ()
 
 end
 
@@ -681,32 +684,32 @@ module Equality = struct
       |> Motley.Util.flip Problem.replace_phys_edits phys_edits
     in
     match Synthesis.implements params data problem with
-    | `Yes -> Printf.printf "Equivalent\n%!"
+    | `Yes -> Core.Printf.printf "Equivalent\n%!"
     | `NoAndCE (inpkt,_) ->
        let printer p i o =
-         Printf.printf "%s\n  in: %s\n  out: %s\n" p
+         Core.Printf.printf "%s\n  in: %s\n  out: %s\n" p
            (Motley.Packet.string__packet i)
            (Motley.Packet.string__packet o)
        in
        let log_out = Motley.Semantics.eval_act (Problem.log_gcl_program params problem) inpkt in
        let phys_out = Motley.Semantics.eval_act (Problem.phys_gcl_program params problem) inpkt in
-       Printf.printf "--\n%!";
+       Core.Printf.printf "--\n%!";
        printer "Log" inpkt log_out;
-       Printf.printf "--\n%!";
+       Core.Printf.printf "--\n%!";
        printer "Phys" inpkt phys_out;
-       Printf.printf "\n\nDifferences\t\tlog\tphys\n";
+       Core.Printf.printf "\n\nDifferences\t\tlog\tphys\n";
        List.iter fvs
          ~f:(fun (fv,_) ->
            match Motley.Util.StringMap.find log_out fv
                , Motley.Util.StringMap.find phys_out fv with
            | None, None -> ()
-           | Some (Int(v,_)), None -> Printf.printf "\t%s\t%s\tundefined\n"
+           | Some (Int(v,_)), None -> Core.Printf.printf "\t%s\t%s\tundefined\n"
                                          fv (Bigint.Hex.to_string v)
-           | None, Some (Int(v,_)) -> Printf.printf "\t%s\tundefined\t%s\n"
+           | None, Some (Int(v,_)) -> Core.Printf.printf "\t%s\tundefined\t%s\n"
                                          fv (Bigint.Hex.to_string v)
            | Some (Int(vl,_)), Some(Int(vp,_)) ->
               if Bigint.(vl <> vp) then
-                Printf.printf "\t%s\t%s\t%s\n"
+                Core.Printf.printf "\t%s\t%s\t%s\n"
                   fv (Bigint.Hex.to_string vl) (Bigint.Hex.to_string vp)
          )
 
@@ -767,18 +770,18 @@ module EqualityReal = struct
       |> Motley.Util.flip Problem.replace_phys_edits phys_edits
     in
     match Synthesis.implements params data problem with
-    | `Yes -> Printf.printf "Equivalent\n%!"
+    | `Yes -> Core.Printf.printf "Equivalent\n%!"
     | `NoAndCE (inpkt,_) ->
        let printer p i o =
-         Printf.printf "%s\n  in: %s\n  out: %s\n" p
+         Core.Printf.printf "%s\n  in: %s\n  out: %s\n" p
            (Motley.Packet.string__packet i)
            (Motley.Packet.string__packet o)
        in
        let log_out = Motley.Semantics.eval_act (Problem.log_gcl_program params problem) inpkt in
        let phys_out = Motley.Semantics.eval_act (Problem.phys_gcl_program params problem) inpkt in
-       Printf.printf "--\n%!";
+       Core.Printf.printf "--\n%!";
        printer "Log" inpkt log_out;
-       Printf.printf "--\n%!";
+       Core.Printf.printf "--\n%!";
        printer "Phys" inpkt phys_out
 
 
@@ -802,12 +805,12 @@ module WeakestPrecondition = struct
 
   let run file z3 () =
     let cmd = Benchmark.parse_file file in
-    let _ : unit = Printf.printf "PROGRAM: %s \n%!" (Ast.string_of_cmd cmd) in
+    let _ : unit = Core.Printf.printf "PROGRAM: %s \n%!" (Ast.string_of_cmd cmd) in
     let wp = Synthesis.symb_wp cmd in
     if z3 then
-      Printf.printf "wp: %s" (Ast.string_of_test wp)
+      Core.Printf.printf "wp: %s" (Ast.string_of_test wp)
     else
-      Printf.printf "%s" (Prover.toZ3String wp)
+      Core.Printf.printf "%s" (Prover.toZ3String wp)
 end
 
 let wp_cmd : Command.t =
@@ -912,14 +915,14 @@ module Classbench = struct
     else if String.(uppercase expname = "ALL") then
       List.iter (Parameters.all_params params)
         ~f:(fun params ->
-          Printf.printf "\n\n%s\n\n" (Parameters.to_string params);
+          Core.Printf.printf "\n\n%s\n\n" (Parameters.to_string params);
           try
             ignore (Benchmark.rep_par params data nrules : Tables.Edit.t list option)
           with _ ->
-            Printf.printf "well that failed"
+            Core.Printf.printf "well that failed"
         )
     else
-      failwith @@ Printf.sprintf "Unrecognized experiment parameter %s" expname
+      failwith @@ Core.Printf.sprintf "Unrecognized experiment parameter %s" expname
 
 
 end
@@ -929,17 +932,6 @@ let classbench_cmd : Command.t =
     ~summary:"benchmarks generated insertions"
     Classbench.spec
     Classbench.run
-
-module Meta = struct
-  let spec = Command.Spec.(empty)
-  let run = CheckAndSet.run
-end
-
-let meta : Command.t =
-  Command.basic_spec
-    ~summary:"run CheckAndSet test"
-    Meta.spec
-    Meta.run
 
 module SqBench = struct
   let spec = Command.Spec.(
@@ -1330,9 +1322,120 @@ let ntbls_cmd : Command.t =
 
 
 
+module ServerCmd = struct
+  let spec = Command.(Spec.(
+      (empty
+       +> anon ("logical" %: string)
+       +> anon ("real" %: string)
+       +> anon ("logical_edits" %: string)
+       +> anon ("physical_edits" %: string)
+       +> anon ("fvs" %: string)
+       +> flag "-P4" no_arg ~doc:"input full P4 programs"
+       +> flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
+       +> flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file")
+
+      +> flag "-DEBUG" no_arg ~doc:"Print Debugging commands"
+      +> flag "-p" no_arg ~doc:"Print synthesized program"
+      +> flag "-measure" no_arg ~doc:"Produce a CSV of data to stdout"
+      +> flag "-onos" no_arg ~doc:"Parse logical edits as onos insertions"
+
+      +> flag "-w" no_arg ~doc:"Do widening"
+      +> flag "-s" no_arg ~doc:"Do slicing optimization"
+      +> flag "-e" (required int) ~doc:"maximum number of physical edits"
+      +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
+      +> flag "-m" no_arg ~doc:"Prune rows with no holes"
+      +> flag "--inj" no_arg ~doc:"Try injection optimization"
+      +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
+      +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
+      +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
+      +> flag "--shortening" no_arg ~doc:"shorten queries"
+      +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
+      +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
+      +> flag "--hints" no_arg ~doc:"Use syntactic hints"
+      +> flag "--holes" no_arg ~doc:"Holes only"
+      +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
+      +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
+      +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
+      +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
+      +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"))
+
+  let run
+        logical
+        real
+        logical_edits
+        physical_edits
+        fvs
+        p4
+        log_incl
+        phys_incl
+        debug
+        print_res
+        measure
+        onos
+        widening
+        do_slice
+        edits_depth
+        search_width
+        monotonic
+        injection
+        fastcx
+        vcache
+        ecache
+        shortening
+        above
+        minimize
+        hints
+        only_holes
+        allow_annotations
+        nlp
+        unique_edits
+        domain
+        restrict_mask () =
+    let params = Parameters.({widening;
+                              do_slice;
+                              edits_depth;
+                              search_width;
+                              debug;
+                              monotonic;
+                              interactive = false;
+                              injection;
+                              fastcx;
+                              vcache;
+                              ecache;
+                              shortening;
+                              above;
+                              minimize;
+                              hints;
+                              only_holes;
+                              allow_annotations;
+                              nlp;
+                              unique_edits;
+                              domain;
+                              restrict_mask;
+                              timeout = None
+                 }) in
+    let fvs = Benchmark.parse_fvs fvs in
+    let log = if p4
+              then Encode.encode_from_p4 log_incl logical false
+                   |> Benchmark.zero_init fvs |> Benchmark.drop_handle fvs
+              else Benchmark.parse_file logical in
+    let phys = if p4
+               then Encode.encode_from_p4 phys_incl real false
+                    |> Benchmark.zero_init fvs |> Benchmark.drop_handle fvs
+               else Benchmark.parse_file real in
+    let log_inst = Runtime.parse logical_edits |> Instance.(update_list params empty) in
+    let phys_inst = Runtime.parse physical_edits |> Instance.(update_list params empty) in
+    let phys_drop_spec = None in
+    let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits:[] ~fvs ~phys_drop_spec () in
+    Server.runserver params problem ()
+end
 
 
-
+let server_cmd : Async_command.t =
+  Command.async_spec
+    ~summary:"Invoke Avenir Server"
+    ServerCmd.spec
+    (ServerCmd.run)
 
 
 
@@ -1342,6 +1445,7 @@ let main : Command.t =
   Command.group
     ~summary:"Invokes the specified Motley Command"
     [ ("synth", synthesize_cmd)
+    ; ("server", server_cmd)
     ; ("encode-p4", encode_cmd)
     ; ("runtest", runtest_cmd)
     ; ("bench", benchmark)
@@ -1355,7 +1459,6 @@ let main : Command.t =
     ; ("eq", equality)
     ; ("eq-real", equality_real)
     ; ("ex", running_example)
-    ; ("meta", meta)
     ; ("wp", wp_cmd)]
 
 let () = Command.run main

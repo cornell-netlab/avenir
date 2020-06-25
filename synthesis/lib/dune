@@ -2,7 +2,7 @@
 
 (library
   (name motley)
-  (libraries core bignum async shell z3 petr4 ANSITerminal extlib ipaddr)
+  (libraries core bignum async cohttp-async shell z3 petr4 ANSITerminal ipaddr)
   (virtual_deps menhir)
   (inline_tests)
   (preprocess (pps ppx_jane ppx_inline_test ppx_deriving_yojson ppx_deriving.std))

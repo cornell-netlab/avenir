@@ -21,6 +21,14 @@ let make ?phys_drop_spec:(phys_drop_spec = None) ~log ~phys ~fvs ~log_inst ~phys
    attempts = [];
    model_space = True }
 
+let empty = make
+              ~log:Skip
+              ~phys:Skip
+              ~fvs:[]
+              ~log_inst:Instance.empty
+              ~phys_inst:Instance.empty
+              ~log_edits:[]
+              ()
 
 
 let to_string params (p : t) =

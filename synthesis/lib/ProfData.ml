@@ -135,7 +135,6 @@ let update_time_val acc time =
 
 let update_time acc ?end_time:(end_time = Time.now()) start_time =
   let open Time in
-  let open Span in
   Time.diff end_time start_time
   |> update_time_val acc
 

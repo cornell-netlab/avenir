@@ -11,6 +11,8 @@ val make :
   -> log_inst:Instance.t -> phys_inst:Instance.t
   -> log_edits:Edit.t list -> unit -> t
 
+val empty : t
+
 val to_string : Parameters.t -> t -> string
 
 val fvs : t -> (string * int) list
