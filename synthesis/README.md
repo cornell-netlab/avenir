@@ -16,17 +16,27 @@ opam install merlin dune utop core
 opam user-setup install
 ```
 
-+ This project needs [Z3 SMT solver](https://github.com/Z3Prover/z3).
-  Currently, running the below command will build the project:
++ Install a binary of the [Z3 SMT
+  solver](https://github.com/Z3Prover/z3) to `/usr/bin/z3`. This is the default if you run `sudo apt install z3`.
+  
++ Pin our custom fork of PLASMA's Z3 serialization library that interfaces with the previously-installed binary:
 
 ```
 opam pin add z3 https://github.com/priyasrikumar/ocaml-z3.git#no-successes
 ```
 
-+ Install petr4 & p4pp
++ Install [petr4](https://github.com/cornell-netlab/petr4). First
+  clone the repository a directory of your choosing `<petr4 fp>`. Run the following commands
+```
+cd <petr4 fp>
+git checkout 74e136af13002bb6ebc3628ef880a17b254d159d
+```
+Then change back to the `hybrid/synthesis` directory, and run
+```
+opam pin add petr4 <petr4 fp>
+```
 
-
-+ Install any remaining dependencies that show up when you run the following command:
++ Install any remaining dependencies (e.g. `async`) using `opam install` (e.g. `opam install async`) that show up when you run the following command:
 
 ```
 dune external-lib-deps --missing @all
