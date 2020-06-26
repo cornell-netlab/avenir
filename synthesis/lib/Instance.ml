@@ -37,7 +37,14 @@ let rec update_list params (inst : t) (edits : Edit.t list) =
 let get_rows inst table : Row.t list = StringMap.find inst table |> Option.value ~default:[]
 
 let get_row (inst : t) (table : string) (idx : int) : Row.t option =
-  List.nth (get_rows inst table) idx
+  let rs = get_rows inst table in
+  List.(nth (rev rs) idx)
+
+let get_rows_before (inst : t) (table : string) (idx : int) : Row.t list =
+  let rs = get_rows inst table |> List.rev in
+  List.filteri rs ~f:(fun i _ -> i < idx )
+  |> List.rev
+
 
 let get_row_exn inst table idx : Row.t =
   match get_row inst table idx with

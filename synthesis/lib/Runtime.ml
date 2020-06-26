@@ -61,8 +61,8 @@ let parse filename : Edit.t list =
             action_data_of_string action_data,
             int_of_string action))
 
-    | "REMOVE"::_ ->
-      failwith "cannot yet handle removes"
+    | ["DEL";tbl_nm;action] ->
+       Del (tbl_nm, int_of_string action)
     | _ ->
       Printf.sprintf "Unrecognized row: %s\n%!"
         (List.intersperse data ~sep:"---" |> List.reduce_exn ~f:(^))

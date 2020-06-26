@@ -145,7 +145,7 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                           (* |> refine_counter params problem in *)
   (* let () = Printf.printf "in : %s \n out: %s\n%!" (string_of_map in_pkt) (string_of_map out_pkt) in *)
   let st = Time.now () in
-  let deletions = [] in (*compute_deletions in_pkt problem in*)
+  let deletions = compute_deletions in_pkt problem in
   let hints = if opts.hints then
                 let open Problem in
                 Hint.construct (log problem) (phys problem) (log_edits problem |> List.hd_exn)

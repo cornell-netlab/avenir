@@ -16,20 +16,23 @@ opam install merlin dune utop core
 opam user-setup install
 ```
 
-+ Install any remaining dependencies that show up when you run the following command:
-
-```
-dune external-lib-deps --missing @all
-```
-
-+ Now you're ready to go! Open the library in `utop` by running `dune lib utop`
-
 + This project needs [Z3 SMT solver](https://github.com/Z3Prover/z3).
   Currently, running the below command will build the project:
 
 ```
 opam pin add z3 https://github.com/priyasrikumar/ocaml-z3.git#no-successes
 ```
+
++ Install petr4 & p4pp
+
+
++ Install any remaining dependencies that show up when you run the following command:
+
+```
+dune external-lib-deps --missing @all
+```
+
+
 
 <!-- + If you get `libz3.so` error try addding the Z3 library to  your path. In Mac, this can be achieved by setting the DYLD_LIBRARY_PATH variable: -->
 
