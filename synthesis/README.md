@@ -53,7 +53,7 @@ To build the executable, run
 make
 ```
 
-which will create an executable `motley` in your current directory. To run the executable, run
+which will create an executable `avenir` in your current directory. To run the executable, run
 
 ```
 ./avenir <command here>
@@ -86,6 +86,22 @@ You should again see the IR encoding of the pipeline programs, and then a line
 that says `Target operations`, and the same (possibly reordered) operations as
 are in `hello/solution.csv`. Try `cat`ing this file to verify this.
 
+## Server Mode
+
+To run avenir in server mode, type
+
+```
+./avenir server <arguments>
+```
+
+which will start a server that listens for POSTs containing JSON
+objects on port `9000`.
+
+For example, to start a server that listens for operations on `abstract.p4` and responds with equivalent operations on `target.p4`, run
+
+```
+../avenir server abstract.p4 target.p4 no_edits.csv no_edits.csv fvs -b 1000 -e 10 -data inserts.sv -I1 includes -I2 includes -P4 -p
+```
 
 # Running Experiments from ONF
 
