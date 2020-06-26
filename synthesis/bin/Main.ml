@@ -1,22 +1,22 @@
 open Core
 open Async
 open Async_command
-module Ast = Motley.Ast
-module Parser = Motley.Parser
-module Lexer = Motley.Lexer
-module Prover = Motley.Prover
-module Synthesis = Motley.Synthesis
-module Encode = Motley.Encode
-module Manip = Motley.Manip
-module Benchmark = Motley.Benchmark
-module Classbenching = Motley.Classbenching
-module Parameters = Motley.Parameters
-module ProfData = Motley.ProfData
-module Problem = Motley.Problem
-module Tables = Motley.Tables
-module Instance = Motley.Instance
-module Runtime = Motley.Runtime
-module Server = Motley.Server
+module Ast = Avenir.Ast
+module Parser = Avenir.Parser
+module Lexer = Avenir.Lexer
+module Prover = Avenir.Prover
+module Synthesis = Avenir.Synthesis
+module Encode = Avenir.Encode
+module Manip = Avenir.Manip
+module Benchmark = Avenir.Benchmark
+module Classbenching = Avenir.Classbenching
+module Parameters = Avenir.Parameters
+module ProfData = Avenir.ProfData
+module Problem = Avenir.Problem
+module Tables = Avenir.Tables
+module Instance = Avenir.Instance
+module Runtime = Avenir.Runtime
+module Server = Avenir.Server
 
 (* <<<<<<< HEAD
 =======
@@ -150,7 +150,7 @@ module Solver = struct
     let phys_inst = Runtime.parse physical_edits |> Instance.(update_list params empty) in
     let phys_drop_spec = None in
     if measure then
-      let open Motley.Instance in
+      let open Avenir.Instance in
       let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits:[] ~fvs ~phys_drop_spec () in
       match Benchmark.measure params None problem log_edits with
       |  None -> Core.Printf.printf "No solution could be found \n%!"
@@ -636,7 +636,7 @@ module RunningExample = struct
 
 
   let run gas widening () =
-    ignore (Benchmark.running_example gas widening : Motley.Tables.Edit.t list)
+    ignore (Benchmark.running_example gas widening : Avenir.Tables.Edit.t list)
 end
 
 
@@ -681,18 +681,18 @@ module Equality = struct
       Problem.make ~log ~phys ~fvs
         ~log_inst ~phys_inst
         ~log_edits ()
-      |> Motley.Util.flip Problem.replace_phys_edits phys_edits
+      |> Avenir.Util.flip Problem.replace_phys_edits phys_edits
     in
     match Synthesis.implements params data problem with
     | `Yes -> Core.Printf.printf "Equivalent\n%!"
     | `NoAndCE (inpkt,_) ->
        let printer p i o =
          Core.Printf.printf "%s\n  in: %s\n  out: %s\n" p
-           (Motley.Packet.string__packet i)
-           (Motley.Packet.string__packet o)
+           (Avenir.Packet.string__packet i)
+           (Avenir.Packet.string__packet o)
        in
-       let log_out = Motley.Semantics.eval_act (Problem.log_gcl_program params problem) inpkt in
-       let phys_out = Motley.Semantics.eval_act (Problem.phys_gcl_program params problem) inpkt in
+       let log_out = Avenir.Semantics.eval_act (Problem.log_gcl_program params problem) inpkt in
+       let phys_out = Avenir.Semantics.eval_act (Problem.phys_gcl_program params problem) inpkt in
        Core.Printf.printf "--\n%!";
        printer "Log" inpkt log_out;
        Core.Printf.printf "--\n%!";
@@ -700,8 +700,8 @@ module Equality = struct
        Core.Printf.printf "\n\nDifferences\t\tlog\tphys\n";
        List.iter fvs
          ~f:(fun (fv,_) ->
-           match Motley.Util.StringMap.find log_out fv
-               , Motley.Util.StringMap.find phys_out fv with
+           match Avenir.Util.StringMap.find log_out fv
+               , Avenir.Util.StringMap.find phys_out fv with
            | None, None -> ()
            | Some (Int(v,_)), None -> Core.Printf.printf "\t%s\t%s\tundefined\n"
                                          fv (Bigint.Hex.to_string v)
@@ -767,18 +767,18 @@ module EqualityReal = struct
       Problem.make ~log ~phys ~fvs
         ~log_inst ~phys_inst
         ~log_edits ()
-      |> Motley.Util.flip Problem.replace_phys_edits phys_edits
+      |> Avenir.Util.flip Problem.replace_phys_edits phys_edits
     in
     match Synthesis.implements params data problem with
     | `Yes -> Core.Printf.printf "Equivalent\n%!"
     | `NoAndCE (inpkt,_) ->
        let printer p i o =
          Core.Printf.printf "%s\n  in: %s\n  out: %s\n" p
-           (Motley.Packet.string__packet i)
-           (Motley.Packet.string__packet o)
+           (Avenir.Packet.string__packet i)
+           (Avenir.Packet.string__packet o)
        in
-       let log_out = Motley.Semantics.eval_act (Problem.log_gcl_program params problem) inpkt in
-       let phys_out = Motley.Semantics.eval_act (Problem.phys_gcl_program params problem) inpkt in
+       let log_out = Avenir.Semantics.eval_act (Problem.log_gcl_program params problem) inpkt in
+       let phys_out = Avenir.Semantics.eval_act (Problem.phys_gcl_program params problem) inpkt in
        Core.Printf.printf "--\n%!";
        printer "Log" inpkt log_out;
        Core.Printf.printf "--\n%!";
@@ -1443,7 +1443,7 @@ let server_cmd : Async_command.t =
 
 let main : Command.t =
   Command.group
-    ~summary:"Invokes the specified Motley Command"
+    ~summary:"Invokes the specified Avenir Command"
     [ ("synth", synthesize_cmd)
     ; ("server", server_cmd)
     ; ("encode-p4", encode_cmd)
