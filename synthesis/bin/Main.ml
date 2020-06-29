@@ -18,25 +18,31 @@ module Instance = Avenir.Instance
 module Runtime = Avenir.Runtime
 module Server = Avenir.Server
 
-(* <<<<<<< HEAD
-=======
 
-let parse_file (filename : string) : Ast.cmd =
-  let cts = In_channel.read_all filename in
-  let lexbuf = Lexing.from_string cts in
-  Parser.main Lexer.tokens lexbuf
+let opt_flags =
+  Command.Spec.(
+    empty
+    +> flag "-w" no_arg ~doc:"Do widening"
+    +> flag "-s" no_arg ~doc:"Do slicing optimization"
+    +> flag "-e" (required int) ~doc:"maximum number of physical edits"
+    +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
+    +> flag "-m" no_arg ~doc:"Prune rows with no holes"
+    +> flag "--inj" no_arg ~doc:"Try injection optimization"
+    +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
+    +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
+    +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
+    +> flag "--shortening" no_arg ~doc:"shorten queries"
+    +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
+    +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
+    +> flag "--hints" no_arg ~doc:"Use syntactic hints"
+    +> flag "--holes" no_arg ~doc:"Holes only"
+    +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
+    +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
+    +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
+    +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
+    +> flag "--restrict-masks" no_arg ~doc:"Restrict masks")
 
-let parse_fvs fp =
-  In_channel.read_lines fp
-  |> List.map ~f:(fun line ->
-         match String.lsplit2 line ~on:'#' with
-         | None -> Core.Printf.sprintf "Malformed FV line %s" line
-                   |> failwith
-         | Some (x, sz) -> (x, int_of_string sz)
-       )
 
-
->>>>>>> master *)
 
 module Solver = struct
   let spec = Command.Spec.(
@@ -57,25 +63,7 @@ module Solver = struct
       +> flag "-measure" no_arg ~doc:"Produce a CSV of data to stdout"
       +> flag "-onos" no_arg ~doc:"Parse logical edits as onos insertions"
 
-      +> flag "-w" no_arg ~doc:"Do widening"
-      +> flag "-s" no_arg ~doc:"Do slicing optimization"
-      +> flag "-e" (required int) ~doc:"maximum number of physical edits"
-      +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
-      +> flag "-m" no_arg ~doc:"Prune rows with no holes"
-      +> flag "--inj" no_arg ~doc:"Try injection optimization"
-      +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
-      +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
-      +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
-      +> flag "--shortening" no_arg ~doc:"shorten queries"
-      +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
-      +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
-      +> flag "--hints" no_arg ~doc:"Use syntactic hints"
-      +> flag "--holes" no_arg ~doc:"Holes only"
-      +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
-      +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
-      +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
-      +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
-      +> flag "--restrict-masks" no_arg ~doc:"Restrict masks")
+      ++ opt_flags)
 
   let run
         logical
@@ -206,26 +194,7 @@ module RunTest = struct
       +> anon ("test_file" %: string)
       +> flag "-DEBUG" no_arg ~doc:"DEBUG"
       +> flag "-i" no_arg ~doc:"Interactive mode"
-       +> flag "-w" no_arg ~doc:"Do widening"
-       +> flag "-s" no_arg ~doc:"Do slicing optimization"
-       +> flag "-e" (required int) ~doc:"maximum number of physical edits"
-       +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
-       +> flag "-m" no_arg ~doc:"Prune rows with no holes"
-       +> flag "--inj" no_arg ~doc:"Try injection optimization"
-       +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
-       +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
-       +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
-       +> flag "--shortening" no_arg ~doc:"shorten queries"
-       +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
-       +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
-       +> flag "--hints" no_arg ~doc:"Use syntactic hints"
-       +> flag "--holes" no_arg ~doc:"Holes only"
-       +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
-       +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
-       +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
-       +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
-       +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
-             )
+      ++ opt_flags)
 
   let run test_file
         debug
@@ -323,25 +292,7 @@ module Bench = struct
       +> anon ("max_inserts" %: int)
       +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
       +> flag "-i" no_arg ~doc:"interactive mode"
-       +> flag "-w" no_arg ~doc:"Do widening"
-       +> flag "-s" no_arg ~doc:"Do slicing optimization"
-       +> flag "-e" (required int) ~doc:"maximum number of physical edits"
-       +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
-       +> flag "-m" no_arg ~doc:"Prune rows with no holes"
-       +> flag "--inj" no_arg ~doc:"Try injection optimization"
-       +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
-       +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
-       +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
-       +> flag "--shortening" no_arg ~doc:"shorten queries"
-       +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
-       +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
-       +> flag "--hints" no_arg ~doc:"Use syntactic hints"
-       +> flag "--holes" no_arg ~doc:"Holes only"
-       +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
-       +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
-       +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
-       +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
-       +> flag "--restrict-masks" no_arg ~doc:"Restrict masks")
+      ++ opt_flags )
 
   let run varsize num_tables max_inserts
         debug
@@ -410,25 +361,7 @@ module ONF = struct
       +> flag "-i" no_arg ~doc:"interactive mode"
       +> flag "-data" (required string) ~doc:"the input log"
       +> flag "-p" no_arg ~doc:"show_result_at_end"
-       +> flag "-w" no_arg ~doc:"Do widening"
-       +> flag "-s" no_arg ~doc:"Do slicing optimization"
-       +> flag "-e" (required int) ~doc:"maximum number of physical edits"
-       +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
-       +> flag "-m" no_arg ~doc:"Prune rows with no holes"
-       +> flag "--inj" no_arg ~doc:"Try injection optimization"
-       +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
-       +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
-       +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
-       +> flag "--shortening" no_arg ~doc:"shorten queries"
-       +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
-       +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
-       +> flag "--hints" no_arg ~doc:"Use syntactic hints"
-       +> flag "--holes" no_arg ~doc:"Holes only"
-       +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
-       +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
-       +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
-       +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
-       +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"  )
+      ++ opt_flags )
 
 
   let run debug interactive data print
@@ -488,6 +421,13 @@ module ONF = struct
     | _ -> ()
 end
 
+let onf : Command.t =
+  Command.basic_spec
+    ~summary: "Run the onf benchmark"
+    ONF.spec
+    ONF.run
+
+
 module ONFReal = struct
   let spec = Command.Spec.(
       empty
@@ -495,37 +435,21 @@ module ONFReal = struct
       +> flag "-i" no_arg ~doc:"interactive mode"
       +> flag "-data" (required string) ~doc:"the input log"
       +> flag "-p" no_arg ~doc:"show_result_at_end"
-       +> flag "-w" no_arg ~doc:"Do widening"
-       +> flag "-s" no_arg ~doc:"Do slicing optimization"
-       +> flag "-e" (required int) ~doc:"maximum number of physical edits"
-       +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
-       +> flag "-m" no_arg ~doc:"Prune rows with no holes"
-       +> flag "--inj" no_arg ~doc:"Try injection optimization"
-       +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
-       +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
-       +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
-       +> flag "--shortening" no_arg ~doc:"shorten queries"
-       +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
-       +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
-       +> flag "--hints" no_arg ~doc:"Use syntactic hints"
-       +> flag "--holes" no_arg ~doc:"Holes only"
-       +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
-       +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
-       +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
-       +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
-       +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
-       +> anon ("p4file1" %: string)
-       +> anon ("p4file2" %: string)
-       +> anon ("log_edits" %: string)
-       +> anon ("phys_edits" %: string)
-       +> anon ("fvs" %: string)
-       +> anon ("assume" %: string)
-       +> flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
-       +> flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file")
+      +> anon ("p4file1" %: string)
+      +> anon ("p4file2" %: string)
+      +> anon ("log_edits" %: string)
+      +> anon ("phys_edits" %: string)
+      +> anon ("fvs" %: string)
+      +> anon ("assume" %: string)
+      +> flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
+      +> flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file"
+      ++ opt_flags)
+
 
 
 
   let run debug interactive data print
+        logical_p4 physical_p4 log_edits phys_edits fvs assume logical_inc physical_inc
         widening
         do_slice
         edits_depth
@@ -545,7 +469,6 @@ module ONFReal = struct
         unique_edits
         domain
         restrict_mask
-        logical_p4 physical_p4 log_edits phys_edits fvs assume logical_inc physical_inc
     () =
     let res = Benchmark.basic_onf_ipv4_real
               Parameters.({
@@ -584,73 +507,11 @@ module ONFReal = struct
 
 end
 
-(*
-module ONFReal = struct
-  let spec = Command.Spec.(
-      empty       
-      +> flag "-gas" (required int) ~doc:"how many cegis iterations?"
-      +> flag "-w" no_arg ~doc:"perform widening"
-      +> flag "-s" no_arg ~doc:"perform slicing optimization"
-      +> flag "-m" no_arg ~doc:"eliminate non-hole branches"
-      +> flag "-i" no_arg ~doc:"interactive mode"
-      +> flag "-inj" no_arg ~doc:"try injection optimization"
-      +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
-      +> flag "-data" (required string) ~doc:"the input log" 
-      +> flag "-fastcx" no_arg ~doc:"Generate counterexample quickly" 
-      +> flag "--del-pushdown" no_arg ~doc:"interpret deletions as pushdowns when possible"
-      +> flag "--above" no_arg ~doc:"insert new edits above instance, not below"
-      +> anon ("p4file1" %: string)
-      +> anon ("p4file2" %: string)
-      +> anon ("log_edits" %: string)
-      +> anon ("phys_edits" %: string)
-      +> anon ("fvs" %: string)
-      +> anon ("assume" %: string)
-      +> flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
-      +> flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file")
-  
-
-  let run gas widening do_slice monotonic interactive injection debug data_fp fastcx del_pushdown above logical_p4 physical_p4 log_edits phys_edits fvs assume logical_inc physical_inc() =
-          ignore (Benchmark.basic_onf_ipv4_real 
-                        Parameters.({widening;do_slice;gas;monotonic;injection;interactive;debug;fastcx;del_pushdown;above; cache = true})
-                        data_fp logical_p4 physical_p4 log_edits phys_edits fvs assume logical_inc physical_inc : Tables.Edit.t list)
-    (* Benchmark.onf_representative gas widening |> ignore *)
-end *)
-
 let onf_real : Command.t =
   Command.basic_spec
     ~summary: "Run the onf benchmark on the real p4 programs"
     ONFReal.spec
     ONFReal.run
-
-let onf : Command.t =
-  Command.basic_spec
-    ~summary: "Run the onf benchmark"
-    ONF.spec
-    ONF.run
-
-module RunningExample = struct
-  let spec = Command.Spec.(
-      empty
-      +> flag "-gas" (required int) ~doc:"how many cegis iterations?"
-      +> flag "-w" no_arg ~doc:"perform widening")
-
-
-  let run gas widening () =
-    ignore (Benchmark.running_example gas widening : Avenir.Tables.Edit.t list)
-end
-
-
-let running_example : Command.t =
-  Command.basic_spec
-    ~summary: "Run the onf benchmark"
-    RunningExample.spec
-    RunningExample.run
-
-let onf : Command.t =
-  Command.basic_spec
-    ~summary: "Run the onf benchmark"
-    ONF.spec
-    ONF.run
 
 module Equality = struct
   let spec = Command.Spec.(
@@ -740,7 +601,7 @@ module EqualityReal = struct
     let fvs = Benchmark.parse_fvs fvs_fp in
     let assume = Benchmark.parse_file assume_fp in
 
-    let print_fvs = printf "fvs = %s" (Sexp.to_string ([%sexp_of: (string * int) list] fvs)) in
+    let () = printf "fvs = %s" (Sexp.to_string ([%sexp_of: (string * int) list] fvs)) in
 
     let open Ast in
     let log = (assume %:% Encode.encode_from_p4 log_incs log_p4 false) |> Benchmark.zero_init fvs |> Benchmark.drop_handle fvs in
@@ -827,33 +688,16 @@ module Classbench = struct
       +> flag "-data" (required string) ~doc:"path to classbench data"
       +> flag "-DEBUG" no_arg ~doc:"debug"
       +> flag "-i" no_arg ~doc:"interactive mode"
-      +> flag "-w" no_arg ~doc:"Do widening"
-      +> flag "-s" no_arg ~doc:"Do slicing optimization"
-      +> flag "-e" (required int) ~doc:"maximum number of physical edits"
-      +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
-      +> flag "-m" no_arg ~doc:"Prune rows with no holes"
-      +> flag "--inj" no_arg ~doc:"Try injection optimization"
-      +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
-      +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
-      +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
-      +> flag "--shortening" no_arg ~doc:"shorten queries"
-      +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
-      +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
-      +> flag "--hints" no_arg ~doc:"Use syntactic hints"
-      +> flag "--holes" no_arg ~doc:"Holes only"
-      +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
-      +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
-      +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
-      +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
-      +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
       +> flag "--timeout" (optional float) ~doc:"Optional timeout in seconds"
-             )
+      ++ opt_flags)
+
   let run
         expname
         nrules
         data
         debug
         interactive
+        timeout
         widening
         do_slice
         edits_depth
@@ -873,7 +717,6 @@ module Classbench = struct
         unique_edits
         domain
         restrict_mask
-        timeout
         () =
     let params =
       Parameters.({
@@ -941,33 +784,15 @@ module SqBench = struct
       +> anon ("NEDITS" %: int)
       +> flag "-DEBUG" no_arg ~doc:"debug"
       +> flag "-i" no_arg ~doc:"interactive mode"
-      +> flag "-w" no_arg ~doc:"Do widening"
-      +> flag "-s" no_arg ~doc:"Do slicing optimization"
-      +> flag "-e" (required int) ~doc:"maximum number of physical edits"
-      +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
-      +> flag "-m" no_arg ~doc:"Prune rows with no holes"
-      +> flag "--inj" no_arg ~doc:"Try injection optimization"
-      +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
-      +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
-      +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
-      +> flag "--shortening" no_arg ~doc:"shorten queries"
-      +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
-      +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
-      +> flag "--hints" no_arg ~doc:"Use syntactic hints"
-      +> flag "--holes" no_arg ~doc:"Holes only"
-      +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
-      +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
-      +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
-      +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
-      +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
       +> flag "--timeout" (optional float) ~doc:"Optional timeout in seconds"
-             )
+      ++ opt_flags)
   let run
         sz
         ntbls
         nedits
         debug
         interactive
+        timeout
         widening
         do_slice
         edits_depth
@@ -987,7 +812,6 @@ module SqBench = struct
         unique_edits
         domain
         restrict_mask
-        timeout
         ()
     =    let params =
       Parameters.(
@@ -1037,27 +861,9 @@ module NumHdrs = struct
       +> anon ("NRULES" %: int)
       +> flag "-DEBUG" no_arg ~doc:"debug"
       +> flag "-i" no_arg ~doc:"interactive mode"
-      +> flag "-w" no_arg ~doc:"Do widening"
-      +> flag "-s" no_arg ~doc:"Do slicing optimization"
-      +> flag "-e" (required int) ~doc:"maximum number of physical edits"
-      +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
-      +> flag "-m" no_arg ~doc:"Prune rows with no holes"
-      +> flag "--inj" no_arg ~doc:"Try injection optimization"
-      +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
-      +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
-      +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
-      +> flag "--shortening" no_arg ~doc:"shorten queries"
-      +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
-      +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
-      +> flag "--hints" no_arg ~doc:"Use syntactic hints"
-      +> flag "--holes" no_arg ~doc:"Holes only"
-      +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
-      +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
-      +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
-      +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
-      +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
       +> flag "--timeout" (optional float) ~doc:"Optional timeout in seconds"
-             )
+      ++ opt_flags)
+
   let run
         sz
         ntables
@@ -1065,6 +871,7 @@ module NumHdrs = struct
         nrules
         debug
         interactive
+        timeout
         widening
         do_slice
         edits_depth
@@ -1084,7 +891,6 @@ module NumHdrs = struct
         unique_edits
         domain
         restrict_mask
-        timeout
         () =
     let params =
       Parameters.({
@@ -1134,33 +940,16 @@ module MetadataBench = struct
       +> anon ("NRULES" %: int)
       +> flag "-DEBUG" no_arg ~doc:"debug"
       +> flag "-i" no_arg ~doc:"interactive mode"
-      +> flag "-w" no_arg ~doc:"Do widening"
-      +> flag "-s" no_arg ~doc:"Do slicing optimization"
-      +> flag "-e" (required int) ~doc:"maximum number of physical edits"
-      +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
-      +> flag "-m" no_arg ~doc:"Prune rows with no holes"
-      +> flag "--inj" no_arg ~doc:"Try injection optimization"
-      +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
-      +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
-      +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
-      +> flag "--shortening" no_arg ~doc:"shorten queries"
-      +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
-      +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
-      +> flag "--hints" no_arg ~doc:"Use syntactic hints"
-      +> flag "--holes" no_arg ~doc:"Holes only"
-      +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
-      +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
-      +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
-      +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
-      +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
       +> flag "--timeout" (optional float) ~doc:"Optional timeout in seconds"
-             )
+      ++ opt_flags)
+
   let run
         sz
         nmeta
         nrules
         debug
         interactive
+        timeout
         widening
         do_slice
         edits_depth
@@ -1180,7 +969,7 @@ module MetadataBench = struct
         unique_edits
         domain
         restrict_mask
-        timeout
+
         () =
     let params =
       Parameters.({
@@ -1230,27 +1019,9 @@ module NumTbls = struct
       +> flag "-breadth" no_arg ~doc:"Breadth experiment when on, Length when not"
       +> flag "-DEBUG" no_arg ~doc:"debug"
       +> flag "-i" no_arg ~doc:"interactive mode"
-      +> flag "-w" no_arg ~doc:"Do widening"
-      +> flag "-s" no_arg ~doc:"Do slicing optimization"
-      +> flag "-e" (required int) ~doc:"maximum number of physical edits"
-      +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
-      +> flag "-m" no_arg ~doc:"Prune rows with no holes"
-      +> flag "--inj" no_arg ~doc:"Try injection optimization"
-      +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
-      +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
-      +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
-      +> flag "--shortening" no_arg ~doc:"shorten queries"
-      +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
-      +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
-      +> flag "--hints" no_arg ~doc:"Use syntactic hints"
-      +> flag "--holes" no_arg ~doc:"Holes only"
-      +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
-      +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
-      +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
-      +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
-      +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
       +> flag "--timeout" (optional float) ~doc:"Optional timeout in seconds"
-             )
+      ++ opt_flags)
+
   let run
         sz
         ntables
@@ -1259,6 +1030,7 @@ module NumTbls = struct
         breadth
         debug
         interactive
+        timeout
         widening
         do_slice
         edits_depth
@@ -1278,7 +1050,6 @@ module NumTbls = struct
         unique_edits
         domain
         restrict_mask
-        timeout
         () =
     let params =
       Parameters.({
@@ -1323,22 +1094,20 @@ let ntbls_cmd : Command.t =
 
 
 module ServerCmd = struct
-  let spec = Command.(Spec.(
-      (empty
-       +> anon ("logical" %: string)
-       +> anon ("real" %: string)
-       +> anon ("logical_edits" %: string)
-       +> anon ("physical_edits" %: string)
-       +> anon ("fvs" %: string)
-       +> flag "-P4" no_arg ~doc:"input full P4 programs"
-       +> flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
-       +> flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file")
-
+  let spec = Async_command.Spec.(
+      empty
+      +> anon ("logical" %: string)
+      +> anon ("real" %: string)
+      +> anon ("logical_edits" %: string)
+      +> anon ("physical_edits" %: string)
+      +> anon ("fvs" %: string)
+      +> flag "-P4" no_arg ~doc:"input full P4 programs"
+      +> flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
+      +> flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file"
       +> flag "-DEBUG" no_arg ~doc:"Print Debugging commands"
       +> flag "-p" no_arg ~doc:"Print synthesized program"
       +> flag "-measure" no_arg ~doc:"Produce a CSV of data to stdout"
       +> flag "-onos" no_arg ~doc:"Parse logical edits as onos insertions"
-
       +> flag "-w" no_arg ~doc:"Do widening"
       +> flag "-s" no_arg ~doc:"Do slicing optimization"
       +> flag "-e" (required int) ~doc:"maximum number of physical edits"
@@ -1357,7 +1126,7 @@ module ServerCmd = struct
       +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
       +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
       +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
-      +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"))
+      +> flag "--restrict-masks" no_arg ~doc:"Restrict masks")
 
   let run
         logical
@@ -1432,10 +1201,10 @@ end
 
 
 let server_cmd : Async_command.t =
-  Command.async_spec
-    ~summary:"Invoke Avenir Server"
-    ServerCmd.spec
-    (ServerCmd.run)
+    Command.async_spec
+      ~summary:"Invoke Avenir Server"
+      ServerCmd.spec
+      ServerCmd.run
 
 
 
@@ -1458,7 +1227,6 @@ let main : Command.t =
     ; ("onf-real", onf_real)
     ; ("eq", equality)
     ; ("eq-real", equality_real)
-    ; ("ex", running_example)
     ; ("wp", wp_cmd)]
 
 let () = Command.run main
