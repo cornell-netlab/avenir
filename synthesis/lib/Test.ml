@@ -81,7 +81,7 @@ let simple_test =
 
 let test1 = string_of_cmd simple_test
 
-let test2 = wp ("h" %<-% Var ("Ingress",8)) True
+let test2 = wp `Negs ("h" %<-% Var ("Ingress",8)) True
 
 (* let complete_test_with_drop_location_no_holes =
  *   While(!%(LocEq 1) %&% !%(LocEq (-1)),

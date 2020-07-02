@@ -51,9 +51,6 @@ let get_row_exn inst table idx : Row.t =
   | None -> failwith @@ Printf.sprintf "Invalid row %d in table %s" idx table
   | Some row -> row
 
-
-
-
 let rec overwrite (old_inst : t) (new_inst : t) : t =
   StringMap.fold new_inst ~init:old_inst
     ~f:(fun ~key ~data acc -> StringMap.set acc ~key ~data)
@@ -136,29 +133,13 @@ let rec apply ?no_miss:(no_miss = false)
               , holify (List.map params ~f:fst) act))
      in
      let dflt_row =
-       let cond = match tag with
-         | OnlyHoles _ -> True
-            (* if no_miss
-             * then False
-             * else List.foldi rows ~init:(True)
-             *        ~f:(fun i acc (ms,_,act) ->
-             *          let i = List.length rows - i in
-             *          acc %&%
-             *            if act >= List.length t.actions then True else
-             *              !%(Match.list_to_test t.keys ms
-             *                 %&% match tag with
-             *                     | WithHoles (ds,_) when List.exists ds ~f:((=) (t.name, i))
-             *                       -> Hole.delete_hole i t.name %=% mkVInt(0,1)
-             *                     | _ -> True)) *)
-         | _ -> True
-       in
-       [(cond, t.default)]
+       if params.no_defaults
+       then [(True, t.default)]
+       else [(False, Skip)]
      in
-     let mk_select = match tag with
-       | OnlyHoles _ -> mkOrdered
-       | _ -> mkOrdered
-     in
-     let tbl_select = (if params.above then holes @ selects else selects @ holes) @ dflt_row |> mk_select in
+     let tbl_select = (if params.above then holes @ selects else selects @ holes)
+                      @ dflt_row
+                      |> mkOrdered in
      (* Printf.printf "TABLE %s: \n %s\n%!" tbl (string_of_cmd tbl_select); *)
      (tbl_select, cnt)
 

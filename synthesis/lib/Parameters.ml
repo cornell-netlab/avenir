@@ -27,6 +27,7 @@ type t =
     unique_edits : bool;
     domain : bool;
     restrict_mask : bool;
+    no_defaults : bool;
 
     (* outddated *)
     allow_annotations : bool;
@@ -52,6 +53,8 @@ let default =
     hints = false;
     only_holes = false;
     restrict_mask = false;
+    no_defaults = false;
+
     allow_annotations = false;
     nlp = false;
     unique_edits = false;

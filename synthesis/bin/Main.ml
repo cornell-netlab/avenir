@@ -24,8 +24,8 @@ let opt_flags =
     empty
     +> flag "-w" no_arg ~doc:"Do widening"
     +> flag "-s" no_arg ~doc:"Do slicing optimization"
-    +> flag "-e" (required int) ~doc:"maximum number of physical edits"
-    +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
+    +> flag "-e" (required int) ~doc:"E maximum number of physical edits"
+    +> flag "-b" (required int) ~doc:"B maximum number of attempts per CE"
     +> flag "-m" no_arg ~doc:"Prune rows with no holes"
     +> flag "--inj" no_arg ~doc:"Try injection optimization"
     +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
@@ -40,7 +40,8 @@ let opt_flags =
     +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
     +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
     +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
-    +> flag "--restrict-masks" no_arg ~doc:"Restrict masks")
+    +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
+    +> flag "--no-defaults" no_arg ~doc:"Prefer solutions that don't rely on default actions ")
 
 
 
@@ -98,7 +99,8 @@ module Solver = struct
         nlp
         unique_edits
         domain
-        restrict_mask () =
+        restrict_mask
+        no_defaults () =
     let params = Parameters.({widening;
                               do_slice;
                               edits_depth;
@@ -120,6 +122,7 @@ module Solver = struct
                               unique_edits;
                               domain;
                               restrict_mask;
+                              no_defaults;
                               timeout = None
                  }) in
     let fvs = Benchmark.parse_fvs fvs in
@@ -217,7 +220,8 @@ module RunTest = struct
         nlp
         unique_edits
         domain
-        restrict_mask() =
+        restrict_mask
+        no_defaults () =
     In_channel.read_lines test_file
     |> List.iter
          ~f:(fun line ->
@@ -247,6 +251,7 @@ module RunTest = struct
                               nlp;
                               unique_edits;
                               domain;
+                              no_defaults;
                               restrict_mask;
                               timeout = None;
                            }) in
@@ -315,7 +320,8 @@ module Bench = struct
         nlp
         unique_edits
         domain
-        restrict_mask () =
+        restrict_mask
+        no_defaults () =
     let params =
       Parameters.(
         {
@@ -340,6 +346,7 @@ module Bench = struct
           unique_edits;
           domain;
           restrict_mask;
+          no_defaults;
           timeout = None;
         })
     in
@@ -384,6 +391,7 @@ module ONF = struct
         unique_edits
         domain
         restrict_mask
+        no_defaults
     () =
     let res = Benchmark.basic_onf_ipv4
               Parameters.({
@@ -408,6 +416,7 @@ module ONF = struct
           unique_edits;
           domain;
           restrict_mask;
+          no_defaults;
           timeout = None})
               data
     in
@@ -469,6 +478,7 @@ module ONFReal = struct
         unique_edits
         domain
         restrict_mask
+        no_defaults
     () =
     let res = Benchmark.basic_onf_ipv4_real
               Parameters.({
@@ -493,6 +503,7 @@ module ONFReal = struct
           unique_edits;
           domain;
           restrict_mask;
+          no_defaults;
           timeout = None})
               data logical_p4 physical_p4 log_edits phys_edits fvs assume logical_inc physical_inc
     in
@@ -717,6 +728,7 @@ module Classbench = struct
         unique_edits
         domain
         restrict_mask
+        no_defaults
         () =
     let params =
       Parameters.({
@@ -741,6 +753,7 @@ module Classbench = struct
                      unique_edits;
                      domain;
                      restrict_mask;
+                     no_defaults;
                      timeout = Option.(timeout >>= fun s -> Some(Time.now(), (Time.Span.of_sec s)))
       })
     in
@@ -812,6 +825,7 @@ module SqBench = struct
         unique_edits
         domain
         restrict_mask
+        no_defaults
         ()
     =    let params =
       Parameters.(
@@ -837,6 +851,7 @@ module SqBench = struct
           unique_edits;
           domain;
           restrict_mask;
+          no_defaults;
           timeout = Option.(timeout >>= fun s -> Some(Time.now(), (Time.Span.of_sec s)))
         })
     in
@@ -891,6 +906,7 @@ module NumHdrs = struct
         unique_edits
         domain
         restrict_mask
+        no_defaults
         () =
     let params =
       Parameters.({
@@ -915,6 +931,7 @@ module NumHdrs = struct
                      unique_edits;
                      domain;
                      restrict_mask;
+                     no_defaults;
                      timeout = Option.(timeout >>= fun s -> Some(Time.now(), (Time.Span.of_sec s)))
       })
     in
@@ -969,7 +986,7 @@ module MetadataBench = struct
         unique_edits
         domain
         restrict_mask
-
+        no_defaults
         () =
     let params =
       Parameters.({
@@ -994,6 +1011,7 @@ module MetadataBench = struct
                      unique_edits;
                      domain;
                      restrict_mask;
+                     no_defaults;
                      timeout = Option.(timeout >>= fun s -> Some(Time.now(), (Time.Span.of_sec s)))
       })
     in
@@ -1050,6 +1068,7 @@ module NumTbls = struct
         unique_edits
         domain
         restrict_mask
+        no_defaults
         () =
     let params =
       Parameters.({
@@ -1074,6 +1093,7 @@ module NumTbls = struct
                      unique_edits;
                      domain;
                      restrict_mask;
+                     no_defaults;
                      timeout = Option.(timeout >>= fun s -> Some(Time.now(), (Time.Span.of_sec s)))
       })
     in
@@ -1126,7 +1146,8 @@ module ServerCmd = struct
       +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
       +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
       +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
-      +> flag "--restrict-masks" no_arg ~doc:"Restrict masks")
+      +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
+      +> flag "--no-defaults" no_arg ~doc:"Prefer solutions that don't rely on default actions ")
 
   let run
         logical
@@ -1159,7 +1180,8 @@ module ServerCmd = struct
         nlp
         unique_edits
         domain
-        restrict_mask () =
+        restrict_mask
+        no_defaults () =
     let params = Parameters.({widening;
                               do_slice;
                               edits_depth;
@@ -1181,6 +1203,7 @@ module ServerCmd = struct
                               unique_edits;
                               domain;
                               restrict_mask;
+                              no_defaults;
                               timeout = None
                  }) in
     let fvs = Benchmark.parse_fvs fvs in
@@ -1205,10 +1228,6 @@ let server_cmd : Async_command.t =
       ~summary:"Invoke Avenir Server"
       ServerCmd.spec
       ServerCmd.run
-
-
-
-
 
 let main : Command.t =
   Command.group

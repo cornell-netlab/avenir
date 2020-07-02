@@ -25,7 +25,7 @@ let symbolic_pkt fvs =
 let symb_wp ?fvs:(fvs=[]) cmd =
   List.dedup_and_sort ~compare:Stdlib.compare (free_vars_of_cmd cmd @ fvs)
   |> symbolic_pkt
-  |> wp cmd
+  |> wp `Negs cmd
 
 let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t)
     : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
@@ -126,12 +126,6 @@ let slice_conclusive (params : Parameters.t) (data : ProfData.t ref) (problem : 
   ProfData.update_time !data.check_sliceable_time st;
   (* Printf.printf "\tSlice is %s\n%!" (if res then "conclusive" else "inconclusive"); *)
   res
-
-
-
-(* A Reimplementation of the core algorithm using the math from the paper *)
-
-
 
 let negate_model (model : value StringMap.t) : test =
   !%( StringMap.fold model
@@ -410,7 +404,7 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
                       *   None
                       * else *)
                      let es = remove_missed_edits params data problem es in
-                     let () = if params.debug then begin
+                     let () = if true then begin
                          (* Printf.printf "\tCEX in %s\n" (Packet.string__packet @@ fst @@ List.hd_exn @@ Problem.cexs problem); *)
                          Printf.printf "\n\t***Edits***\n%!";
                          Problem.phys_edits problem |>

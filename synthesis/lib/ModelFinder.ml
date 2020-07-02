@@ -15,6 +15,7 @@ type opts =
    annot : bool;
    single : bool;
    domain : bool;
+   no_defaults : bool;
   }
 
 type t = {
@@ -23,16 +24,18 @@ type t = {
   }
 
 let string_of_opts (opts) : string =
-  let s = if opts.injection then "injection  " else "" in
+  let s = " " in
+  let s = if opts.injection then s^"injection  " else s in
   let s = if opts.hints then s^"hints  " else s in
   let s = if opts.paths then s^"paths  " else s in
   let s = if opts.only_holes then s^"only holes  " else s in
   let s = if opts.mask then s^"mask " else s in
   let s = if opts.restrict_mask then s^"restrict_mask" else s in
   let s = if opts.nlp then s^"nlp" else s in
-  let s = if opts.annot then s^"annot" else s in
-  let s = if opts.single then s^"single" else s in
-  let s = if opts.domain then s^"domain_restrict" else s in
+  let s = if opts.annot then s^"annot " else s in
+  let s = if opts.single then s^"single " else s in
+  let s = if opts.domain then s^"domain_restrict " else s in
+  let s = if opts.domain then s^"no_defaults " else s in
   if s = "" then "none" else s
 
 let no_opts =
@@ -46,22 +49,20 @@ let no_opts =
    annot = false;
    single = false;
    domain = false;
+   no_defaults = false;
   }
 
 
 (* None > Mask > Paths > Injection > Hints > Only_Holes *)
-let rec make_schedule ({injection;hints;paths;only_holes;mask;restrict_mask;nlp;domain} as opt) =
+let rec make_schedule opt =
   opt ::
-    (* if only_holes then
-     *   make_schedule {opt with only_holes = false}
-     * else if hints || injection then
-     *   make_schedule {opt with injection = false; hints = false}
-     * else *)
-    if injection || hints || paths || only_holes || nlp || domain then
-      [{opt with injection=false;hints=false;paths=false;only_holes=false; nlp=false;domain = false}]
-    else [] (* if mask && restrict_mask then
-     *   [no_opts]
-     * else[no_opts] *)
+    if opt.injection || opt.hints || opt.paths || opt.only_holes || opt.nlp || opt.domain then
+      let opt' = {opt with injection=false;hints=false;paths=false;only_holes=false; nlp=false;domain = false} in
+      opt' :: make_schedule opt'
+    else if opt.no_defaults then
+      let opt' = {opt with no_defaults = false} in
+      opt' :: make_schedule opt'
+    else []
 
 let make_searcher (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : t =
   let schedule = make_schedule {
@@ -75,6 +76,7 @@ let make_searcher (params : Parameters.t) (data : ProfData.t ref) (problem : Pro
                      nlp = params.nlp;
                      single = params.unique_edits;
                      domain = params.domain;
+                     no_defaults = true;
                    } in
   {schedule; search_space = []}
   
@@ -104,42 +106,6 @@ let compute_deletions pkt (problem : Problem.t) =
     )
 
 
-(* let perturb p x v sz =
- *   if Bigint.(v <> zero && v + one = pow (of_int 2) (of_int sz)) then
- *     StringMap.set p ~key:x ~data:(Int(Bigint.(v - one), sz))
- *   else
- *     StringMap.set p ~key:x ~data:(Int(Bigint.(v + one),sz))
- *
- * let refine_counter params problem ((inp,outp) : Packet.t * Packet.t) =
- *   let l = Problem.log_gcl_program params problem in
- *   let p = Problem.phys_gcl_program params problem in
- *   Problem.fvs problem
- *   |> List.dedup_and_sort ~compare:(fun (x,_) (y,_) -> String.compare x y)
- *   |> List.fold ~init:(inp,outp)
- *        ~f:(fun (inp_acc, outp_acc) (x,sz) ->
- *          match StringMap.find inp x, StringMap.find outp x with
- *          | None, None -> (inp, outp)
- *          | Some Int(v_in, sz), Some (Int(v_out, sz')) ->
- *             let inp' = perturb inp x v_in sz in
- *             let loutp'= Semantics.eval_act l inp' in
- *             if Bigint.(v_in = v_out) then
- *               let poutp' = Semantics.eval_act p inp' in
- *               Printf.printf "%s unchanged %s |-> %s \n" x (Bigint.Hex.to_string v_in) (Bigint.Hex.to_string v_out);
- *               if StringMap.find_exn loutp' x = StringMap.find_exn inp' x then
- *                 let () = Printf.printf "\t up to perturbation\n%!" in
- *                 (StringMap.remove inp_acc x, StringMap.remove outp_acc x)
- *               else
- *                 let () = Printf.printf "\t perturbation changed it %s |-> %s \n%!"
- *                            (string_of_value @@ StringMap.find_exn loutp' x)
- *                            (string_of_value @@ StringMap.find_exn inp' x) in
- *                 (inp_acc,outp_acc)
- *             else
- *               (inp_acc,outp_acc)
- *          | _, _ -> (inp_acc, outp_acc)
- *        ) *)
-
-
-
 let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) (opts : opts)  =
   let (in_pkt, out_pkt) = Problem.cexs problem |> List.hd_exn in
                           (* |> refine_counter params problem in *)
@@ -154,7 +120,7 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                       then Instance.OnlyHoles hints
                       else Instance.WithHoles (deletions, hints) in
   let hole_type =  if opts.mask then `Mask else `Exact in
-  let phys = Problem.phys_gcl_holes params problem hole_protocol hole_type  in
+  let phys = Problem.phys_gcl_holes {params with no_defaults = opts.no_defaults} problem hole_protocol hole_type  in
   if params.debug then Printf.printf "NEW Phys\n %s\n%!" (string_of_cmd phys);
   ProfData.update_time !data.model_holes_time st;
   let st = Time.now () in
@@ -164,9 +130,9 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   let in_pkt_form, out_pkt_form = Packet.to_test in_pkt ~fvs, Packet.to_test out_pkt ~fvs in
   let wp_list =
     if opts.paths then
-      wp_paths ~no_negations:true phys out_pkt_form
+      wp_paths `NoNegs phys out_pkt_form
     else
-      [phys, in_pkt_form %=>% wp phys out_pkt_form]
+      [phys, in_pkt_form %=>% wp `NoNegs phys out_pkt_form]
   in
   ProfData.update_time !data.search_wp_time st;
   let tests =
@@ -185,22 +151,6 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                              acc %&%
                                (Hole(Hole.which_act_hole_name tbl,max (log2 num_acts) 1)
                                 %<=% mkVInt(num_acts-1,max (log2 num_acts) 1))) in
-          (* Printf.printf "well_formedness computed\n%!"; *)
-          (* let widening_constraint =
-           *   if opts.mask then
-           *     List.fold (holes_of_test in_pkt_wp)  ~init:True
-
-           *       ~f:(fun acc (hole, sz) ->
-           *         match String.chop_suffix hole ~suffix:"_mask" with
-           *         | Some _ ->
-           *            (Hole(hole, sz) %=% mkVInt(pow 2 sz -1, sz)) %+% ((Hole(hole,sz) %=% mkVInt(0,sz)))
-           *         | None -> acc
-           *
-           *       )
-           *   else True
-           * in
-           * Printf.printf "Widening constriaint:\n  %s \n\n%!" (string_of_test widening_constraint); *)
-          (* Printf.printf "Widening and well-formedness computed\n%!"; *)
           let pre_condition =
             (Problem.model_space problem) %&% wf_holes %&% spec
             |> Injection.optimization {params with injection = opts.injection} problem
@@ -240,17 +190,6 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                                m
                           ))
                 else
-
-                  (* if List.exists (Problem.fvs problem) ~f:(fun (v,_) ->  String.is_substring h ~substring:v || not (String.is_substring h ~substring:"?"))
-                   * then *)
-                  (* let is_mask_val =
-                   *   List.exists holes
-                   *     ~f:(fun (hm,_) ->
-                   *       match String.chop_suffix hm ~suffix:"_mask" with
-                   *       | Some h' -> h = h'
-                   *       | None -> false
-                   *     )
-                   * in *)
                   let is_addr = List.exists ["addr";"dst";"src";"mac"]
                                   ~f:(fun substring -> String.is_substring h ~substring) in
                     let restr =
@@ -268,6 +207,7 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                                    then Hole(h,sz) %=% Value(Int(i,szi))
                                    else False)
                     in
+
                     let restr = if (not opts.domain) || restr = False then True else restr in
                     let is_chosen =
                       match Problem.log_edits problem |> List.hd with
@@ -310,6 +250,22 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
               )
           in
           (* if params.debug then Printf.printf "active domain restr \n %s\n%!" (string_of_test active_domain_restrict); *)
+          let no_defaults = if opts.no_defaults
+                            then (List.filter (holes_of_cmd phys)
+                                   ~f:(fun (v,_) ->
+                                     List.for_all fvs ~f:(fun (v',_) ->
+                                         if List.exists [v'; Hole.add_row_prefix; Hole.delete_row_prefix; Hole.which_act_prefix]
+                                              ~f:(fun substring -> String.is_substring v ~substring)
+                                         then (if params.debug then Printf.printf "%s \\in %s, so skipped\n%!" v v'; false)
+                                         else (if params.debug then Printf.printf "%s \\not\\in %s, so kept\n%!" v v'; true)
+                                       )
+                                   )
+                                  |> List.fold ~init:True ~f:(fun acc (v,sz) ->
+                                         acc %&% (Hole(v,sz) %<>% mkVInt(0,sz))
+                                 ))
+                            else True
+          in
+          if params.debug then Printf.printf "NoDefaults Restriction (%s) \n %s\n%!" (if opts.no_defaults then "on" else "off") (string_of_test no_defaults);
           let out_test =
             (if opts.annot then
                ((Hole("?AddRowTonexthop",1) %=% Hole("?AddRowToipv6_fib",1))
@@ -343,7 +299,11 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                (* %&% (Hole("?AddRowTosmac_rewrite",1) %=% mkVInt(0,1)) *)
              else True)
             %&%
-            active_domain_restrict %&% query_test in
+              no_defaults
+            %&%
+              active_domain_restrict
+            %&%
+              query_test in
           (* Printf.printf "outtest_computed\n%!"; *)
           (* let () = if params.debug then Printf.printf "test is \n   %s\n\n%!" (string_of_test out_test) in *)
           Some (out_test, hints)) in
@@ -405,7 +365,7 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
   | [], (opts::schedule) ->
      let () =
        if params.debug then
-         Printf.printf "\nusing optimization to |%s|\n\n%!"
+         Printf.printf "\nusing optimization |%s|\n\n%!"
            (string_of_opts opts)
      in
      let search_space = apply_opts params data problem opts in

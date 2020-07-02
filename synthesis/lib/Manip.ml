@@ -123,14 +123,11 @@ let rec exact_only t =
   | And(a,b) | Or(a,b) | Impl(a,b) | Iff(a,b)
     -> exact_only a && exact_only b
 
-let regularize ~no_negations cond misses =
-  if no_negations then
-    if cond = True then
-      cond %&% !%(misses)
-    else
-      cond
-  else
-    cond %&% !%misses
+let regularize negs cond misses =
+  match negs with
+  | `NoNegs when cond = True -> cond %&% !%(misses)
+  | `NoNegs ->  cond
+  | `Negs -> cond %&% !%misses
 
   (* if exact_only cond
    * then if cond = True
@@ -140,12 +137,12 @@ let regularize ~no_negations cond misses =
          
                 
 (* computes weakest pre-condition of condition phi w.r.t command c *)
-let rec wp ?no_negations:(no_negations = false) c phi =
+let rec wp negs c phi =
   (* let guarded_wp (cond, act) = cond %=>% wp ~no_negations act phi in *)
   match c with
   | Skip -> phi
   | Seq (firstdo, thendo) ->
-    wp ~no_negations firstdo @@ wp ~no_negations thendo phi
+    wp negs firstdo @@ wp negs thendo phi
   | Assign (field, value) ->
      let phi' = substitute phi @@ StringMap.singleton field value in
      (* Printf.printf "replacing %s with %s in %s \n to get %s \n" field (string_of_expr value) (string_of_test phi) (string_of_test phi'); *)
@@ -161,7 +158,7 @@ let rec wp ?no_negations:(no_negations = false) c phi =
   | Select (Partial, []) -> True
   | Select (Partial, cmds) ->
      let phi' = List.fold cmds ~init:False ~f:(fun wp_so_far (cond, act) ->
-         let act_wp = wp ~no_negations act phi in 
+         let act_wp = wp negs act phi in
          (* Printf.printf "Combining guard: %s  action: %s and accumulation %s\n%!==%s\n%!"
           *   (string_of_test cond) (string_of_test act_wp) (string_of_test wp_so_far)
           *   ((cond %&% act_wp) %+% wp_so_far |> string_of_test); *)
@@ -173,8 +170,8 @@ let rec wp ?no_negations:(no_negations = false) c phi =
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
      let phi' = List.fold cmds ~init:(True, False) ~f:(fun (wp_so_far, misses) (cond, act) ->
-         let guard = regularize ~no_negations cond misses in
-         let act_wp = wp ~no_negations act phi in 
+         let guard = regularize negs cond misses in
+         let act_wp = wp negs act phi in
          (* Printf.printf "Combining guard: %s  action: %s and accumulation %s\n%!==%s\n%!"
           *   (string_of_test guard) (string_of_test act_wp) (string_of_test wp_so_far)
           *   ((guard %=>% act_wp) %&% wp_so_far |> string_of_test); *)
@@ -519,13 +516,13 @@ let rec fill_holes (c : cmd) subst =
                actions = List.map t.actions ~f:(fun (scope, a) -> (scope, fill_holes a subst));
                default = fill_holes t.default subst }
 
-let rec wp_paths ~no_negations c phi : (cmd * test) list =
+let rec wp_paths negs c phi : (cmd * test) list =
   match c with
   | Skip -> [(c, phi)]
   | Seq (c1, c2) ->
-     List.map (wp_paths ~no_negations c2 phi)
+     List.map (wp_paths negs c2 phi)
        ~f:(fun (trace2, phi) ->
-         List.map (wp_paths ~no_negations c1 phi)
+         List.map (wp_paths negs c1 phi)
            ~f:(fun (trace1, phi') ->
              (trace1 %:% trace2, phi')
            ) 
@@ -543,14 +540,14 @@ let rec wp_paths ~no_negations c phi : (cmd * test) list =
   | Select (Total, cmds) ->
      let open List in
      (cmds >>| fun (t,c) -> Assert t %:% c)
-     >>= flip (wp_paths ~no_negations) phi
+     >>= flip (wp_paths negs) phi
 
                   
   (* doesn't require at any guard to be true *)
   | Select (Partial, []) -> [(Skip, True)]
   | Select (Partial, cmds) ->
      List.fold cmds ~init:([]) ~f:(fun wp_so_far (cond, act) ->
-          List.fold (wp_paths ~no_negations act phi) ~init:wp_so_far
+          List.fold (wp_paths negs act phi) ~init:wp_so_far
              ~f:(fun acc (trace, act_wp) ->
                acc @ [(Assert cond %:% trace, cond %&% act_wp)]))
 
@@ -560,15 +557,19 @@ let rec wp_paths ~no_negations c phi : (cmd * test) list =
       * (cmds >>| fun (t,c) -> Assume t %:% c)
       * >>= Fun.flip wp_paths phi *)
      List.fold cmds ~init:([], False) ~f:(fun (wp_so_far, prev_conds) (cond, act) ->
-         List.fold (wp_paths ~no_negations act phi) ~init:wp_so_far
+         List.fold (wp_paths negs act phi) ~init:wp_so_far
            ~f:(fun acc (trace, act_wp) ->
-             let misses = if no_negations then True else !%(prev_conds) in
+             let misses =
+               match negs with
+               | `NoNegs ->  True
+               | `Negs -> !%(prev_conds)
+             in
              (Assert (cond %&% misses) %:% trace, cond %&% misses %&% act_wp) :: acc), prev_conds %+% cond)
      |> fst
 
   | Apply t ->
      let open List in
-     (t.default :: List.map ~f:(fun (sc, a) -> holify (List.map sc ~f:fst) a) t.actions) >>= flip (wp_paths ~no_negations) phi
+     (t.default :: List.map ~f:(fun (sc, a) -> holify (List.map sc ~f:fst) a) t.actions) >>= flip (wp_paths negs) phi
   | While _ ->
      failwith "[Error] loops must be unrolled\n%!"
 
