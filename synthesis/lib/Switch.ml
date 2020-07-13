@@ -44,7 +44,7 @@ let edited_instance params (p : t) =
 let to_gcl params (p : t) =
   match !(p.gcl) with
   | None ->
-     let i = Instance.apply params NoHoles `Exact (edited_instance params p) !(p.pipeline) |> fst in
+     let i = Instance.apply params NoHoles `Exact (edited_instance params p) !(p.pipeline) in
      p.gcl := Some i;
      i
   | Some i -> i
@@ -54,7 +54,7 @@ let to_gcl_holes params (p : t) dels tag =
   match !(p.gcl_holes), !(p.dels), !(p.tag) with
   | Some i, Some d, Some t when d = dels && t = tag -> i
   | _ ->
-     let i = Instance.apply params ~no_miss:false dels tag (edited_instance params p) !(p.pipeline) |> fst in
+     let i = Instance.apply params ~no_miss:false dels tag (edited_instance params p) !(p.pipeline) in
      p.gcl_holes := Some i;
      p.dels := Some dels;
      p.tag := Some tag;

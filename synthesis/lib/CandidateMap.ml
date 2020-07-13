@@ -62,7 +62,7 @@ let apply_hints
       pline pinst : (cmd * (Row.action_data * int) StringMap.t option) list =
   match h_opt with
   | None ->
-     [Instance.apply params tag typ pinst pline |> fst, None]
+     [Instance.apply params tag typ pinst pline, None]
   | Some h ->
      List.map (h m) ~f:(fun t -> (compute_cand_for_trace typ pline pinst t, Some t))
 

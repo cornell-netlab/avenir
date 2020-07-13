@@ -62,28 +62,28 @@ let size : t -> int =
 
 let rec apply ?no_miss:(no_miss = false)
           (params : Parameters.t)
-          (tag : interp) encode_tag ?cnt:(cnt=0)
+          (tag : interp) encode_tag
           (inst : t)
           (prog : cmd)
-        : (cmd * int) =
+        : cmd =
   match prog with
   | Skip
     | Assign _
     | Assert _
-    | Assume _ -> (prog, cnt)
+    | Assume _ -> prog
   | Seq (c1,c2) ->
-     let (c1', cnt1) = apply ~no_miss params tag encode_tag ~cnt inst c1 in
-     let (c2', cnt2) = apply ~no_miss params tag encode_tag ~cnt:cnt1 inst c2 in
-     (c1' %:% c2', cnt2)
+     let c1' = apply ~no_miss params tag encode_tag inst c1 in
+     let c2' = apply ~no_miss params tag encode_tag inst c2 in
+     c1' %:% c2'
   | While _ -> failwith "while loops not supported"
   | Select (typ, ss) ->
-     let (ss, ss_cnt) =
-       List.fold ss ~init:([],cnt)
-         ~f:(fun (acc, cnt) (t, c) ->
-           let (c', cnt') = apply params ~no_miss tag encode_tag ~cnt inst c in
-           acc @ [(t,c')], cnt'
+     let ss =
+       List.fold ss ~init:[]
+         ~f:(fun acc (t, c) ->
+           let c' = apply params ~no_miss tag encode_tag inst c in
+           acc @ [(t,c')]
          ) in
-     (mkSelect typ ss, ss_cnt)
+     mkSelect typ ss
   | Apply t ->
      let actSize = max (log2(List.length t.actions)) 1 in
      let row_hole = Hole.add_row_hole t.name in
@@ -141,7 +141,7 @@ let rec apply ?no_miss:(no_miss = false)
                       @ dflt_row
                       |> mkOrdered in
      (* Printf.printf "TABLE %s: \n %s\n%!" tbl (string_of_cmd tbl_select); *)
-     (tbl_select, cnt)
+     tbl_select
 
 
 
