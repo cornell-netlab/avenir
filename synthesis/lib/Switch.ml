@@ -60,7 +60,13 @@ let to_gcl_holes params (p : t) dels tag =
      p.tag := Some tag;
      i
 
-let to_string params (p : t) = to_gcl params p |> string_of_cmd
+let to_string params (p : t) =
+  Printf.sprintf "%s\n[%s]\n%!"
+    (string_of_cmd !(p.pipeline))
+    (List.fold (p.edits) ~init:""
+       ~f:(fun acc e ->
+         Printf.sprintf "%s%s%s" acc (if acc = "" then "" else "\n") (Edit.to_string e)
+       ))
 
 let clear_cache (p : t) = {p with
                             gcl = ref None;
