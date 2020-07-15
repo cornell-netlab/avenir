@@ -132,11 +132,7 @@ let rec apply ?no_miss:(no_miss = false)
                 *       ~f:(fun acc (cond, _) -> acc %&% !%(cond)) *)
               , holify (List.map params ~f:fst) act))
      in
-     let dflt_row =
-       if params.no_defaults
-       then [(True, t.default)]
-       else [(False, Skip)]
-     in
+     let dflt_row = [(True, t.default)] in
      let tbl_select = (if params.above then holes @ selects else selects @ holes)
                       @ dflt_row
                       |> mkOrdered in

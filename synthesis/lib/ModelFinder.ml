@@ -76,7 +76,7 @@ let make_searcher (params : Parameters.t) (data : ProfData.t ref) (problem : Pro
                      nlp = params.nlp;
                      single = params.unique_edits;
                      domain = params.domain;
-                     no_defaults = true;
+                     no_defaults = params.no_defaults;
                    } in
   {schedule; search_space = []}
   

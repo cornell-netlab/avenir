@@ -29,6 +29,7 @@ let symb_wp ?fvs:(fvs=[]) cmd =
 
 let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t)
     : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
+  let params = {params with no_defaults = false} in
   let st_mk_cond = Time.now () in
   let log = Problem.log_gcl_program params problem in
   let phys = Problem.phys_gcl_program params problem in
