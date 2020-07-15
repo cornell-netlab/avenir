@@ -1,5 +1,13 @@
 # Getting Started
 
+## Install OPAM version 2.0.4
+The installation instruction are for `Ubuntu 18.04.2 LTS`.
+```bash
+add-apt-repository ppa:avsm/ppa
+apt update
+apt install opam
+```
+
 + First make sure you have `opam` installed. Then in the `synthesis` directory, run
 
 ```
@@ -21,7 +29,8 @@ opam user-setup install
   
 + Pin our custom fork of PLASMA's Z3 serialization library that interfaces with the previously-installed binary:
 
-```
+```bash
+opam install menhir
 opam pin add z3 https://github.com/priyasrikumar/ocaml-z3.git#no-successes
 ```
 
