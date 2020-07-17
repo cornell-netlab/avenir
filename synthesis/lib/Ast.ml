@@ -86,10 +86,14 @@ let rec size_of_expr (e : expr) : size =
      let s = size_of_expr e in
      let s' = size_of_expr e' in
      if s = s' then s
-     else failwith (Printf.sprintf "size of expressions: %s, and %s differs (%d and %d)"
-                      (string_of_expr e)
-                      (string_of_expr e')
-                      s s')
+     else
+       if s = -1 || s' = -1
+       then -1
+       else
+         failwith (Printf.sprintf "size of expressions: %s, and %s differs (%d and %d)"
+                     (string_of_expr e)
+                     (string_of_expr e')
+                     s s')
 
 let rec num_nodes_in_expr e =
   match e with

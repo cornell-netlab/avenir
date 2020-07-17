@@ -1109,4 +1109,4 @@ let encode_from_p4 include_dirs p4_file verbose : Ast.cmd =
   | `Ok p4_program ->
      let cmd = encode_program p4_program in
     (* Format.printf "Encoded Program: \n%!\n %s%! \n%!" (string_of_cmd cmd); *)
-    cmd
+    TypeInference.infer cmd
