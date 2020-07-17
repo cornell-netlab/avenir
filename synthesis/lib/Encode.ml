@@ -37,6 +37,7 @@ let rec lookup_type_width (type_ctx : Declaration.t list) (typ : Type.t) =
                         ~f:(fun td -> match td with
                                         | (_, TypeDef d) -> snd d.name = snd n
                                         | (_, Header h) -> snd h.name = snd n
+                                        | (_, SerializableEnum e) -> snd e.name = snd n
                                         (* | (_, Struct s) -> snd s.name = snd n *)
                                         | _ -> false ) in
       begin match t with
@@ -46,10 +47,17 @@ let rec lookup_type_width (type_ctx : Declaration.t list) (typ : Type.t) =
             | Util.Right _ -> failwith "lookup_type_width: Unimplemented decl"
            end
         | Some (_, Header{fields;_}) ->
-          Some (List.fold (List.map fields ~f:(fun (_, fl) -> lookup_field_width_exn type_ctx (snd fl.name))) ~f:(+) ~init:0)
+           Some (List.fold fields ~init:0
+                   ~f:(fun acc (_, fl) -> acc + lookup_type_width_exn type_ctx fl.typ))
         | Some (_, Struct{fields;_}) ->
-            Some (List.fold (List.map fields ~f:(fun (_, fl) -> lookup_field_width_exn type_ctx (snd fl.name))) ~f:(+) ~init:0)
-        | _ -> failwith ("lookup_type_width: 1 type not handled " 
+           Some (List.fold (List.map fields ~f:(fun (_, fl) -> lookup_field_width_exn type_ctx (snd fl.name))) ~f:(+) ~init:0)
+        | Some (_, SerializableEnum e) ->
+           begin match e.typ with
+           | (_, BitType (_,Int(_,i))) ->
+              Some (Bigint.to_int_exn i.value)
+           | (_, _ ) -> failwith "malformed enum"
+           end
+        | _ -> failwith ("lookup_type_width: 1 type not handled "
                               ^ Sexp.to_string ([%sexp_of: Type.t] typ) ^ " "
                               ^ Sexp.to_string ([%sexp_of: Declaration.t option] t))
       end
@@ -72,9 +80,11 @@ and gather_fields type_ctx =
 and check_typedef_widths type_ctx n =
   let open Declaration in
   List.find_map type_ctx ~f:(fun d -> match d with
-                                    | (_, TypeDef {name; typ_or_decl = Left t;_}) ->
-                                        if n = snd name then Some t else None
-                                    | _ -> None)
+                                      | (_, TypeDef {name; typ_or_decl = Left t;_})
+                                           when n = snd name -> Some t
+                                      | (_, SerializableEnum {annotations;typ;name;_} )
+                                           when n = snd name -> Some typ
+                                      | _ -> None)
 
 (* and lookup_field_width (type_ctx : Declaration.t list) fn : size option =
   let open Declaration in
@@ -96,6 +106,7 @@ and lookup_field_width (type_ctx : Declaration.t list) fn : size option =
   let split_hd = List.hd_exn split  in
   let split_tl = List.tl_exn split in
   let split_last = List.last_exn split in
+  (* Printf.printf "searching for field %s\n%!" fn; *)
   match split_last with
   | "ingress_port" -> Some 9
   | "egress_spec" -> Some 9
@@ -106,13 +117,34 @@ and lookup_field_width (type_ctx : Declaration.t list) fn : size option =
    (* Checking for "M v" here is a hack, to get around that update_typ_ctx_from_param doesn't update
     * the name field in the declaration.  It would be preferable to do this, but type inference seems to
     * fail for the record update (and I was unable to figure out how to explicitly write the type.) *)
-    match List.find type_ctx ~f:(fun d -> Some split_hd = safe_name d || M split_hd = fst d) with
+      match List.find type_ctx ~f:(fun d -> Some split_hd = safe_name d || M split_hd = fst d) with
     | Some (_, TypeDef { typ_or_decl = Left t}) -> lookup_type_width type_ctx t
     | Some d ->
+       (* Printf.printf "found context for %s\n %s \n%!" fn
+        *   (Sexp.to_string @@ Declaration.sexp_of_pre_t (snd d)); *)
         if split_tl = []
-          then Option.bind (check_typedef_widths type_ctx fn) ~f:(lookup_type_width type_ctx)
-          else lookup_field_width' type_ctx d split_tl 
-    | None -> None
+        then match check_typedef_widths type_ctx fn with
+             | Some t -> lookup_type_width type_ctx t
+             | None -> match check_typedef_widths type_ctx (snd @@ Declaration.name d) with
+                       | Some t ->
+                          begin match lookup_type_width type_ctx t with
+                          | Some i -> Some i
+                          | None ->
+                             Type.sexp_of_t t
+                             |> Sexp.to_string
+                             |> Printf.sprintf "!!Couldn't find type width for %s"
+                             |> failwith
+                          end
+                       | None ->
+                          Declaration.name d
+                          |> snd
+                          |> Printf.sprintf "??Couldn't find width for %s"
+                          |> failwith
+
+        else lookup_field_width' type_ctx d split_tl
+    | None ->
+       (* failwith "couldn't find type in type context" *)
+       None
     end
 
 and lookup_field_width' (type_ctx : Declaration.t list) (decl : Declaration.t) fn : size option =
@@ -236,6 +268,11 @@ let rec dispatch_list ((info,expr) : Expression.t) : P4String.t list =
   | E.ExpressionMember {expr; name} -> dispatch_list expr @ [name]
   | E.FunctionCall {func; type_args=[];_} -> dispatch_list func
   | E.ArrayAccess {array; index} -> header_stack_name array index
+  | E.TypeMember _ ->
+     Expression.sexp_of_pre_t expr
+     |> Sexp.to_string
+     |> Printf.sprintf  "[dispatch_list] Type Member: %s"
+     |> failwith
   | _ ->  ctor_name_expression (info,expr) |> type_error
 
 and string_of_memberlist =
@@ -274,6 +311,23 @@ let action_run_field members =
 let rec encode_expression_to_value (type_ctx : Declaration.t list) (e : Expression.t) : expr =
   encode_expression_to_value_with_width (-1) type_ctx e
 
+and find_senum_member (type_ctx : Declaration.t list) (senum_name : string) (member_name : string)
+    : expr option =
+  let open Declaration in
+  List.find_map type_ctx
+    ~f:(fun d ->
+      match d with
+      | (_,SerializableEnum e) when snd e.name = senum_name ->
+         List.find_map e.members ~f:(fun (member, exp) ->
+             if snd member = member_name
+             then Some (encode_expression_to_value_with_width
+                          (lookup_type_width_exn type_ctx e.typ)
+                          type_ctx
+                          exp)
+             else None
+           )
+      | _ -> None)
+
 and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) (e : Expression.t) : expr =
   let module E= Expression in
   let unimplemented name =
@@ -304,9 +358,15 @@ and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) 
     let w = get_width type_ctx e in
     Var (s, w)
   | E.ExpressionMember _ ->
-    let dn = dispatch_name e in
-    let w = lookup_field_width_exn type_ctx dn in
-    Var (dn, w)
+     let dn = dispatch_name e in
+     (* dn |>
+      * (snd e
+      * |> Expression.sexp_of_pre_t
+      * |> Sexp.to_string
+      * |> Printf.printf "ExpressionMember:  %s and dispatch name %s\n%!") ; *)
+     let w = lookup_field_width_exn type_ctx dn in
+     
+     Var (dn, w)
   | E.BinaryOp {op;args=(e, e')} ->
      begin match snd op with
      | Plus -> binop mkPlus e e'
@@ -327,6 +387,22 @@ and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) 
         Var (validity_bit members, 1)
      | Some _ -> unimplemented ("FunctionCall for members " ^ string_of_memberlist members)
      end
+  | E.TypeMember {typ;name} ->
+     begin match snd typ with
+     | TypeName t ->
+        begin match find_senum_member type_ctx (snd t) (snd name) with
+        | None -> failwith @@ Printf.sprintf "couldn't find TypeMember name %s.%s" (snd t) (snd name)
+        | Some expr -> expr
+
+        end
+     | _ -> failwith "Expected Typename for Type member"
+     end
+     (* Expression.sexp_of_pre_t expr
+      * |> Sexp.to_string
+      * |> Printf.sprintf  "[encode_expression_to_value_with_width] Type Member: %s"
+      * |> failwith *)
+  | E.Cast {typ;expr} ->
+     encode_expression_to_value_with_width width type_ctx expr
   | _ -> unimplemented (ctor_name_expression e)
 
 and get_width (type_ctx : Declaration.t list) (e : Expression.t) : size =
@@ -339,10 +415,13 @@ and get_width (type_ctx : Declaration.t list) (e : Expression.t) : size =
           | Some (w, _) -> w
           | None -> -1
         end
-    | E.Name (_, s) -> lookup_field_width_exn type_ctx s
+    | E.Name (info, s) ->
+       (* Printf.printf "Getting name? for %s at %s\n%!" s (Info.to_string info); *)
+       lookup_field_width_exn type_ctx s
     | E.ExpressionMember _ ->
-      let dn = dispatch_name e in
-      lookup_field_width_exn type_ctx dn
+       let dn = dispatch_name e in
+       (* Printf.printf "Getting expression member????\n"; *)
+       lookup_field_width_exn type_ctx dn
     | E.BinaryOp {op;args=(e, e')} ->
       let w1 = get_width type_ctx e in
       let w2 = get_width type_ctx e' in
@@ -429,8 +508,17 @@ let rec encode_expression_to_test (type_ctx : Declaration.t list) (e: Expression
      begin match name with
      | (_,"hit") ->
         Var (hit_bit members, 1) %=% mkVInt(1, 1)
-     | _ -> unimplemented ("ExpressionMember for members " ^ string_of_memberlist members)
+     | _ ->
+        Var (Printf.sprintf "%s.%s" (string_of_memberlist members) (snd name),
+             get_width type_ctx e)
+          %<>% mkVInt(0,get_width type_ctx e)
+        (* unimplemented ("ExpressionMember for members " ^ string_of_memberlist members) *)
      end
+  | E.TypeMember _ as expr->
+     Expression.sexp_of_pre_t expr
+     |> Sexp.to_string
+     |> Printf.sprintf  "[encode_expression_to_test] Type Member: %s"
+     |> failwith
   | _ -> unimplemented (ctor_name_expression e)
 
 let lookup_exn (Program(top_decls) : program) (ctx : Declaration.t list) (ident : P4String.t) : Declaration.t =
@@ -489,7 +577,9 @@ let rec dispatch prog ctx type_ctx rv members =
   | [member] ->
     let act, xs = lookup_action_exn prog ctx member in
     let xs' = List.map ~f:(fun (_,p) -> Parameter.(p.variable)) xs in
-      `Motley (encode_action3 ~action_data:xs' prog ctx type_ctx rv act)
+    let add_tctx = List.map xs ~f:(update_typ_ctx_from_param type_ctx) in
+    let type_ctx2 = add_tctx @ type_ctx in
+      `Motley (encode_action3 ~action_data:xs' prog ctx type_ctx2 rv act)
   | member :: members' ->
     let open Declaration in
     match lookup_exn prog ctx member with
@@ -636,13 +726,15 @@ and update_typ_ctx_from_param (type_ctx : Declaration.t list) (param : Parameter
   let open Parameter in
   let open Declaration in
   let open Type in
-  let v = snd (snd param).variable in
+  let p = snd param in
+  let v = snd p.variable in
+  (* Printf.printf "Adding %s to context\n" v; *)
   let decl = List.find type_ctx ~f:(fun d -> is_some (safe_name d) && safe_name d = typ_safe_name (snd param).typ) in
   match decl with
   | Some (_, d) -> M v, d
   | None ->
     begin match snd (snd param).typ with
-          | BitType _ -> M v, TypeDef { annotations = []; name = M v, v; typ_or_decl = Left ((snd param).typ)}
+          | BitType _ -> M v, TypeDef { annotations = []; name = M v, v; typ_or_decl = Left (p.typ)}
           | _ -> failwith "update_typ_ctx_from_param"
     end
   (* M v, Header { annotations = [];
@@ -710,8 +802,8 @@ and encode_action prog (ctx : Declaration.t list) (type_ctx : Declaration.t list
 
 (** Takes a block representing an action and the action_data variables, replacing them with controller holes *)
 and encode_action3 prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv:int) ( (_,act) : Block.t ) ~action_data : cmd * bool * bool =
- let open Block in
- let (c, rb, eb) = 
+  let open Block in
+ let (c, rb, eb) =
     List.fold act.statements ~init:(Skip, false, false)
       ~f:(fun (rst, in_rb, in_eb) stmt ->
             let tstmt, ret_rb, ret_eb = encode_statement prog ctx type_ctx rv stmt in
@@ -791,10 +883,51 @@ and gather_constants (type_ctx : Declaration.t list) (decl : Declaration.t list)
                               | _ -> None ) in
   es  
 
+and get_ingress_egress_names (decls : Declaration.t list) : (string * string) option =
+  List.find_map decls  ~f:(fun (_,d) ->
+      begin match d with
+      | Instantiation {annotations;typ;args;name;init}
+           when (snd name = "main") ->
+         if List.length args < 4
+         then failwith "main has unexpected type, expecting V1Switch(<Parser>,<Checksum Verification>,<Ingress>,<Egress>,<ChecksumComputation>, <Deparser>)"
+         else
+           let ingress_arg = snd @@ List.nth_exn args 2 in
+           let egress_arg = snd @@ List.nth_exn args 3 in
+           begin match ingress_arg, egress_arg with
+           | Argument.Expression i, Argument.Expression e ->
+              begin match snd i.value, snd e.value with
+              | Expression.NamelessInstantiation iinst, Expression.NamelessInstantiation einst ->
+                 let ityp = snd iinst.typ in
+                 let etyp = snd einst.typ in
+                 begin match ityp, etyp with
+                 | TypeName iname, TypeName ename ->
+                    Some (snd iname, snd ename)
+                 | _ -> failwith @@ Printf.sprintf "main had ill-typed argument. Expecting a TypeName: Error was in  %s or %s\n"
+                                      (ityp |> Type.sexp_of_pre_t |> Sexp.to_string)
+                                      (etyp |> Type.sexp_of_pre_t |> Sexp.to_string)
+                 end
+              | _ -> failwith @@ Printf.sprintf "main had ill-typed argument. Expecting a Nameless Instantiation: Error was in  %s or %s\n"
+                                   (i.value |> snd |> Expression.sexp_of_pre_t |> Sexp.to_string)
+                                   (e.value |> snd |> Expression.sexp_of_pre_t |> Sexp.to_string)
+
+              end
+           | _ -> failwith "main had unrecognized argument"
+           end
+      | _ ->
+         None
+      end
+    )
+
 and encode_program (Program(top_decls) as prog : program ) =
   let type_cxt = get_type_decls top_decls in
-    encode_pipeline type_cxt prog "MyIngress"
-    %:% mkOrdered [ Var("standard_metadata.egress_spec", 9) %<>% mkVInt(0, 9), encode_pipeline type_cxt prog "MyEgress"; True, Skip ]
+  match get_ingress_egress_names top_decls with
+  | Some (ingress_name, egress_name) ->
+     encode_pipeline type_cxt prog ingress_name
+     %:% mkOrdered [
+             Var("standard_metadata.egress_spec", 9) %<>% mkVInt(0, 9), encode_pipeline type_cxt prog egress_name;
+             True, Skip ]
+  | None ->
+     failwith "Could not extract ingress and egress from package \"main\""
 
 and encode_pipeline (type_cxt : Declaration.t list) (Program(top_decls) as prog:program ) (pn : string) =
   let open Declaration in
@@ -807,7 +940,7 @@ and encode_pipeline (type_cxt : Declaration.t list) (Program(top_decls) as prog:
     let assign_rv = mkAssn (return_bit rv) (mkVInt(0, 1)) in
     let type_cxt2 = List.map c.params ~f:(update_typ_ctx_from_param type_cxt) @ type_cxt in
     (* let _ = printf "type_cxt\n%s\n" (Sexp.to_string ([%sexp_of: Declaration.t list] type_cxt)) in *)
-    let assign_consts = assign_constants type_cxt2 top_decls in
+    (* let assign_consts = assign_constants type_cxt2 top_decls in *)
     let consts = gather_constants type_cxt2 top_decls in
     replace_consts consts (assign_rv %:% encode_control prog c.locals type_cxt2 rv c.apply)
   | Some _ -> failwith "Found a module called MyIngress, but it wasn't a control module"
@@ -823,9 +956,12 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
           | _ -> (acc_keys, acc_actions, acc_customs)
          ) in
   let str_keys = List.map p4keys ~f:(fun k -> let kn = dispatch_name (snd k).key in
+                                              (* Printf.printf "Getting key?\n"; *)
                                               (kn, lookup_field_width_exn type_ctx kn)) in
   
   let lookup_and_encode_action i (_,a) =
+    (* Printf.printf "Encoding action %s\n%!" (snd a.name); *)
+
     let (body, ad) = lookup_action_exn prog ctx a.name in
     let action_data = List.map ad ~f:(fun (_,p) -> Parameter.(p.variable, p.typ)) in
     let action_data_names = List.map action_data ~f:fst in
@@ -833,8 +969,10 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
     let set_action_run = mkAssn (snd name ^ action_run_suffix) (mkVInt(i + 1, 1)) in
     let add_tctx = List.map ad ~f:(update_typ_ctx_from_param type_ctx) in 
     let type_ctx2 = add_tctx @ type_ctx in
-    List.map action_data ~f:(fun ((_, ad), t) -> ad, lookup_type_width_exn type_ctx t)
-            , set_action_run %:% encode_action prog ctx type_ctx2 rv body ~action_data:action_data_names
+    let out = List.map action_data ~f:(fun ((_, ad), t) -> ad, lookup_type_width_exn type_ctx t)
+            , set_action_run %:% encode_action prog ctx type_ctx2 rv body ~action_data:action_data_names in
+    (* Printf.printf "Encoded action %s\n%!" (snd a.name); *)
+    out
   in
   let action_cmds = List.mapi p4actions ~f:lookup_and_encode_action in
 
