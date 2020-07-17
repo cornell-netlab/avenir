@@ -46,25 +46,26 @@ let matches_of_string (data_str : string) : Match.t list =
                    |> failwith
             end
          | _ ->
-            begin match String.lsplit2 match_str ~on:'/' with
-            | Some _ ->
-               begin match String.lsplit2 match_str ~on:'#' with
-               | Some (match_str, size) when (size = "32")->
-                  Classbenching.parse_ip_mask match_str
-               | _ -> Printf.sprintf "Couldn't parse match from string %s" match_str
-                      |> failwith
-               end
-            | _ ->
-               begin match String.lsplit2 match_str ~on:'#' with
-               | Some (value_str, size_str) ->
-                  let size = int_of_string size_str in
-                  let value = Bigint.of_string value_str in
-                  Match.Exact(Int(value, size))
-               | None ->
-               Printf.sprintf "Couldn't parse match from string %s" match_str
-               |> failwith
-               end
-            end
+            if String.is_substring match_str "."
+            then
+              (*Parse IPv4*)
+              begin match String.lsplit2 match_str ~on:'#' with
+              | Some (match_str, size) when (size = "32")->
+                 Classbenching.parse_ip_mask match_str
+              | _ -> Printf.sprintf "Couldn't parse match from string %s" match_str
+                     |> failwith
+              end
+            else
+              (*assume its an integer??*)
+              begin match String.lsplit2 match_str ~on:'#' with
+              | Some (value_str, size_str) ->
+                 let size = int_of_string size_str in
+                 let value = Bigint.of_string value_str in
+                 Match.Exact(Int(value, size))
+              | None ->
+                 Printf.sprintf "Couldn't parse match from string %s" match_str
+                 |> failwith
+              end
          end
        )
 
