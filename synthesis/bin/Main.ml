@@ -125,7 +125,8 @@ module Solver = struct
                               no_defaults;
                               timeout = None
                  }) in
-    let fvs = Benchmark.parse_fvs fvs in
+    let var_mapping = Benchmark.parse_fvs fvs in
+    let fvs = List.map var_mapping ~f:snd in
     let log = if p4
               then Encode.encode_from_p4 log_incl logical false
                    |> Benchmark.zero_init fvs |> Benchmark.drop_handle fvs
@@ -548,7 +549,7 @@ module Equality = struct
     let data = ProfData.zero () in
     let log_inst = Instance.empty in
     let phys_inst = Instance.empty in
-    let fvs = Benchmark.parse_fvs fvs_fp in
+    let fvs = Benchmark.parse_fvs fvs_fp |> List.map ~f:snd in
     let problem =
       Problem.make ~log ~phys ~fvs
         ~log_inst ~phys_inst
@@ -609,7 +610,7 @@ module EqualityReal = struct
 
 
   let run log_p4 phys_p4  log_incs phys_incs log_edits phys_edits fvs_fp assume_fp debug () =
-    let fvs = Benchmark.parse_fvs fvs_fp in
+    let fvs = Benchmark.parse_fvs fvs_fp |> List.map ~f:snd in
     let assume = Benchmark.parse_file assume_fp in
 
     let () = printf "fvs = %s" (Sexp.to_string ([%sexp_of: (string * int) list] fvs)) in
@@ -1206,10 +1207,13 @@ module ServerCmd = struct
                               no_defaults;
                               timeout = None
                  }) in
-    let fvs = Benchmark.parse_fvs fvs in
+    let mapping = Benchmark.parse_fvs fvs in
+    let fvs = List.map mapping ~f:snd in
     let log = if p4
               then Encode.encode_from_p4 log_incl logical false
-                   |> Benchmark.zero_init fvs |> Benchmark.drop_handle fvs
+                   |> Encode.unify_names mapping
+                   |> Benchmark.zero_init fvs
+                   |> Benchmark.drop_handle fvs
               else Benchmark.parse_file logical in
     let phys = if p4
                then Encode.encode_from_p4 phys_incl real false

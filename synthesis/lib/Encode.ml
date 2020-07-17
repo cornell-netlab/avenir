@@ -1086,6 +1086,61 @@ let preprocess include_dirs p4file =
   (*let _ : Core.Unix.Exit_or_signal.t = try Unix.close_process_in in_chan with _ -> failwith "bad close" in*)
   str
 
+
+let rec rewrite_expr (m : (string * int) StringMap.t) (e : expr) : expr =
+  match e with
+  | Value _ | Hole _ -> e
+  | Var (v,sz) -> Var (StringMap.find m v |> Option.value ~default:(v,sz))
+  | Plus (e1,e2) -> Plus (rewrite_expr m e1, rewrite_expr m e2)
+  | Times (e1,e2) -> Times (rewrite_expr m e1, rewrite_expr m e2)
+  | Minus (e1,e2) -> Minus (rewrite_expr m e1, rewrite_expr m e2)
+  | Mask (e1,e2) -> Mask (rewrite_expr m e1, rewrite_expr m e2)
+
+let rec rewrite_test (m : (string * int) StringMap.t) (t : test) : test =
+  match t with
+  | True | False -> t
+  | Eq (e1,e2) -> rewrite_expr m e1 %=% rewrite_expr m e2
+  | Le (e1,e2) -> rewrite_expr m e1 %<=% rewrite_expr m e2
+  | And (t1,t2) -> rewrite_test m t1 %&% rewrite_test m t2
+  | Or (t1,t2) -> rewrite_test m t1 %+% rewrite_test m t2
+  | Impl (t1,t2) -> rewrite_test m t1 %=>% rewrite_test m t2
+  | Iff (t1,t2) -> rewrite_test m t1 %<=>% rewrite_test m t2
+  | Neg (t1) -> !%(rewrite_test m t1)
+
+
+let rec rewrite (m : (string * int) StringMap.t) (c : cmd) : cmd =
+  match c with
+  | Skip -> Skip
+  | Assign (f,c) ->
+     let c' = rewrite_expr m c in
+     StringMap.find m f
+     |> Option.map ~f:fst
+     |> Option.value ~default:f
+     |> flip mkAssn c'
+  | Assert t -> Assert (rewrite_test m t)
+  | Assume t -> Assert (rewrite_test m t)
+  | Seq (c1,c2) -> rewrite m c1 %:% rewrite m c2
+  | Select (typ, ss) ->
+     mkSelect typ @@ List.map ss ~f:(fun (t,c) -> rewrite_test m t, rewrite m c)
+  | Apply {name; keys; actions; default} ->
+     Apply {name;
+            keys = List.map keys
+                     ~f:(fun (x,sz) -> StringMap.find m x |> Option.value ~default:(x,sz));
+            actions = List.map actions
+                        ~f:(fun (data, action) ->
+                          let m' = List.fold data ~init:m
+                                     ~f:(fun acc (x,_) -> StringMap.remove acc x) in
+                         (data, rewrite m' action));
+            default = rewrite m default}
+  | While _ -> failwith "[rewrite] deprecated"
+
+
+  
+let unify_names (m : ((string * int) * (string * int)) list) (c : cmd) : cmd =
+  let tfx = List.fold m ~init:StringMap.empty ~f:(fun acc (abs_var, phys_var) ->
+                StringMap.set acc ~key:(fst abs_var) ~data:phys_var) in
+  rewrite tfx c
+
 let parse_p4 include_dirs p4_file verbose =
   let () = Lexer.reset () in
   let () = Lexer.set_filename p4_file in

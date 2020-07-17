@@ -48,7 +48,7 @@ let rec infer_test (t : test) : test =
   | True -> True
   | False -> False
   | Eq (e1,e2) -> infer_expr e1 %=% infer_expr e2
-  | Le (e1,e2) -> infer_expr e1 %<% infer_expr e2
+  | Le (e1,e2) -> infer_expr e1 %<=% infer_expr e2
   | And (b1,b2) -> infer_test b1 %&% infer_test b1
   | Or (b1,b2) -> infer_test b1 %+% infer_test b2
   | Impl (b1,b2) -> infer_test b1 %=>% infer_test b2

@@ -15,12 +15,17 @@ let parse_file (filename : string) : Ast.cmd =
 let parse_fvs fp =
   In_channel.read_lines fp
   |> List.map ~f:(fun line ->
-         match String.lsplit2 line ~on:'#' with
+         match String.lsplit2 line ~on:',' with
          | None -> Printf.sprintf "Malformed FV line %s" line
                    |> failwith
-         | Some (x, sz) -> (x, int_of_string sz)
+         | Some (abs, phys_cont) ->
+            match String.lsplit2 line ~on:',' with
+            | None -> Printf.sprintf "Malformed FV line %s" line
+                      |> failwith
+            | Some (phys, sz_str) ->
+               let sz = int_of_string sz_str in
+               ((abs, sz), (phys, sz))
        )
-
 
 let rec run_experiment iter seq (phys_seq : Edit.t list) (params : Parameters.t) hints (problem : Problem.t) =
   match seq with
@@ -676,7 +681,7 @@ let basic_onf_ipv4 params filename =
   measure params None problem (onos_to_edits filename "ipv6")
 
 let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_edits_file fvs_file assume_file log_inc phys_inc = 
-  let fvs = parse_fvs fvs_file in
+  let fvs = parse_fvs fvs_file |> List.map ~f:snd in
   let assume = parse_file assume_file in
 
   (* let print_fvs = printf "fvs = %s" (Sexp.to_string ([%sexp_of: (string * int) list] fvs)) in *)
