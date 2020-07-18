@@ -1,0 +1,7 @@
+assume (hdr.ethernet_valid#1 = 1#1);
+assume (hdr.ipv4_valid#1 = 1#1);
+assume (hdr.udp_valid#1 = 1#1);
+assume ((hdr.udp_valid#1 = 1#1) ==> (hdr.ipv4_valid#1 = 1#1));
+assume ((hdr.ipv4_valid#1 = 1#1) ==> (hdr.ethernet_valid#1 = 1#1));
+assume ((hdr.gtpu_valid#1 = 1#1) ==> (2348810240#32 & 4278190080#32 = hdr.ipv4.dst_addr#32 & 4278190080#32));
+skip

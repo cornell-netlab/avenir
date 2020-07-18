@@ -1,0 +1,6 @@
+ADD,uplink_filter_table,140.0.100.254#32,,0
+ADD,downlink_filter_table,17.0.0.0/24#32,,0
+ADD,uplink_pdr_lookup,140.0.100.254#32;255#32;17.0.0.1#32,1#32;1#32,0
+ADD,downlink_pdr_lookup,17.0.0.1#32,2#32;2#32,0
+ADD,far_lookup,1#32,0#1;0#1,0
+ADD,far_lookup,2#32,0#1;0#1;140.0.100.254/32#32;140.0.100.1/32#32;255#32,1
