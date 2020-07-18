@@ -68,7 +68,7 @@ let rec wide_eval wide (e : expr) = (mkInt(0,-1),mkInt(0,-1))
    *                 (subtract_values lox hiy, subtract_values hix loy)
    * | Mask (x,y) -> failwith "Don't know how to widely evaluate a mask" *)
 
-
+(*
 let widening_assignment (wide : (value*value) StringMap.t) f e : (value * value) StringMap.t =
   StringMap.set wide ~key:f ~data:(wide_eval wide e)
 
@@ -130,6 +130,7 @@ let widening_match pkt wide matches =
            )
       | _ -> failwith "dont know how to widen masks"
     )
+*)
 
 let action_to_execute pkt wide keys (rows : Row.t list ) =
   List.fold rows ~init:(True,None,None)
@@ -139,7 +140,7 @@ let action_to_execute pkt wide keys (rows : Row.t list ) =
          let cond = Match.list_to_test keys matches in
          if check_test cond pkt
          then
-           (missed %&% cond, widening_match pkt wide (List.zip_exn keys matches) |> Some, Some (data, action))
+           (missed %&% cond, None, Some (data, action))
          else
            (* let _ = Printf.printf "%s not in  %s" (Packet.string__packet (fst pkt_loc)) (string_of_test cond)   in *)
            (missed %&% !%(cond), Some wide, None)
@@ -157,17 +158,17 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
           (pkt_loc, wide, cmd, StringMap.empty)
        | Assign (f, e) ->
           ((Packet.set_field_of_expr pkt f e, loc_opt),
-           widening_assignment wide f e,
+           StringMap.empty,
            cmd, StringMap.empty)
        | Assert t
          (* failwith "Asserts are deprecated" *)
          (* if check_test t pkt_loc then
-          *   (pkt_loc, widening_test pkt wide t, cmd, StringMap.empty)
+          *   (pkt_loc, StringMap.empty, cmd, StringMap.empty)
           * else
           *   failwith ("AssertionFailure: " ^ string_of_test t ^ "was false") *)
          | Assume t ->
           (* failwith "Raw assumes are deprecated" *)
-          (pkt_loc, widening_test pkt wide t, cmd, StringMap.empty)
+          (pkt_loc, StringMap.empty, cmd, StringMap.empty)
        | Seq (firstdo, thendo) ->
           let pkt_loc', wide', cmd', trace' = trace_eval_inst ~gas ~wide firstdo inst pkt_loc in
           let pkt_loc'', wide'', cmd'', trace'' = trace_eval_inst ~gas ~wide:wide' thendo inst pkt_loc' in

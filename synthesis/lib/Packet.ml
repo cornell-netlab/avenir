@@ -10,7 +10,7 @@ type located = t * (int option)
 
 
 let string__packet (p : t) =
-  (StringMap.fold ~f:(fun ~key:k ~data:v acc -> acc ^ k ^ "," ^ (string_of_value v) ^ ",") p ~init:"(") ^ ")"
+  (StringMap.fold ~f:(fun ~key:k ~data:v acc -> acc ^ k ^ "=" ^ (string_of_value v) ^ "\n") p ~init:"(") ^ ")\n"
 
 let set_field (pkt : t) (field : string) (v : value) : t  =
   (* Printf.printf "Setting %s to %s;\n" (field) (string_of_value v); *)

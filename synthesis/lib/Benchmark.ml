@@ -19,11 +19,13 @@ let parse_fvs fp =
          | None -> Printf.sprintf "Malformed FV line %s" line
                    |> failwith
          | Some (abs, phys_cont) ->
-            match String.lsplit2 line ~on:',' with
+            match String.lsplit2 phys_cont ~on:',' with
             | None -> Printf.sprintf "Malformed FV line %s" line
                       |> failwith
             | Some (phys, sz_str) ->
-               let sz = int_of_string sz_str in
+               let sz = try int_of_string sz_str
+                        with _ -> failwith @@ Printf.sprintf "Couldn't parse int from %s" sz_str
+               in
                ((abs, sz), (phys, sz))
        )
 

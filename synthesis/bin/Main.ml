@@ -655,10 +655,25 @@ module EqualityReal = struct
        Core.Printf.printf "--\n%!";
        printer "Log" inpkt log_out;
        Core.Printf.printf "--\n%!";
-       printer "Phys" inpkt phys_out
-
-
-
+       printer "Phys" inpkt phys_out;
+       Core.Printf.printf "\n\nDifferences\tin\tlog\tphys\n";
+       List.iter fvs
+         ~f:(fun (fv,_) ->
+           match Avenir.Util.StringMap.find log_out fv
+               , Avenir.Util.StringMap.find phys_out fv with
+           | None, None -> ()
+           | Some (Int(v,_)), None -> Core.Printf.printf "\t%s\t%s\tundefined\n"
+                                         fv (Bigint.Hex.to_string v)
+           | None, Some (Int(v,_)) -> Core.Printf.printf "\t%s\tundefined\t%s\n"
+                                         fv (Bigint.Hex.to_string v)
+           | Some (Int(vl,_)), Some(Int(vp,_)) ->	   
+             if Bigint.(vl <> vp)
+             then let inval = match Avenir.Util.StringMap.find inpkt fv with
+	               | None -> "??"
+                       | Some (Int(v,_)) -> Bigint.Hex.to_string v in
+                Core.Printf.printf "%s\t%s\t%s\t%s\n"
+                  fv inval (Bigint.Hex.to_string vl) (Bigint.Hex.to_string vp)
+         )     
 end
 
 
