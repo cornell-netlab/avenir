@@ -220,10 +220,14 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
 
 
 
-let eval_act (act : cmd) (pkt : Packet.t) : Packet.t =
-  (* Printf.printf "EVALUATING WITH PACKET:\n %s\n%!" (Packet.string__packet pkt); *)
+
+let eval_act_trace (act : cmd) (pkt : Packet.t) :  (Packet.t * cmd) =
   match trace_eval_inst act Instance.empty ~wide:StringMap.empty (pkt, None) with
-  | ((pkt, _), _ ,_ ,_) -> pkt
+  | ((pkt, _), _ ,trace ,_) -> (pkt,trace)
+
+let eval_act (act : cmd) (pkt : Packet.t) : Packet.t =
+  fst @@ eval_act_trace act pkt
+
 
 let eval_cmd (cmd : cmd) (inst : Instance.t) (pkt : Packet.t) : Packet.t =
   (* Printf.printf "EVALUATING WITH PACKET:\n %s\n%!" (Packet.string__packet pkt); *)

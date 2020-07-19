@@ -706,15 +706,17 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
 
 and zero_init fvs cmd =
   let vs = variables cmd |> List.dedup_and_sort ~compare:(fun (v1, _) (v2, _) -> String.compare v1 v2) in
-  let zi = List.filter vs ~f:(fun v -> List.mem fvs v (=) |> not) in
-  List.map zi ~f:(fun (v, w) ->  mkAssn v  (mkVInt(0, w)))
-  |> List.fold ~init:cmd ~f:(fun c1 c2 -> c2 %:% c1)
+  let zi = List.filter vs ~f:(fun (v,_) -> List.(mem (fvs >>| fst) v (=) |> not)) in
+  sequence @@
+    List.map zi ~f:(fun (v, w) ->  mkAssn v  (mkVInt(0, w)))
+    @ [cmd]
+
 
 and drop_handle fvs cmd =
   let c_end = List.map fvs ~f:(fun (v, w) -> mkAssn v (mkVInt(0, w)))
               |> List.fold ~init:Skip ~f:(fun c1 c2 -> c1 %:% c2)
   in
-  cmd %:% mkOrdered [ Var("standard_metadata.egress_spec", 9) %=% mkVInt(0, 9), c_end; True, Skip]
+  cmd %:% mkOrdered [ Var("standard_metadata.egress_port", 9) %=% mkVInt(0, 9), c_end; True, Skip]
 
 and variables cmd =
   match cmd with

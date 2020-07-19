@@ -610,14 +610,23 @@ module EqualityReal = struct
 
 
   let run log_p4 phys_p4  log_incs phys_incs log_edits phys_edits fvs_fp assume_fp debug () =
-    let fvs = Benchmark.parse_fvs fvs_fp |> List.map ~f:snd in
+    let mapping = Benchmark.parse_fvs fvs_fp in
+    let fvs = List.map mapping ~f:snd in
     let assume = Benchmark.parse_file assume_fp in
 
     let () = printf "fvs = %s" (Sexp.to_string ([%sexp_of: (string * int) list] fvs)) in
 
     let open Ast in
-    let log = (assume %:% Encode.encode_from_p4 log_incs log_p4 false) |> Benchmark.zero_init fvs |> Benchmark.drop_handle fvs in
-    let phys = (assume %:% Encode.encode_from_p4 phys_incs phys_p4 false) |> Benchmark.zero_init fvs |> Benchmark.drop_handle fvs in
+    let log = (assume %:% (Encode.encode_from_p4 log_incs log_p4 false
+                           |> Encode.unify_names mapping
+                           |> Benchmark.zero_init fvs))
+              |> Benchmark.drop_handle fvs
+    in
+    let phys = (assume %:% (Encode.encode_from_p4 phys_incs phys_p4 false
+                            |> Encode.unify_names mapping
+                            |> Benchmark.zero_init fvs))
+               |> Benchmark.drop_handle fvs
+    in
 
     Format.printf "Log Encoded Program: \n%!\n %s%! \n%!" (string_of_cmd log);
     Format.printf "Phys Encoded Program: \n%!\n %s%! \n%!" (string_of_cmd phys);
@@ -650,12 +659,14 @@ module EqualityReal = struct
            (Avenir.Packet.string__packet i)
            (Avenir.Packet.string__packet o)
        in
-       let log_out = Avenir.Semantics.eval_act (Problem.log_gcl_program params problem) inpkt in
-       let phys_out = Avenir.Semantics.eval_act (Problem.phys_gcl_program params problem) inpkt in
+       let log_out,ltrace = Avenir.Semantics.eval_act_trace (Problem.log_gcl_program params problem) inpkt in
+       let phys_out,ptrace = Avenir.Semantics.eval_act_trace (Problem.phys_gcl_program params problem) inpkt in
        Core.Printf.printf "--\n%!";
        printer "Log" inpkt log_out;
+       Core.Printf.printf "--logical trace--\n%s\n" (string_of_cmd ltrace);
        Core.Printf.printf "--\n%!";
        printer "Phys" inpkt phys_out;
+       Core.Printf.printf "--physical trace--\n%s\n" (string_of_cmd ptrace);
        Core.Printf.printf "\n\nDifferences\tin\tlog\tphys\n";
        List.iter fvs
          ~f:(fun (fv,_) ->

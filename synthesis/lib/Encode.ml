@@ -24,58 +24,68 @@ let rec lookup_type_width (type_ctx : Declaration.t list) (typ : Type.t) =
   let open Type in
   let open Declaration in
   match snd typ with
-    | Bool -> Some 1
-    | Error -> Some (-1)
-    | BitType e ->
-      begin match snd e with
-        | Int (_, i) -> Some (Bigint.to_int_exn i.value)
-        | _ -> failwith "lookup_type_width: Unimplemented expr"
-      end
+  | Bool -> Some 1
+  | Error -> Some (-1)
+  | BitType e ->
+     begin match snd e with
+     | Int (_, i) -> Some (Bigint.to_int_exn i.value)
+     | _ -> failwith "lookup_type_width: Unimplemented expr"
+     end
 
-    | TypeName n ->
-      let t = List.find type_ctx
-                        ~f:(fun td -> match td with
-                                        | (_, TypeDef d) -> snd d.name = snd n
-                                        | (_, Header h) -> snd h.name = snd n
-                                        | (_, SerializableEnum e) -> snd e.name = snd n
-                                        (* | (_, Struct s) -> snd s.name = snd n *)
-                                        | _ -> false ) in
-      begin match t with
-        | Some (_, TypeDef{typ_or_decl;_}) ->
-          begin match typ_or_decl with
-            | Util.Left t2 -> lookup_type_width type_ctx t2
-            | Util.Right _ -> failwith "lookup_type_width: Unimplemented decl"
-           end
-        | Some (_, Header{fields;_}) ->
-           Some (List.fold fields ~init:0
-                   ~f:(fun acc (_, fl) -> acc + lookup_type_width_exn type_ctx fl.typ))
-        | Some (_, Struct{fields;_}) ->
-           Some (List.fold (List.map fields ~f:(fun (_, fl) -> lookup_field_width_exn type_ctx (snd fl.name))) ~f:(+) ~init:0)
-        | Some (_, SerializableEnum e) ->
-           begin match e.typ with
-           | (_, BitType (_,Int(_,i))) ->
-              Some (Bigint.to_int_exn i.value)
-           | (_, _ ) -> failwith "malformed enum"
-           end
-        | _ -> failwith ("lookup_type_width: 1 type not handled "
-                              ^ Sexp.to_string ([%sexp_of: Type.t] typ) ^ " "
-                              ^ Sexp.to_string ([%sexp_of: Declaration.t option] t))
-      end
-    | HeaderStack { header; size} -> Option.map (lookup_type_width type_ctx header) ~f:(fun w -> w * encode_expr_to_int size)
-    | _ -> failwith ("lookup_type_width: 2 type not handled " ^ Sexp.to_string ([%sexp_of: Type.t] typ))
+  | TypeName n ->
+     let t = List.find type_ctx
+               ~f:(fun td -> match td with
+                             | (_, TypeDef d) -> snd d.name = snd n
+                             | (_, Header h) -> snd h.name = snd n
+                             | (_, SerializableEnum e) -> snd e.name = snd n
+                             (* | (_, Struct s) -> snd s.name = snd n *)
+                             | _ -> false ) in
+     begin match t with
+     | Some (_, TypeDef{typ_or_decl;_}) ->
+        begin match typ_or_decl with
+        | Util.Left t2 -> lookup_type_width type_ctx t2
+        | Util.Right _ -> failwith "lookup_type_width: Unimplemented decl"
+        end
+     | Some (_, Header{fields;_}) ->
+        Some (List.fold fields ~init:0
+                ~f:(fun acc (_, fl) -> acc + lookup_type_width_exn type_ctx fl.typ))
+     | Some (_, Struct{fields;_}) ->
+        Some (List.fold (List.map fields ~f:(fun (_, fl) -> lookup_field_width_exn type_ctx (snd fl.name))) ~f:(+) ~init:0)
+     | Some (_, SerializableEnum e) ->
+        begin match e.typ with
+        | (_, BitType (_,Int(_,i))) ->
+           Some (Bigint.to_int_exn i.value)
+        | (_, _ ) -> failwith "malformed enum"
+        end
+     | _ -> failwith ("lookup_type_width: 1 type not handled "
+                      ^ Sexp.to_string ([%sexp_of: Type.t] typ) ^ " "
+                      ^ Sexp.to_string ([%sexp_of: Declaration.t option] t))
+     end
+  | HeaderStack { header; size} -> Option.map (lookup_type_width type_ctx header) ~f:(fun w -> w * encode_expr_to_int size)
+  | _ -> failwith ("lookup_type_width: 2 type not handled " ^ Sexp.to_string ([%sexp_of: Type.t] typ))
 
 and lookup_type_width_exn (type_ctx : Declaration.t list) typ : size =
   match lookup_type_width type_ctx typ with
-    | Some w -> w
-    | None -> failwith ("lookup_type_width_exn: lookup failed")
+  | Some w -> w
+  | None -> failwith ("lookup_type_width_exn: lookup failed")
 
 and gather_fields type_ctx =
   let open Declaration in
   List.filter_map type_ctx ~f:(fun d -> match d with
-                                     | (_, Header {fields;_}) -> Some fields
-                                     | (_, Struct {fields;_}) -> Some fields
-                                     | _ -> None)
+                                        | (_, Header {fields;_}) -> Some fields
+                                        | (_, Struct {fields;_}) -> Some fields
+                                        | _ -> None)
   |> List.concat
+
+and get_members (type_ctx : Declaration.t list) ((info, h) : Expression.t) : P4String.t list option  =
+  match h with
+  | ExpressionMember {expr=_;name} -> begin
+      match List.find type_ctx ~f:(fun d -> safe_name d = Some (snd name)) with
+      | Some (_, Header {fields;_}) ->
+         Some(List.map fields ~f:(fun (_,f) -> f.name))
+      | _ -> None
+    end
+  | _ -> None
 
 and check_typedef_widths type_ctx n =
   let open Declaration in
@@ -97,7 +107,7 @@ and check_typedef_widths type_ctx n =
     match List.find flds ~f:(fun (_, f) -> snd f.name = fn) with
       | Some (_, f) -> lookup_type_width type_ctx f.typ
       | None -> Option.bind (check_typedef_widths type_ctx fn) ~f:(lookup_type_width type_ctx)
-*)
+ *)
 
 and lookup_field_width (type_ctx : Declaration.t list) fn : size option =
   let open Declaration in
@@ -114,64 +124,64 @@ and lookup_field_width (type_ctx : Declaration.t list) fn : size option =
   | "parser_error" -> Some 1
   | "isValid" -> Some 1
   | _ -> begin
-   (* Checking for "M v" here is a hack, to get around that update_typ_ctx_from_param doesn't update
-    * the name field in the declaration.  It would be preferable to do this, but type inference seems to
-    * fail for the record update (and I was unable to figure out how to explicitly write the type.) *)
+      (* Checking for "M v" here is a hack, to get around that update_typ_ctx_from_param doesn't update
+       * the name field in the declaration.  It would be preferable to do this, but type inference seems to
+       * fail for the record update (and I was unable to figure out how to explicitly write the type.) *)
       match List.find type_ctx ~f:(fun d -> Some split_hd = safe_name d || M split_hd = fst d) with
-    | Some (_, TypeDef { typ_or_decl = Left t}) -> lookup_type_width type_ctx t
-    | Some d ->
-       (* Printf.printf "found context for %s\n %s \n%!" fn
-        *   (Sexp.to_string @@ Declaration.sexp_of_pre_t (snd d)); *)
-        if split_tl = []
-        then match check_typedef_widths type_ctx fn with
-             | Some t -> lookup_type_width type_ctx t
-             | None -> match check_typedef_widths type_ctx (snd @@ Declaration.name d) with
-                       | Some t ->
-                          begin match lookup_type_width type_ctx t with
-                          | Some i -> Some i
-                          | None ->
-                             Type.sexp_of_t t
-                             |> Sexp.to_string
-                             |> Printf.sprintf "!!Couldn't find type width for %s"
-                             |> failwith
-                          end
-                       | None ->
-                          Declaration.name d
-                          |> snd
-                          |> Printf.sprintf "??Couldn't find width for %s"
-                          |> failwith
+      | Some (_, TypeDef { typ_or_decl = Left t}) -> lookup_type_width type_ctx t
+      | Some d ->
+         (* Printf.printf "found context for %s\n %s \n%!" fn
+          *   (Sexp.to_string @@ Declaration.sexp_of_pre_t (snd d)); *)
+         if split_tl = []
+         then match check_typedef_widths type_ctx fn with
+              | Some t -> lookup_type_width type_ctx t
+              | None -> match check_typedef_widths type_ctx (snd @@ Declaration.name d) with
+                        | Some t ->
+                           begin match lookup_type_width type_ctx t with
+                           | Some i -> Some i
+                           | None ->
+                              Type.sexp_of_t t
+                              |> Sexp.to_string
+                              |> Printf.sprintf "!!Couldn't find type width for %s"
+                              |> failwith
+                           end
+                        | None ->
+                           Declaration.name d
+                           |> snd
+                           |> Printf.sprintf "??Couldn't find width for %s"
+                           |> failwith
 
-        else lookup_field_width' type_ctx d split_tl
-    | None ->
-       (* failwith "couldn't find type in type context" *)
-       None
+         else lookup_field_width' type_ctx d split_tl
+      | None ->
+         (* failwith "couldn't find type in type context" *)
+         None
     end
 
 and lookup_field_width' (type_ctx : Declaration.t list) (decl : Declaration.t) fn : size option =
   let open Declaration in
   match fn with
   | f :: fs ->
-    begin match snd decl with
-    | Struct {fields} ->
-      let fld = match List.find fields ~f:(fun fl -> snd (snd fl).name = f) with
-                | Some fl -> fl
-                | None -> failwith "lookup_field_width': field not found" in
-      begin match List.find type_ctx ~f:(fun d -> safe_name d = typ_safe_name (snd fld).typ) with
-       | Some d -> if fs = []
-                        then lookup_type_width type_ctx (snd fld).typ
-                        else lookup_field_width' type_ctx d fs
-       | None -> failwith "lookup_field_width': decl not found"
-      end
-    | Header {fields} ->
-       begin match List.find fields ~f:(fun fl -> snd (snd fl).name = f) with
-                | Some fl -> lookup_type_width type_ctx (snd fl).typ
-                (* Account for header stacks*)
-                | None -> if is_int f
-                            then lookup_field_width' type_ctx decl fs
-                            else failwith "lookup_field_width': field not found"
-       end
-    | _ -> failwith ("f = " ^ f ^ "\ndecl = " ^ Sexp.to_string ([%sexp_of: Declaration.pre_t] (snd decl)))
-    end
+     begin match snd decl with
+     | Struct {fields} ->
+        let fld = match List.find fields ~f:(fun fl -> snd (snd fl).name = f) with
+          | Some fl -> fl
+          | None -> failwith @@ Printf.sprintf "lookup_field_width': field %s not found" f in
+        begin match List.find type_ctx ~f:(fun d -> safe_name d = typ_safe_name (snd fld).typ) with
+        | Some d -> if fs = []
+                    then lookup_type_width type_ctx (snd fld).typ
+                    else lookup_field_width' type_ctx d fs
+        | None -> failwith "lookup_field_width': decl not found"
+        end
+     | Header {fields} ->
+        begin match List.find fields ~f:(fun fl -> snd (snd fl).name = f) with
+        | Some fl -> lookup_type_width type_ctx (snd fl).typ
+        (* Account for header stacks*)
+        | None -> if is_int f
+                  then lookup_field_width' type_ctx decl fs
+                  else failwith @@ Printf.sprintf "lookup_field_width': field %s not found" f
+        end
+     | _ -> failwith ("f = " ^ f ^ "\ndecl = " ^ Sexp.to_string ([%sexp_of: Declaration.pre_t] (snd decl)))
+     end
   | [] -> failwith "lookup_field_width': empty list"
 
 and is_int n =
@@ -194,19 +204,19 @@ and lookup_field_width' (type_ctx : Declaration.t list) (red_type_ctx : Declarat
   | f :: fs ->
     let red_type_ctx' = red_type_ctx in
     lookup_field_width' type_ctx red_type_ctx'  fs
-*)
+ *)
 
 and lookup_field_width_exn (type_ctx : Declaration.t list) field : size =
-(* let last_field = List.last_exn (String.split field ~on:'.') in *)
+  (* let last_field = List.last_exn (String.split field ~on:'.') in *)
   match lookup_field_width type_ctx field with
-    | Some i -> i
-    | None -> failwith ("lookup_field_width_exn: field " ^ field)
+  | Some i -> i
+  | None -> failwith ("lookup_field_width_exn: field " ^ field)
 
 and encode_expr_to_int (e : Expression.t) : int =
   let open Expression in
   match snd e with
-    | Int (_, i) -> Bigint.to_int_exn i.value
-    | _ -> failwith ("encode_express_to_int")
+  | Int (_, i) -> Bigint.to_int_exn i.value
+  | _ -> failwith ("encode_express_to_int")
 
 (* Expressions *)
 let ctor_name_expression (e : Expression.t) : string =
@@ -612,12 +622,33 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t l
     | _ -> failwith "unimplemented, only know how to resolve table dispatches"
     end
   | Assignment {lhs=lhs; rhs=rhs} ->
-    begin match encode_expression_to_value type_ctx lhs with
-      | Var (f,s) -> f %<-% encode_expression_to_value_with_width s type_ctx rhs, false, false
-      | _ -> failwith ("[TypeError] lhs of assignment must be a field, at " ^ Petr4.Info.to_string info)
-    end
+     begin match get_members type_ctx lhs, get_members type_ctx rhs with
+     | Some lmems, Some rmems ->
+        let mems = List.fold2 lmems rmems ~init:(Skip,false,false)
+                     ~f:(fun (acc, b1,b2) lmem rmem ->
+                       let open Expression in
+                       let s =
+                         Assignment {lhs = (info, ExpressionMember {expr=lhs;name=lmem});
+                                     rhs = (info, ExpressionMember {expr=rhs;name=rmem})}
+                       in
+                       let c, cb1, cb2 = encode_statement prog ctx type_ctx rv (info, s) in
+                       (acc %:% c, b1 || cb1, b2 || cb2)
+                     )
+        in
+        begin match mems with
+        | Ok cmd3 -> cmd3
+        | Unequal_lengths -> failwith "Couldn't copy header.. different number of fields!"
+        end
+     | Some _, None | None, Some _ ->
+        failwith "[encode_statement] trying to assign a non-header to a header"
+     | None,None ->
+        begin match encode_expression_to_value type_ctx lhs with
+        | Var (f,s) -> f %<-% encode_expression_to_value_with_width s type_ctx rhs, false, false
+        | _ -> failwith ("[TypeError] lhs of assignment must be a field, at " ^ Petr4.Info.to_string info)
+        end
+     end
   | DirectApplication {typ; args} ->
-    dispatch_direct_app type_ctx prog typ args
+        dispatch_direct_app type_ctx prog typ args
     (* unimplemented ("DirectApplication" ^ Sexp.to_string ([%sexp_of: Statement.pre_t] stmt)) *)
   | Conditional {cond; tru; fls} ->
     let fls_case, fls_rb, fls_eb =
@@ -922,10 +953,16 @@ and encode_program (Program(top_decls) as prog : program ) =
   let type_cxt = get_type_decls top_decls in
   match get_ingress_egress_names top_decls with
   | Some (ingress_name, egress_name) ->
-     encode_pipeline type_cxt prog ingress_name
-     %:% mkOrdered [
-             Var("standard_metadata.egress_spec", 9) %<>% mkVInt(0, 9), encode_pipeline type_cxt prog egress_name;
+     sequence [
+         encode_pipeline type_cxt prog ingress_name;
+         mkOrdered [
+             Var("standard_metadata.egress_port", 9) %<>% mkVInt(0, 9),
+             sequence [
+                 "standard_metadata.egress_port" %<-% Var("standard_metadata.egress_spec",9);
+                 encode_pipeline type_cxt prog egress_name
+               ];
              True, Skip ]
+       ]
   | None ->
      failwith "Could not extract ingress and egress from package \"main\""
 
