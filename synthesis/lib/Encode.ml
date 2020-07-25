@@ -939,7 +939,8 @@ and get_ingress_egress_names (decls : Declaration.t list) : (string * string) op
              begin match ingress_arg, egress_arg with
              | Argument.Expression i, Argument.Expression e ->
                 begin match snd i.value, snd e.value with
-                | Expression.NamelessInstantiation iinst, Expression.NamelessInstantiation einst ->
+                | Expression.NamelessInstantiation iinst,
+                  Expression.NamelessInstantiation einst ->
                    let ityp = snd iinst.typ in
                    let etyp = snd einst.typ in
                    begin match ityp, etyp with
@@ -949,7 +950,11 @@ and get_ingress_egress_names (decls : Declaration.t list) : (string * string) op
                                         (ityp |> Type.sexp_of_pre_t |> Sexp.to_string)
                                         (etyp |> Type.sexp_of_pre_t |> Sexp.to_string)
                    end
-                | _ -> failwith @@ Printf.sprintf "main had ill-typed argument. Expecting a Nameless Instantiation: Error was in  %s or %s\n"
+                | Expression.FunctionCall {func=(_,Expression.Name (BareName inm))},
+                  Expression.FunctionCall {func=(_,Expression.Name (BareName enm))} ->
+                   Some (snd inm, snd enm)
+                | _ ->
+                   failwith @@ Printf.sprintf "main had ill-typed argument. Expecting a Nameless Instantiation or FunctionCall(Name(BareName)): Error was in  %s or %s\n"
                                      (i.value |> snd |> Expression.sexp_of_pre_t |> Sexp.to_string)
                                      (e.value |> snd |> Expression.sexp_of_pre_t |> Sexp.to_string)
 
@@ -987,8 +992,11 @@ and encode_program (Program(top_decls) as prog : program ) =
 and encode_pipeline (type_cxt : Declaration.t list) (Program(top_decls) as prog:program ) (pn : string) =
   let open Declaration in
   match List.find top_decls ~f:(fun d -> match snd d with
-                                            | Control{name;_} -> snd name = pn
-                                            | _ -> false) with
+                                         | Control{name;_} ->
+                                            Printf.printf "%s =?= %s\n%!" (snd name) pn;
+                                            snd name = pn
+                                         | _ -> false)
+  with
   | None -> failwith ("Could not find control module " ^ pn)
   | Some (_, Control c) ->
     let rv = get_return_value () in
