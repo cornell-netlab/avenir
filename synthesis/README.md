@@ -34,18 +34,20 @@ opam install menhir
 opam pin add z3 https://github.com/priyasrikumar/ocaml-z3.git#no-successes
 ```
 
-+ Install [petr4](https://github.com/cornell-netlab/petr4). First
++ Install [petr4](https://github.com/cornell-netlab/petr4) using the following instructions. First
   clone the repository a directory of your choosing `<petr4 fp>`. Run the following commands
 ```
 cd <petr4 fp>
-git checkout 74e136af13002bb6ebc3628ef880a17b254d159d
+git checkout cd556c1e2c20ccbd5b959f385cecebc43f5cfd72
 ```
 Then change back to the `hybrid/synthesis` directory, and run
 ```
 opam pin add petr4 <petr4 fp>
 ```
 
-+ Install any remaining dependencies (e.g. `async`) using `opam install` (e.g. `opam install async`) that show up when you run the following command:
++ Install any remaining dependencies (e.g. `async`) using `opam
+  install` (e.g. `opam install async`) that show up when you run the
+  following command:
 
 ```
 dune external-lib-deps --missing @all
