@@ -474,7 +474,7 @@ control l2_fwd(inout parsed_packet_t hdr,
     }
 }
 
-control MyIngress(inout parsed_packet_t hdr,
+control ingress(inout parsed_packet_t hdr,
                 inout local_metadata_t local_metadata,
                 inout standard_metadata_t standard_metadata) {
 
@@ -519,7 +519,7 @@ control MyIngress(inout parsed_packet_t hdr,
     }
 }
 
-control MyEgress(inout parsed_packet_t hdr,
+control egress(inout parsed_packet_t hdr,
                inout local_metadata_t local_metadata,
                inout standard_metadata_t standard_metadata) {
     apply {

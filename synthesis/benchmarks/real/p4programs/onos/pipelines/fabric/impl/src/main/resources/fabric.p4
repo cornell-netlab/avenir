@@ -65,7 +65,7 @@ const bit<9> CPU_PORT = 64;
 
 // END ADDED
 
-control MyIngress (inout parsed_headers_t hdr,
+control FabricIngress (inout parsed_headers_t hdr,
                        inout fabric_metadata_t fabric_metadata,
                        inout standard_metadata_t standard_metadata) {
 
@@ -112,7 +112,7 @@ control MyIngress (inout parsed_headers_t hdr,
     }
 }
 
-control MyEgress (inout parsed_headers_t hdr,
+control FabricEgress (inout parsed_headers_t hdr,
                       inout fabric_metadata_t fabric_metadata,
                       inout standard_metadata_t standard_metadata) {
 
