@@ -391,13 +391,17 @@ and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) 
      | Plus -> binop mkPlus e e'
      | Minus -> binop mkMinus e e'
      | Mul -> binop mkTimes e e'
+     | BitAnd -> binop mkMask e e'
+     | BitXor -> binop mkXor e e'
+     | BitOr -> binop mkBOr e e'
+     | Shl -> binop mkShl e e'
+
      | Div | Mod
        -> unimplemented (string_of_binop op)
      | Le | Ge | Lt | Gt | Eq | NotEq | And | Or
        -> type_error (string_of_binop op)
-     | BitXor -> binop mkXor e e'
 
-     | Shl | Shr | PlusSat | MinusSat | BitAnd | BitOr | PlusPlus
+     | Shr | PlusSat | MinusSat | PlusPlus
        -> unimplemented (string_of_binop op)
      end
   | E.FunctionCall {func; type_args=[]; args=[]} ->
@@ -680,9 +684,10 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t l
         mkAssn (return_bit rv) (mkVInt(1, 1)), true, false
       | _ -> unimplemented "Return")
   | Switch {expr; cases} ->
-    mkOrdered (encode_switch prog ctx type_ctx expr rv cases), true, true
+     let tbl_apply, cases = encode_switch prog ctx type_ctx expr rv cases in
+     tbl_apply %:% mkOrdered cases, true, true
   | DeclarationStatement _ ->
-    unimplemented "DeclarationStatement"
+     unimplemented "DeclarationStatement"
 
 and dispatch_direct_app type_ctx prog ((_, ident) : Type.t) (args : Argument.t list) =
   let open Type in
@@ -862,26 +867,41 @@ and encode_action3 prog (ctx : Declaration.t list) (type_ctx : Declaration.t lis
   in
   c, rb, eb
 
-and encode_switch prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : Expression.t) (rv : int) ( cases : Statement.switch_case list) : (test * cmd) list =
-  let e, acs = encode_switch_expr prog ctx type_ctx expr in
+and encode_switch prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : Expression.t) (rv : int) ( cases : Statement.switch_case list) : cmd * ((test * cmd) list) =
+  let tbl, e, acs = encode_switch_expr prog ctx type_ctx rv expr in
+  tbl,
   (List.fold_map cases ~f:(encode_switch_case prog ctx type_ctx e acs rv) ~init:True)
   |> snd |> List.filter_map ~f:(fun x -> x)
 
 
-and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (e : Expression.t) : expr * Table.action_ref list =
+and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) (e : Expression.t) : cmd * expr * Table.action_ref list =
   let dispList = dispatch_list e in
   match dispList with
   | [] -> failwith "[RuntimeException] Tried to encode an empty list of names"
-  | member :: _ ->
-    let open Declaration in
-    match lookup_exn prog ctx member with
-    | (_, Table t ) -> let p4actions = List.fold_left t.properties ~init:[]
-      ~f:(fun acc_actions prop ->
-          match snd prop with
-          | Actions {actions} -> acc_actions @ actions
-          | _ -> acc_actions) in
-      encode_expression_to_value type_ctx e, p4actions
-    | _ -> failwith "Table not found"
+  | table :: _->
+     let num_disp = List.length dispList in
+     let action = List.nth_exn dispList (num_disp - 1) in
+     if snd action = "action_run" then
+       begin
+         Printf.printf "Looking for table %s in switch\n" (snd table);
+         let open Declaration in
+         match lookup_exn prog ctx table with
+         | (_, Table t ) ->
+            let p4actions = List.fold_left t.properties ~init:[]
+                              ~f:(fun acc_actions prop ->
+                                match snd prop with
+                                | Actions {actions} -> acc_actions @ actions
+                                | _ -> acc_actions)
+            in
+            let actionSize = List.length p4actions |> (+) 1 |> log2 in
+            encode_table prog ctx type_ctx rv t.name t.properties,
+            Var(list_prefix dispList (num_disp - 2) |> action_run_field, actionSize),
+            p4actions
+         | _ -> failwith "Table not found"
+       end
+     else failwith @@ "couldn't process action " ^ snd action
+
+
 
 
  and encode_switch_case prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : expr)
@@ -1061,7 +1081,6 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
 
   let init_action_run = mkAssn (snd name ^ action_run_suffix) (mkVInt(0, 1)) in
 
-  (* let xxx_keys = printf "keys = %s\n" (Sexp.to_string ([%sexp_of: (string * int) list] str_keys)) in *)
   init_action_run %:% Apply { name = snd name; keys = str_keys; actions =  action_cmds; default =  enc_def_act }
 
 and functioncall_args type_ctx (fc : Expression.t) =
@@ -1097,7 +1116,7 @@ and replace_consts_expr (consts : (string * expr)  list) (e : expr) =
     | None -> Var(v, w)
     end
   | Hole h -> Hole h
-  | Plus es | Times es | Minus es | Mask es | Xor es
+  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
     -> binop (ctor_for_binexpr e) es
 
 and replace_consts_test (consts : (string * expr) list) (t : test) =
@@ -1156,7 +1175,7 @@ let rec rewrite_expr (m : (string * int) StringMap.t) (e : expr) : expr =
   match e with
   | Value _ | Hole _ -> e
   | Var (v,sz) -> Var (StringMap.find m v |> Option.value ~default:(v,sz))
-  | Plus es | Times es | Minus es | Mask es | Xor es
+  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
     -> binop (ctor_for_binexpr e) es
 
 let rec rewrite_test (m : (string * int) StringMap.t) (t : test) : test =

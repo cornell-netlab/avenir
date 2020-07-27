@@ -231,3 +231,10 @@ let oLift2 f a b =
   | _,_ -> None
 
 
+
+let rec list_prefix xs i =
+  if i <= 0
+  then []
+  else match xs with
+       | [] -> []
+       | x::xs -> x :: list_prefix xs (i-1)

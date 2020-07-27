@@ -93,8 +93,8 @@ let rec substitute ?holes:(holes = false) ex subsMap =
           e')
        else ((*Printf.printf "NO SUBST\n%!";*)  e)
     | Value _ -> e
-    | Plus es | Times es | Minus es | Mask es | Xor es ->
-       binop (ctor_for_binexpr e) es
+    | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
+      -> binop (ctor_for_binexpr e) es
   in
   match ex with
   | True | False -> ex
@@ -210,7 +210,7 @@ let good_execs fvs c =
        | Some (i,_) ->  Hole (freshen x sz i)
        end
     | Value _ -> e
-    | Plus es | Minus es | Times es | Mask es | Xor es
+    | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es
       -> binop (ctor_for_binexpr e) es
   in
   let rec indexVars b sub =
@@ -366,7 +366,8 @@ let rec prepend_expr pfx e =
   | Value _ -> e
   | Var (v,sz) -> Var(pfx^v, sz)
   | Hole(v, sz) -> Var(pfx^v, sz)
-  | Plus es | Minus es | Times es | Mask es | Xor es -> binop (ctor_for_binexpr e) es
+  | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es
+    -> binop (ctor_for_binexpr e) es
 
 let rec prepend_test pfx b =
   match b with
@@ -465,7 +466,7 @@ let rec fill_holes_expr e (subst : value StringMap.t) =
                  (if sz <> sz' then (Printf.printf "[Warning] replacing %s#%d with %s#%d, but the sizes may be different, taking the size of %s to be ground truth" h sz strv (size_of_value v) strv));
                  Value v
      end
-  | Plus es | Minus es | Times es | Mask es | Xor es
+  | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es
     -> binop (ctor_for_binexpr e) es
 
 
@@ -600,7 +601,7 @@ let rec fixup_val (model : value StringMap.t) (e : expr)  : expr =
                                     truth\n%!" h sz strv strv));
                  Value v
      end
-  | Plus es | Times es | Minus es | Mask es | Xor es
+  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
     -> binop (ctor_for_binexpr e) es
 
 let rec fixup_test (model : value StringMap.t) (t : test) : test =

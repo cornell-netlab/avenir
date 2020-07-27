@@ -43,8 +43,8 @@ let rec set_field_of_expr (pkt : t) (field : string) (e : expr) : t =
   | Minus (e, e') -> binop subtract_values e e'
   | Mask (e,e') -> binop mask_values e e'
   | Xor (e,e') -> binop xor_values e e'
-
-
+  | BOr (e,e') -> binop or_values e e'
+  | Shl (e,e') -> binop shl_values e e'
 
 let init_field_to_random bound pkt (f,sz) =
   set_field pkt f (Int (Random.int (max bound 1) |> Bigint.of_int_exn, sz))

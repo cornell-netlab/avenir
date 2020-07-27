@@ -9,7 +9,7 @@ let rec relabel (e : expr) (sz : size) : expr =
   | Value (Int(v, _)) -> Value(Int(v, sz))
   | Var (x, _) -> Var(x, sz)
   | Hole(h,_) -> Hole(h, sz)
-  | Plus es | Times es | Minus es | Mask es | Xor es
+  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es
     -> binop (ctor_for_binexpr e) es
 
 let rec infer_expr (e : expr) : expr =
@@ -35,7 +35,7 @@ let rec infer_expr (e : expr) : expr =
   | Value _
     | Var _
     | Hole _ -> e
-  | Plus es | Times es | Minus es | Mask es | Xor es
+  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es
     -> binop (ctor_for_binexpr e) es
 
 let rec infer_test (t : test) : test =

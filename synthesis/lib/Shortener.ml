@@ -14,7 +14,7 @@ let rec shorten_expr (bht : Bishtbl.t) (e : expr) : expr =
     | Value _ -> e
     | Var (x, sz) -> Var(get x, sz)
     | Hole (h, sz) -> Hole(get h, sz)
-    | Plus es | Times es | Minus es | Mask es | Xor es
+    | Plus es | Times es | Minus es | Mask es | Xor es | BOr es
       -> binop (ctor_for_binexpr e) es
 
 let rec shorten (bht : Bishtbl.t) (t : test) : test =
@@ -38,7 +38,7 @@ let rec unshorten_expr (bht : Bishtbl.t) (e : expr) : expr =
     | Value _ -> e
     | Var (x, sz) -> Var(unget x, sz)
     | Hole (h, sz) -> Hole(unget h, sz)
-    | Plus es | Times es | Minus es | Mask es | Xor es
+    | Plus es | Times es | Minus es | Mask es | Xor es | BOr es
       -> binop (ctor_for_binexpr e) es
 
 let rec unshorten (bht : Bishtbl.t) (t : test) : test =
