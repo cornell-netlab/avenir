@@ -911,8 +911,9 @@ and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t
     match snd case with
       | Action {label;code} ->
         begin match snd label with
-          | Default -> failwith "Default in switch"
-          | Name lbl_name ->
+        | Default ->
+           True, Some (fall_test, encode_block prog ctx type_ctx rv code)
+        | Name lbl_name ->
             let act_i = List.findi ts ~f:(fun _ a -> name_string (snd a).name = snd lbl_name) in
             let block = encode_block prog ctx type_ctx rv code in
             begin match act_i with
