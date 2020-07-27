@@ -4,17 +4,16 @@ open Ast
 
 
 let rec relabel (e : expr) (sz : size) : expr =
+  let binop mk (e,e') = mk (relabel e sz) (relabel e' sz) in
   match e with
   | Value (Int(v, _)) -> Value(Int(v, sz))
   | Var (x, _) -> Var(x, sz)
   | Hole(h,_) -> Hole(h, sz)
-  | Plus(e1,e2) -> Plus (relabel e1 sz, relabel e2 sz)
-  | Times(e1,e2) -> Times(relabel e1 sz, relabel e2 sz)
-  | Minus(e1,e2) -> Minus(relabel e1 sz, relabel e2 sz)
-  | Mask (e1,e2) -> Mask(relabel e1 sz, relabel e2 sz)
+  | Plus es | Times es | Minus es | Mask es | Xor es
+    -> binop (ctor_for_binexpr e) es
 
 let rec infer_expr (e : expr) : expr =
-  let binop f e1 e2 =
+  let binop f (e1,e2) =
     let s1 = size_of_expr e1 in
     let s2 = size_of_expr e2 in
     assert (s1 >= -1);
@@ -36,12 +35,8 @@ let rec infer_expr (e : expr) : expr =
   | Value _
     | Var _
     | Hole _ -> e
-  | Plus (e1,e2) -> binop mkPlus e1 e2
-  | Times(e1,e2) -> binop mkTimes e1 e2
-  | Minus(e1,e2) -> binop mkMinus e1 e2
-  | Mask(e1,e2) -> binop mkMask e1 e2
-
-
+  | Plus es | Times es | Minus es | Mask es | Xor es
+    -> binop (ctor_for_binexpr e) es
 
 let rec infer_test (t : test) : test =
   match t with

@@ -61,6 +61,17 @@ let rec expr_to_term_help expr styp : Smtlib.term =
      (* expr_str expr;
       * debug sexp; *)
      sexp
+  | Xor (e1,e2) ->
+     if size_of_expr e1 <> size_of_expr e2
+     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     let sexp = Smtlib.bvneg @@
+                  Smtlib.bvxnor
+                    (expr_to_term_help e1 styp)
+                    (expr_to_term_help e2 styp) in
+     (* expr_str expr;
+      * debug sexp; *)
+     sexp
+
 
 let rec test_to_term_help test styp : Smtlib.term =
   match test with

@@ -13,17 +13,6 @@ type size = int
 
 type value =
   | Int of (Bigint.t * size)
-            
-
-type expr =
-  | Value of value
-  | Var of (string * size)
-  | Hole of (string * size)
-  | Plus of (expr * expr)
-  | Times of (expr * expr)
-  | Minus of (expr * expr)
-  | Mask of (expr * expr)
-
 
 let rec string_of_value (v : value) : string =
   match v with
@@ -38,36 +27,63 @@ let vleq v v' =
   match v, v' with
   | Int(i,sz), Int(i',sz') when sz = sz' -> Bigint.(<=) i i'
   | Int(i,sz), Int(i',sz') -> failwith @@ Printf.sprintf "Ints are different sizes: %s#%d <= %s#%d " (Bigint.Hex.to_string i) sz (Bigint.Hex.to_string i') sz'
-                                  
+
+type expr =
+  | Value of value
+  | Var of (string * size)
+  | Hole of (string * size)
+  | Plus of (expr * expr)
+  | Times of (expr * expr)
+  | Minus of (expr * expr)
+  | Mask of (expr * expr)
+  | Xor of (expr * expr)
+
+let mkInt (i,sz) =
+  if i < 0 then failwith "Negative integers not representable" else
+  Int (Bigint.of_int_exn i, sz)
+let mkVInt i = Value (mkInt i)
+let mkPlus e e' = Plus(e,e')
+let mkMinus e e' = Minus (e, e')
+let mkTimes e e' = Times (e, e')
+let mkMask e e' = Mask(e,e')
+let mkXor e e' = Xor(e,e')
+
+let ctor_for_binexpr =
+  function
+  | Hole _ | Value _ | Var _ -> failwith "[bin_ctor_for_expr] received hole, value, or var"
+  | Plus _ -> mkPlus
+  | Times _ -> mkTimes
+  | Minus _ -> mkMinus
+  | Mask _ -> mkMinus
+  | Xor _ -> mkXor
 
 let rec string_of_expr (e : expr) : string =
+  let string_binop e1 op e2 = Printf.sprintf "(%s %s %s)" (string_of_expr e1) op (string_of_expr e2) in
   match e with
   | Value v -> string_of_value v
   | Var (x,s) -> x ^ "#" ^ string_of_int s
   | Hole (x,s) -> "?" ^ x ^ "#" ^ string_of_int s
-  | Plus (e, e') -> "(" ^ string_of_expr e ^ " + " ^ string_of_expr e' ^ ")"
-  | Times (e, e') -> string_of_expr e ^ " * " ^ string_of_expr e'
-  | Minus (e, e') -> "(" ^ string_of_expr e ^ " - " ^ string_of_expr e' ^ ")"
-  | Mask (e,e') -> "(" ^ string_of_expr e ^ " & " ^ string_of_expr e' ^ ")"
+  | Plus (e, e')  -> string_binop e "+" e'
+  | Times (e, e') -> string_binop e "*" e'
+  | Minus (e, e') -> string_binop e "-" e'
+  | Mask (e,e')   -> string_binop e "&" e'
+  | Xor (e,e')    -> string_binop e "^" e'
 
 let rec sexp_string_of_value (v : value) =
   match v with
   | Int (i,sz) -> Printf.sprintf "Int(%s,%d)" (Bigint.to_string i) sz
                    
 let rec sexp_string_of_expr (e : expr) =
+  let string_binop ctor (e1, e2) = Printf.sprintf "%s(%s, %s)" ctor (sexp_string_of_expr e1) (sexp_string_of_expr e2) in
   match e with
   | Value v -> "Value(" ^ sexp_string_of_value v ^ ")"
   | Var (x, s) -> "Var(\"" ^ x ^ "\"," ^ string_of_int s ^ ")"
   | Hole (x, s) -> "Hole(\"" ^ x ^ "\"," ^ string_of_int s ^ ")"  
-  | Plus (e,e') ->
-     "Plus(" ^ sexp_string_of_expr e ^ ", " ^ sexp_string_of_expr e' ^ ")"
-  | Times (e,e') ->
-     "Times(" ^ sexp_string_of_expr e ^ ", " ^ sexp_string_of_expr e' ^ ")"
-  | Minus (e, e') ->
-     "Minus(" ^ sexp_string_of_expr e ^ ", " ^ sexp_string_of_expr e' ^ ")"
-  | Mask (e,e') ->
-     "Mask(" ^ sexp_string_of_expr e ^ ", " ^ sexp_string_of_expr e' ^ ")"
-
+  | Plus es -> string_binop "Plus" es
+  | Times es -> string_binop "Times" es
+  | Minus es -> string_binop "Minus" es
+  | Mask es -> string_binop "Mask" es
+  | Xor es -> string_binop "Xor" es
 
 let get_int (v : value) : Bigint.t =
   match v with
@@ -82,7 +98,7 @@ let rec size_of_expr (e : expr) : size =
   | Value v -> size_of_value v
   | Var (_,s) -> s
   | Hole (_,s) -> s
-  | Plus (e, e') | Minus(e,e') | Times (e,e') | Mask(e,e')->
+  | Plus (e, e') | Minus(e,e') | Times (e,e') | Mask(e,e') | Xor (e,e') ->
      let s = size_of_expr e in
      let s' = size_of_expr e' in
      if s = s' then s
@@ -98,20 +114,11 @@ let rec size_of_expr (e : expr) : size =
 let rec num_nodes_in_expr e =
   match e with
   | Value _ | Var _ | Hole _ -> 1
-  | Plus (e,e') | Minus(e,e') | Times(e,e') | Mask(e,e') ->
+  | Plus (e,e') | Minus(e,e') | Times(e,e') | Mask(e,e') | Xor (e,e') ->
      num_nodes_in_expr e
      + num_nodes_in_expr e'
      + 1
 
-                                                                            
-let mkInt (i,sz) =
-  if i < 0 then failwith "Negative integers not representable" else
-  Int (Bigint.of_int_exn i, sz)
-let mkVInt i = Value (mkInt i)    
-let mkPlus e e' = Plus(e,e')
-let mkMinus e e' = Minus (e, e')
-let mkTimes e e' = Times (e, e')
-let mkMask e e' = Mask(e,e')
 
                    
 let rec add_values (v : value) (v' : value) : value =
@@ -138,6 +145,12 @@ let rec subtract_values (v : value) (v' : value) : value =
 let rec mask_values (v : value) (v' : value) : value =
   match v,v' with
   | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x land x'), sz)
+  | Int (x, sz), Int (x', sz') ->
+     failwith (Printf.sprintf "MASK: Type error %s#%d and %s#%d have different BV sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
+
+let rec xor_values (v : value) (v' : value) : value =
+  match v,v' with
+  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x lxor x'), sz)
   | Int (x, sz), Int (x', sz') ->
      failwith (Printf.sprintf "MASK: Type error %s#%d and %s#%d have different BV sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 
@@ -226,6 +239,7 @@ let rec mkEq (e : expr) (e':expr) =
       | Times _ -> 5
       | Value _ -> 7
       | Mask _ -> 8
+      | Xor _ -> 9
     in
     let norm = match e, e' with
     | Value _, Value _
@@ -329,7 +343,7 @@ let rec free_of_expr typ e : (string * size) list =
   | Var (x,sz), `Var  | Hole (x,sz), `Hole -> [x,sz]
   | Var _ , `Hole -> []
   | Hole _ , `Var -> []
-  | Plus(e,e'),_ | Times (e,e'),_ | Minus(e,e'),_ | Mask (e,e'), _->
+  | Plus(e,e'),_ | Times (e,e'),_ | Minus(e,e'),_ | Mask (e,e'), _ | Xor (e,e'), _ ->
      free_of_expr typ e @ free_of_expr typ e'
 
 let rec free_of_test typ test : (string * size) list =
@@ -355,7 +369,7 @@ let holes_of_test = free_of_test `Hole
 let rec has_hole_expr = function
   | Value _ | Var _  -> false
   | Hole _ -> true
-  | Plus (e1,e2) | Minus(e1,e2) | Times (e1,e2) | Mask (e1,e2) ->
+  | Plus (e1,e2) | Minus(e1,e2) | Times (e1,e2) | Mask (e1,e2) | Xor (e1,e2)->
      has_hole_expr e1 || has_hole_expr e2
                                  
 let rec has_hole_test = function
@@ -375,7 +389,7 @@ let rec multi_ints_of_expr e : (Bigint.t * size) list =
   match e with
   | Value v -> multi_ints_of_value v
   | Var _ | Hole _ -> []
-  | Plus (e,e') | Times (e,e') | Minus (e,e')  | Mask (e,e')
+  | Plus (e,e') | Times (e,e') | Minus (e,e')  | Mask (e,e') | Xor (e,e')
     -> multi_ints_of_expr e @ multi_ints_of_expr e'
                   
 let rec multi_ints_of_test test : (Bigint.t * size) list =
@@ -658,8 +672,8 @@ let rec multi_ints_of_cmd c : (Bigint.t * size) list =
      List.fold t.actions ~init:(multi_ints_of_cmd t.default)
        ~f:(fun rst act -> rst @ multi_ints_of_cmd (snd act))
 
-
 let rec holify_expr holes (e : expr) : expr =
+  let binop ctor (e,e') = ctor (holify_expr holes e) (holify_expr holes e') in
   match e with
   | Hole _ | Value _ -> e
   | Var (x,sz) ->
@@ -667,10 +681,12 @@ let rec holify_expr holes (e : expr) : expr =
      | None -> e
      | Some _ -> Hole ((*"?" ^*) x, sz)
      end
-  | Plus (e,e') -> Plus (holify_expr holes e, holify_expr holes  e')
-  | Times (e,e') -> Times (holify_expr holes e, holify_expr holes  e')
-  | Minus (e,e') -> Minus (holify_expr holes e, holify_expr holes  e')
-  | Mask (e,e') -> Mask (holify_expr holes e, holify_expr holes e')
+  | Plus es
+    | Times es
+    | Minus es
+    | Mask es
+    | Xor es
+    -> binop (ctor_for_binexpr e) es
                           
 and holify_test holes b : test =
   match b with

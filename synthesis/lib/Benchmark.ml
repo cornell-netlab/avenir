@@ -734,10 +734,8 @@ and variables_expr e =
   | Value _ -> []
   | Var(n, w) -> [(n, w)]
   | Hole _ -> []
-  | Plus(e1, e2) -> variables_expr e1 @ variables_expr e2
-  | Times(e1, e2) -> variables_expr e1 @ variables_expr e2
-  | Minus(e1, e2) -> variables_expr e1 @ variables_expr e2
-  | Mask(e1, e2) -> variables_expr e1 @ variables_expr e2
+  | Plus(e1, e2) | Times (e1,e2) | Minus (e1,e2) | Mask (e1,e2) | Xor (e1,e2)
+    -> variables_expr e1 @ variables_expr e2
 
 and variables_test t =
   match t with
@@ -756,10 +754,8 @@ and get_width e =
   | Value(Int(_, w)) -> w
   | Var(_, w) -> w
   | Hole(_, w) -> w
-  | Plus(e1, _) -> get_width e1
-  | Times(e1, _) -> get_width e1
-  | Minus(e1, _) -> get_width e1
-  | Mask(e1, _) -> get_width e1
+  | Plus(e1, _) | Times (e1, _) | Minus (e1, _) | Mask (e1, _) | Xor (e1, _)
+    -> get_width e1
 
 (**** BEGIN CLASSBENCH ***)
 

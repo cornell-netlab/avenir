@@ -80,6 +80,7 @@ let get_val subsMap str default =
 let rec substitute ?holes:(holes = false) ex subsMap =
   let subst = get_val subsMap in
   let rec substituteE e =
+    let binop op (e,e') = op (substituteE e) (substituteE e) in
     match e with
     | Var (field,_) ->
        let replacement = subst field e in
@@ -92,10 +93,8 @@ let rec substitute ?holes:(holes = false) ex subsMap =
           e')
        else ((*Printf.printf "NO SUBST\n%!";*)  e)
     | Value _ -> e
-    | Plus (e, e') -> Plus (substituteE e, substituteE e')
-    | Times (e, e') -> Times (substituteE e, substituteE e')
-    | Minus (e, e') -> Minus (substituteE e, substituteE e')
-    | Mask (e, e') -> Mask (substituteE e, substituteE e')
+    | Plus es | Times es | Minus es | Mask es | Xor es ->
+       binop (ctor_for_binexpr e) es
   in
   match ex with
   | True | False -> ex
@@ -195,8 +194,8 @@ let rec wp negs c phi =
 let freshen v sz i = (v ^ "$" ^ string_of_int i, sz)
       
 let good_execs fvs c =
-  let binop f sub l op r = op (f l sub) (f r sub) in
   let rec indexVars_expr e (sub : ((int * int) StringMap.t)) =
+    let binop f (e,e') = f (indexVars_expr e sub) (indexVars_expr e' sub) in
     match e with
     | Var (x,sz) ->
        begin match StringMap.find sub x with
@@ -211,21 +210,21 @@ let good_execs fvs c =
        | Some (i,_) ->  Hole (freshen x sz i)
        end
     | Value _ -> e
-    | Plus(e1,e2) -> Plus(indexVars_expr e1 sub, indexVars_expr e2 sub)
-    | Minus(e1,e2) -> Minus(indexVars_expr e1 sub, indexVars_expr e2 sub)
-    | Times(e1,e2) -> Times(indexVars_expr e1 sub, indexVars_expr e2 sub)
-    | Mask (e1,e2) -> Mask(indexVars_expr e1 sub, indexVars_expr e2 sub)
+    | Plus es | Minus es | Times es | Mask es | Xor es
+      -> binop (ctor_for_binexpr e) es
   in
   let rec indexVars b sub =
+    let binop_t op a b = op (indexVars a sub) (indexVars b sub) in
+    let binop_e op a b = op (indexVars_expr a sub) (indexVars_expr b sub) in
     match b with
     | True | False -> b
     | Neg b -> !%(indexVars b sub)
-    | And  (a,b) -> binop indexVars       sub a (%&%)   b
-    | Or   (a,b) -> binop indexVars       sub a (%+%)   b
-    | Impl (a,b) -> binop indexVars       sub a (%=>%)  b
-    | Iff  (a,b) -> binop indexVars       sub a (%<=>%) b
-    | Eq (e1,e2) -> binop indexVars_expr sub e1 (%=%) e2
-    | Le (e1,e2) -> binop indexVars_expr sub e1 (%<=%) e2
+    | And  (a,b) -> binop_t (%&%) a b
+    | Or   (a,b) -> binop_t (%+%) a b
+    | Impl (a,b) -> binop_t (%=>%) a b
+    | Iff  (a,b) -> binop_t (%<=>%) a b
+    | Eq (e1,e2) -> binop_e (%=%) e1 e2
+    | Le (e1,e2) -> binop_e (%<=%) e1 e2
   in
   let rec passify sub c : ((int * int) StringMap.t * cmd) =
     match c with
@@ -362,14 +361,12 @@ let zip_eq_exn xs ys =
   List.fold2_exn xs ys ~init:True ~f:(fun acc x y -> acc %&% (Var x %=% Var y) )
 
 let rec prepend_expr pfx e =
+  let binop op (e,e') = op (prepend_expr pfx e) (prepend_expr pfx e') in
   match e with
   | Value _ -> e
   | Var (v,sz) -> Var(pfx^v, sz)
   | Hole(v, sz) -> Var(pfx^v, sz)
-  | Plus (e1, e2) -> Plus(prepend_expr pfx e1, prepend_expr pfx e2)
-  | Minus (e1, e2) -> Minus(prepend_expr pfx e1, prepend_expr pfx e2)
-  | Times (e1, e2) -> Times(prepend_expr pfx e1, prepend_expr pfx e2)
-  | Mask (e1, e2)  -> Mask(prepend_expr pfx e1, prepend_expr pfx e2)
+  | Plus es | Minus es | Times es | Mask es | Xor es -> binop (ctor_for_binexpr e) es
 
 let rec prepend_test pfx b =
   match b with
@@ -457,7 +454,7 @@ let equivalent ?neg:(neg = True) eq_fvs l p =
    has no effect on vars *)
 let rec fill_holes_expr e (subst : value StringMap.t) =
   let fill_holesS e = fill_holes_expr e subst in
-  let binop op e e' = op (fill_holesS e) (fill_holesS e') in
+  let binop op (e,e') = op (fill_holesS e) (fill_holesS e') in
   match e with
   | Value _ | Var _ -> e
   | Hole (h,sz) ->
@@ -468,10 +465,9 @@ let rec fill_holes_expr e (subst : value StringMap.t) =
                  (if sz <> sz' then (Printf.printf "[Warning] replacing %s#%d with %s#%d, but the sizes may be different, taking the size of %s to be ground truth" h sz strv (size_of_value v) strv));
                  Value v
      end
-  | Plus (e, e') -> binop mkPlus e e'
-  | Minus (e, e') -> binop mkMinus e e'
-  | Times (e, e') -> binop mkTimes e e'
-  | Mask (e, e') -> binop mkMask e e'
+  | Plus es | Minus es | Times es | Mask es | Xor es
+    -> binop (ctor_for_binexpr e) es
+
 
 (* Fills in first-order holes according to subst  *)                  
 let rec fill_holes_test t subst =
@@ -589,7 +585,7 @@ let bind_action_data vals (scope, cmd) : cmd =
 
 let rec fixup_val (model : value StringMap.t) (e : expr)  : expr =
   (* let _ = Printf.printf "FIXUP\n%!" in *)
-  let binop op e e' = op (fixup_val model e) (fixup_val model e') in
+  let binop op (e,e') = op (fixup_val model e) (fixup_val model e') in
   match e with
   | Value _ | Var _ -> e
   | Hole (h,sz) -> 
@@ -604,11 +600,8 @@ let rec fixup_val (model : value StringMap.t) (e : expr)  : expr =
                                     truth\n%!" h sz strv strv));
                  Value v
      end
-  | Plus  (e, e') -> binop mkPlus  e e'
-  | Times (e, e') -> binop mkTimes e e'
-  | Minus (e, e') -> binop mkMinus e e'
-  | Mask (e,e') -> binop mkMask e e'
-
+  | Plus es | Times es | Minus es | Mask es | Xor es
+    -> binop (ctor_for_binexpr e) es
 
 let rec fixup_test (model : value StringMap.t) (t : test) : test =
   let binop ctor call left right = ctor (call left) (call right) in 

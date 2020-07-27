@@ -23,6 +23,7 @@ let rec eval_expr (pkt_loc : Packet.located) ( e : expr ) : value =
   | Times (e1, e2) -> binop multiply_values e1 e2
   | Minus (e1, e2) -> binop subtract_values e1 e2
   | Mask (e1, e2) -> binop mask_values e1 e2
+  | Xor (e1,e2) -> binop xor_values e1 e2
 
 let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   let binopt op a b = op (check_test a pkt_loc) (check_test b pkt_loc) in

@@ -42,6 +42,7 @@ let rec set_field_of_expr (pkt : t) (field : string) (e : expr) : t =
   | Times (e, e') -> binop multiply_values e e'
   | Minus (e, e') -> binop subtract_values e e'
   | Mask (e,e') -> binop mask_values e e'
+  | Xor (e,e') -> binop xor_values e e'
 
 
 

@@ -395,7 +395,9 @@ and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) 
        -> unimplemented (string_of_binop op)
      | Le | Ge | Lt | Gt | Eq | NotEq | And | Or
        -> type_error (string_of_binop op)
-     | Shl | Shr | PlusSat | MinusSat | BitAnd | BitXor | BitOr | PlusPlus
+     | BitXor -> binop mkXor e e'
+
+     | Shl | Shr | PlusSat | MinusSat | BitAnd | BitOr | PlusPlus
        -> unimplemented (string_of_binop op)
      end
   | E.FunctionCall {func; type_args=[]; args=[]} ->
@@ -1086,6 +1088,7 @@ and replace_consts (consts : (string * expr)  list) (prog : cmd) =
     Apply{name; keys; actions = actions'; default = default'}
 
 and replace_consts_expr (consts : (string * expr)  list) (e : expr) =
+  let binop mk (e1,e2) = mk (replace_consts_expr consts e1) (replace_consts_expr consts e2) in
   match e with
   | Value v -> Value v
   | Var(v, w) ->
@@ -1094,10 +1097,8 @@ and replace_consts_expr (consts : (string * expr)  list) (e : expr) =
     | None -> Var(v, w)
     end
   | Hole h -> Hole h
-  | Plus(e1, e2) -> Plus(replace_consts_expr consts e1, replace_consts_expr consts e2)
-  | Times(e1, e2) -> Times(replace_consts_expr consts e1, replace_consts_expr consts e2)
-  | Minus(e1, e2) -> Minus(replace_consts_expr consts e1, replace_consts_expr consts e2)
-  | Mask(e1, e2) -> Mask(replace_consts_expr consts e1, replace_consts_expr consts e2)
+  | Plus es | Times es | Minus es | Mask es | Xor es
+    -> binop (ctor_for_binexpr e) es
 
 and replace_consts_test (consts : (string * expr) list) (t : test) =
   match t with
@@ -1151,13 +1152,12 @@ let preprocess include_dirs p4file =
 
 
 let rec rewrite_expr (m : (string * int) StringMap.t) (e : expr) : expr =
+  let binop mk (e,e') = mk (rewrite_expr m e) (rewrite_expr m e') in
   match e with
   | Value _ | Hole _ -> e
   | Var (v,sz) -> Var (StringMap.find m v |> Option.value ~default:(v,sz))
-  | Plus (e1,e2) -> Plus (rewrite_expr m e1, rewrite_expr m e2)
-  | Times (e1,e2) -> Times (rewrite_expr m e1, rewrite_expr m e2)
-  | Minus (e1,e2) -> Minus (rewrite_expr m e1, rewrite_expr m e2)
-  | Mask (e1,e2) -> Mask (rewrite_expr m e1, rewrite_expr m e2)
+  | Plus es | Times es | Minus es | Mask es | Xor es
+    -> binop (ctor_for_binexpr e) es
 
 let rec rewrite_test (m : (string * int) StringMap.t) (t : test) : test =
   match t with
