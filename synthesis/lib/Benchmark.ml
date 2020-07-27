@@ -716,7 +716,8 @@ and drop_handle fvs cmd =
   let c_end = List.map fvs ~f:(fun (v, w) -> mkAssn v (mkVInt(0, w)))
               |> List.fold ~init:Skip ~f:(fun c1 c2 -> c1 %:% c2)
   in
-  cmd %:% mkOrdered [ Var("standard_metadata.egress_port", 9) %=% mkVInt(0, 9), c_end; True, Skip]
+  cmd %:% mkOrdered [ Var("standard_metadata.egress_spec", 9) %=% mkVInt(0, 9), c_end;
+                      True, Skip]
 
 and variables cmd =
   match cmd with

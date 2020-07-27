@@ -1,5 +1,6 @@
 standard_metadata.ingress_port,standard_metadata.ingress_port,9
 standard_metadata.egress_spec,standard_metadata.egress_spec,9
+standard_metadata.egress_port,standard_metadata.egress_port,9
 hdr.ipv6_valid,hdr.ipv6_valid,1
 hdr.ipv6.version,hdr.ipv6.version,4
 hdr.ipv6.traffic_class,hdr.ipv6.traffic_class,8

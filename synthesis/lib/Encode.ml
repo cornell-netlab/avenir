@@ -978,10 +978,10 @@ and encode_program (Program(top_decls) as prog : program ) =
   | Some (ingress_name, egress_name) ->
      sequence [
          encode_pipeline type_cxt prog ingress_name;
+         "standard_metadata.egress_port" %<-% Var("standard_metadata.egress_spec", 9);
          mkOrdered [
-             Var("standard_metadata.egress_port", 9) %<>% mkVInt(0, 9),
+             Var("standard_metadata.egress_spec", 9) %<>% mkVInt(0, 9),
              sequence [
-                 "standard_metadata.egress_port" %<-% Var("standard_metadata.egress_spec",9);
                  encode_pipeline type_cxt prog egress_name
                ];
              True, Skip ]
