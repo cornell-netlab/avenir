@@ -27,6 +27,7 @@ let rec eval_expr (pkt_loc : Packet.located) ( e : expr ) : value =
   | Xor (e1,e2) -> binop xor_values e1 e2
   | BOr (e1,e2) -> binop or_values e1 e2
   | Shl (e1,e2) -> binop shl_values e1 e2
+  | Slice {hi;lo;bits} -> slice_value hi lo @@ eval_expr pkt_loc bits
 
 let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   let binopt op a b = op (check_test a pkt_loc) (check_test b pkt_loc) in

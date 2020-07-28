@@ -429,6 +429,12 @@ and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) 
      | _ -> Printf.printf "[ERROR] unsupported cast type";
             failwith "[encode_expression_to_value_with_width]"
      end
+  | E.BitStringAccess {bits;lo;hi} ->
+     begin match lo, hi with
+     | (_,Int (_,i)), (_,Int (_,j)) -> mkSlice (Bigint.to_int_exn i.value) (Bigint.to_int_exn j.value)
+                           @@ encode_expression_to_value_with_width width type_ctx bits
+     | _, _ -> failwith "Bit string accesses must be ints"
+     end
   | _ -> unimplemented (ctor_name_expression e)
 
 and get_width (type_ctx : Declaration.t list) (e : Expression.t) : size =
@@ -1122,6 +1128,7 @@ and replace_consts_expr (consts : (string * expr)  list) (e : expr) =
     end
   | Hole h -> Hole h
   | Cast (i,e) -> mkCast i @@ replace_consts_expr consts e
+  | Slice {hi;lo;bits} -> mkSlice hi lo @@ replace_consts_expr consts bits
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
     -> binop (ctor_for_binexpr e) es
 
@@ -1182,6 +1189,7 @@ let rec rewrite_expr (m : (string * int) StringMap.t) (e : expr) : expr =
   | Value _ | Hole _ -> e
   | Var (v,sz) -> Var (StringMap.find m v |> Option.value ~default:(v,sz))
   | Cast (i,e) -> mkCast i @@ rewrite_expr m e
+  | Slice {hi;lo;bits} -> mkSlice hi lo @@ rewrite_expr m bits
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
     -> binop (ctor_for_binexpr e) es
 

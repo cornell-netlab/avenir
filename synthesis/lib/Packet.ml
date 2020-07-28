@@ -39,6 +39,7 @@ let rec set_field_of_expr (pkt : t) (field : string) (e : expr) : t =
   | Hole _ ->
      failwith "Packets cannot have holes in them"
   | Cast (i,e) -> set_field pkt field @@ cast_value i @@ get_val (set_field_of_expr pkt field e) field
+  | Slice {hi;lo;bits} -> set_field pkt field @@ slice_value hi lo @@ get_val (set_field_of_expr pkt field e) field
   | Plus  (e, e') -> binop add_values e e'
   | Times (e, e') -> binop multiply_values e e'
   | Minus (e, e') -> binop subtract_values e e'

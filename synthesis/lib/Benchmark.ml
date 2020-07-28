@@ -734,7 +734,7 @@ and variables_expr e =
   | Value _ -> []
   | Var(n, w) -> [(n, w)]
   | Hole _ -> []
-  | Cast (_,e) -> variables_expr e
+  | Cast (_,e) | Slice {bits=e;_} -> variables_expr e
   | Plus(e1, e2) | Times (e1,e2) | Minus (e1,e2) | Mask (e1,e2) | Xor (e1,e2) | BOr (e1,e2) | Shl (e1,e2)
     -> variables_expr e1 @ variables_expr e2
 
@@ -754,6 +754,8 @@ and get_width e =
   match e with
   | Value(Int(_, w)) | Var(_, w) | Hole(_, w) | Cast(w,_)
     -> w
+  | Slice {hi;lo;_} -> let sz = hi - lo in
+                       if sz < 0 then -1 else sz
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
     -> get_width (fst es)
 

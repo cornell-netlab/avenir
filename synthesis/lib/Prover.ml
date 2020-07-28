@@ -42,6 +42,9 @@ let rec expr_to_term_help expr styp : Smtlib.term =
      else if sz < i
      then Smtlib.concat (expr_to_term_help (mkVInt(0,i-sz))  styp) t
      else t
+  | Slice {hi;lo;bits} ->
+     let term = expr_to_term_help bits styp in
+     Smtlib.extract hi lo term
 
   | Plus (e1, e2) ->
      if size_of_expr e1 <> size_of_expr e2

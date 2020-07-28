@@ -9,6 +9,8 @@ let rec relabel (e : expr) (sz : size) : expr =
   | Var (x, _) -> Var(x, sz)
   | Hole(h,_) -> Hole(h, sz)
   | Cast (i,e') -> if i = sz then e else failwith "Tried to relabel an explicit cast incorrectly:("
+  | Slice {hi;lo;bits} -> let sz' = hi - lo in
+                          if sz = sz' then e else failwith "Tried to incorrectly relabel a slice"
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
     -> binop (ctor_for_binexpr e) es
 
@@ -37,6 +39,7 @@ let rec infer_expr (e : expr) : expr =
     | Var _
     | Hole _ -> e
   | Cast (i,e) -> mkCast i @@ infer_expr e
+  | Slice {hi;lo;bits} -> mkSlice hi lo @@ infer_expr bits
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
     -> binop (ctor_for_binexpr e) es
 

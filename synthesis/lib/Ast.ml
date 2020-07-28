@@ -40,6 +40,7 @@ type expr =
   | BOr of (expr * expr)
   | Shl of (expr * expr)
   | Cast of (int * expr)
+  | Slice of {hi : int; lo: int; bits: expr}
 
 let mkInt (i,sz) =
   if i < 0 then failwith "Negative integers not representable" else
@@ -53,10 +54,11 @@ let mkMask e e' = Mask(e,e')
 let mkXor e e' = Xor(e,e')
 let mkBOr e e' = BOr (e,e')
 let mkShl e e' = Shl (e,e')
+let mkSlice hi lo bits = Slice {hi; lo; bits}
 
 let ctor_for_binexpr =
   function
-  | Hole _ | Value _ | Var _ | Cast _ -> failwith "[bin_ctor_for_expr] received hole, value, or var"
+  | Hole _ | Value _ | Var _ | Cast _ | Slice _ -> failwith "[bin_ctor_for_expr] received hole, value, var, cast, or slice"
   | Plus _ -> mkPlus
   | Times _ -> mkTimes
   | Minus _ -> mkMinus
@@ -79,6 +81,7 @@ let rec string_of_expr (e : expr) : string =
   | Xor (e,e')    -> string_binop e "^" e'
   | BOr (e,e')    -> string_binop e "|" e'
   | Shl (e,e')    -> string_binop e "<<" e'
+  | Slice {hi; lo; bits} -> Printf.sprintf "%s[%d:%d]" (string_of_expr bits) hi lo
 
 
 let rec sexp_string_of_value (v : value) =
@@ -99,7 +102,7 @@ let rec sexp_string_of_expr (e : expr) =
   | Xor es -> string_binop "Xor" es
   | BOr es     -> string_binop "BOr" es
   | Shl es     -> string_binop "Shl" es
-
+  | Slice {hi;lo;bits} -> Printf.sprintf "Slice {hi=%d;lo=%d;bits=%s}" hi lo (sexp_string_of_expr bits)
 
 let get_int (v : value) : Bigint.t =
   match v with
@@ -127,11 +130,13 @@ let rec size_of_expr (e : expr) : size =
                      (string_of_expr e)
                      (string_of_expr e')
                      s s')
+  | Slice {hi;lo;bits} -> let sz = hi - lo in
+                          if sz < 0 then -1 else sz
 
 let rec num_nodes_in_expr e =
   match e with
   | Value _ | Var _ | Hole _ -> 1
-  | Cast (_,e) -> 1 + num_nodes_in_expr e
+  | Cast (_,e) | Slice {bits=e;_}-> 1 + num_nodes_in_expr e
   | Plus (e,e') | Minus(e,e') | Times(e,e') | Mask(e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') ->
      num_nodes_in_expr e
      + num_nodes_in_expr e'
@@ -193,7 +198,15 @@ let rec cast_value w (v : value) : value =
      else
        v
 
-
+let slice_value (hi : size) (lo : size) (v : value) : value =
+  match v with
+  | Int(x,sz) ->
+     if hi > sz || lo > sz then failwith "index out of range"
+     else
+       let sz' = hi - lo in
+       let mask = Bigint.((pow (of_int 2) (of_int sz')) - one) in
+       let x' = Bigint.((shift_right x lo) land mask) in
+       Int (x', sz')
 
 type test =
   | True | False
@@ -282,6 +295,7 @@ let rec mkEq (e : expr) (e':expr) =
       | Xor _ -> 9
       | BOr _ -> 10
       | Shl _ -> 11
+      | Slice _ -> 12
     in
     let norm = match e, e' with
     | Value _, Value _
@@ -385,7 +399,7 @@ let rec free_of_expr typ e : (string * size) list =
   | Var (x,sz), `Var  | Hole (x,sz), `Hole -> [x,sz]
   | Var _ , `Hole -> []
   | Hole _ , `Var -> []
-  | Cast(i,e),_ -> free_of_expr typ e
+  | Cast(_,e),_ | Slice {bits=e;_},_ -> free_of_expr typ e
   | Plus(e,e'),_ | Times (e,e'),_ | Minus(e,e'),_ | Mask (e,e'), _ | Xor (e,e'), _ | BOr (e,e'), _ | Shl (e,e'), _
     -> free_of_expr typ e @ free_of_expr typ e'
 
@@ -412,7 +426,7 @@ let holes_of_test = free_of_test `Hole
 let rec has_hole_expr = function
   | Value _ | Var _  -> false
   | Hole _ -> true
-  | Cast (_,e) -> has_hole_expr e
+  | Cast (_,e) | Slice {bits=e;_} -> has_hole_expr e
   | Plus (e1,e2) | Minus(e1,e2) | Times (e1,e2) | Mask (e1,e2) | Xor (e1,e2) | BOr (e1,e2) | Shl (e1,e2)
     -> has_hole_expr e1 || has_hole_expr e2
                                  
@@ -433,7 +447,7 @@ let rec multi_ints_of_expr e : (Bigint.t * size) list =
   match e with
   | Value v -> multi_ints_of_value v
   | Var _ | Hole _ -> []
-  | Cast (_,e) -> multi_ints_of_expr e
+  | Cast (_,e) | Slice {bits=e;_} -> multi_ints_of_expr e
   | Plus (e,e') | Times (e,e') | Minus (e,e')  | Mask (e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e')
     -> multi_ints_of_expr e @ multi_ints_of_expr e'
                   
@@ -727,6 +741,7 @@ let rec holify_expr holes (e : expr) : expr =
      | Some _ -> Hole ((*"?" ^*) x, sz)
      end
   | Cast (i,e) -> mkCast i @@ holify_expr holes e
+  | Slice {hi;lo;bits} -> mkSlice hi lo @@ holify_expr holes bits
   | Plus es
     | Times es
     | Minus es
