@@ -34,6 +34,15 @@ let rec expr_to_term_help expr styp : Smtlib.term =
      Smtlib.bbv (num) sz
   | Var (v, sz) -> quantify v `Var styp
   | Hole (h, sz) -> quantify h `Hole styp
+  | Cast (i,e) ->
+     let sz = size_of_expr e in
+     let t = expr_to_term_help e styp in
+     if sz > i
+     then Smtlib.extract i 0 t
+     else if sz < i
+     then Smtlib.concat (expr_to_term_help (mkVInt(0,i-sz))  styp) t
+     else t
+
   | Plus (e1, e2) ->
      if size_of_expr e1 <> size_of_expr e2
      then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);

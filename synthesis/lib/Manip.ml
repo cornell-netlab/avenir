@@ -82,6 +82,7 @@ let rec substitute ?holes:(holes = false) ex subsMap =
   let rec substituteE e =
     let binop op (e,e') = op (substituteE e) (substituteE e) in
     match e with
+    | Value _ -> e
     | Var (field,_) ->
        let replacement = subst field e in
        (* Printf.printf "substituting %s for %s;\n%!" field (string_of_expr e); *)
@@ -92,7 +93,7 @@ let rec substitute ?holes:(holes = false) ex subsMap =
          ((*Printf.printf "%s -> %s \n%!" field (string_of_expr e');*)
           e')
        else ((*Printf.printf "NO SUBST\n%!";*)  e)
-    | Value _ -> e
+    | Cast (i,e) -> mkCast i @@ substituteE e
     | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
       -> binop (ctor_for_binexpr e) es
   in
@@ -197,6 +198,7 @@ let good_execs fvs c =
   let rec indexVars_expr e (sub : ((int * int) StringMap.t)) =
     let binop f (e,e') = f (indexVars_expr e sub) (indexVars_expr e' sub) in
     match e with
+    | Value _ -> e
     | Var (x,sz) ->
        begin match StringMap.find sub x with
        | None  -> "couldn't find "^x^" in substitution map with keys"
@@ -209,7 +211,7 @@ let good_execs fvs c =
        | None  -> "couldn't find "^x^" in substitution map " |> failwith
        | Some (i,_) ->  Hole (freshen x sz i)
        end
-    | Value _ -> e
+    | Cast (i,e) -> mkCast i @@ indexVars_expr e sub
     | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es
       -> binop (ctor_for_binexpr e) es
   in
@@ -366,6 +368,7 @@ let rec prepend_expr pfx e =
   | Value _ -> e
   | Var (v,sz) -> Var(pfx^v, sz)
   | Hole(v, sz) -> Var(pfx^v, sz)
+  | Cast (i,e) -> mkCast i @@ prepend_expr pfx e
   | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es
     -> binop (ctor_for_binexpr e) es
 
@@ -466,6 +469,7 @@ let rec fill_holes_expr e (subst : value StringMap.t) =
                  (if sz <> sz' then (Printf.printf "[Warning] replacing %s#%d with %s#%d, but the sizes may be different, taking the size of %s to be ground truth" h sz strv (size_of_value v) strv));
                  Value v
      end
+  | Cast (i,e) -> mkCast i @@ fill_holesS e
   | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es
     -> binop (ctor_for_binexpr e) es
 
@@ -601,6 +605,7 @@ let rec fixup_val (model : value StringMap.t) (e : expr)  : expr =
                                     truth\n%!" h sz strv strv));
                  Value v
      end
+  | Cast (i,e) -> mkCast i @@ fixup_val model e
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
     -> binop (ctor_for_binexpr e) es
 

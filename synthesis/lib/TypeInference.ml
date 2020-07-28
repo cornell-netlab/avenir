@@ -2,13 +2,13 @@ open Core
 open Ast
 
 
-
 let rec relabel (e : expr) (sz : size) : expr =
   let binop mk (e,e') = mk (relabel e sz) (relabel e' sz) in
   match e with
   | Value (Int(v, _)) -> Value(Int(v, sz))
   | Var (x, _) -> Var(x, sz)
   | Hole(h,_) -> Hole(h, sz)
+  | Cast (i,e') -> if i = sz then e else failwith "Tried to relabel an explicit cast incorrectly:("
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
     -> binop (ctor_for_binexpr e) es
 
@@ -28,13 +28,15 @@ let rec infer_expr (e : expr) : expr =
       else
         if s2 = -1
         then f e1 (relabel e2 s1)
-        else Printf.sprintf "sizes are known and differ!\n\t%s\t%s\n%!" (string_of_expr e1) (string_of_expr e2)
-             |> failwith
+        else begin Printf.printf "sizes are known and differ!\n\t%s\t%s\n%!" (string_of_expr e1) (string_of_expr e2);
+                   failwith "BitWidth type error"
+             end
   in
   match e with
   | Value _
     | Var _
     | Hole _ -> e
+  | Cast (i,e) -> mkCast i @@ infer_expr e
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
     -> binop (ctor_for_binexpr e) es
 

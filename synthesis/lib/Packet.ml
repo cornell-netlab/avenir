@@ -38,6 +38,7 @@ let rec set_field_of_expr (pkt : t) (field : string) (e : expr) : t =
      |> set_field pkt field
   | Hole _ ->
      failwith "Packets cannot have holes in them"
+  | Cast (i,e) -> set_field pkt field @@ cast_value i @@ get_val (set_field_of_expr pkt field e) field
   | Plus  (e, e') -> binop add_values e e'
   | Times (e, e') -> binop multiply_values e e'
   | Minus (e, e') -> binop subtract_values e e'
@@ -45,6 +46,7 @@ let rec set_field_of_expr (pkt : t) (field : string) (e : expr) : t =
   | Xor (e,e') -> binop xor_values e e'
   | BOr (e,e') -> binop or_values e e'
   | Shl (e,e') -> binop shl_values e e'
+
 
 let init_field_to_random bound pkt (f,sz) =
   set_field pkt f (Int (Random.int (max bound 1) |> Bigint.of_int_exn, sz))

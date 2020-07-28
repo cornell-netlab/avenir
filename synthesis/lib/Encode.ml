@@ -423,8 +423,12 @@ and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) 
       * |> Sexp.to_string
       * |> Printf.sprintf  "[encode_expression_to_value_with_width] Type Member: %s"
       * |> failwith *)
-  | E.Cast {typ;expr} ->
-     encode_expression_to_value_with_width width type_ctx expr
+  | E.Cast {typ=(_,typ);expr} ->
+     begin match typ with
+     | BitType (_,Int (_,i)) -> mkCast (Bigint.to_int_exn i.value) @@ encode_expression_to_value_with_width width type_ctx expr
+     | _ -> Printf.printf "[ERROR] unsupported cast type";
+            failwith "[encode_expression_to_value_with_width]"
+     end
   | _ -> unimplemented (ctor_name_expression e)
 
 and get_width (type_ctx : Declaration.t list) (e : Expression.t) : size =
@@ -883,7 +887,7 @@ and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t
      let action = List.nth_exn dispList (num_disp - 1) in
      if snd action = "action_run" then
        begin
-         Printf.printf "Looking for table %s in switch\n" (snd table);
+         (* Printf.printf "Looking for table %s in switch\n" (snd table); *)
          let open Declaration in
          match lookup_exn prog ctx table with
          | (_, Table t ) ->
@@ -985,12 +989,12 @@ and get_ingress_egress_names (decls : Declaration.t list) : (string * string) op
              | _ -> failwith "main had unrecognized argument"
              end
          else begin
-             Printf.printf "Found instantiation named %s\n" (snd name);
+             (* Printf.printf "Found instantiation named %s\n" (snd name); *)
              None
            end
 
       | _ ->
-         Printf.printf "couldn't extract anything\n";
+         (* Printf.printf "couldn't extract anything\n"; *)
          None
       end
     )
@@ -1016,7 +1020,7 @@ and encode_pipeline (type_cxt : Declaration.t list) (Program(top_decls) as prog:
   let open Declaration in
   match List.find top_decls ~f:(fun d -> match snd d with
                                          | Control{name;_} ->
-                                            Printf.printf "%s =?= %s\n%!" (snd name) pn;
+                                            (* Printf.printf "%s =?= %s\n%!" (snd name) pn; *)
                                             snd name = pn
                                          | _ -> false)
   with
@@ -1117,6 +1121,7 @@ and replace_consts_expr (consts : (string * expr)  list) (e : expr) =
     | None -> Var(v, w)
     end
   | Hole h -> Hole h
+  | Cast (i,e) -> mkCast i @@ replace_consts_expr consts e
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
     -> binop (ctor_for_binexpr e) es
 
@@ -1176,6 +1181,7 @@ let rec rewrite_expr (m : (string * int) StringMap.t) (e : expr) : expr =
   match e with
   | Value _ | Hole _ -> e
   | Var (v,sz) -> Var (StringMap.find m v |> Option.value ~default:(v,sz))
+  | Cast (i,e) -> mkCast i @@ rewrite_expr m e
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
     -> binop (ctor_for_binexpr e) es
 
