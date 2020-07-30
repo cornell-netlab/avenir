@@ -98,6 +98,10 @@ let rec expr_to_term_help expr styp : Smtlib.term =
      (* expr_str expr;
       * debug sexp; *)
      sexp
+  | Concat (e1,e2) ->
+     Smtlib.concat
+       (expr_to_term_help e1 styp)
+       (expr_to_term_help e2 styp)
 
 
 

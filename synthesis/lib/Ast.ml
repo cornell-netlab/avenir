@@ -38,6 +38,7 @@ type expr =
   | Xor of (expr * expr)
   | BOr of (expr * expr)
   | Shl of (expr * expr)
+  | Concat of (expr * expr)
   | Cast of (int * expr)
   | Slice of {hi : int; lo: int; bits: expr}
 
@@ -53,6 +54,7 @@ let mkMask e e' = Mask(e,e')
 let mkXor e e' = Xor(e,e')
 let mkBOr e e' = BOr (e,e')
 let mkShl e e' = Shl (e,e')
+let mkConcat e e' = Concat(e,e')
 let mkSlice hi lo bits = Slice {hi; lo; bits}
 
 let ctor_for_binexpr =
@@ -65,6 +67,7 @@ let ctor_for_binexpr =
   | Xor _ -> mkXor
   | BOr _ -> mkBOr
   | Shl _ -> mkShl
+  | Concat _ -> mkConcat
 
 let rec string_of_expr (e : expr) : string =
   let string_binop e1 op e2 = Printf.sprintf "(%s %s %s)" (string_of_expr e1) op (string_of_expr e2) in
@@ -80,6 +83,7 @@ let rec string_of_expr (e : expr) : string =
   | Xor (e,e')    -> string_binop e "^" e'
   | BOr (e,e')    -> string_binop e "|" e'
   | Shl (e,e')    -> string_binop e "<<" e'
+  | Concat (e,e') -> string_binop e "@" e'
   | Slice {hi; lo; bits} -> Printf.sprintf "%s[%d:%d]" (string_of_expr bits) hi lo
 
 
@@ -101,6 +105,7 @@ let rec sexp_string_of_expr (e : expr) =
   | Xor es -> string_binop "Xor" es
   | BOr es     -> string_binop "BOr" es
   | Shl es     -> string_binop "Shl" es
+  | Concat es -> string_binop "Concat" es
   | Slice {hi;lo;bits} -> Printf.sprintf "Slice {hi=%d;lo=%d;bits=%s}" hi lo (sexp_string_of_expr bits)
 
 let get_int (v : value) : Bigint.t =
@@ -117,6 +122,7 @@ let rec size_of_expr (e : expr) : size =
   | Var (_,s) -> s
   | Hole (_,s) -> s
   | Cast (i,_) -> i
+  | Concat (e,e') -> size_of_expr e + size_of_expr e'
   | Plus (e, e') | Minus(e,e') | Times (e,e') | Mask(e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') ->
      let s = size_of_expr e in
      let s' = size_of_expr e' in
@@ -136,7 +142,7 @@ let rec num_nodes_in_expr e =
   match e with
   | Value _ | Var _ | Hole _ -> 1
   | Cast (_,e) | Slice {bits=e;_}-> 1 + num_nodes_in_expr e
-  | Plus (e,e') | Minus(e,e') | Times(e,e') | Mask(e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') ->
+  | Plus (e,e') | Minus(e,e') | Times(e,e') | Mask(e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') | Concat (e,e') ->
      num_nodes_in_expr e
      + num_nodes_in_expr e'
      + 1
@@ -206,6 +212,12 @@ let slice_value (hi : size) (lo : size) (v : value) : value =
        let mask = Bigint.((pow (of_int 2) (of_int sz')) - one) in
        let x' = Bigint.((shift_right x lo) land mask) in
        Int (x', sz')
+
+let concat_values (l : value) (r : value) : value =
+  match l,r with
+  | Int (lx,lsz), Int(rx, rsz) ->
+     Int(Bigint.(shift_left lx rsz + rx)
+       , lsz + rsz)
 
 type test =
   | True | False
@@ -295,6 +307,7 @@ let mkEq (e : expr) (e':expr) =
       | BOr _ -> 10
       | Shl _ -> 11
       | Slice _ -> 12
+      | Concat _ -> 13
     in
     let norm = match e, e' with
     | Value _, Value _
@@ -399,7 +412,7 @@ let rec free_of_expr typ e : (string * size) list =
   | Var _ , `Hole -> []
   | Hole _ , `Var -> []
   | Cast(_,e),_ | Slice {bits=e;_},_ -> free_of_expr typ e
-  | Plus(e,e'),_ | Times (e,e'),_ | Minus(e,e'),_ | Mask (e,e'), _ | Xor (e,e'), _ | BOr (e,e'), _ | Shl (e,e'), _
+  | Plus(e,e'),_ | Times (e,e'),_ | Minus(e,e'),_ | Mask (e,e'), _ | Xor (e,e'), _ | BOr (e,e'), _ | Shl (e,e'), _ | Concat (e,e'),_
     -> free_of_expr typ e @ free_of_expr typ e'
 
 let rec free_of_test typ test : (string * size) list =
@@ -426,7 +439,7 @@ let rec has_hole_expr = function
   | Value _ | Var _  -> false
   | Hole _ -> true
   | Cast (_,e) | Slice {bits=e;_} -> has_hole_expr e
-  | Plus (e1,e2) | Minus(e1,e2) | Times (e1,e2) | Mask (e1,e2) | Xor (e1,e2) | BOr (e1,e2) | Shl (e1,e2)
+  | Plus (e1,e2) | Minus(e1,e2) | Times (e1,e2) | Mask (e1,e2) | Xor (e1,e2) | BOr (e1,e2) | Shl (e1,e2) | Concat (e1,e2)
     -> has_hole_expr e1 || has_hole_expr e2
                                  
 let rec has_hole_test = function
@@ -447,7 +460,7 @@ let rec multi_ints_of_expr e : (Bigint.t * size) list =
   | Value v -> multi_ints_of_value v
   | Var _ | Hole _ -> []
   | Cast (_,e) | Slice {bits=e;_} -> multi_ints_of_expr e
-  | Plus (e,e') | Times (e,e') | Minus (e,e')  | Mask (e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e')
+  | Plus (e,e') | Times (e,e') | Minus (e,e')  | Mask (e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') | Concat (e,e')
     -> multi_ints_of_expr e @ multi_ints_of_expr e'
                   
 let rec multi_ints_of_test test : (Bigint.t * size) list =
@@ -748,6 +761,7 @@ let rec holify_expr holes (e : expr) : expr =
     | Xor es
     | BOr es
     | Shl es
+    | Concat es
     -> binop (ctor_for_binexpr e) es
                           
 and holify_test holes b : test =

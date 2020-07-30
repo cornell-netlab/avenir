@@ -95,7 +95,7 @@ let rec substitute ?holes:(holes = false) ex subsMap =
        else ((*Printf.printf "NO SUBST\n%!";*)  e)
     | Cast (i,e) -> mkCast i @@ substituteE e
     | Slice {hi;lo;bits} -> mkSlice hi lo @@ substituteE bits
-    | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
+    | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es
       -> binop (ctor_for_binexpr e) es
   in
   match ex with
@@ -214,7 +214,7 @@ let good_execs fvs c =
        end
     | Cast (i,e) -> mkCast i @@ indexVars_expr e sub
     | Slice {hi;lo;bits} -> mkSlice hi lo @@ indexVars_expr bits sub
-    | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es
+    | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es
       -> binop (ctor_for_binexpr e) es
   in
   let rec indexVars b sub =
@@ -372,7 +372,7 @@ let rec prepend_expr pfx e =
   | Hole(v, sz) -> Var(pfx^v, sz)
   | Cast (i,e) -> mkCast i @@ prepend_expr pfx e
   | Slice {hi;lo;bits} -> mkSlice hi lo @@ prepend_expr pfx bits
-  | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es
+  | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es
     -> binop (ctor_for_binexpr e) es
 
 let rec prepend_test pfx b =
@@ -474,7 +474,7 @@ let rec fill_holes_expr e (subst : value StringMap.t) =
      end
   | Cast (i,e) -> mkCast i @@ fill_holesS e
   | Slice {hi;lo;bits} -> mkSlice hi lo @@ fill_holesS bits
-  | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es
+  | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es
     -> binop (ctor_for_binexpr e) es
 
 
@@ -611,7 +611,7 @@ let rec fixup_val (model : value StringMap.t) (e : expr)  : expr =
      end
   | Cast (i,e) -> mkCast i @@ fixup_val model e
   | Slice {hi;lo;bits} -> mkSlice hi lo @@ fixup_val model bits
-  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
+  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es
     -> binop (ctor_for_binexpr e) es
 
 let rec fixup_test (model : value StringMap.t) (t : test) : test =

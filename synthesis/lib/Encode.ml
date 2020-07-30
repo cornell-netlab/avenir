@@ -1124,7 +1124,7 @@ and replace_consts_expr (consts : (string * expr)  list) (e : expr) =
   | Hole h -> Hole h
   | Cast (i,e) -> mkCast i @@ replace_consts_expr consts e
   | Slice {hi;lo;bits} -> mkSlice hi lo @@ replace_consts_expr consts bits
-  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
+  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es
     -> binop (ctor_for_binexpr e) es
 
 and replace_consts_test (consts : (string * expr) list) (t : test) =
@@ -1185,7 +1185,7 @@ let rec rewrite_expr (m : (string * int) StringMap.t) (e : expr) : expr =
   | Var (v,sz) -> Var (StringMap.find m v |> Option.value ~default:(v,sz))
   | Cast (i,e) -> mkCast i @@ rewrite_expr m e
   | Slice {hi;lo;bits} -> mkSlice hi lo @@ rewrite_expr m bits
-  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
+  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es
     -> binop (ctor_for_binexpr e) es
 
 let rec rewrite_test (m : (string * int) StringMap.t) (t : test) : test =

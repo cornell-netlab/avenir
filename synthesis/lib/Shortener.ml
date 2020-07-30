@@ -17,7 +17,7 @@ let rec shorten_expr (bht : Bishtbl.t) (e : expr) : expr =
     | Hole (h, sz) -> Hole(get h, sz)
     | Cast (i,e) -> unop ~mk:(mkCast i) e
     | Slice {hi;lo;bits} -> unop ~mk:(mkSlice hi lo) bits
-    | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
+    | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es
       -> binop (ctor_for_binexpr e) es
 
 let rec shorten (bht : Bishtbl.t) (t : test) : test =
@@ -44,7 +44,7 @@ let rec unshorten_expr (bht : Bishtbl.t) (e : expr) : expr =
     | Hole (h, sz) -> Hole(unget h, sz)
     | Cast (i,e) -> unop ~mk:(mkCast i) e
     | Slice {hi;lo;bits} -> unop ~mk:(mkSlice hi lo) bits
-    | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
+    | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es
       -> binop (ctor_for_binexpr e) es
 
 let rec unshorten (bht : Bishtbl.t) (t : test) : test =
