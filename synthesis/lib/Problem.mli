@@ -1,4 +1,3 @@
-open Core
 open Util
 open Ast
 open Tables
@@ -55,8 +54,6 @@ val attempts_to_string : t -> string
 val num_attempts : t -> int
 val seen_attempt : t -> value StringMap.t -> bool
 
-
-val add_cex : t -> Packet.t * Packet.t -> t
 
 val reset_model_space : t -> t
 val refine_model_space : t -> test -> t

@@ -1,5 +1,4 @@
 open Core
-open Util
 open Ast
 open Tables
 
@@ -60,7 +59,7 @@ let to_gcl_holes params (p : t) dels tag =
      p.tag := Some tag;
      i
 
-let to_string params (p : t) =
+let to_string (_ : Parameters.t) (p : t) =
   Printf.sprintf "%s\n[%s]\n%!"
     (string_of_cmd !(p.pipeline))
     (List.fold (p.edits) ~init:""

@@ -155,110 +155,12 @@ let reorder_benchmark varsize length max_inserts params =
   
             
 (** ONF BENCHMARK **)
-   
-let set_valid s = (s ^ ".valid") %<-% mkVInt(1,1)
-let set_invalid s = (s ^ ".valid") %<-% mkVInt(0,1)
-let is_valid s = Var(s^".valid",1) %=% mkVInt(1,1)
-let std_meta_in_port_str = "standard_metadata.ingress_port"
-let std_meta_in_port = Var(std_meta_in_port_str,9)
-let cpu_port = mkVInt(255,9)
-let hdr_packet_out_str = "hdr.packet_out"
-let hdr_ethernet_str = "hdr.ethernet"
-let fabric_metadata_vlan_id_str = "fabric_metadata_vlan_id"
-let default_vlan_id = mkVInt(4094, 12)
-let hdr_eth_type_str = "hdr.eth_type"
-let hdr_eth_type_value_str = "hdr.eth_type.value"
-let hdr_eth_type_value = Var(hdr_eth_type_value_str, 16)
-let ethertype_mpls = mkVInt(34887,16)
-let hdr_mpls_str = "hdr_mpls_str"
-let fabric_metadata_mpls_label_str = "fabric_metadata.mpls_label_str"
-let fabric_metadata_mpls_ttl_str = "fabric_metadata.mpls.ttl"
-let hdr_mpls_ttl_str = "hdr.mpls.ttl"
-let hdr_mpls_ttl = Var(hdr_mpls_ttl_str, 8)
-(* let fabric_metadata_mpls_label = Var(fabric_metadata_mpls_label_str, 20) *)
-let hdr_mpls_label_str = "hdr.mpls.label"
-let hdr_mpls_label = Var(hdr_mpls_label_str, 20)
-let hdr_ipv4_str = "hdr.ipv4"
-let fabric_metadata_ip_proto_str = "fabric_metadata.ip_proto"
-let fabric_metadata_ip_eth_typ_str = "fabric_metadata.ip_eth_typ"
-let hdr_ipv4_protocol_str = "hdr.ipv4.protocol"
-let hdr_ipv4_protocol = Var(hdr_ipv4_protocol_str, 8)
-let ethertype_ipv4 = mkVInt(2048, 16)
-let proto_tcp = mkVInt(6,8)
-let proto_udp = mkVInt(17,8)
-let proto_icmp = mkVInt(1,8)
-let hdr_tcp_str = "hdr.tcp"
-let fabric_metadata_l4_sport_str = "fabric_metadata.l4_sport"
-let fabric_metadata_l4_dport_str = "fabric_metadata.l4_dport"  
-let hdr_tcp_sport_str = "hdr.tcp.sport"
-let hdr_tcp_sport = Var(hdr_tcp_sport_str, 16)
-let hdr_tcp_dport_str = "hdr.tcp.dport"
-let hdr_tcp_dport = Var(hdr_tcp_dport_str, 16)
-let hdr_udp_str = "hdr.udp"
-let hdr_udp_sport_str = "hdr.udp.sport"
-let hdr_udp_sport = Var(hdr_udp_sport_str, 16)
-let hdr_udp_dport_str = "hdr.udp.dport"
-let hdr_udp_dport = Var(hdr_udp_dport_str, 16)
-let hdr_icmp_str = "hdr.icmp"
-                     
-let hdr_packet_out_str = "hdr_packet_out_str"
-let standard_metadata_egress_spec_str = "standard_metadata.egress_spec"
-let standard_metadata_egress_spec = Var(standard_metadata_egress_spec_str, 9)
-let hdr_packet_out_egress_port_str = "hdr.packet_out.egress_port"
-let hdr_packet_out_egress_port = Var(hdr_packet_out_egress_port_str, 9)
-let fabric_metadata_is_controller_packet_out_str = "fabric_metadata.is_controller_packet_out"
-let default_mpls_ttl = mkVInt(64,8)
-let fabric_metadata_fwd_type_str = "fabric_metadata.fwd_type"
-let fabric_metadata_fwd_type = Var(fabric_metadata_fwd_type_str, 3)
-let fwd_bridging = mkVInt(0,3)
-let fwd_mpls = mkVInt(1,3)
-let fwd_ipv4_unicast = mkVInt(2,3)
-let fabric_metadata_skip_next_str = "fabric_metadata.skip_next"
-let fabric_metadata_skip_next = Var(fabric_metadata_skip_next_str, 1)
-let standard_metadata_ingress_port_str = "standard_metadata_ingress_port"
-let hdr_ethernet_src_addr_str = "hdr_ethernet.src_addr"
-let hdr_ethernet_dst_addr_str = "hdr_ethernet.dst_addr"
-let hdr_ipv4_src_addr_str = "hdr_ipv4.src_addr"
-let hdr_ipv4_dst_addr_str = "hdr_ipv4.dst_addr"
-let hdr_icmp_icmp_type = "hdr_icmp_icmp_type"
-let hdr_icmp_icmp_code = "hdr_icmp_icmp_code"
-let fabric_metadata_next_id_str = "fabric_metadata.next_id"
-let mark_to_drop = "standard_metadata.drop" %<-% mkVInt(1,1)
-                                                       
-let fabric_metadata_is_multicast_str = "fabric_metadata.is_multicast" 
-let fabric_metadata_is_multicast = Var(fabric_metadata_is_multicast_str, 1) 
-let standard_metadata_ingress_port = Var(standard_metadata_ingress_port_str, 9) 
-let standard_metadata_egress_port_str = "standard_metadata.egress_port" 
-let standard_metadata_egress_port = Var(standard_metadata_egress_port_str, 9) 
-let hdr_mpls_str = "hdr.mpls" 
-let hdr_mpls_tc_str = "hdr.mpls.tc" 
-let hdr_mpls_bos_str = "hdr.mpls.bos" 
-let hdr_mpls_ttl_str = "hdr.mpls.ttl" 
-let hdr_mpls_ttl = Var(hdr_mpls_ttl_str, 8) 
-let fabric_metadata_mpls_label = Var(fabric_metadata_mpls_label_str, 20) 
-let fabric_metadata_ip_eth_typ = Var(fabric_metadata_ip_eth_typ_str, 16)
-let fabric_metadata_mpls_ttl = Var(fabric_metadata_mpls_ttl_str, 8) 
-let hdr_ipv4_ttl_str = "hdr.ipv4.ttl" 
-let hdr_ipv4_ttl = Var(hdr_ipv4_ttl_str, 8)
-let fabric_metadata_skip_forwarding_str = "fabric_metadata.skip_forwarding"
-let fabric_metadata_skip_forwarding = Var(fabric_metadata_skip_forwarding_str, 1)                       
-let fabric_metadata_is_controller_packet_out_str = "fabric_metadata.is_controller_packet_out"
-let fabric_metadata_is_controller_packet_out = Var(fabric_metadata_is_controller_packet_out_str, 1)
-let hdr_packet_in = "hdr.packet_in"
-let hdr_packet_in_ingress_port_str = "hdr.packet_in.ingress_port"
-let hdr_packet_in_egress_port_str = "hdr.packet_in.egress_port"
-let loopback_port = mkVInt(13,9)
-let local_metadata_l3_admit_str = "local_metadata_l3_admit"
-let local_metadata_l3_admit = Var(local_metadata_l3_admit_str, 1)
-let local_metadata_egress_spec_at_punt_match = "local_metadata.egress_spec_at_punt_match"
-let local_metadata_egress_spec_at_punt_match = Var(local_metadata_egress_spec_at_punt_match, 9)
-
     
 let onos_to_edits filename tbl_nm =
   let lines = In_channel.read_lines filename in
   let make_edit data : Edit.t =
     match data with
-    | [ts; "ADD"; _; ipv6; id] ->
+    | [_; "ADD"; _; ipv6; id] ->
        Add (tbl_nm, ([Match.mk_ipv6_match ipv6], [Int(Bigint.of_string id, 32)], 0))
     | [_; "REMOVE"; _; _; _] ->
        failwith "cannot yet handle removes"
@@ -273,368 +175,6 @@ let onos_to_edits filename tbl_nm =
          |> make_edit]
       ) in
   edits    
-
-let fwd_classifier_table =
-  mkApply(
-      "fwd_classifier"
-    , [ (standard_metadata_ingress_port_str, 9 (*exact*))
-      ; (hdr_ethernet_dst_addr_str, 48 (*ternary*))
-      ; (hdr_eth_type_value_str, 16 (*ternary*))
-      ; (fabric_metadata_ip_eth_typ_str, 16 (*exact*))]
-    , [ ([("fwd_type",3)], fabric_metadata_fwd_type_str %<-% Var("fwd_type", 3))]
-    , fabric_metadata_fwd_type_str %<-% fwd_bridging)
-let bridging_table =
-  mkApply("bridging"
-      , [ (fabric_metadata_vlan_id_str, 12 (*exact*))
-        ; (hdr_ethernet_dst_addr_str, 48 (*ternary*))
-        ]
-      , [([("next_id",32)], fabric_metadata_next_id_str %<-% Var("next_id",32))]
-      , Skip)
-       
-let mpls_table =
-  mkApply("mpls"
-      , [ (fabric_metadata_mpls_label_str, 20 (* exact *) ) ]
-      , [ ([("next_id",32)],  fabric_metadata_next_id_str %<-% Var("next_id", 32)) ]
-      , Skip )
-let ipv4_tbl =
-  mkApply("ipv4"
-      , [ (hdr_ipv4_dst_addr_str, 20 (*exact *))]
-      , [ ([("next_id",32)],  fabric_metadata_next_id_str %<-% Var("next_id", 32)) ]
-      , Skip)
-       
-let acl_table = mkApply("acl",
-                      [ (standard_metadata_ingress_port_str, 9  (*exact*))
-                      ; (fabric_metadata_ip_proto_str, 8 (*ternary*))
-                      ; (fabric_metadata_l4_sport_str, 16 (*ternary*))
-                      ; (fabric_metadata_l4_sport_str, 16 (*ternary*))
-                      ; (hdr_ethernet_dst_addr_str, 48 (*ternary*))
-                      ; (hdr_eth_type_value_str, 16 (*ternary*))
-                      ; (hdr_ipv4_src_addr_str, 32 (*ternary*))
-                      ; (hdr_icmp_icmp_type, 8 (*ternary*))
-                      ; (hdr_icmp_icmp_code, 8 (*ternary*))
-                      ]
-                      ,[ ([("next_id",32)], fabric_metadata_next_id_str %<-% Var("next_id", 32))
-                       ; ([], sequence [ standard_metadata_egress_spec_str %<-% cpu_port
-                                       ; fabric_metadata_skip_next_str %<-% mkVInt(1,1)])
-                       ; ([], sequence [mark_to_drop; fabric_metadata_skip_next_str %<-% mkVInt(1,1)])
-                       ; ([], Skip)
-                       ] 
-                      , fabric_metadata_fwd_type_str %<-% fwd_bridging)
-                     
-
-let apply_simple_next =
-  mkApply("next.simple"
-      , [(fabric_metadata_next_id_str, 32 (*exact*))]
-      , [ ([("port",9)], standard_metadata_egress_spec_str %<-% Var("port", 9))
-        ; ([("port",9);("smac",48);("dmac",48)], sequence [ hdr_ethernet_src_addr_str %<-% Var("smac", 48)
-                                            ; hdr_ethernet_dst_addr_str %<-% Var("dmac", 48)
-                                            ; standard_metadata_egress_spec_str %<-% Var("port", 8)])
-        ; ([("label",20);("port",9);("smac",48);("dmac",48)],
-           sequence [ fabric_metadata_mpls_label_str %<-% Var("label", 20)
-                    ; hdr_ethernet_src_addr_str %<-% Var("smac", 48)
-                    ; hdr_ethernet_dst_addr_str %<-% Var("dmac", 48)
-                    ; standard_metadata_egress_spec_str %<-% Var("port",8)])
-        ]
-      , Skip)
-
-
-
-       
-let prsr = Skip
- (*   [ [ (std_meta_in_port %=% cpu_port, set_valid hdr_packet_out_str)
- *     ; (True, Skip) ] |> mkOrdered
- *   ; set_valid hdr_ethernet_str
- *   ; fabric_metadata_vlan_id_str %<-% default_vlan_id
- *   ; set_valid hdr_eth_type_str
- *   ; [ (hdr_eth_type_value %=% ethertype_mpls
- *       , [ set_valid hdr_mpls_str
- *         ; fabric_metadata_mpls_label_str %<-% hdr_mpls_label
- *         ; fabric_metadata_mpls_ttl_str %<-% hdr_mpls_ttl
- *         ; ipv4_prsr] |> sequence)
- *     ; (hdr_eth_type_value %=% ethertype_ipv4
- *       , ipv4_prsr)
- *     ; (True, Skip)
- *     ] |> mkOrdered
- *   ] |> List.reduce_exn ~f:(%:%) *)
-                       
-let ingress =
-  [(is_valid hdr_packet_out_str,
-    [ standard_metadata_egress_spec_str %<-% hdr_packet_out_egress_port
-    ; set_invalid hdr_packet_out_str
-    ; fabric_metadata_is_controller_packet_out_str %<-% mkVInt(1,1)
-    ] |> sequence)
-  ;  (True,
-      [ (is_valid hdr_mpls_str,
-         fabric_metadata_mpls_ttl_str %<-% Plus(default_mpls_ttl, mkVInt(1,8)))
-      ; (True,
-         [ fwd_classifier_table
-         ; mkOrdered[
-               ( fabric_metadata_skip_forwarding %=% mkVInt(0,1)
-               , [ (fabric_metadata_fwd_type %=% fwd_bridging, bridging_table)
-                 ; (fabric_metadata_fwd_type %=% fwd_mpls, mpls_table)
-                 ; (fabric_metadata_fwd_type %=% fwd_ipv4_unicast, ipv4_tbl)
-                 ] |> mkOrdered)
-             ; (True, Skip)]
-         ; acl_table
-         ; [ (fabric_metadata_skip_next %=% mkVInt(0,1), apply_simple_next) (*and others?*)
-           ; (True, Skip)
-           ] |> mkOrdered
-         ] |> sequence
-
-      )] |> mkOrdered)
-       
-  ] |> mkOrdered
-         
-let egress =
-  mkOrdered [
-      (fabric_metadata_is_controller_packet_out %=% cpu_port, Skip)
-    ; (standard_metadata_egress_port %=% cpu_port,
-       sequence [
-           set_valid hdr_packet_in
-         ; hdr_packet_in_ingress_port_str %<-% standard_metadata_egress_port])
-    ; (True, 
-       sequence [
-         (*   mkOrdered
-          *     [ ((fabric_metadata_is_multicast %=% mkVInt(1,1)) %&% (standard_metadata_ingress_port %=% standard_metadata_egress_port)
-          *       , mark_to_drop)
-          *     ; (True, Skip)]
-          * ; *)
-           mkOrdered
-             [ (is_valid hdr_mpls_str, sequence [ set_invalid hdr_mpls_str
-                                                ; hdr_eth_type_value_str %<-% fabric_metadata_ip_eth_typ])
-             ; (True,
-                sequence [
-                    set_valid hdr_mpls_str
-                  ; hdr_mpls_label_str %<-% fabric_metadata_mpls_label
-                  ; hdr_mpls_tc_str %<-% mkVInt(0,3)
-                  ; hdr_mpls_bos_str %<-% mkVInt(1,1)
-                  ; hdr_mpls_ttl_str %<-% fabric_metadata_mpls_ttl
-                  ; hdr_eth_type_value_str %<-% ethertype_mpls]
-               )
-             ]
-         ; mkOrdered
-             [ (is_valid hdr_mpls_str,
-                sequence [
-                    hdr_mpls_ttl_str %<-% Minus(hdr_mpls_ttl, mkVInt(1,8))
-                  ; mkOrdered [
-                        (hdr_mpls_ttl %=% mkVInt(0,8), mark_to_drop)
-                      ; (True, Skip) 
-                      ]
-               ])
-             ; (is_valid hdr_ipv4_str,
-                sequence [
-                    hdr_ipv4_ttl_str %<-% Minus(hdr_ipv4_ttl, mkVInt(1,8))
-                  ; mkOrdered [
-                   (hdr_ipv4_ttl %=% mkVInt(0,8), mark_to_drop)
-                      ; (True, Skip)
-                      ]
-               ])
-             ; (True, Skip)
-             ]
-         ]
-      )
-    ]
-           
-
-    
-let fabric_no_vlan =
-  sequence
-    [ prsr
-    ; ingress
-    ; egress
-    ]
-
-    
-
-
-let eth_ipv4_tcp_prsr =
-  sequence [
-    (*   mkOrdered [
-     *       (standard_metadata_ingress_port %=% cpu_port, set_valid hdr_packet_out_str)
-     *     ; (True, Skip)
-     *     ]
-     * ; *)
-      set_valid hdr_ethernet_str
-    ; fabric_metadata_vlan_id_str %<-% default_vlan_id
-    ; set_valid hdr_eth_type_str
-    ; Assume(hdr_eth_type_value %=% ethertype_ipv4)
-    ; set_valid hdr_ipv4_str
-    ; fabric_metadata_ip_proto_str %<-% hdr_ipv4_protocol
-    ; fabric_metadata_ip_eth_typ_str %<-% ethertype_ipv4
-    ; Assume (hdr_ipv4_protocol %=% proto_tcp)
-    ; set_valid hdr_tcp_str
-    ; fabric_metadata_l4_sport_str %<-% hdr_tcp_sport
-    ; fabric_metadata_l4_dport_str %<-% hdr_tcp_dport]
-
-let ingress_ipv4_tcp =
-  sequence [
-      mkOrdered [
-        (*   (is_valid hdr_packet_out_str,
-         *    sequence [
-         *        standard_metadata_egress_spec_str %<-% hdr_packet_out_egress_port
-         *      ; set_invalid hdr_packet_out_str
-         *      ; fabric_metadata_is_controller_packet_out_str %<-% mkVInt(1,1) ])
-         * ; *) (True,
-           sequence [
-               fwd_classifier_table
-             ; mkOrdered [
-                   (fabric_metadata_skip_forwarding %=% mkVInt(0,1), 
-                    mkOrdered
-                      [ (fabric_metadata_fwd_type %=% fwd_bridging, bridging_table)
-                      ; (fabric_metadata_fwd_type %=% fwd_mpls, mpls_table)
-                      ; (fabric_metadata_fwd_type %=% fwd_ipv4_unicast, ipv4_tbl)
-                      ; (True, Skip)
-                   ])
-                 ; (True, Skip)
-                 ]
-             ; acl_table
-             ; mkOrdered [
-                    (fabric_metadata_skip_next %=% mkVInt(0,1), apply_simple_next)
-                  ; (True, Skip)
-                 ]
-             ]
-          )
-        ]
-    ]
-
-let egress_ipv4_tcp =
-  (* mkOrdered [
-   *   (\*   (fabric_metadata_is_controller_packet_out %=% cpu_port, Skip)
-   *    * ; *\)
-   *   (\*   (standard_metadata_egress_port %=% cpu_port,
-   *    *    sequence [
-   *    *        set_valid hdr_packet_in
-   *    *      ; hdr_packet_in_ingress_port_str %<-% standard_metadata_egress_port])
-   *    * ; *\)
-   *     (True, *)
-       sequence [
-          (*  mkOrdered [
-          *       ((fabric_metadata_is_multicast %=% mkVInt(1,1))
-          *        %&% (standard_metadata_ingress_port %=% standard_metadata_egress_port)
-          *       , mark_to_drop)
-          *     ; (True, Skip)
-          *     ]
-          * ; *) mkOrdered [
-               (is_valid hdr_ipv4_str, sequence [ hdr_ipv4_ttl_str %<-% Minus(hdr_ipv4_ttl, mkVInt(1,8))
-                                                ; mkOrdered [(hdr_ipv4_ttl %=% mkVInt(0,8), mark_to_drop); (True, Skip)]
-                                         ]
-                                                
-               )
-             ; (True, Skip)
-             ]
-         ]
-    (*   )
-     * ] *)
-
-           
-           
-    
-let fabric_eth_ipv4_tcp =
-  sequence
-    [ eth_ipv4_tcp_prsr
-    ; ingress_ipv4_tcp
-    ; egress_ipv4_tcp ]    
-    
-
-let bcm_eth_ipv4_tcp_parser =
-  sequence [
-      Assume(standard_metadata_ingress_port %<>% cpu_port)
-    ; set_valid hdr_ethernet_str
-    ; Assume(hdr_eth_type_value %=% ethertype_ipv4)
-    ; set_valid hdr_ipv4_str
-    ; Assume(hdr_ipv4_protocol %=% proto_tcp)
-    ; set_valid hdr_tcp_str
-    ; fabric_metadata_l4_sport_str %<-% hdr_tcp_sport
-    ; fabric_metadata_l4_dport_str %<-% hdr_tcp_dport
-    ]
-
-let my_station_table =
-  mkApply("my_station_table"
-      , [(hdr_ethernet_dst_addr_str, 48 (*ternary*))]
-      , [ ( [] , local_metadata_l3_admit_str %<-% mkVInt(1,1) )
-        ; ( [], Skip )]
-      , Skip)
-
-let l3_fwd =
-  mkApply("l3_fwd"
-      , [(hdr_ipv4_dst_addr_str, 32 (*lpm*))
-        ; (hdr_ipv4_src_addr_str, 32 (*selector*))
-        ; (hdr_ipv4_protocol_str, 8 (*selector*))
-        ; (fabric_metadata_l4_sport_str, 16 (*selector*))
-        ]
-      , [ [("port",9); ("smac",48); ("dmac",48); (*"dst_vlan",*)],
-          sequence [
-              standard_metadata_egress_spec_str %<-% Var("port", 9)
-              (*            ; local_metadata_dst_vlan %<-% Var("dst_vlan", ??)*)
-            ; hdr_ethernet_src_addr_str %<-% Var("smac", 48)
-            ; hdr_ethernet_dst_addr_str %<-% Var("dmac", 48)
-            ; hdr_ipv4_ttl_str %<-% Minus(hdr_ipv4_ttl, mkVInt(1,8))
-            ]
-        ]
-      , Skip)
-
-let l2_unicast_table =
-  mkApply("l2_unicast_table"
-      , [(hdr_ethernet_dst_addr_str, 48 (*exact*))]
-      , [([("port",9)], standard_metadata_egress_spec_str %<-% Var("port", 9) )]
-      , Skip)
-       
-let bcm_eth_ipv4_tcp_ingress=
-  let cpu_proc =
-    mkOrdered [
-        (is_valid hdr_packet_out_str, sequence [
-                                          standard_metadata_egress_spec_str %<-% hdr_packet_out_egress_port
-                                        ; set_invalid hdr_packet_out_str])
-      ; (True, Skip)
-      ]
-  in
-  (* let punt_table = mkApply("punt", [], [], Skip) in *)
-  let l2_l3_tables =
-    mkOrdered [
-        ((standard_metadata_egress_spec %=% mkVInt(0,9)) %+% (standard_metadata_egress_spec %=% loopback_port),
-         sequence [
-             my_station_table
-           ; mkOrdered [
-                 (local_metadata_l3_admit %=% mkVInt(1,1), l3_fwd)
-               ; (True, l2_unicast_table)
-               ]
-           (* ; punt_table *)
-           ]
-        )
-      ]
-  in
-  sequence [
-      cpu_proc
-    ; l2_l3_tables
-    ]
-
-let bcm_eth_ipv4_tcp_egress =
-  mkOrdered [
-      (standard_metadata_egress_spec %=% cpu_port, sequence [
-                                                       set_valid hdr_packet_in
-                                                     ; hdr_packet_in_ingress_port_str %<-% standard_metadata_ingress_port
-                                                     ; hdr_packet_in_egress_port_str %<-% local_metadata_egress_spec_at_punt_match ])
-    ; (True, Skip)
-    ]
-           
-let bcm_eth_ipv4_tcp =
-  sequence
-    [ standard_metadata_egress_spec_str %<-% mkVInt(0,9)
-    ; local_metadata_l3_admit_str %<-% mkVInt(0,1)
-    ; bcm_eth_ipv4_tcp_parser
-    ; bcm_eth_ipv4_tcp_ingress
-    (*; bcm_eth_ipv4_tcp_egress*) ]
-
-(* let simple_benchmark =
- *   let fvs = (List.filter (free_vars_of_cmd fabric_eth_ipv4_tcp) ~f:(fun v -> List.exists (free_vars_of_cmd bcm_eth_ipv4_tcp) ~f:((=) v))) in
- *   synthesize_edit ~gas:5 ~iter:0 (Prover.solver ())
- *     ~fvs
- *     fabric_eth_ipv4_tcp (\*logical*\)    
- *     bcm_eth_ipv4_tcp (\*physical*\)
- *     StringMap.empty
- *     StringMap.empty
- *     ("ipv4",([Between(0, pow 2 32, 32)], [], 1))
- *   |> ignore *)
 
 
 let (%>) c c' = ignore c; c'
@@ -682,7 +222,7 @@ let basic_onf_ipv4 params filename =
   in
   measure params None problem (onos_to_edits filename "ipv6")
 
-let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_edits_file fvs_file assume_file log_inc phys_inc = 
+let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_edits_file fvs_file assume_file log_inc phys_inc =
   let fvs = parse_fvs fvs_file |> List.map ~f:snd in
   let assume = parse_file assume_file in
 
@@ -690,23 +230,23 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
 
   let log = (assume %:% Encode.encode_from_p4 log_inc log_p4 false) |> zero_init fvs |> drop_handle fvs in
   let phys = (assume %:% Encode.encode_from_p4 phys_inc phys_p4 false) |> zero_init fvs |> drop_handle fvs in
-  
-  let open Match in
+
   (* let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in *)
   (* let fvs = parse_fvs fvs in *)
   let log_edits = Runtime.parse log_edits_file in
+  let phys_edits = Runtime.parse phys_edits_file in
   let problem =
     Problem.make
       ~log  ~phys ~fvs
-      ~log_inst: StringMap.(set empty ~key:"ipv6" ~data:[])
-      ~phys_inst:StringMap.(set empty ~key:"l3_fwd" ~data:[])
+      ~log_inst:Instance.(update_list params empty log_edits)
+      ~phys_inst:Instance.(update_list params empty phys_edits)
       ~log_edits:[] ()
   in
   measure params None problem (log_edits :: onos_to_edits data_file "routing_v6")
 
 and zero_init fvs cmd =
   let vs = variables cmd |> List.dedup_and_sort ~compare:(fun (v1, _) (v2, _) -> String.compare v1 v2) in
-  let zi = List.filter vs ~f:(fun (v,_) -> List.(mem (fvs >>| fst) v (=) |> not)) in
+  let zi = List.filter vs ~f:(fun (v,_) -> List.(mem (fvs >>| fst) v ~equal:(=) |> not)) in
   sequence @@
     List.map zi ~f:(fun (v, w) ->  mkAssn v  (mkVInt(0, w)))
     @ [cmd]
@@ -726,7 +266,7 @@ and variables cmd =
   | Seq (c1, c2) -> variables c1 @ variables c2
   | While(_, c1) -> variables c1
   | Select(_, tc) -> List.concat_map tc ~f:(fun (t, c) -> variables_test t @  variables c)
-  | Apply {keys} -> keys
+  | Apply {keys;_} -> keys
   | _ -> []
 
 and variables_expr e =
@@ -974,12 +514,12 @@ let square_bench params sz n max_edits =
  *     Representative pipeline          *
  ****************************************)
 
-let cb_to_matches table fvs cb_row =
+let cb_to_matches fvs cb_row =
   List.map fvs ~f:(fun (f,sz) ->
                     get cb_row f
                     |> Option.value ~default:(Mask(mkInt(0,sz),mkInt(0,sz))))
 
-let generate_out acc cb_row  =
+let generate_out acc  =
   let open Edit in
   let biggest = List.fold acc ~init:Bigint.one ~f:(fun max_so_far curr ->
                     match curr with
@@ -1000,16 +540,16 @@ let rep params data nrules =
          ~f:(fun acc cb_row ->
            let open Edit in
            let fields = cb_fvs in
-           let matches = project cb_row fields |> (cb_to_matches "logical" fvs) in
+           let matches = project cb_row fields |> (cb_to_matches fvs) in
            if List.exists acc ~f:(function
-                  | Add (_,(ms,_,_)) -> List.(ms = matches)
+                  | Add (_,(ms,_,_)) -> ms = matches
                   | _ -> false)
               || List.for_all matches ~f:(function
                      | Mask(_,m) -> Bigint.(get_int m = zero)
                      | _ -> false)
            then acc
            else
-             let outp = generate_out acc cb_row in
+             let outp = generate_out acc in
              acc @ [Add("obt", (matches, [Int(outp,9)], 0))]
          )
   in
@@ -1069,16 +609,16 @@ let rep_middle params data nrules =
          ~f:(fun acc cb_row ->
            let open Edit in
            let fields = cb_fvs in
-           let matches = project cb_row fields |> (cb_to_matches "logical" fvs) in
+           let matches = project cb_row fields |> (cb_to_matches fvs) in
            if List.exists acc ~f:(function
-                  | Add (_,(ms,_,_)) -> List.(ms = matches)
+                  | Add (_,(ms,_,_)) -> ms = matches
                   | _ -> false)
               || List.for_all matches ~f:(function
                      | Mask(_,m) -> Bigint.(get_int m = zero)
                      | _ -> false)
            then acc
            else
-             let outp = generate_out acc cb_row in
+             let outp = generate_out acc in
              acc @ [Add("obt", (matches, [Int(outp,9)], 0))]
          )
   in
@@ -1161,10 +701,10 @@ let rep_of params exactify data nrules =
          ~f:(fun acc cb_row ->
            let open Edit in
            let fields = cb_fvs in
-           let matches = project cb_row fields |> (cb_to_matches "logical" fvs) in
+           let matches = project cb_row fields |> (cb_to_matches fvs) in
            let matches = if exactify then exactify_matches matches else matches in
            if List.exists acc ~f:(function
-                  | Add (_,(ms,_,_)) -> List.(ms = matches)
+                  | Add (_,(ms,_,_)) -> ms = matches
                   | _ -> false)
               || List.for_all matches ~f:(function
                      | Mask(_,m) -> Bigint.(get_int m = zero)
@@ -1173,7 +713,7 @@ let rep_of params exactify data nrules =
              (* let () = Printf.printf "\tthrowing out %s\n" (Edit.to_string (Add("obt",(matches, [], -1)))) in *)
              acc
            else
-             let outp = generate_out acc cb_row in
+             let outp = generate_out acc in
              let e =  Add("obt", (matches, [Int(outp,9)], 0)) in
              (* let () = Printf.printf "Keeping %s\n" (Edit.to_string e) in *)
              acc @ [e]
@@ -1237,9 +777,9 @@ let rep_par params data nrules =
       ~f:(fun acc cb_row ->
         let open Edit in
         let fields = cb_fvs in
-        let matches = project cb_row fields |> (cb_to_matches "logical" fvs) in
+        let matches = project cb_row fields |> (cb_to_matches fvs) in
         if List.exists acc ~f:(function
-               | Add (_,(ms,_,_)) -> List.(ms = matches)
+               | Add (_,(ms,_,_)) -> ms = matches
                | _ -> false)
            || List.for_all matches ~f:(function
                   | Mask(_,m) -> Bigint.(get_int m = zero)
@@ -1248,7 +788,7 @@ let rep_par params data nrules =
           (* let () = Printf.printf "\tthrowing out %s\n" (Edit.to_string (Add("obt",(matches, [], -1)))) in *)
           acc
         else
-          let outp = generate_out acc cb_row in
+          let outp = generate_out acc in
           let e =  Add("obt", (matches, [Int(outp,9)], 0)) in
           (* let () = Printf.printf "Keeping %s\n" (Edit.to_string e) in *)
           acc @ [e]

@@ -135,7 +135,7 @@ let update_time_val acc time =
 
 let update_time acc ?end_time:(end_time = Time.now()) start_time =
   let open Time in
-  Time.diff end_time start_time
+  diff end_time start_time
   |> update_time_val acc
 
 let incr acc = acc := !acc + 1

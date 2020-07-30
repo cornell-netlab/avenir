@@ -80,7 +80,7 @@ let get_val subsMap str default =
 let rec substitute ?holes:(holes = false) ex subsMap =
   let subst = get_val subsMap in
   let rec substituteE e =
-    let binop op (e,e') = op (substituteE e) (substituteE e) in
+    let binop op (e,e') = op (substituteE e) (substituteE e') in
     match e with
     | Value _ -> e
     | Var (field,_) ->
@@ -153,7 +153,7 @@ let rec wp negs c phi =
               
   (* requires at least one guard to be true *)
   | Select (Total, []) -> True
-  | Select (Total, cmds) -> failwith "total is unsupported
+  | Select (Total, _) -> failwith "total is unsupported
 "
   (* doesn't require at any guard to be true *)
   | Select (Partial, []) -> True
@@ -184,7 +184,7 @@ let rec wp negs c phi =
      phi'
 
 
-  | Apply t
+  | Apply _
     -> failwith "wp of apply is no good"
   (* concatMap acts ~f:(fun (scope, a) ->
        *      wp ~no_negations (holify (List.map scope ~f:fst) a) phi) ~c:(mkAnd) ~init:(Some True)
@@ -419,8 +419,8 @@ let equivalent ?neg:(neg = True) eq_fvs l p =
   let prefix_list =  List.map ~f:(fun (x,sz) -> (phys_prefix ^ x, sz)) in
   let fvs_p = prefix_list fvs in
   let eq_fvs_p = prefix_list eq_fvs in
-  let sub_l, gl, bl = good_execs fvs l in
-  let sub_p, gp, bp = good_execs fvs_p p' in
+  let sub_l, gl, _ = good_execs fvs l in
+  let sub_p, gp, _ = good_execs fvs_p p' in
   let lin = inits eq_fvs sub_l in
   let pin = inits eq_fvs_p sub_p in
   let lout = finals eq_fvs sub_l in
@@ -579,7 +579,7 @@ let rec wp_paths negs c phi : (cmd * test) list =
      failwith "[Error] loops must be unrolled\n%!"
 
 let bind_action_data vals (scope, cmd) : cmd =
-  let holes = List.map scope fst in
+  let holes = List.map scope ~f:fst in
   (* Printf.printf "holes:";
    * List.iter holes ~f:(Printf.printf " %s");
    * Printf.printf "\n%!";

@@ -1,4 +1,3 @@
-open Bignum
 open Core
 open Ast
 open Tables
@@ -46,7 +45,7 @@ let matches_of_string (data_str : string) : Match.t list =
                    |> failwith
             end
          | _ ->
-            if String.is_substring match_str "."
+            if String.is_substring match_str ~substring:"."
             then
               (*Parse IPv4*)
               begin match String.lsplit2 match_str ~on:'#' with

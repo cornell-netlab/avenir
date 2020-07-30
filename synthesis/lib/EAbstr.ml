@@ -28,7 +28,7 @@ let similar (eold : Edit.t) (enew : Edit.t) =
                 let od_s = string_of_value od in
                 match StringMap.find acc od_s with
                 | Some nd' -> if nd' = nd then Some acc else None
-                | None -> StringMap.set acc od_s nd |> Some
+                | None -> StringMap.set acc ~key:od_s ~data:nd |> Some
          ) |> or_unequal_lengths_to_option |> Option.join
      in
      let matches = List.fold2 oms nms ~init:(Some StringMap.empty)
@@ -48,7 +48,7 @@ let similar (eold : Edit.t) (enew : Edit.t) =
                 | Some nm' when nm' = nm -> Some acc
                 | Some _ -> None
                 | None ->
-                   StringMap.set acc om_s nm |> Some
+                   StringMap.set acc ~key:om_s ~data:nm |> Some
                 end)
                    |> or_unequal_lengths_to_option |> Option.join
        (*        match om, nm with

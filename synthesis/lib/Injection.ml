@@ -37,4 +37,3 @@ let optimization (params : Parameters.t) (problem : Problem.t) : test -> test =
 
 (* END HOLE BASED OPTIMIZATION*)
 
-let compute_hints (params : Parameters.t) (problem : Problem.t) : Hint.t list = failwith ""

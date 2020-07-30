@@ -162,7 +162,7 @@ with Failure (e) ->
 
 let handle_request
   ~(body : Cohttp_async.Body.t)
-   (client_addr : Socket.Address.Inet.t)
+   (_ : Socket.Address.Inet.t)
    (request : Request.t) : Server.response Deferred.t =
    match request.meth with
    | `POST ->
@@ -175,7 +175,7 @@ let handle_request
           Cohttp_async.Server.respond `Not_found
 
 
-let log_error addr exn =
+let log_error _ exn =
     printf "Error: %s \n" (Exn.to_string exn)
 
 

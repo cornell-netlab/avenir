@@ -39,7 +39,7 @@ let rec set_field_of_expr (pkt : t) (field : string) (e : expr) : t =
   | Hole _ ->
      failwith "Packets cannot have holes in them"
   | Cast (i,e) -> set_field pkt field @@ cast_value i @@ get_val (set_field_of_expr pkt field e) field
-  | Slice {hi;lo;bits} -> set_field pkt field @@ slice_value hi lo @@ get_val (set_field_of_expr pkt field e) field
+  | Slice {hi;lo;bits} -> set_field pkt field @@ slice_value hi lo @@ get_val (set_field_of_expr pkt field bits) field
   | Plus  (e, e') -> binop add_values e e'
   | Times (e, e') -> binop multiply_values e e'
   | Minus (e, e') -> binop subtract_values e e'
@@ -118,8 +118,8 @@ let equal ?(fvs = None) (pkt:t) (pkt':t) =
   match fvs with
   | None -> StringMap.equal (=) pkt pkt'
   | Some fvs ->
-     let pkt_fvs = StringMap.filter_keys pkt ~f:(fun k -> List.exists fvs (fun (v,_) -> k = v)) in
-     let pkt_fvs' = StringMap.filter_keys pkt' ~f:(fun k -> List.exists fvs (fun (v,_) -> k = v)) in
+     let pkt_fvs = StringMap.filter_keys pkt ~f:(fun k -> List.exists fvs ~f:(fun (v,_) -> k = v)) in
+     let pkt_fvs' = StringMap.filter_keys pkt' ~f:(fun k -> List.exists fvs ~f:(fun (v,_) -> k = v)) in
      (* Printf.printf "Checking\n%s\n=\n%s\n" (string__packet pkt_fvs) (string__packet pkt_fvs'); *)
      StringMap.equal (=) pkt_fvs pkt_fvs'
 
@@ -177,7 +177,7 @@ let extract_inout_ce (model : value StringMap.t) : (t * t) =
               (out_pkt, counter)
            | _ ->
               (set_field out_pkt v data,
-               StringMap.set counter v idx) in
+               StringMap.set counter ~key:v ~data:idx) in
          ((in_pkt', out_pkt'), counter')
     )
   |> fst

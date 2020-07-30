@@ -1,6 +1,5 @@
 open Core
 open Ast
-open Util
 open Packet
 open Z3
 
@@ -32,8 +31,8 @@ let rec expr_to_term_help expr styp : Smtlib.term =
   match expr with
   | Value (Int (num, sz)) ->
      Smtlib.bbv (num) sz
-  | Var (v, sz) -> quantify v `Var styp
-  | Hole (h, sz) -> quantify h `Hole styp
+  | Var (v, _) -> quantify v `Var styp
+  | Hole (h, _) -> quantify h `Hole styp
   | Cast (i,e) ->
      let sz = size_of_expr e in
      let t = expr_to_term_help e styp in
@@ -132,7 +131,7 @@ let rec test_to_term_help test styp : Smtlib.term =
                       (test_to_term_help t1 styp)
   | Neg t -> Smtlib.not_ (test_to_term_help t styp)
 
-let rec model_to_packet (lst : (Smtlib.identifier * Smtlib.term) list) =
+let model_to_packet (lst : (Smtlib.identifier * Smtlib.term) list) =
   let name_vals : (string * value) list =
     (List.map lst ~f:(fun (Id id, x) ->
          let id = match String.index id '@' with
@@ -163,10 +162,13 @@ let test_to_term test styp d =
 
 let vars_to_term vars d =
   let open Smtlib in
-  (* if d
-   * then (List.iter vars ~f:(fun (id, i) -> Printf.printf "VAR: %s %d\n%!" id i);
-   *       List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i)))
-   * else *) List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i))
+  if d
+  then begin
+      let open List in
+      iter vars ~f:(fun (id, i) -> Printf.printf "VAR: %s %d\n%!" id i);
+      map vars ~f:(fun (id, i) -> (Id id, BitVecSort i))
+    end
+  else List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i))
 
 let sat_prover = Smtlib.make_solver "/usr/bin/z3"
 let valid_prover = sat_prover
@@ -181,7 +183,7 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
   let vars = vars_to_term (free_vars_of_test test) params.debug in
   let st = Time.now() in
   let holes = holes_of_test test |> List.dedup_and_sort
-                ~compare:(fun (idx, x) (idy, y) -> Stdlib.compare idx idy) in
+                ~compare:(fun (idx, _) (idy, _) -> Stdlib.compare idx idy) in
   let () = List.iter holes
              ~f:(fun (id, i) ->
                if params.debug && print_debug then
@@ -218,7 +220,7 @@ let check_valid_inner (params : Parameters.t) (longtest : Ast.test)  =
   (* Printf.printf "Test:  %s\n %!" (string_of_test test ); *)
   let vars = free_vars_of_test test
              |> List.dedup_and_sort
-                  ~compare:(fun (idx, x) (idy, y) -> Stdlib.compare idx idy) in
+                  ~compare:(fun (idx, _) (idy, _) -> Stdlib.compare idx idy) in
   let () =
     List.iter vars
       ~f:(fun (id, i) ->
@@ -291,11 +293,11 @@ let check_min (params : Parameters.t) (test : Ast.test) =
   let vars = List.map (free_vars_of_test test)
       ~f:(fun (id, i) -> (Id id, BitVecSort i)) in
   let holes = holes_of_test test |> List.dedup_and_sort
-                ~compare:(fun (idx, x) (idy, y) -> Stdlib.compare idx idy) in
+                ~compare:(fun (idx, _) (idy, _) -> Stdlib.compare idx idy) in
   let constraints =
     List.fold holes
       ~init:[]
-      ~f:(fun acc (hi, sz) ->
+      ~f:(fun acc (hi,_) ->
           if String.is_suffix hi ~suffix:"_hi"
           then
             let hivar = String.rev hi

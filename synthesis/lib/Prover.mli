@@ -1,5 +1,4 @@
 open Ast
-open Util
 open Core
 open Packet
 

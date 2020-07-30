@@ -1,4 +1,3 @@
-open Bignum
 open Core
 open Util
 
@@ -14,7 +13,7 @@ type size = int
 type value =
   | Int of (Bigint.t * size)
 
-let rec string_of_value (v : value) : string =
+let string_of_value (v : value) : string =
   match v with
   | Int (i,x) -> Printf.sprintf "%s#%d" (Bigint.Hex.to_string i) x
 
@@ -84,7 +83,7 @@ let rec string_of_expr (e : expr) : string =
   | Slice {hi; lo; bits} -> Printf.sprintf "%s[%d:%d]" (string_of_expr bits) hi lo
 
 
-let rec sexp_string_of_value (v : value) =
+let sexp_string_of_value (v : value) =
   match v with
   | Int (i,sz) -> Printf.sprintf "Int(%s,%d)" (Bigint.to_string i) sz
                    
@@ -108,7 +107,7 @@ let get_int (v : value) : Bigint.t =
   match v with
   | Int (x, _) -> x
                   
-let rec size_of_value (v : value) : size =
+let size_of_value (v : value) : size =
   match v with
   | Int (_, s) -> s
                            
@@ -130,8 +129,8 @@ let rec size_of_expr (e : expr) : size =
                      (string_of_expr e)
                      (string_of_expr e')
                      s s')
-  | Slice {hi;lo;bits} -> let sz = hi - lo in
-                          if sz < 0 then -1 else sz
+  | Slice {hi;lo;_} -> let sz = hi - lo in
+                       if sz < 0 then -1 else sz
 
 let rec num_nodes_in_expr e =
   match e with
@@ -144,19 +143,19 @@ let rec num_nodes_in_expr e =
 
 
                    
-let rec add_values (v : value) (v' : value) : value =
+let add_values (v : value) (v' : value) : value =
   match v, v' with
   | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x + x'),sz)
   | Int (x, sz), Int(x',sz') ->
      failwith (Printf.sprintf "Type error %s#%d and %s#%d have different bitvec sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 
-let rec multiply_values (v : value) (v' : value) : value =
+let multiply_values (v : value) (v' : value) : value =
   match v, v' with
   | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x * x'), sz)
   | Int (x,sz), Int (x',sz') -> failwith (Printf.sprintf "Type error %s#%d and %s#%d have different bitvec sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 
 
-let rec subtract_values (v : value) (v' : value) : value =
+let subtract_values (v : value) (v' : value) : value =
   match v, v' with
   | Int (x, sz), Int (x',sz') when sz = sz' ->
      (* if Bigint.(x-x' < zero)
@@ -165,30 +164,30 @@ let rec subtract_values (v : value) (v' : value) : value =
   | Int (x, sz), Int (x', sz') ->
      failwith (Printf.sprintf "Type error %s#%d and %s#%d have different bitvec sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 
-let rec mask_values (v : value) (v' : value) : value =
+let mask_values (v : value) (v' : value) : value =
   match v,v' with
   | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x land x'), sz)
   | Int (x, sz), Int (x', sz') ->
      failwith (Printf.sprintf "MASK: Type error %s#%d and %s#%d have different BV sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 
-let rec xor_values (v : value) (v' : value) : value =
+let xor_values (v : value) (v' : value) : value =
   match v,v' with
   | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x lxor x'), sz)
   | Int (x, sz), Int (x', sz') ->
      failwith (Printf.sprintf "MASK: Type error %s#%d and %s#%d have different BV sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 
-let rec or_values (v : value) (v' : value) : value =
+let or_values (v : value) (v' : value) : value =
   match v,v' with
   | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x lor x'), sz)
   | Int (x, sz), Int (x', sz') ->
      failwith (Printf.sprintf "MASK: Type error %s#%d and %s#%d have different BV sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 
-let rec shl_values (v : value) (v' : value) : value =
+let shl_values (v : value) (v' : value) : value =
   match v,v' with
-  | Int (x, sz), Int (x',sz') ->
+  | Int (x, sz), Int (x',_) ->
      Int (Bigint.(shift_left x @@ to_int_exn x'), sz)
 
-let rec cast_value w (v : value) : value =
+let cast_value w (v : value) : value =
   match v with
   | Int(x,sz) ->
      if w < sz then
@@ -278,7 +277,7 @@ let mkNeg t =
 let (!%) = mkNeg
 
              
-let rec mkEq (e : expr) (e':expr) =
+let mkEq (e : expr) (e':expr) =
   if not enable_smart_constructors then Eq(e,e') else 
   if e = e' then
     ((*Printf.printf "[=] %s and %s are equal, so True\n" (string_of_expr e) (string_of_expr e');*)
@@ -439,7 +438,7 @@ let rec has_hole_test = function
      has_hole_expr e1 || has_hole_expr e2
                                  
 
-let rec multi_ints_of_value e : (Bigint.t * size) list =
+let multi_ints_of_value e : (Bigint.t * size) list =
   match e with
   | Int (i,sz) -> [i,sz]
 
@@ -558,7 +557,7 @@ let (%:%) = mkSeq
 
 let mkAssn f v =
   match v with
-  | Var(x, sz) when x = f -> Skip
+  | Var(x, _) when x = f -> Skip
   | _ -> Assign (f, v)
 let (%<-%)= mkAssn
          
@@ -711,7 +710,7 @@ let rec multi_ints_of_cmd c : (Bigint.t * size) list =
   (* | Assign (_, Int i) ->
    *   [i] *)
   (* Only collect _tested_ inputs*)
-  | Assign (f,e) -> multi_ints_of_expr e
+  | Assign (_,e) -> multi_ints_of_expr e
   | Seq (c, c') ->
     multi_ints_of_cmd c
     @ multi_ints_of_cmd c'

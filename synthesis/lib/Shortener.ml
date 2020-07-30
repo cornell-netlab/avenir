@@ -16,6 +16,7 @@ let rec shorten_expr (bht : Bishtbl.t) (e : expr) : expr =
     | Var (x, sz) -> Var(get x, sz)
     | Hole (h, sz) -> Hole(get h, sz)
     | Cast (i,e) -> unop ~mk:(mkCast i) e
+    | Slice {hi;lo;bits} -> unop ~mk:(mkSlice hi lo) bits
     | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
       -> binop (ctor_for_binexpr e) es
 
@@ -42,6 +43,7 @@ let rec unshorten_expr (bht : Bishtbl.t) (e : expr) : expr =
     | Var (x, sz) -> Var(unget x, sz)
     | Hole (h, sz) -> Hole(unget h, sz)
     | Cast (i,e) -> unop ~mk:(mkCast i) e
+    | Slice {hi;lo;bits} -> unop ~mk:(mkSlice hi lo) bits
     | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
       -> binop (ctor_for_binexpr e) es
 
@@ -59,9 +61,9 @@ let rec unshorten (bht : Bishtbl.t) (t : test) : test =
     | Neg t1 -> mkNeg @@ unshorten bht t1
 
 
-let rec unshorten_model (bht : Bishtbl.t) (m : value StringMap.t) : value StringMap.t =
+let unshorten_model (bht : Bishtbl.t) (m : value StringMap.t) : value StringMap.t =
   if disable then m else
     StringMap.fold m ~init:StringMap.empty
       ~f:(fun ~key ~data acc ->
-        StringMap.add_exn acc ~key:(Bishtbl.get_back bht key) ~data
+        StringMap.add_exn acc ~key:(Bishtbl.get_back bht ~key) ~data
       )

@@ -95,9 +95,6 @@ let add_attempt (p : t) (attempt : value StringMap.t) : t =
 let seen_attempt (p : t)  (attempt : value StringMap.t) : bool =
   List.exists p.attempts ~f:(StringMap.equal veq attempt)
 
-let add_cex (p : t) (cex : (Packet.t * Packet.t)) : t =
-  {p with cexs = cex :: p.cexs}
-
 let reset_model_space (p : t) : t =
   {p with model_space = True}
 

@@ -53,7 +53,7 @@ let rec find_match ?idx:(idx = 0) pkt_loc ss ~default:default =
      else
        (find_match ~idx:(idx+1) pkt_loc rest ~default)
 
-let rec wide_eval wide (e : expr) = (mkInt(0,-1),mkInt(0,-1))
+(* let rec wide_eval wide (e : expr) = (mkInt(0,-1),mkInt(0,-1)) *)
   (* match e with
    * | Value(x) -> (x,x)
    * | Var(x, sz) ->
@@ -165,14 +165,13 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
           ((Packet.set_field_of_expr pkt f e, loc_opt),
            StringMap.empty,
            cmd, StringMap.empty)
-       | Assert t
+       | Assert _
          (* failwith "Asserts are deprecated" *)
          (* if check_test t pkt_loc then
           *   (pkt_loc, StringMap.empty, cmd, StringMap.empty)
           * else
           *   failwith ("AssertionFailure: " ^ string_of_test t ^ "was false") *)
-         | Assume t ->
-          (* failwith "Raw assumes are deprecated" *)
+         | Assume _ ->
           (pkt_loc, StringMap.empty, cmd, StringMap.empty)
        | Seq (firstdo, thendo) ->
           let pkt_loc', wide', cmd', trace' = trace_eval_inst ~gas ~wide firstdo inst pkt_loc in

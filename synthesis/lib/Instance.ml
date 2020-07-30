@@ -51,7 +51,7 @@ let get_row_exn inst table idx : Row.t =
   | None -> failwith @@ Printf.sprintf "Invalid row %d in table %s" idx table
   | Some row -> row
 
-let rec overwrite (old_inst : t) (new_inst : t) : t =
+let overwrite (old_inst : t) (new_inst : t) : t =
   StringMap.fold new_inst ~init:old_inst
     ~f:(fun ~key ~data acc -> StringMap.set acc ~key ~data)
 
@@ -195,7 +195,7 @@ let remove_deleted_rows (params : Parameters.t) match_model (pinst : t) : t =
                  | Some do_delete when get_int do_delete = Bigint.one ->
                     if params.interactive then Printf.printf "- %s : row %d\n%!" tbl_name i;
                     false
-                 | Some x -> true
+                 | Some _ -> true
                  end
               | _ -> true
             )

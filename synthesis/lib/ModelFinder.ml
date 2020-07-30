@@ -64,7 +64,7 @@ let rec make_schedule opt =
       opt' :: make_schedule opt'
     else []
 
-let make_searcher (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : t =
+let make_searcher (params : Parameters.t) (_ : ProfData.t ref) (_ : Problem.t) : t =
   let schedule = make_schedule {
                      injection = params.injection;
                      hints = params.hints;
@@ -93,8 +93,7 @@ let reindex_for_dels problem tbl i =
           | _ -> cnt
         )
 
-let compute_deletions pkt (problem : Problem.t) =
-  let open Problem in
+let compute_deletions (_ : value StringMap.t) (problem : Problem.t) =
   let phys_inst = Problem.phys_inst problem in
   StringMap.fold phys_inst ~init:[]
     ~f:(fun ~key:table_name ~data:rows dels ->
@@ -325,13 +324,13 @@ let holes_for_table table phys =
 let holes_for_other_actions table phys actId =
   match get_schema_of_table table phys with
   | None -> failwith @@ Printf.sprintf"couldnt find schema for %s\n%!" table
-  | Some (ks, acts, _) ->
+  | Some (_, acts, _) ->
      List.foldi acts ~init:[]
        ~f:(fun i acc (params,_) ->
          acc @ if i = Bigint.to_int_exn actId then [] else List.map params ~f:fst
        )
 
-let minimize_model (model : value StringMap.t) (phys : cmd) : value StringMap.t = model
+let minimize_model (model : value StringMap.t) (_ (*phys*) : cmd) : value StringMap.t = model
   (* StringMap.keys model
    * |> List.filter ~f:(fun k -> String.is_prefix k ~prefix:Hole.add_row_prefix)
    * |> List.fold ~init:model

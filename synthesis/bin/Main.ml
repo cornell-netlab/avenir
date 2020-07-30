@@ -1,6 +1,5 @@
 open Core
 open Async
-open Async_command
 module Ast = Avenir.Ast
 module Parser = Avenir.Parser
 module Lexer = Avenir.Lexer
@@ -142,7 +141,6 @@ module Solver = struct
     let phys_inst = Runtime.parse physical_edits |> Instance.(update_list params empty) in
     let phys_drop_spec = None in
     if measure then
-      let open Avenir.Instance in
       let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits:[] ~fvs ~phys_drop_spec () in
       match Benchmark.measure params None problem log_edits with
       |  None -> Core.Printf.printf "No solution could be found \n%!"
@@ -156,7 +154,7 @@ module Solver = struct
       Core.Printf.printf "PROBLEM: %s \n" (Problem.to_string params problem);
       match Synthesis.cegis_math_sequence params (ProfData.zero ()) problem with
       | None -> failwith "failed"
-      | Some (solution, phys_edits) ->
+      | Some (_, phys_edits) ->
          if print_res
          then
            begin
@@ -1186,9 +1184,9 @@ module ServerCmd = struct
         log_incl
         phys_incl
         debug
-        print_res
-        measure
-        onos
+        _ (*print_res*)
+        _ (*measure*)
+        _ (*onos*)
         widening
         do_slice
         edits_depth

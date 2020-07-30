@@ -1,4 +1,3 @@
-open Bignum
 open Core
 open Util
 open Ast
@@ -23,7 +22,7 @@ module Match = struct
     match m with
     | Exact x -> string_of_value x
     | Between (lo,hi) -> Printf.sprintf "[%s,%s]" (string_of_value lo) (string_of_value hi)
-    | Mask ((Int(i,sz) as v), (Int(j,sz') as m)) ->
+    | Mask ((Int(i,sz) as v), (Int(j,_) as m)) ->
        if Bigint.(i = zero && j = zero ) then
          Printf.sprintf "*#%d" sz
        else
@@ -49,13 +48,13 @@ module Match = struct
 
   let to_test_hole tbl k m =
     match m with
-    | Exact (Int(x,sz) as v) ->
+    | Exact (Int(_,sz) as v) ->
        Hole (Hole.match_hole_exact tbl k,sz) %=% Value(v)
-    | Between((Int(lo,lsz) as l), (Int(hi,hsz) as h)) ->
+    | Between((Int(_,lsz) as l), (Int(_,hsz) as h)) ->
        assert (lsz = hsz);
        let (loh, hih) = Hole.match_holes_range tbl k in
        (Hole(loh,lsz) %=% Value l) %&% (Hole(hih,hsz) %=% Value h)
-    | Mask ((Int(v,vsz) as vint), (Int(m,msz) as mask)) ->
+    | Mask ((Int(_,vsz) as vint), (Int(_,msz) as mask)) ->
        assert (vsz = msz);
        let (vh, mh) = Hole.match_holes_mask tbl k in
        (Hole(vh,vsz) %=% Value vint) %&% (Hole(mh,msz) %=% Value mask)
@@ -83,7 +82,7 @@ module Match = struct
       let exp_addr_str =
         match String.substr_index addr_str ~pattern:"::" with
         | None -> addr_str
-        | Some i ->
+        | Some _ ->
           let rec loop addr =
             if String.count addr ~f:((=) ':') = 8 then
               String.substr_replace_all addr  ~pattern:"::" ~with_:":"
@@ -210,7 +209,7 @@ module Row = struct
   let mk_new_row match_model phys tbl_name data_opt act : t option =
     match get_schema_of_table tbl_name phys with
     | None -> failwith ("Couldnt find keys for table " ^ tbl_name)
-    | Some (ks, acts, d) ->
+    | Some (ks, acts, _) ->
        let keys_holes =
          List.fold ks ~init:(Some [])
            ~f:(fun acc (v, sz) ->
@@ -320,7 +319,7 @@ module Edit = struct
     | Add(t,(ms,ds,i)) ->
        match get_schema_of_table t phys with
        | None -> failwith @@ Printf.sprintf "Couldn't find table %s" t
-       | Some (keys,actions,def) ->
+       | Some (keys,actions,_) ->
           let actSize = max (log2 (List.length actions)) 1 in
           Hole.add_row_hole t %=% mkVInt(1,1)
           %&%
@@ -346,8 +345,8 @@ module Edit = struct
 
   let get_ith_match ~i (e : t) =
     match e with
-    | Add (s, row) -> Row.get_ith_match i row
-    | Del (s, row) -> None
+    | Add (_, row) -> Row.get_ith_match i row
+    | Del (_, _) -> None
 
   let extract phys (m : value StringMap.t)  : t list =
     let dels, adds =

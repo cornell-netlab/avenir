@@ -66,11 +66,11 @@ let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref)
   pkt_opt
 
 
-let unique_in_table params prog inst edits e =
+let unique_in_table params (_ (*prog*) : cmd) inst edits e =
   let open Edit in
   match e with
   | Del _ -> false
-  | Add (tbl, (ms, ds, a)) ->
+  | Add (tbl, (ms, _,_)) ->
      let index_of_e = List.findi edits ~f:(fun _ e' -> e = e') |> Option.value_exn |> fst in
      let earlier_edits = List.filteri edits ~f:(fun i _ -> i < index_of_e) in
      let inst' = Instance.update_list params inst earlier_edits in
@@ -79,11 +79,11 @@ let unique_in_table params prog inst edits e =
          not (Match.has_inter_l ms ms')
        )
 
-let exists_in_table params prog inst edits e =
+let exists_in_table params (_ (*prog*) : cmd) inst edits e =
   let open Edit in
   match e with
   | Del _ -> false
-  | Add (tbl, (ms, ds, a)) ->
+  | Add (tbl, (ms, _, _)) ->
      let index_of_e = List.findi edits ~f:(fun _ e' -> e = e') |> Option.value_exn |> fst in
      let earlier_edits = List.filteri edits ~f:(fun i _ -> i < index_of_e) in
      let inst' = Instance.update_list params inst earlier_edits in
@@ -156,7 +156,7 @@ let edit_cache = ref @@ EAbstr.make ()
 
 
 
-let rec get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref) (problem : Problem.t)
+let get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref) (problem : Problem.t)
         : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
   if params.fastcx then begin
       let st = Time.now () in
@@ -227,7 +227,7 @@ let get_new_cex params data problem =
 (*a model is suspicious if it contains a value that's not related to
    anything we've seen so far. Not sure how to analyze masks, so we
    just allow them to have any value*)
-let suspect_model params problem es model =
+let suspect_model params problem model =
   let ints_in_problem =
     multi_ints_of_cmd (Problem.log_gcl_program params problem)
     @ multi_ints_of_cmd (Problem.phys_gcl_program params problem)

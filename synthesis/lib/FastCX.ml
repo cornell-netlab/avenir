@@ -9,7 +9,7 @@ open Packet
 
 let rec one_some (table: string) (lst : ((test * cmd) list)) : Ast.cmd option =
   let processed = List.map lst ~f:(fun (b, c) -> (b, truncated table c)) in
-  let elim = List.filter processed ~f:(fun (b,c) -> if c = None then false else true) in
+  let elim = List.filter processed ~f:(fun (_,c) -> if c = None then false else true) in
   if (List.is_empty elim) then None else match elim with
     | (b, Some c)::[] -> Some (Seq (Assume b, c))
     | _ -> failwith "not well formed"
@@ -28,7 +28,7 @@ and truncated (table : string) (program : Ast.cmd) : Ast.cmd option =
   | Select (_, lst) -> one_some table lst
   | Apply t -> if t.name = table then Some Skip else None
 
-let hits_pred params data prog inst edits e : test =
+let hits_pred params (_: ProfData.t ref) prog inst edits e : test =
   match e with
   | Edit.Add (t, (ms, _, _)) ->
     let (ks, _, _) = get_schema_of_table t prog |> Option.value_exn in
@@ -46,8 +46,8 @@ let hits_pred params data prog inst edits e : test =
      let (ks, _, _) = get_schema_of_table t prog |> Option.value_exn in
      let (ms, _, _) = Instance.get_row inst t i |> Option.value_exn in
      let phi = Match.list_to_test ks ms %&%
-                 List.foldi (Instance.get_rows_before inst t i) ~init:True
-                   ~f:(fun j acc (matches,_,_) ->
+                 List.fold (Instance.get_rows_before inst t i) ~init:True
+                   ~f:(fun acc (matches,_,_) ->
                      (* Printf.printf "combining %s\n%!" (Match.list_to_test ks matches |> string_of_test); *)
                      acc %&% !%(Match.list_to_test ks matches))
      in
@@ -57,7 +57,7 @@ let hits_pred params data prog inst edits e : test =
     wp `Negs pref_gcl phi
 
 
-let hits_list_pred params data prog inst edits =
+let hits_list_pred params (data : ProfData.t ref) prog inst edits =
   (* Printf.printf "\tThere are %d edits to check\n" (List.length edits); *)
   List.fold edits ~init:[]
     ~f:(fun acc e -> hits_pred params data prog inst edits e :: acc)
@@ -89,12 +89,11 @@ let make_cex params problem x =
 
 let attempt_model test =
   match test with
-  | Eq(Hole(x,sz), Value(v)) -> StringMap.(set empty ~key:x ~data:v) |> Some
+  | Eq(Hole(x,_), Value(v)) -> StringMap.(set empty ~key:x ~data:v) |> Some
   | _ -> None
 
 
 let unreachable params (problem : Problem.t) (test : Ast.test) =
-  let open Option in
   (* let drop_spec = (Problem.phys_drop_spec problem >>| fun spec ->
    *                  (\* Printf.printf "Program %s\n " (string_of_cmd @@ Problem.phys_gcl_program params problem);
    *                   * Printf.printf "OUT DROPSPEC:%s\n%!" (string_of_test spec); *\)

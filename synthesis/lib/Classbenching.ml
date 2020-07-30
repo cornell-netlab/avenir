@@ -1,8 +1,5 @@
 open Core
 open Ast
-open Synthesis
-open Util
-open Packet
 open Tables
 
 
@@ -211,7 +208,7 @@ let rec project cb_row hdrs =
 let generate f acc cb_row sz =
   let biggest = List.fold acc ~init:Bigint.one ~f:(fun max_so_far curr ->
                     match get curr "out_port" with
-                    | Some (Exact Int (i,sz)) when Bigint.(i > max_so_far) -> i
+                    | Some (Exact Int (i,_)) when Bigint.(i > max_so_far) -> i
                     | _ -> max_so_far
                   ) in
   set cb_row f (Some (Exact (Int(Bigint.(biggest + one), sz))))

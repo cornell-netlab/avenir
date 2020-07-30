@@ -30,7 +30,7 @@ let get_poss_injections keys phys e : string list =
          ~f:(fun acc k m ->
            match m with
            | Exact _ -> acc @ [k]
-           | Mask (v,m) ->
+           | Mask (_,m) ->
               if Bigint.(get_int m = zero)
               then acc
               else acc @ [k]
@@ -49,10 +49,10 @@ let get_poss_injections keys phys e : string list =
             else None)
 
 
-let make edit table (log_keys, log_acts, log_def) (phys_keys, phys_acts, phys_def) =
+let make edit table (log_keys, _, _) (phys_keys,_, _) =
   let match_opt =
     List.map phys_keys ~f:(fun (key,sz) ->
-        match List.findi log_keys ~f:(fun i (key',_) -> key = key') with
+        match List.findi log_keys ~f:(fun _ (key',_) -> key = key') with
         | None ->
            let string = Printf.sprintf "0b%s" (String.make sz '0') in
            Some (Match.Mask(mkInt(0,sz), mkInt(int_of_string string, sz)))
@@ -67,7 +67,7 @@ let make edit table (log_keys, log_acts, log_def) (phys_keys, phys_acts, phys_de
 let construct log phys (e : Edit.t) : t list =
   match get_schema_of_table (Edit.table e) log with
   | None -> []
-  | Some ((keys, actions, default) as log_schema) ->
+  | Some ((keys, _, _) as log_schema) ->
      get_poss_injections keys phys e
      |> List.fold ~init:[]
           ~f:(fun acc table ->

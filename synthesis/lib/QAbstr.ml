@@ -96,7 +96,7 @@ let rec abstracted_expr (e1 : expr) (e2 : expr) : bool =
   | Value _, Value _ ->
      (* Printf.printf "Int values are different %s  <> %s" (sexp_string_of_expr e1) (sexp_string_of_expr e2); *)
      false
-  | Value(v), Var(x) -> true (*BUG :: This is wrong -- need to keep a map*)
+  | Value _, Var _ -> true (*BUG :: This is wrong -- need to keep a map*)
   | Var s1, Var s2 | Hole s1, Hole s2 -> Stdlib.(s1 = s2)
   | Plus  (e11, e12), Plus  (e21, e22) -> recurse e11 e12 e21 e22
   | Times (e11, e12), Times (e21, e22) -> recurse e11 e12 e21 e22
@@ -137,7 +137,7 @@ let string_of_map (m : string StringMap.t) =
         data
     )
 
-let cache_check params ({seen;generals} : t) test =
+let cache_check _ ({seen;generals} : t) test =
   if disable then ({seen=[];generals=[]}, `Miss test) else
   let f phi =
     (* Printf.printf "\ncomparing to %s\n%!" (sexp_string_of_test phi); *)
@@ -151,7 +151,7 @@ let cache_check params ({seen;generals} : t) test =
   | Some (_,q) when q = test ->
      (* Printf.printf "Queries were identical\n%!"; *)
      ({seen; generals}, `Hit test)
-  | Some (m,q) ->
+  | Some (_,q) ->
      (* Printf.printf "Found a match\n%!"; *)
      match List.find generals ~f:(fun phi ->
                (* Printf.printf "Checking whether\n\n %s\n\n is an instance of \n\n %s\n%!" *)
