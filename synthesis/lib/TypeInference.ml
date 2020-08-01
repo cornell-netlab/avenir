@@ -41,7 +41,8 @@ let rec infer_expr (e : expr) : expr =
     | Hole _ -> e
   | Cast (i,e) -> mkCast i @@ infer_expr e
   | Slice {hi;lo;bits} -> mkSlice hi lo @@ infer_expr bits
-  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es
+  | Concat (e,e') -> mkConcat (infer_expr e) (infer_expr e')
+  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
     -> binop (ctor_for_binexpr e) es
 
 let rec infer_test (t : test) : test =

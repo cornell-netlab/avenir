@@ -663,6 +663,17 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t l
      | None,None ->
         begin match encode_expression_to_value type_ctx lhs with
         | Var (f,s) -> f %<-% encode_expression_to_value_with_width s type_ctx rhs, false, false
+        | Slice {hi;lo;bits=(Var(f,s) as bits)} ->
+           f %<-% mkConcat (
+                      mkConcat
+                        (mkSlice s hi bits)
+                        (encode_expression_to_value_with_width (hi - lo) type_ctx rhs)
+                    )
+                    (mkSlice lo 0 bits)
+
+          , false
+          , false
+
         | _ -> failwith ("[TypeError] lhs of assignment must be a field, at " ^ Petr4.Info.to_string info)
         end
      end
