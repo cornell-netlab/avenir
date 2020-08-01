@@ -63,7 +63,7 @@ let ctor_for_binexpr =
   | Plus _ -> mkPlus
   | Times _ -> mkTimes
   | Minus _ -> mkMinus
-  | Mask _ -> mkMinus
+  | Mask _ -> mkMask
   | Xor _ -> mkXor
   | BOr _ -> mkBOr
   | Shl _ -> mkShl
