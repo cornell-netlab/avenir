@@ -230,9 +230,13 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
   (* let print_fvs = printf "fvs = %s" (Sexp.to_string ([%sexp_of: (string * int) list] fvs)) in *)
 
   let log = (assume %:% Encode.encode_from_p4 log_inc log_p4 false)
-            |> Encode.unify_names var_mapping |> zero_init fvs |> drop_handle fvs in
+            |> Encode.unify_names var_mapping |> zero_init fvs |> drop_handle fvs
+            (* |> StaticSlicing.static_slice fvs *)
+  in
   let phys = (assume %:% Encode.encode_from_p4 phys_inc phys_p4 false)
-             |> Encode.unify_names var_mapping |> zero_init fvs |> drop_handle fvs in
+             |> Encode.unify_names var_mapping |> zero_init fvs |> drop_handle fvs
+             (* |> StaticSlicing.static_slice fvs *)
+  in
 
   (* let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in *)
   (* let fvs = parse_fvs fvs in *)

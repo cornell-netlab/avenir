@@ -238,3 +238,5 @@ let rec list_prefix xs i =
   else match xs with
        | [] -> []
        | x::xs -> x :: list_prefix xs (i-1)
+
+let swap (a,b) = (b,a)
