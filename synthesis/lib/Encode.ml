@@ -395,13 +395,19 @@ and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) 
      | BitXor -> binop mkXor e e'
      | BitOr -> binop mkBOr e e'
      | Shl -> binop mkShl e e'
+     | MinusSat ->
+        Printf.eprintf "Warning, interpreting |-| as -\n%!";
+        binop mkMinus e e'
+     | PlusSat ->
+        Printf.eprintf "Warning, interpreting |+| as +\n%!";
+        binop mkPlus e e'
 
      | Div | Mod
        -> unimplemented (string_of_binop op)
      | Le | Ge | Lt | Gt | Eq | NotEq | And | Or
        -> type_error (string_of_binop op)
 
-     | Shr | PlusSat | MinusSat | PlusPlus
+     | Shr | PlusPlus
        -> unimplemented (string_of_binop op)
      end
   | E.FunctionCall {func; type_args=[]; args=[]} ->

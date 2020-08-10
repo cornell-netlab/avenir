@@ -128,13 +128,18 @@ module Solver = struct
     let fvs = List.map var_mapping ~f:snd in
     let log = if p4
               then Encode.encode_from_p4 log_incl logical false
-                   |> Benchmark.zero_init fvs |> Benchmark.drop_handle fvs
+                   |> Encode.unify_names var_mapping
+                   |> Benchmark.zero_init fvs
+                   |> Benchmark.drop_handle fvs
               else Benchmark.parse_file logical in
     let phys = if p4
                then Encode.encode_from_p4 phys_incl real false
-                    |> Benchmark.zero_init fvs |> Benchmark.drop_handle fvs
+                    |> Encode.unify_names var_mapping
+                    |> Benchmark.zero_init fvs
+                    |> Benchmark.drop_handle fvs
                else Benchmark.parse_file real in
-    let log_inst = Runtime.parse logical_edits |> Instance.(update_list params empty) in
+    let log_inst = Runtime.parse logical_edits
+                   |> Instance.(update_list params empty) in
     let log_edits = if onos
                     then Benchmark.onos_to_edits data "ipv6"
                     else Runtime.parse data |> List.(map ~f:return)  in

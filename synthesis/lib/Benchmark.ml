@@ -223,13 +223,16 @@ let basic_onf_ipv4 params filename =
   measure params None problem (onos_to_edits filename "ipv6")
 
 let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_edits_file fvs_file assume_file log_inc phys_inc =
-  let fvs = parse_fvs fvs_file |> List.map ~f:snd in
+  let var_mapping = parse_fvs fvs_file in
+  let fvs = List.map var_mapping ~f:snd in
   let assume = parse_file assume_file in
 
   (* let print_fvs = printf "fvs = %s" (Sexp.to_string ([%sexp_of: (string * int) list] fvs)) in *)
 
-  let log = (assume %:% Encode.encode_from_p4 log_inc log_p4 false) |> zero_init fvs |> drop_handle fvs in
-  let phys = (assume %:% Encode.encode_from_p4 phys_inc phys_p4 false) |> zero_init fvs |> drop_handle fvs in
+  let log = (assume %:% Encode.encode_from_p4 log_inc log_p4 false)
+            |> Encode.unify_names var_mapping |> zero_init fvs |> drop_handle fvs in
+  let phys = (assume %:% Encode.encode_from_p4 phys_inc phys_p4 false)
+             |> Encode.unify_names var_mapping |> zero_init fvs |> drop_handle fvs in
 
   (* let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in *)
   (* let fvs = parse_fvs fvs in *)
