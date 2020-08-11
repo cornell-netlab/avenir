@@ -209,7 +209,7 @@ let good_execs fvs c =
        end
     | Hole (x, sz) ->
        begin match StringMap.find sub x with
-       | None  -> "couldn't find "^x^" in substitution map " |> failwith
+       | None  -> Hole (x,sz) (*"couldn't find "^x^" in substitution map " |> failwith*)
        | Some (i,_) ->  Hole (freshen x sz i)
        end
     | Cast (i,e) -> mkCast i @@ indexVars_expr e sub
@@ -242,7 +242,7 @@ let good_execs fvs c =
        | None ->
           let sz = size_of_expr e in
           (StringMap.set sub ~key:f ~data:(1, sz)
-          , Assume (Var (freshen f sz 0) %=% indexVars_expr e sub))
+          , Assume (Var (freshen f sz 1) %=% indexVars_expr e sub))
        | Some (idx, sz) ->
           (StringMap.set sub ~key:f ~data:(idx + 1,sz)
           , Assume (Var (freshen f sz (idx + 1)) %=% (indexVars_expr e sub)))
@@ -337,12 +337,12 @@ let good_execs fvs c =
   let init_sub = List.fold fvs ~init:StringMap.empty ~f:(fun sub (v,sz) ->
                      StringMap.set sub ~key:v ~data:(0,sz)
                    ) in
-  (* Printf.printf "active : \n %s \n" (string_of_cmd c); *)
+  Printf.printf "active : \n %s \n" (string_of_cmd c);
   let merged_sub, passive_c = passify init_sub c  in
-  (* Printf.printf "passive : \n %s\n" (string_of_cmd passive_c); *)
+  Printf.printf "passive : \n %s\n" (string_of_cmd passive_c);
   (* let vc = good_wp passive_c in *)
   (* Printf.printf "good_executions:\n %s\n%!" (string_of_test vc); *)
-  (merged_sub, good_wp passive_c, bad_wp passive_c)
+  (merged_sub, passive_c, good_wp passive_c, bad_wp passive_c)
 
 
 let inits fvs sub =
@@ -351,7 +351,38 @@ let inits fvs sub =
       if List.exists fvs ~f:(fun (x,_) -> x = v)
       then (freshen v sz 0) :: vs
       else vs)
-  |> List.sort ~compare:(fun (u,_) (v,_) -> Stdlib.compare u v)
+  |> List.dedup_and_sort ~compare:(fun (u,_) (v,_) -> Stdlib.compare u v)
+
+let rec apply_init_expr (e : expr) =
+  let unop op e = op @@ apply_init_expr e in
+  let binop op (e,e') = op (apply_init_expr e) (apply_init_expr e') in
+  match e with
+  | Value _ | Hole _ -> e
+  | Var (v, sz) -> Var (freshen v sz 0)
+  | Cast (sz, e) -> unop (mkCast sz) e
+  | Slice {hi;lo;bits} -> unop (mkSlice hi lo) bits
+  | Plus es
+    | Times es
+    | Minus es
+    | Mask es
+    | Xor es
+    | BOr es
+    | Shl es
+    | Concat es -> binop (ctor_for_binexpr e) es
+
+let rec apply_init_test t =
+  let ebinop op (e,e') = op (apply_init_expr e) (apply_init_expr e') in
+  let tbinop op (t,t') = op (apply_init_test t) (apply_init_test t') in
+  let tunop op t = op @@ apply_init_test t in
+  match t with
+  | True | False -> t
+  | Eq es -> ebinop mkEq es
+  | Le es -> ebinop mkLe es
+  | And ts -> tbinop mkAnd ts
+  | Or ts -> tbinop mkAnd ts
+  | Impl ts -> tbinop mkAnd ts
+  | Iff ts -> tbinop mkAnd ts
+  | Neg t -> tunop mkNeg t
 
 let finals fvs sub =
   StringMap.fold sub ~init:[]
@@ -360,6 +391,46 @@ let finals fvs sub =
       then (freshen v sz i) :: vs
       else vs)
   |> List.sort ~compare:(fun (u,_) (v,_) -> Stdlib.compare u v)
+
+
+let rec apply_finals_sub_expr e sub =
+  let unop op e = op @@ apply_finals_sub_expr e sub in
+  let binop op (e,e') = op (apply_finals_sub_expr e sub) (apply_finals_sub_expr e' sub) in
+  match e with
+  | Value _ | Hole _ -> e
+  | Var (v, sz) ->
+     begin match StringMap.find sub v with
+     | Some (i,_) -> Var (freshen v sz i)
+     | None -> Var (v,sz)
+     end
+  | Cast (sz, e) -> unop (mkCast sz) e
+  | Slice {hi;lo;bits} -> unop (mkSlice hi lo) bits
+  | Plus es
+    | Times es
+    | Minus es
+    | Mask es
+    | Xor es
+    | BOr es
+    | Shl es
+    | Concat es -> binop (ctor_for_binexpr e) es
+
+
+let rec apply_finals_sub_test t sub =
+  let ebinop op (e,e') = op (apply_finals_sub_expr e sub) (apply_finals_sub_expr e' sub) in
+  let tbinop op (t,t') = op (apply_finals_sub_test t sub) (apply_finals_sub_test t' sub) in
+  let tunop op t = op @@ apply_finals_sub_test t sub in
+  match t with
+  | True | False -> t
+  | Eq es -> ebinop mkEq es
+  | Le es -> ebinop mkLe es
+  | And ts -> tbinop mkAnd ts
+  | Or ts -> tbinop mkAnd ts
+  | Impl ts -> tbinop mkAnd ts
+  | Iff ts -> tbinop mkAnd ts
+  | Neg t -> tunop mkNeg t
+
+
+
 
 let zip_eq_exn xs ys =
   List.fold2_exn xs ys ~init:True ~f:(fun acc x y -> acc %&% (Var x %=% Var y) )
@@ -419,8 +490,8 @@ let equivalent ?neg:(neg = True) eq_fvs l p =
   let prefix_list =  List.map ~f:(fun (x,sz) -> (phys_prefix ^ x, sz)) in
   let fvs_p = prefix_list fvs in
   let eq_fvs_p = prefix_list eq_fvs in
-  let sub_l, gl, _ = good_execs fvs l in
-  let sub_p, gp, _ = good_execs fvs_p p' in
+  let sub_l, _, gl, _ = good_execs fvs l in
+  let sub_p, _, gp, _ = good_execs fvs_p p' in
   let lin = inits eq_fvs sub_l in
   let pin = inits eq_fvs_p sub_p in
   let lout = finals eq_fvs sub_l in

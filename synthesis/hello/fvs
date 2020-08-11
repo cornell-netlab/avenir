@@ -1,6 +1,7 @@
-hdr.ipv4_valid#1
-hdr.ethernet.srcAddr#48
-hdr.ethernet.dstAddr#48
-hdr.ipv4.ttl#8
-hdr.ipv4.dstAddr#32
-standard_metadata.egress_spec#9
+hdr.ipv4_valid,hdr.ipv4_valid,1
+hdr.ethernet.srcAddr,hdr.ethernet.srcAddr,48
+hdr.ethernet.dstAddr,hdr.ethernet.dstAddr,48
+hdr.ipv4.ttl,hdr.ipv4.ttl,8
+hdr.ipv4.dstAddr,hdr.ipv4.dstAddr,32
+hdr.ipv4.srcAddr,hdr.ipv4.srcAddr,32
+standard_metadata.egress_spec,standard_metadata.egress_spec,9

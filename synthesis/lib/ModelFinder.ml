@@ -129,22 +129,22 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   let in_pkt_form, out_pkt_form = Packet.to_test in_pkt ~fvs, Packet.to_test out_pkt ~fvs in
   let wp_list =
     if opts.paths then
-      wp_paths `NoNegs phys out_pkt_form
+      wp_paths `NoNegs phys out_pkt_form |> List.map ~f:(fun (c,t) -> c, in_pkt_form %=>% t)
     else
-      [phys, in_pkt_form %=>% wp `NoNegs phys out_pkt_form]
+      let (sub, _(*passive_phys*), good_N, _) = good_execs fvs phys in
+      let test = (apply_init_test in_pkt_form) %=>% (good_N %=>% apply_finals_sub_test out_pkt_form sub) in
+      Printf.printf "--------------%s---------------\n%!" (string_of_test test);
+      [phys, test ]
   in
   ProfData.update_time !data.search_wp_time st;
   let tests =
     List.filter_map wp_list
       ~f:(fun (cmd, spec) ->
         if spec = False || not (has_hole_test spec) then None else
-          (* let st = Time.now() in *)
-          (* Printf.printf "\n\nWP: %s\n\n%!" (string_of_test in_pkt_wp); *)
 
           let () = if params.debug then
                      Printf.printf "Checking path with hole!\n  %s\n\n%!" (string_of_cmd cmd) in
-          (* let () = if params.debug then
-           *            Printf.printf "test starts:\n%!  %s\n\n%!" (string_of_test spec) in *)
+
           let wf_holes = List.fold (Problem.phys problem |> get_tables_actsizes) ~init:True
                            ~f:(fun acc (tbl,num_acts) ->
                              acc %&%
@@ -154,8 +154,8 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
             (Problem.model_space problem) %&% wf_holes %&% spec
             |> Injection.optimization {params with injection = opts.injection} problem
           in
-          (* Printf.printf "Pre_condition computed\n%!"; *)
-          let query_test = wf_holes %&%(* widening_constraint %&%*) pre_condition in
+
+          let query_test = wf_holes %&% (* widening_constraint %&%*) pre_condition in
           let active_domain_restrict =
             let ints = (multi_ints_of_cmd (Problem.log_gcl_program params problem))
                        @ (multi_ints_of_cmd (Problem.phys_gcl_program params problem))

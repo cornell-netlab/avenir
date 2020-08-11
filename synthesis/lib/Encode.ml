@@ -1272,5 +1272,7 @@ let encode_from_p4 include_dirs p4_file verbose : cmd =
      raise (Failure (Format.sprintf "at %s @\n%!" (Info.to_string info)))
   | `Ok p4_program ->
      let cmd = encode_program p4_program in
-    (* Format.printf "Encoded Program: \n%!\n %s%! \n%!" (string_of_cmd cmd); *)
-    TypeInference.infer cmd
+    Format.printf "Encoded Program: \n%!\n %s%! \n%!" (string_of_cmd cmd);
+    let c_inf = TypeInference.infer cmd in
+    Format.printf "Types Inferred: \n%!\n %s%! \n%!" (string_of_cmd c_inf);
+    c_inf
