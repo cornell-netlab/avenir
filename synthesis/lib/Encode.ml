@@ -675,7 +675,7 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t l
                         (mkSlice s hi bits)
                         (encode_expression_to_value_with_width (hi - lo) type_ctx rhs)
                     )
-                    (mkSlice lo 0 bits)
+                    (mkSlice (lo-1) 0 bits)
 
           , false
           , false

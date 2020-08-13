@@ -3,7 +3,7 @@ open Ast
 open Packet
 open Z3
 
-let print_debug = true
+let print_debug = false
 
 let debug term =
   if print_debug then
@@ -28,6 +28,11 @@ let quantify expr etyp styp =
   | _, `Sat -> Smtlib.const expr
 
 let rec expr_to_term_help expr styp : Smtlib.term =
+  if size_of_expr expr = 33 then
+    Printf.sprintf "FOUND THE OFFENSE: \n%s\n" (string_of_expr expr)
+    |> failwith
+  else
+
   match expr with
   | Value (Int (num, sz)) ->
      Smtlib.bbv (num) sz
@@ -37,13 +42,13 @@ let rec expr_to_term_help expr styp : Smtlib.term =
      let sz = size_of_expr e in
      let t = expr_to_term_help e styp in
      if sz > i
-     then Smtlib.extract i 0 t
+     then Smtlib.extract (i-1) 0 t
      else if sz < i
      then Smtlib.concat (expr_to_term_help (mkVInt(0,i-sz))  styp) t
      else t
   | Slice {hi;lo;bits} ->
      let term = expr_to_term_help bits styp in
-     Smtlib.extract hi lo term
+     Smtlib.extract (hi-1) lo term
 
   | Plus (e1, e2) ->
      if size_of_expr e1 <> size_of_expr e2
@@ -99,9 +104,9 @@ let rec expr_to_term_help expr styp : Smtlib.term =
       * debug sexp; *)
      sexp
   | Concat (e1,e2) ->
-     Smtlib.concat
-       (expr_to_term_help e1 styp)
-       (expr_to_term_help e2 styp)
+       Smtlib.concat
+         (expr_to_term_help e1 styp)
+         (expr_to_term_help e2 styp)
 
 
 
@@ -166,7 +171,7 @@ let test_to_term test styp d =
 
 let vars_to_term vars d =
   let open Smtlib in
-  if d
+  if d && print_debug
   then begin
       let open List in
       iter vars ~f:(fun (id, i) -> Printf.printf "VAR: %s %d\n%!" id i);

@@ -19,6 +19,8 @@
 
 #define MAX_PORTS 511
 
+#define CPU_PORT 64
+
 #if defined(WITH_INT_SOURCE) || defined(WITH_INT_TRANSIT) || defined(WITH_INT_SINK)
 #define WITH_INT
 #endif

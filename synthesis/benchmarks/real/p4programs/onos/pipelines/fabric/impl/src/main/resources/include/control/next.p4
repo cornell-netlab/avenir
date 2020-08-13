@@ -373,15 +373,15 @@ control EgressNextControl (inout parsed_headers_t hdr,
             hdr.mpls.ttl = hdr.mpls.ttl - 1;
             if (hdr.mpls.ttl == 0) mark_to_drop(standard_metadata);
         } else {
-            if(hdr.ipv4.isValid()) {
-                hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
-                if (hdr.ipv4.ttl == 0) mark_to_drop(standard_metadata);
-            }
+             if(hdr.ipv4.isValid()) {
+                 hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
+                 if (hdr.ipv4.ttl == 0) mark_to_drop(standard_metadata);
+             }
 #ifdef WITH_IPV6
-            else if (hdr.ipv6.isValid()) {
-                hdr.ipv6.hop_limit = hdr.ipv6.hop_limit - 1;
-                if (hdr.ipv6.hop_limit == 0) mark_to_drop(standard_metadata);
-            }
+             else if (hdr.ipv6.isValid()) {
+                 hdr.ipv6.hop_limit = hdr.ipv6.hop_limit - 1;
+                 if (hdr.ipv6.hop_limit == 0) mark_to_drop(standard_metadata);
+             }
 #endif // WITH_IPV6
         }
     }

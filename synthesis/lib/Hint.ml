@@ -139,13 +139,16 @@ let add_to_model (phys : cmd) (hints : t list) (m : value StringMap.t) : value S
         acc)
 
 
+let default_match_holes tbl encode_tag keys  =
+  List.fold keys ~init:True
+    ~f:(fun acc (x,sz) ->
+      acc %&% if x = "l3_metadata__nexthop_index" then
+                Hole.match_holes `Exact tbl x sz
+              else
+                Hole.match_holes encode_tag tbl x sz)
+
+
 let tbl_hole encode_tag (keys: (string * size) list) tbl row_hole act_hole i actSize (hs : t list) =
-  let default_match_holes =
-    List.fold ~init:True
-      ~f:(fun acc (x,sz) ->
-        acc %&% if x = "l3_metadata__nexthop_index" then
-                  Hole.match_holes `Exact tbl x sz
-                else Hole.match_holes encode_tag tbl x sz) in
   let matches_holes =
 (*     if List.exists ["acl";"vlan"] ~f:(fun x -> String.is_substring tbl ~substring:x)
     then False
@@ -154,11 +157,11 @@ let tbl_hole encode_tag (keys: (string * size) list) tbl row_hole act_hole i act
     | Some h ->
        (* if String.is_substring h.table ~substring:"punt" then False else *)
        begin match encode_match keys h encode_tag with
-       | None ->  default_match_holes keys
+       | None ->  default_match_holes tbl encode_tag keys
        | Some phi -> phi
        end
     (* | None when List.length hs > 0 -> False *)
-    | _ -> default_match_holes keys
+    | _ -> default_match_holes tbl encode_tag keys
  in
   matches_holes
   %&% (row_hole %=% mkVInt (1,1))

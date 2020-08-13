@@ -51,6 +51,14 @@ let get_row_exn inst table idx : Row.t =
   | None -> failwith @@ Printf.sprintf "Invalid row %d in table %s" idx table
   | Some row -> row
 
+
+let negate_rows inst tbl keys =
+  get_rows inst tbl
+  |> List.fold ~init:True
+       ~f:(fun acc (matches,_,_) ->
+         acc %&% !%(Match.list_to_test keys matches))
+
+
 let overwrite (old_inst : t) (new_inst : t) : t =
   StringMap.fold new_inst ~init:old_inst
     ~f:(fun ~key ~data acc -> StringMap.set acc ~key ~data)
@@ -130,7 +138,7 @@ let rec apply ?no_miss:(no_miss = false)
               (Hint.tbl_hole encode_tag t.keys t.name row_hole act_hole i actSize hs
                (* %&% List.fold selects ~init:True
                 *       ~f:(fun acc (cond, _) -> acc %&% !%(cond)) *)
-              , holify (List.map params ~f:fst) act))
+              , holify ~f:(fun (h,sz) -> (Hole.action_data t.name i h sz, sz)) (List.map params ~f:fst) act))
      in
      let dflt_row = [(True, t.default)] in
      let tbl_select = (if params.above then holes @ selects else selects @ holes)

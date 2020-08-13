@@ -197,29 +197,46 @@ let freshen v sz i = (v ^ "$" ^ string_of_int i, sz)
       
 let good_execs fvs c =
   let rec indexVars_expr e (sub : ((int * int) StringMap.t)) =
-    let binop f (e,e') = f (indexVars_expr e sub) (indexVars_expr e' sub) in
+    let binop f (e1,e2) =
+      let (e1', sub1) = indexVars_expr e1 sub in
+      let (e2', sub2) = indexVars_expr e2 sub in
+      f e1' e2', StringMap.merge sub1 sub2
+                   ~f:(fun ~key -> function
+                     | `Both (i1, i2) -> if i1 = i2
+                                         then Some i1
+                                         else failwith @@ Printf.sprintf "collision on %s: (%d,%d) <> (%d,%d)"
+                                                            key (fst i1) (snd i1) (fst i2) (snd i2)
+                     | `Left i | `Right i -> Some i
+                   )
+    in
     match e with
-    | Value _ -> e
+    | Value _ -> (e, sub)
     | Var (x,sz) ->
        begin match StringMap.find sub x with
-       | None  -> "couldn't find "^x^" in substitution map with keys"
-                  ^ (StringMap.keys sub |> List.fold ~init:"" ~f:(fun acc k -> Printf.sprintf "%s %s" acc k))
-                  |> failwith
-       | Some (i,_) ->  Var (freshen x sz i)
+       | None  -> (Var (freshen x sz 0), StringMap.set sub ~key:x ~data:(0,sz))
+       | Some (i,_) ->  (Var (freshen x sz i), sub)
        end
     | Hole (x, sz) ->
        begin match StringMap.find sub x with
-       | None  -> Hole (x,sz) (*"couldn't find "^x^" in substitution map " |> failwith*)
-       | Some (i,_) ->  Hole (freshen x sz i)
+       | None  -> (Hole (x,sz), sub) (*"couldn't find "^x^" in substitution map " |> failwith*)
+       | Some (i,_) ->  (Hole (freshen x sz i), sub)
        end
-    | Cast (i,e) -> mkCast i @@ indexVars_expr e sub
-    | Slice {hi;lo;bits} -> mkSlice hi lo @@ indexVars_expr bits sub
+    | Cast (i,e) ->
+       let e', sub' = indexVars_expr e sub in
+       mkCast i e', sub'
+    | Slice {hi;lo;bits} ->
+       let e', sub' = indexVars_expr bits sub in
+       mkSlice hi lo e', sub'
     | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es
       -> binop (ctor_for_binexpr e) es
   in
   let rec indexVars b sub =
     let binop_t op a b = op (indexVars a sub) (indexVars b sub) in
-    let binop_e op a b = op (indexVars_expr a sub) (indexVars_expr b sub) in
+    let binop_e f (e1,e2) =
+      let (e1',_) = indexVars_expr e1 sub in
+      let (e2',_) = indexVars_expr e2 sub in
+      f e1' e2'
+    in
     match b with
     | True | False -> b
     | Neg b -> !%(indexVars b sub)
@@ -227,8 +244,8 @@ let good_execs fvs c =
     | Or   (a,b) -> binop_t (%+%) a b
     | Impl (a,b) -> binop_t (%=>%) a b
     | Iff  (a,b) -> binop_t (%<=>%) a b
-    | Eq (e1,e2) -> binop_e (%=%) e1 e2
-    | Le (e1,e2) -> binop_e (%<=%) e1 e2
+    | Eq es -> binop_e (%=%) es
+    | Le es -> binop_e (%<=%) es
   in
   let rec passify sub c : ((int * int) StringMap.t * cmd) =
     match c with
@@ -242,10 +259,10 @@ let good_execs fvs c =
        | None ->
           let sz = size_of_expr e in
           (StringMap.set sub ~key:f ~data:(1, sz)
-          , Assume (Var (freshen f sz 1) %=% indexVars_expr e sub))
+          , Assume (Var (freshen f sz 1) %=% fst(indexVars_expr e sub)))
        | Some (idx, sz) ->
           (StringMap.set sub ~key:f ~data:(idx + 1,sz)
-          , Assume (Var (freshen f sz (idx + 1)) %=% (indexVars_expr e sub)))
+          , Assume (Var (freshen f sz (idx + 1)) %=% fst(indexVars_expr e sub)))
        end
     | Seq (c1, c2) ->
        let (sub1, c1') = passify sub  c1 in
@@ -337,9 +354,9 @@ let good_execs fvs c =
   let init_sub = List.fold fvs ~init:StringMap.empty ~f:(fun sub (v,sz) ->
                      StringMap.set sub ~key:v ~data:(0,sz)
                    ) in
-  Printf.printf "active : \n %s \n" (string_of_cmd c);
+  (* Printf.printf "active : \n %s \n" (string_of_cmd c); *)
   let merged_sub, passive_c = passify init_sub c  in
-  Printf.printf "passive : \n %s\n" (string_of_cmd passive_c);
+  (* Printf.printf "passive : \n %s\n" (string_of_cmd passive_c); *)
   (* let vc = good_wp passive_c in *)
   (* Printf.printf "good_executions:\n %s\n%!" (string_of_test vc); *)
   (merged_sub, passive_c, good_wp passive_c, bad_wp passive_c)

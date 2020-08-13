@@ -114,15 +114,33 @@ let make ?fvs:(fvs = None) (store : value StringMap.t) : t =
        )
 
 
+let restrict_packet fvs pkt =
+  StringMap.filter_keys pkt ~f:(fun k -> List.exists fvs ~f:(fun (v,_) -> k = v))
+
 
 let equal ?(fvs = None) (pkt:t) (pkt':t) =
   match fvs with
   | None -> StringMap.equal (=) pkt pkt'
   | Some fvs ->
-     let pkt_fvs = StringMap.filter_keys pkt ~f:(fun k -> List.exists fvs ~f:(fun (v,_) -> k = v)) in
-     let pkt_fvs' = StringMap.filter_keys pkt' ~f:(fun k -> List.exists fvs ~f:(fun (v,_) -> k = v)) in
-     (* Printf.printf "Checking\n%s\n=\n%s\n" (string__packet pkt_fvs) (string__packet pkt_fvs'); *)
-     StringMap.equal (=) pkt_fvs pkt_fvs'
+     StringMap.equal (=) (restrict_packet fvs pkt) (restrict_packet fvs pkt')
+
+
+let subseteq_aux smaller bigger =
+  StringMap.fold smaller ~init:true ~f:(fun ~key ~data acc ->
+      if not acc then acc
+      else
+        match StringMap.find bigger key with
+        | None -> false
+        | Some big_data -> acc && big_data = data
+    )
+
+let subseteq ?(fvs = None) (smaller:t) (bigger:t) =
+  match fvs with
+  | None -> subseteq_aux smaller bigger
+  | Some fvs -> subseteq_aux (restrict_packet fvs smaller) (restrict_packet fvs bigger)
+
+
+
 
 let generate ?bound:(bound=10000000) ?values:(values=([] : value list))  (vars : (string * size) list) =
   match values with

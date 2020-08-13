@@ -7,11 +7,21 @@ let delete_row_prefix = "?delete"
 let delete_row_infix = "In"
 let which_act_prefix = "?ActIn"
 
-let add_row_hole_name = Printf.sprintf "%s%s" add_row_prefix
+
+let prefix = Printf.sprintf "%s%s"
+
+let add_row_hole_name = prefix add_row_prefix
+
 let delete_row_hole_name i tbl = Printf.sprintf "%s%d%s%s" delete_row_prefix i delete_row_infix tbl
-let which_act_hole_name = Printf.sprintf "%s%s" which_act_prefix
+let is_delete_hole n = String.(is_prefix ~prefix:delete_row_prefix n
+                                    && is_substring ~substring:delete_row_infix n)
+
+let which_act_hole_name = prefix which_act_prefix
+let is_which_act_hole = String.is_prefix ~prefix:which_act_prefix
 
 let find_add_row = String.chop_prefix ~prefix:add_row_prefix
+let is_add_row_hole = String.is_prefix ~prefix:add_row_prefix
+
 let find_delete_row key =
   match String.chop_prefix key ~prefix:delete_row_prefix with
   | None -> None
@@ -46,3 +56,7 @@ let match_holes encode_tag tbl x sz =
      let h = match_hole_exact tbl x in
      Var(x, sz) %=% Hole (h,sz)
 
+let action_data_prefix tbl i = Printf.sprintf "%s_%d_" tbl i
+(* let action_data_prefix _ _ = Printf.sprintf "" *)
+
+let action_data tbl i v sz = Printf.sprintf "%s%s_%d" (action_data_prefix tbl i) v sz

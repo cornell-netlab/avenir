@@ -59,12 +59,6 @@
 #include "include/int/int_main.p4"
 #endif // WITH_INT
 
-// ADDED
-
-const bit<9> CPU_PORT = 64;
-
-// END ADDED
-
 control FabricIngress (inout parsed_headers_t hdr,
                        inout fabric_metadata_t fabric_metadata,
                        inout standard_metadata_t standard_metadata) {

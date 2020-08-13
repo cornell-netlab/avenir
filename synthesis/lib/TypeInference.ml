@@ -5,6 +5,10 @@ open Ast
 let rec relabel (e : expr) (sz : size) : expr =
   let binop mk (e,e') = mk (relabel e sz) (relabel e' sz) in
   match e with
+  | Value (Int(_,sz'))
+    | Var (_,sz')
+    | Hole (_,sz') when sz' >= 0 && sz <> sz' ->
+     failwith @@ Printf.sprintf "Tried to relabel %s to width %d" (string_of_expr e) sz
   | Value (Int(v, _)) -> Value(Int(v, sz))
   | Var (x, _) -> Var(x, sz)
   | Hole(h,_) -> Hole(h, sz)

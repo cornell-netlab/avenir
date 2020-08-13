@@ -43,7 +43,7 @@ type expr =
   | Slice of {hi : int; lo: int; bits: expr}
 
 let mkInt (i,sz) =
-  if i < 0 then failwith "Negative integers not representable" else
+  if i < 0 then failwith @@ Printf.sprintf "Negative integers not representable, tried %d" i else
   Int (Bigint.of_int_exn i, sz)
 let mkVInt i = Value (mkInt i)
 let mkCast i e = Cast(i,e)
@@ -83,7 +83,7 @@ let rec string_of_expr (e : expr) : string =
   | Xor (e,e')    -> string_binop e "^" e'
   | BOr (e,e')    -> string_binop e "|" e'
   | Shl (e,e')    -> string_binop e "<<" e'
-  | Concat (e,e') -> string_binop e "@" e'
+  | Concat (e,e') -> string_binop e "APPEND" e'
   | Slice {hi; lo; bits} -> Printf.sprintf "%s[%d:%d]" (string_of_expr bits) hi lo
 
 
@@ -743,17 +743,17 @@ let rec multi_ints_of_cmd c : (Bigint.t * size) list =
      List.fold t.actions ~init:(multi_ints_of_cmd t.default)
        ~f:(fun rst act -> rst @ multi_ints_of_cmd (snd act))
 
-let rec holify_expr holes (e : expr) : expr =
-  let binop ctor (e,e') = ctor (holify_expr holes e) (holify_expr holes e') in
+let rec holify_expr ~f holes (e : expr) : expr =
+  let binop ctor (e,e') = ctor (holify_expr ~f holes e) (holify_expr ~f holes e') in
   match e with
   | Hole _ | Value _ -> e
   | Var (x,sz) ->
      begin match List.find holes ~f:(fun elem -> x = elem)  with
      | None -> e
-     | Some _ -> Hole ((*"?" ^*) x, sz)
+     | Some _ -> Hole (f (x, sz))
      end
-  | Cast (i,e) -> mkCast i @@ holify_expr holes e
-  | Slice {hi;lo;bits} -> mkSlice hi lo @@ holify_expr holes bits
+  | Cast (i,e) -> mkCast i @@ holify_expr ~f holes e
+  | Slice {hi;lo;bits} -> mkSlice hi lo @@ holify_expr ~f holes bits
   | Plus es
     | Times es
     | Minus es
@@ -764,29 +764,29 @@ let rec holify_expr holes (e : expr) : expr =
     | Concat es
     -> binop (ctor_for_binexpr e) es
                           
-and holify_test holes b : test =
+and holify_test ~f holes b : test =
   match b with
   | True | False -> b
-  | Eq (e, e') -> holify_expr holes  e %=% holify_expr holes  e'
-  | Le (e, e') -> holify_expr holes  e %<=% holify_expr holes  e'
-  | And (b, b') -> holify_test holes b %&% holify_test holes b'
-  | Or (b, b')  -> holify_test holes b %+% holify_test holes b'
-  | Impl(b,b') -> holify_test holes b %=>% holify_test holes b'
-  | Iff(b, b') -> holify_test holes b %=>% holify_test holes b'
-  | Neg b       -> !%(holify_test holes b)
+  | Eq (e, e') -> holify_expr ~f holes  e %=% holify_expr ~f holes  e'
+  | Le (e, e') -> holify_expr ~f holes  e %<=% holify_expr ~f holes  e'
+  | And (b, b') -> holify_test ~f holes b %&% holify_test ~f holes b'
+  | Or (b, b')  -> holify_test ~f holes b %+% holify_test ~f holes b'
+  | Impl(b,b') -> holify_test ~f holes b %=>% holify_test ~f holes b'
+  | Iff(b, b') -> holify_test ~f holes b %=>% holify_test ~f holes b'
+  | Neg b       -> !%(holify_test ~f holes b)
                      
-and holify_cmd holes c : cmd=
+and holify_cmd ~f holes c : cmd=
   match c with
   | Skip -> c
-  | Assign (f, e) -> f %<-% holify_expr holes e
-  | Assert t -> Assert (holify_test holes t)
-  | Assume t -> Assume (holify_test holes t)
+  | Assign (v, e) -> v %<-% holify_expr ~f holes e
+  | Assert t -> Assert (holify_test ~f holes t)
+  | Assume t -> Assume (holify_test ~f holes t)
   | Seq (c, c') ->
-     holify_cmd holes c %:% holify_cmd holes c'
+     holify_cmd ~f holes c %:% holify_cmd ~f holes c'
   | While (t, c) ->
-     mkWhile (holify_test holes t) (holify_cmd holes c)
+     mkWhile (holify_test ~f holes t) (holify_cmd ~f holes c)
   | Select (styp, cases) ->
-     List.map cases ~f:(fun (t, c) -> holify_test holes t, holify_cmd holes c)
+     List.map cases ~f:(fun (t, c) -> holify_test ~f holes t, holify_cmd ~f holes c)
      |> mkSelect styp
   | Apply t
     -> Apply {name=t.name;
@@ -795,12 +795,12 @@ and holify_cmd holes c : cmd=
                             let holes' = List.filter holes ~f:(fun h ->
                                              List.for_all (List.map data ~f:fst) ~f:((<>) h)
                                            ) in
-                            (data, holify_cmd holes' act));
-             default = holify_cmd holes t.default}
+                            (data, holify_cmd ~f holes' act));
+             default = holify_cmd ~f holes t.default}
               
     
 (** replace all vars in cmd that are also in holes with holes having the same name*)
-let holify holes c =  holify_cmd holes c
+let holify ?(f=fun x -> x) holes c =  holify_cmd ~f holes c
         
 let sequence = List.reduce_exn ~f:(%:%)
 

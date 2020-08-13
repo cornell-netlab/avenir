@@ -373,7 +373,7 @@ let cmd_equalable bound_vars (a1 : action) (a2 : action) : test option =
     (string_of_cmd a1)
     (string_of_cmd a2)
     (string_of_test condition);
-  holify_test bound_vars condition |> check_sat Parameters.default |> fst >>= const (Some condition)
+  holify_test ~f:(fun x -> x) bound_vars condition |> check_sat Parameters.default |> fst >>= const (Some condition)
 
 let candidates (phys : schema) (log_row : action_seq) : (test * action_seq) list =
   let all_phys_rows = list_cross phys.actions in

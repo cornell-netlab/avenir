@@ -299,3 +299,18 @@ let rec trace_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : ((string 
 let get_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : (string * int) list =
   let open List in
   dedup_and_sort ~compare:Stdlib.compare (trace_nd_hits c inst pkt >>= fst)
+
+
+(*TODO: Can do this faster(?) by transposing the traversal*)
+let fails_on_some_example c fvs cexs =
+  List.find cexs ~f:(fun (inpkt,outpkt) ->
+      if Packet.equal ~fvs:(Some fvs)
+           (eval_act c inpkt)
+           outpkt
+      then false
+      else begin
+          (* Printf.printf "Failed! in:\n %s\n\nout\n%s\n\n%!" (Packet.string__packet inpkt) (Packet.string__packet outpkt); *)
+          true
+        end
+
+    )

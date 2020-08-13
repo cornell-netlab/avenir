@@ -254,7 +254,7 @@ module Row = struct
              *   (List.fold params ~init:"" ~f:(fun acc (p,_) -> Printf.sprintf "%s %s" acc p)); *)
             List.fold params ~init:[]
               ~f:(fun acc (p,sz) ->
-                  match StringMap.find match_model p with
+                  match StringMap.find match_model @@ Hole.action_data tbl_name act p sz with
                   | None ->
                      (* Printf.printf "Cannot find expected key %s in %s \n%!" p (string_of_map match_model);*)
                      acc @ [Int (Random.int (pow 2 sz) |> Bigint.of_int_exn, sz)]

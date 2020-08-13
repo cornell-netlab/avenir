@@ -31,39 +31,45 @@ let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref)
     : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
   let params = {params with no_defaults = false} in
   let st_mk_cond = Time.now () in
-  let log = Problem.log_gcl_program params problem in
-  let phys = Problem.phys_gcl_program params problem in
-  (* Printf.printf "\timplements\n%!"; *)
-  if params.debug then
-    Printf.printf "-------------------------------------------\n%s \n???====?=====????\n %s\n-------------------------------------\n%!"
-      (string_of_cmd log) (string_of_cmd phys);
-  ProfData.update_time !data.make_vc_time st_mk_cond;
-  let condition = equivalent ~neg Problem.(fvs problem) log phys in
-  let cv_st = Time.now () in
-  let model_opt, z3time = if params.vcache then check_valid_cached params condition else check_valid params condition in
-  ProfData.update_time !data.check_valid_time cv_st;
-  ProfData.update_time_val !data.eq_time z3time;
-  !data.tree_sizes :=  num_nodes_in_test condition :: !(!data.tree_sizes);
-  ProfData.incr !data.eq_num_z3_calls;
-  let st = Time.now () in
-  let pkt_opt = match model_opt with
-    | None  -> if params.debug then Printf.printf "++++++++++valid+++++++++++++\n%!";
-      `Yes
-    | Some x ->
-       let in_pkt, out_pkt = Packet.extract_inout_ce x in
-       let remake = Packet.make ~fvs:(Problem.fvs problem |> Some) in
-       let in_pkt' = if params.widening then in_pkt else remake in_pkt in
-       let out_pkt' = if params.widening then out_pkt
-                      else eval_act (Problem.log_gcl_program params problem) in_pkt in
+  (* let slice = StaticSlicing.static_slice (Problem.fvs problem) in *)
+  let log = Problem.log_gcl_program params problem(* |> slice*) in
+  let phys = Problem.phys_gcl_program params problem (* |> slice*) in
+  assert (fails_on_some_example log (Problem.fvs problem) (Problem.cexs problem) |> Option.is_none);
+
+  match fails_on_some_example phys (Problem.fvs problem) (Problem.cexs problem) with
+  | Some (in_pkt, out_pkt) -> `NoAndCE (in_pkt,out_pkt)
+  | None ->
+     if params.debug then
+       Printf.printf "-------------------------------------------\n%s \n???====?=====????\n %s\n-------------------------------------\n%!"
+         (string_of_cmd log) (string_of_cmd phys);
+     ProfData.update_time !data.make_vc_time st_mk_cond;
+     let condition = equivalent ~neg Problem.(fvs problem) log phys in
+     let cv_st = Time.now () in
+     let model_opt, z3time = if params.vcache then check_valid_cached params condition else check_valid params condition in
+     ProfData.update_time !data.check_valid_time cv_st;
+     ProfData.update_time_val !data.eq_time z3time;
+     !data.tree_sizes :=  num_nodes_in_test condition :: !(!data.tree_sizes);
+     ProfData.incr !data.eq_num_z3_calls;
+     let st = Time.now () in
+     let pkt_opt = match model_opt with
+       | None  -> if params.debug then Printf.printf "++++++++++valid+++++++++++++\n%!";
+                  `Yes
+       | Some x ->
+          let in_pkt, out_pkt = Packet.extract_inout_ce x in
+          let remake = Packet.make ~fvs:(Problem.fvs problem |> Some) in
+          let in_pkt' = if params.widening then in_pkt else remake in_pkt in
+          let out_pkt' = if params.widening then out_pkt
+                         else eval_act (Problem.log_gcl_program params problem) in_pkt in
+          assert (Packet.subseteq ~fvs:(Some(Problem.fvs problem)) out_pkt' (eval_act log in_pkt'));
        if params.debug || params.interactive then
          Printf.printf "----------invalid----------------\n%! CE_in = %s\n log_out  = %s\n phys_out = %s\n%!"
            (Packet.string__packet in_pkt')
            (Packet.string__packet out_pkt')
            (Packet.string__packet @@ eval_act (Problem.phys_gcl_program params problem) in_pkt)
        ; `NoAndCE (in_pkt', out_pkt')
-  in
-  ProfData.update_time !data.normalize_packet_time st;
-  pkt_opt
+     in
+     ProfData.update_time !data.normalize_packet_time st;
+     pkt_opt
 
 
 let unique_in_table params (_ (*prog*) : cmd) inst edits e =
@@ -176,6 +182,7 @@ let get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref) (pr
          ProfData.update_time !data.impl_time st;
          res
       | `NoAndCE counter ->
+         Printf.printf "BACKTRACKING\n%!";
          `NoAndCE counter
     end
   else
@@ -185,7 +192,9 @@ let get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref) (pr
       let res = implements ~neg params data (Problem.slice params problem) in
       ProfData.update_time !data.impl_time st;
       match res with
-      | `NoAndCE counter -> `NoAndCE counter
+      | `NoAndCE counter ->
+         Printf.printf "BACKTRACKING (SLICED)\n%!";
+         `NoAndCE counter
       | `Yes when slice_conclusive params data problem -> `Yes
       | `Yes -> implements ~neg params data problem
     else
@@ -271,216 +280,167 @@ let minimize_solution params data problem =
 
 
 let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (Edit.t list option) =
-  (* Printf.printf "\tcegis_math\n%!"; *)
+  Printf.printf "cegis_math\n%!";
   (* Printf.printf "%s\n%!" (List.hd_exn (Problem.log_edits problem) |> Edit.to_string); *)
   match params.timeout with
   | Some (st,dur) when Time.(Span.(dur < diff(now()) st))  -> None
   | _ ->
-  if params.ecache then
-    (* let () = Printf.printf "\ttrying cache \n%!"in *)
-    solve_math 1 params data problem
-  else
-    (* let st = Time.now () in *)
-    let cex = get_cex params data problem in
-    (* ProfData.update_time !data.impl_time st; *)
-    match cex with
-    | `Yes ->
-       (* (\*if params.debug then*\) Printf.printf "\tNo CEX to be found -- programs are equiv\n%!"; *)
-       let problem =
-         if params.minimize
-         then minimize_solution params data problem
-         else problem
-       in
-       if not params.ecache then
-         edit_cache := EAbstr.update !edit_cache (Problem.log_edits problem |> List.hd_exn) (Problem.phys_edits problem);
-       if params.interactive then begin
-           Printf.printf "%s\n%!" (Problem.phys_gcl_program params problem |> string_of_cmd);
-           ignore(Stdio.In_channel.(input_char stdin) : char option)
-         end;
-       Problem.phys_edits problem |> Some
-    | `NoAndCE counter ->
-       (* Printf.printf "\tCEX found \n%!"; *)
-       (* (Time.(Span.(diff (now()) st |> to_ms))); *)
-       let problem = Problem.add_cex problem counter in
-       let counter = (
-           fst counter
-         , Semantics.eval_act (Problem.log_gcl_program params problem) (fst counter))
-       in
-       if params.debug then
-         Printf.printf "Counterexample found!\nin: %s\nlog:  %s\nphys:  %s\n\n%!"
-           (Packet.string__packet @@ fst counter)
-           (Packet.string__packet @@ snd counter)
-           (Packet.string__packet @@ Semantics.eval_act (Problem.phys_gcl_program params problem) (fst counter))
-       ;
-         let params = {params with fastcx = false; ecache = false} in
-         (* let f = liftPair ~f:Packet.equal ~combine:(&&) counter in *)
-         (* if List.exists ~f (Problem.cexs problem) then begin
-          *     if params.debug then
-          *       Printf.eprintf "Duplicated counter example. IN: %s -------> OUT: %s\n%!"
-          *         (fst counter |> Packet.string__packet)
-          *         (snd counter |> Packet.string__packet);
-          *     None
-          *   end
-          * else *)
-         solve_math params.search_width params data
-           (Problem.add_cex problem counter)
+     if params.ecache then
+       (* let () = Printf.printf "\ttrying cache \n%!"in *)
+       solve_math 1 params data problem
+     else
+       (* let st = Time.now () in *)
+       let cex = get_cex params data problem in
+       (* ProfData.update_time !data.impl_time st; *)
+       match cex with
+       | `Yes ->
+          (* (\*if params.debug then*\) Printf.printf "\tNo CEX to be found -- programs are equiv\n%!"; *)
+          let problem =
+            if params.minimize
+            then minimize_solution params data problem
+            else problem
+          in
+          if not params.ecache then
+            edit_cache := EAbstr.update !edit_cache (Problem.log_edits problem |> List.hd_exn) (Problem.phys_edits problem);
+          if params.interactive then begin
+              Printf.printf "%s\n%!" (Problem.phys_gcl_program params problem |> string_of_cmd);
+              ignore(Stdio.In_channel.(input_char stdin) : char option)
+            end;
+          Some (Problem.phys_edits problem)
+
+       | `NoAndCE counter ->
+          let problem = Problem.add_cex problem counter in
+          let counter = (
+              fst counter
+            , Semantics.eval_act (Problem.log_gcl_program params problem) (fst counter))
+          in
+          if params.debug then
+            Printf.printf "Counterexample found!\nin: %s\nlog:  %s\nphys:  %s\n\n%!"
+              (Packet.string__packet @@ fst counter)
+              (Packet.string__packet @@ snd counter)
+              (Packet.string__packet @@ Semantics.eval_act (Problem.phys_gcl_program params problem) (fst counter));
+          let params = {params with fastcx = false; ecache = false} in
+          solve_math params.search_width params data
+            (Problem.add_cex problem counter)
 
 
 
 and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
-  (* if params.debug then
-   *   Printf.printf "+Model Space+\n%!"; *)
-  (* Printf.printf "\tSolving for %d more iters\n%!" i; *)
+  Printf.printf "solve_math\n%!";
   match params.timeout with
   | Some (st,dur) when Time.(Span.(dur < diff(now()) st)) ->
      Printf.printf "Timeout\n%!";
      None
   | _ ->
-  if i = 0 then
-    (* let () = Printf.printf "The jig is up\n%!" in *)
-    None
-  else
-    if params.ecache then
-      match EAbstr.infer !edit_cache (Problem.log_edits problem |> List.hd_exn) with
-      | None ->
-         (* Printf.printf "\nEdit Cache failed\n%!"; *)
-         cegis_math {params with ecache = false; do_slice = false} data problem
-      | Some ps ->
-         (* Printf.printf "\nEdit Cache Succeeded\n%! Guessing\n";
-          * List.iter ps ~f:(fun e -> Printf.printf "\t%s\n%!" (Edit.to_string e)); *)
-         match get_cex {params with fastcx = false} data (Problem.replace_phys_edits problem ps) with
-         | `Yes ->
-            (* Printf.printf "Successful%!\n"; *)
-            Some ps
-         | `NoAndCE _ ->
-            (* Printf.printf "Failed%!\n"; *)
-            cegis_math {params with ecache = false} data problem
-    else
-      if Problem.model_space problem = True
-         || (check_sat params (Problem.model_space problem) |> fst |> Option.is_some)
-      then begin
-          if (Problem.phys_edits problem |> List.length > params.edits_depth)
-          then (* let () = Printf.printf "too many edits\n%!" in *)
-               None
-          else
-            let st = Time.now () in
-            let rec loop i problem searcher =
-              match params.timeout with
-              | Some (st,dur) when Time.(Span.(dur < diff(now()) st))  ->  Printf.printf "Timeout\n%!";None
-              | _ ->
-              if i = 0 then
-                (* let () = Printf.printf "The jig is up\n%!" in *)
-                None else
-                (* let () = Printf.printf "\tlooping\n%!" in *)
-                let model_opt = ModelFinder.search params data problem searcher in
-                (*get_model params datproblem in*)
-                ProfData.update_time !data.model_search_time st;
-                match model_opt with
-                | None ->
-                   (* if params.debug || params.interactive then *)
-                   (* Printf.printf "No model could be found\n%!"; *)
-                   if params.interactive then
-                     ignore(Stdio.In_channel.(input_char stdin) : char option);
-                   if params.debug then None
-                   else None (* begin match ModelFinder.search {params with debug = true} data problem searcher with
-                              * | Some _ -> Printf.printf "found a model when retrying%!\n"; failwith ""
-                              * | None -> Printf.printf "couldn't find a model when retrying"; None
-                              * end *)
-                | Some (model, searcher) ->
-                   (* Printf.printf "\nfound model\n%s\n\n%!" (string_of_map model); *)
-                   if Problem.seen_attempt problem model
-                   then begin
-                       Printf.printf "ALREADY EXPLORED\n %s \n\n %s \n%!"
-                         (Problem.model_space problem |> string_of_test)
-                         (string_of_map model);
-                       let res = fixup_test model (Problem.model_space problem) in
-                       Printf.printf "applied \n\n\n %s\n\n\n" (string_of_test res);
-                       failwith ""
-                     end
-                   else
-                     let problem = Problem.add_attempt problem model in
-                     (* assert (Problem.num_attempts problem <= 1); *)
-                     let es = Edit.extract (Problem.phys problem) model in
-                     (* if List.exists es ~f:(fun e -> List.exists (Problem.phys_edits problem) ~f:(fun e' -> e = e') ) then
-                      *   None
-                      * else *)
-                     let es = remove_missed_edits params data problem es in
-                     let () = if true then begin
-                         (* Printf.printf "\tCEX in %s\n" (Packet.string__packet @@ fst @@ List.hd_exn @@ Problem.cexs problem); *)
-                         Printf.printf "\n\t***Edits***\n%!";
-                         Problem.phys_edits problem |>
-                           List.iter ~f:(fun e -> Printf.printf "\t %s\n%!" (Edit.to_string e));
-                         Printf.printf "\t*** New ***\n%!";
-                         List.iter es ~f:(fun e -> Printf.printf "\t %s\n%!" (Edit.to_string e));
-                         Printf.printf "\t***     ***\n";
-                         (* ignore(Stdio.In_channel.(input_char stdin) : char option); *)
-                       end in
-                     (* let es =
-                      *   if params.del_pushdown then
-                      *     match Edit.get_deletes es with
-                      *     | [] -> es
-                      *     | ds -> es @ List.map ds ~f:(fun (table,idx) ->
-                      *                      Edit.Add(table, Instance.get_row_exn (Problem.phys_inst problem) table idx)
-                      *                    )
-                      *   else es
-                      * in *)
-
-
-                     (* let (dels, _) = Edit.split @@ Problem.phys_edits problem @ es in
-                      * if List.length dels > 0
-                      * then
-                      *   let () = Printf.printf "\t Committing\n%!" in
-                      *   cegis_math params data Problem.(append_phys_edits problem es |> reset_model_space |> reset_attempts)
-                      * else *)
-                     (* let problem = Problem.apply_edits_to_phys params problem dels in *)
-                     (* let model = List.fold (StringMap.keys model) ~init:model
-                      *               ~f:(fun m k ->
-                      *                 if String.is_prefix k ~prefix:(Hole.delete_row_prefix)
-                      *                 then StringMap.remove m k
-                      *                 else m
-                      *               ) in *)
-                     if List.length es = 0 then None else
-                     let problem' = Problem.(append_phys_edits problem es
-                                             |> reset_model_space
-                                             |> reset_attempts) in
-                     let continue () =
-                       (* Printf.printf "\tmodel didnt work\n"; *)
-                       let negated_edits = !%(Edit.test_of_list (Problem.phys problem) es) in
-                       (* Printf.printf "%s\n%!" (string_of_test negated_edits); *)
-                       let model_space = Problem.model_space problem %&% negated_edits in
-                       let problem = Problem.set_model_space problem model_space in
-                       match loop (i - 1) problem searcher with
-                       | Some es -> Some es
-                       | None ->
-                          (* Printf.printf "\tBacktracking\n%!"; *)
-                          (* if params.interactive then
-                           *   ignore(Stdio.In_channel.(input_char stdin) : char option); *)
-                          ProfData.incr !data.num_backtracks;
-                          (* match (1, get_new_cex params data problem) with
-                           * | 0, Some problem ->
-                           *    Printf.printf "\tnew cex\n%!";
-                           *    solve_math (i - 1) params data problem
-                           * | _, _ -> *)
-                          solve_math (i - 1) params data problem
-
-                     in
-                     if params.debug then begin
-                         Printf.printf "\n%s\n%!" (Problem.to_string params problem');
-                       end;
-                     match cegis_math params data problem' with
-                     | None -> continue ()
-                     | Some es -> Some es in
-            ModelFinder.make_searcher params data problem
-            |> loop params.search_width problem
-        end
-      else begin
-          Printf.printf "Exhausted the Space\n%!";
-          match get_new_cex params data problem with
-          | Some p -> solve_math i params data p
-          | None ->
-             Printf.printf "we really have exhausted the space\n";
-             None
-        end
+     if i = 0 then
+       None
+     else
+       if params.ecache then
+         match EAbstr.infer !edit_cache (Problem.log_edits problem |> List.hd_exn) with
+         | None ->
+            cegis_math {params with ecache = false; do_slice = false} data problem
+         | Some ps ->
+            match get_cex {params with fastcx = false} data (Problem.replace_phys_edits problem ps) with
+            | `Yes ->
+               Some ps
+            | `NoAndCE _ ->
+               cegis_math {params with ecache = false} data problem
+       else
+         if Problem.model_space problem = True
+            || (Problem.model_space problem <> False
+                && (check_sat params (Problem.model_space problem) |> fst |> Option.is_some))
+         then begin
+             if (Problem.phys_edits problem |> List.length > params.edits_depth)
+             then None
+             else
+               let st = Time.now () in
+               let rec loop i problem searcher =
+                 Printf.printf "loop\n%!";
+                 match params.timeout with
+                 | Some (st,dur) when Time.(Span.(dur < diff(now()) st))  ->
+                    Printf.printf "Timeout\n%!";None
+                 | _ ->
+                    if i = 0 then
+                      None else
+                      let model_opt = ModelFinder.search params data problem searcher in
+                      ProfData.update_time !data.model_search_time st;
+                      match model_opt with
+                      | None ->
+                         if params.interactive then
+                           ignore(Stdio.In_channel.(input_char stdin) : char option);
+                         if params.debug then None
+                         else None
+                      | Some (model, searcher) ->
+                         if Problem.seen_attempt problem model
+                         then begin
+                             Printf.printf "ALREADY EXPLORED\n %s \n\n %s \n%!"
+                               (Problem.model_space problem |> string_of_test)
+                               (string_of_map model);
+                             let res = fixup_test model (Problem.model_space problem) in
+                             Printf.printf "applied \n\n\n %s\n\n\n" (string_of_test res);
+                             failwith ""
+                           end
+                         else
+                           let problem = Problem.add_attempt problem model in
+                           let es = Edit.extract (Problem.phys problem) model in
+                           let es = remove_missed_edits params data problem es in
+                           let () = if true then begin
+                                        (* let space = Problem.model_space problem in *)
+                                        (* Printf.printf "\n\t***Space***\n\t%s\n\t***     ***" (string_of_test space); *)
+                                        Printf.printf "\n\t***Edits*** (%d CEXs)\n%!" (List.length @@ Problem.cexs problem);
+                                        Problem.phys_edits problem |>
+                                          List.iter ~f:(fun e -> Printf.printf "\t %s\n%!" (Edit.to_string e));
+                                        Printf.printf "\t*** New ***\n%!";
+                                        List.iter es ~f:(fun e -> Printf.printf "\t %s\n%!" (Edit.to_string e));
+                                        Printf.printf "\t***     ***\n";
+                                      (* Printf.printf "\t ***model***\n";
+                                       * Printf.printf "\t%s\n%!" (string_of_map model); *)
+                                        (* ignore(Stdio.In_channel.(input_char stdin) : char option); *)
+                                      end in
+                           let problem' = Problem.(append_phys_edits problem es
+                                                   |> reset_model_space
+                                                   |> reset_attempts) in
+                           if params.debug then begin
+                               Printf.printf "\n%s\n%!" (Problem.to_string params problem');
+                             end;
+                           (*Good lord please help me*)
+                           let guarded_cegis_math () =
+                             if List.is_empty es then None
+                             else cegis_math params data problem'
+                           in
+                           match guarded_cegis_math () with
+                           | None -> Printf.printf "Those edits were wrong, backtracking.\n%!";
+                                     let negated =
+                                       if List.is_empty es then
+                                         negate_model model
+                                       else
+                                         !%(Edit.test_of_list (Problem.phys problem) es)
+                                     in
+                                     let model_space = Problem.model_space problem %&% negated in
+                                     let problem = Problem.set_model_space problem model_space in
+                                     (* Printf.printf "Model Restr is %s\n%!" (string_of_test @@ Problem.model_space problem); *)
+                                     begin match loop (i - 1) problem searcher with
+                                     | Some es ->
+                                        Printf.printf "Loop succeeded\n";
+                                        Some es
+                                     | None ->
+                                        Printf.printf "\tcontinuing, model space %s\n%!" (string_of_test @@ Problem.model_space problem);
+                                        ProfData.incr !data.num_backtracks;
+                                        solve_math (i - 1) params data problem
+                                     end
+                           | Some es -> Some es
+               in
+               ModelFinder.make_searcher params data problem
+               |> loop params.search_width problem
+           end
+         else begin
+             Printf.printf "Exhausted the Space\n%!";
+             match get_new_cex params data problem with
+             | Some p -> solve_math i params data p
+             | None ->
+                Printf.printf "we really have exhausted the space\n";
+                None
+           end
 
 
 let cegis_math_sequence (params : Parameters.t) data problem =

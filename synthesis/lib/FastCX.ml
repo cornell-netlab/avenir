@@ -32,12 +32,7 @@ let hits_pred params (_: ProfData.t ref) prog inst edits e : test =
   match e with
   | Edit.Add (t, (ms, _, _)) ->
     let (ks, _, _) = get_schema_of_table t prog |> Option.value_exn in
-    let phi = Match.list_to_test ks ms %&%
-                List.fold (Instance.get_rows inst t) ~init:True
-                  ~f:(fun acc (matches,_,_) ->
-                    (* Printf.printf "combining %s\n%!" (Match.list_to_test ks matches |> string_of_test); *)
-                    acc %&% !%(Match.list_to_test ks matches))
-    in
+    let phi = Match.list_to_test ks ms %&% Instance.negate_rows inst t ks in
     (* Printf.printf "Condition: %s\n%!" (string_of_test phi); *)
     let prefix = truncated t prog |> Option.value_exn in
     let pref_gcl = Instance.(apply params NoHoles `Exact (update_list params inst edits) prefix) in
@@ -102,7 +97,7 @@ let unreachable params (problem : Problem.t) (test : Ast.test) =
   (* Printf.printf "IN DROP_SPEC%s\n%!" (string_of_test drop_spec); *)
   let n = 10 in
   let rec loop i phi =
-    let mk_query t = holify_test (List.map ~f:fst @@ free_vars_of_test t) t in
+    let mk_query t = holify_test ~f:(fun x -> x) (List.map ~f:fst @@ free_vars_of_test t) t in
     let query = mk_query @@ test %&% phi in
     if params.debug then
       Printf.printf "FAST CX QUERY %d : \n %s\n%!" (n - i) (string_of_test query);
