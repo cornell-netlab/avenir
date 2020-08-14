@@ -240,3 +240,22 @@ let rec list_prefix xs i =
        | x::xs -> x :: list_prefix xs (i-1)
 
 let swap (a,b) = (b,a)
+
+
+
+let none_or x y =
+  match x with
+  | Some _ -> x
+  | None -> y ()
+
+let (<|>) = none_or
+
+let noneif b f =
+  if b then None else f ()
+
+let (<||>) = noneif
+
+let timed_out (s : (Time.t * Time.Span.t) option ) =
+  match s with
+  | Some (st,dur) -> Time.(Span.(dur < diff(now()) st))
+  | _ -> false

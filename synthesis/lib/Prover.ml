@@ -187,6 +187,8 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
   let open Smtlib in
   (* Printf.printf "Finding model for test of size %d\n%!" (num_nodes_in_test test); *)
   (* Printf.printf "\n%s\n\n%!" (string_of_test test); *)
+  if longtest = True then (Some StringMap.empty, Time.Span.zero) else
+  if longtest = False then (None, Time.Span.zero) else
   let test = Shortener.shorten shortener longtest in
   if params.debug then assert (longtest = Shortener.unshorten shortener test);
   let vars = vars_to_term (free_vars_of_test test) params.debug in
@@ -220,6 +222,8 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
       else None
   in reset sat_prover; (model, dur)
 
+let is_sat params test =
+  check_sat params test |> fst |> Option.is_some
 
 let check_valid_inner (params : Parameters.t) (longtest : Ast.test)  =
   let open Smtlib in

@@ -8,3 +8,5 @@ avenir: _build/default/bin/main.exe
 
 clean:
 	rm -fr _build
+
+rebuild: clean avenir

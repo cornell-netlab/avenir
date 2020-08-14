@@ -9,6 +9,9 @@ open Packet
 (* Checks a formula as satisfiable. *)
 val check_sat : Parameters.t  -> test -> ((value StringMap.t) option * Time.Span.t)
 
+(* Is a formula satisfiable? returns a boolean *)
+val is_sat : Parameters.t -> test -> bool
+
 (* Checks SMT Query for validity. *)
 val check_valid : Parameters.t -> test -> ((value StringMap.t) option * Time.Span.t)
 
