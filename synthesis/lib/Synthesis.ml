@@ -329,8 +329,7 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
                       | None ->
                          if params.interactive then
                            ignore(Stdio.In_channel.(input_char stdin) : char option);
-                         if params.debug then None
-                         else None
+                         None
                       | Some (model, searcher) ->
                          if Problem.seen_attempt problem model
                          then begin
@@ -359,7 +358,7 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
                                         (* ignore(Stdio.In_channel.(input_char stdin) : char option); *)
                                       end in
                            let problem' = Problem.(append_phys_edits problem es
-                                                   |> reset_model_space
+                                                    |> reset_model_space
                                                    |> reset_attempts) in
                            if params.debug then begin
                                Printf.printf "\n%s\n%!" (Problem.to_string params problem');
