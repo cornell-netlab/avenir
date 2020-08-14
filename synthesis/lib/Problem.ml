@@ -5,11 +5,17 @@ open Tables
 
 type t =
   {
-    log : Switch.t;
+    (* logical program *)
+    log : Switch.t; 
+    (* physical program *)
     phys : Switch.t;
+    (* input-output counterexamples (for logical program) *)
     cexs: (Packet.t * Packet.t) list;
-    model_space : test;
+    (* formula encoding search space that has been traversed *)
+    model_space : Ast.test;
+    (* previously obtained models *)
     attempts : value StringMap.t list;
+    (* variables used to check equality, and their widths *)
     fvs : (string * int) list
   }
 

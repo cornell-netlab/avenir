@@ -179,8 +179,10 @@ end
 
 module Row = struct
   type action_data = value list
+
   (* Match expresssions, action data, action index*)
   type t = Match.t list * action_data * int
+
   let to_string ((mtchs, ad, actid) : t) =
     Printf.sprintf "%s,%s,%d"
       ( List.map mtchs ~f:(Match.to_string)

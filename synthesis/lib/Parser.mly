@@ -15,6 +15,8 @@
 %left IMPLIES
 %left OR
 %left AND
+%left PLUS
+%left TIMES
 %left SEMICOLON
 %nonassoc NOT
 

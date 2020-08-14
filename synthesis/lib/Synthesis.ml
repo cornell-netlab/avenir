@@ -7,11 +7,6 @@ open Manip
 open Util
 open Tables
 
-
-(* let symbolize x = x ^ "_SYMBOLIC" *)
-(* let unsymbolize = String.chop_suffix_exn ~suffix:"_SYMBOLIC" *)
-let is_symbolic = String.is_suffix ~suffix:"_SYMBOLIC"
-
 let symbolic_pkt fvs =
   List.fold fvs ~init:True
     ~f:(fun acc_test (var,sz) ->
@@ -231,32 +226,6 @@ let get_new_cex params data problem =
      then failwith "repeated counterexample"
      else add_cex problem counter |> Some
 
-
-
-(*a model is suspicious if it contains a value that's not related to
-   anything we've seen so far. Not sure how to analyze masks, so we
-   just allow them to have any value*)
-let suspect_model params problem model =
-  let ints_in_problem =
-    multi_ints_of_cmd (Problem.log_gcl_program params problem)
-    @ multi_ints_of_cmd (Problem.phys_gcl_program params problem)
-    |> List.map ~f:fst
-    |> List.dedup_and_sort ~compare:Bigint.compare
-  in
-  let open Bigint in
-  StringMap.fold model ~init:false
-    ~f:(fun ~key ~data acc ->
-         let d = get_int data in
-         if d = zero then acc
-         else if  d = one then acc
-         else if not (List.exists (Problem.fvs problem) ~f:(fun (v,_) -> String.is_substring key ~substring:v)) then
-           let () = Printf.printf "%s is excluded\n" key in acc
-         else if String.is_substring key ~substring:"_mask" then acc
-         else if List.exists ints_in_problem ~f:(Bigint.(=) d) then acc
-         else true
-    )
-
-
 let rec minimize_edits params data problem certain uncertain =
   match uncertain with
   | [] -> certain
@@ -265,8 +234,6 @@ let rec minimize_edits params data problem certain uncertain =
      match implements params data (Problem.replace_phys_edits problem (certain @ es)) with
      | `Yes -> minimize_edits params data problem certain es
      | `NoAndCE _ -> minimize_edits params data problem (certain@[e]) es
-
-
 
 let minimize_solution params data problem =
   let es = Printf.printf "\tminimizing\n";
@@ -277,7 +244,6 @@ let minimize_solution params data problem =
    *     Printf.printf "\t%s\n%!" (Edit.to_string e)
    *   ); *)
   Problem.replace_phys_edits problem es
-
 
 let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (Edit.t list option) =
   Printf.printf "cegis_math\n%!";
@@ -308,22 +274,17 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
             end;
           Some (Problem.phys_edits problem)
 
-       | `NoAndCE counter ->
-          let problem = Problem.add_cex problem counter in
-          let counter = (
-              fst counter
-            , Semantics.eval_act (Problem.log_gcl_program params problem) (fst counter))
-          in
+       | `NoAndCE (in_pkt, _) ->
+          let log_out_pkt = Semantics.eval_act (Problem.log_gcl_program params problem) in_pkt in 
+          let phy_out_pkt = Semantics.eval_act (Problem.phys_gcl_program params problem) in_pkt in
           if params.debug then
             Printf.printf "Counterexample found!\nin: %s\nlog:  %s\nphys:  %s\n\n%!"
-              (Packet.string__packet @@ fst counter)
-              (Packet.string__packet @@ snd counter)
-              (Packet.string__packet @@ Semantics.eval_act (Problem.phys_gcl_program params problem) (fst counter));
+              (Packet.string__packet in_pkt)
+              (Packet.string__packet log_out_pkt)
+              (Packet.string__packet phy_out_pkt);
           let params = {params with fastcx = false; ecache = false} in
           solve_math params.search_width params data
-            (Problem.add_cex problem counter)
-
-
+            (Problem.add_cex problem (in_pkt, log_out_pkt))
 
 and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
   Printf.printf "solve_math\n%!";
@@ -441,7 +402,6 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
                 Printf.printf "we really have exhausted the space\n";
                 None
            end
-
 
 let cegis_math_sequence (params : Parameters.t) data problem =
   let log_edit_sequence = Problem.log_edits problem in

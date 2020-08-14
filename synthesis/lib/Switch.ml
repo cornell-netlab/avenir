@@ -4,15 +4,16 @@ open Tables
 
 type t =
   {
-    pipeline : cmd ref;
-    inst : Instance.t ref;
-    edits : Edit.t list;
-    gcl : cmd option ref;
-    gcl_holes : cmd option ref;
-    dels : Instance.interp option ref;
-    tag : [`Mask | `Exact] option ref;
-    edited_inst : Instance.t option ref;
-    drop_spec : test option;
+    pipeline : cmd ref;         (* switch program *)
+    inst : Instance.t ref;      (* table rules *)
+    edits : Edit.t list;        (* edits to table rules *)
+    (* cached stuff *)
+    gcl : cmd option ref;       (* switch program with table rules inlined *)
+    gcl_holes : cmd option ref; (* switch program with table rules inlined and holes added *)
+    dels : Instance.interp option ref;   (* ??? *)
+    tag : [`Mask | `Exact] option ref;   (* flag determining whether holes can be masked *)
+    edited_inst : Instance.t option ref; (* inst with edits applied *)
+    drop_spec : test option;             (* dead code? *)
   }
 
 let make ?drop_spec:(drop_spec = None) pipeline inst edits : t =

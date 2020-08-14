@@ -1,9 +1,12 @@
-(include_subdirs unqualified)
+(menhir
+  (flags --no-stdlib --explain)
+  (modules Parser))
+
+(ocamllex (modules Lexer))
 
 (library
   (name avenir)
   (libraries core bignum async cohttp-async shell z3 petr4 ANSITerminal ipaddr)
-  (virtual_deps menhir)
   (inline_tests)
   (preprocess (pps ppx_jane ppx_inline_test ppx_deriving_yojson ppx_deriving.std))
   (ocamlc_flags -custom -cclib -lstdc++)
