@@ -225,7 +225,7 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
 let is_sat params test =
   check_sat params test |> fst |> Option.is_some
 
-let check_valid_inner (params : Parameters.t) (longtest : Ast.test)  =
+let check_valid (params : Parameters.t) (longtest : Ast.test)  =
   let open Smtlib in
   (* Printf.printf "Checking validity for test of size %d\n%!" (num_nodes_in_test test); *)
   let test = Shortener.shorten shortener longtest in
@@ -260,7 +260,8 @@ let check_valid_inner (params : Parameters.t) (longtest : Ast.test)  =
   (model, dur)
 
 
-let check_valid = check_valid_inner
+let is_valid params test =
+  check_valid params test |> fst |> Option.is_none
 
 let cache = ref @@ QAbstr.make ()
 
@@ -276,7 +277,7 @@ let check_valid_cached (params : Parameters.t) (test : Ast.test) =
   | `Miss test | `Hit test ->
      (* Printf.printf "\tCouldn't abstract a thing from %d previous tests!\n" (List.length !cache.seen); *)
      let dur' = Time.(diff (now()) st) in
-     let (m , dur) = check_valid_inner params test in
+     let (m , dur) = check_valid params test in
      if Option.is_none m then
        cache := QAbstr.add_test test !cache;
      (m, Time.Span.(dur + dur'))
@@ -284,15 +285,15 @@ let check_valid_cached (params : Parameters.t) (test : Ast.test) =
      (* Printf.printf "\tChecking abstraction from %d previous tests and %d abstractions!\n%!" (List.length !cache.seen) (List.length !cache.generals); *)
      let dur' = Time.(diff (now()) st) in
      let (m , dur) = if List.length !cache.seen > 0 then
-                       check_valid_inner {params with debug = true} q
+                       check_valid {params with debug = true} q
                      else
-                       check_valid_inner params q in
+                       check_valid params q in
      match m with
      | Some _ ->
         (* Printf.printf "\tAbstraction Failed\n%!"; *)
         (* Printf.printf "\t%s\n%!" (string_of_test q); *)
         let dur' = Time.(diff (now()) st) in
-        let (m , dur) = check_valid_inner params test in
+        let (m , dur) = check_valid params test in
         (m, Time.Span.(dur + dur'))
      | None ->
         (* Printf.printf "\tAbstraction successful\n%!"; *)
@@ -347,3 +348,7 @@ let check_min (params : Parameters.t) (test : Ast.test) =
       Some (model_to_packet (get_model sat_prover))
     else None
   in reset sat_prover; (model, dur)
+
+
+let is_valid_cached params test =
+  check_valid_cached params test |> fst |> Option.is_none

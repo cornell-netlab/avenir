@@ -253,9 +253,25 @@ let (<|>) = none_or
 let noneif b f =
   if b then None else f ()
 
-let (<||>) = noneif
+let someif b f =
+  if b then f () else None
+
+let (|=>) = someif
 
 let timed_out (s : (Time.t * Time.Span.t) option ) =
   match s with
   | Some (st,dur) -> Time.(Span.(dur < diff(now()) st))
   | _ -> false
+
+
+let rec try_in_sequence = function
+  | [] -> None
+  | f::fs ->
+     match f () with
+     | None -> try_in_sequence fs
+     | Some _ as res -> res
+
+
+let max_int nbits =
+  Printf.sprintf "0b%s" (String.make nbits '1')
+  |> Bigint.of_string

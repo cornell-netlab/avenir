@@ -194,11 +194,12 @@ module Row = struct
        |> Option.value ~default:"")
       actid
 
-  let test_of_data (vars : (string * size) list) (vals : action_data) =
+  let test_of_data (tbl : string) (act_id : int) (vars : (string * size) list) (vals : action_data) =
     List.fold2_exn vars vals ~init:True
       ~f:(fun acc (x,sz) v ->
         assert (sz = size_of_value v);
-        acc %&% (Hole(x, sz) %=% Value v)
+        mkAnd acc @@
+          (Hole.action_data_hole tbl act_id x sz %=% Value v)
       )
 
   let intersects (m1s, _,_ : t) (m2s, _, _ : t) : bool =
@@ -329,7 +330,7 @@ module Edit = struct
           %&%
             (Match.test_hole_of_lists t keys ms)
           %&%
-            (Row.test_of_data (List.nth_exn actions i |> fst) ds)
+            (Row.test_of_data t i (List.nth_exn actions i |> fst) ds)
 
   let test_of_list phys es =
     List.(map es ~f:(to_test phys) |> reduce_exn ~f:(%&%))

@@ -257,6 +257,8 @@ let rec mkOr (t : test) (t' : test) : test =
     end
   else Or (t,t')
 
+let bigor = List.fold ~init:False ~f:(mkOr)
+
 let (%+%) = mkOr
 
 let rec mkAnd (t : test) (t' : test) =
@@ -274,7 +276,10 @@ let rec mkAnd (t : test) (t' : test) =
     end
   else And(t,t')
 
+let bigand = List.fold ~init:True ~f:(mkAnd)
+
 let (%&%) = mkAnd
+
        
 let mkNeg t =
   if enable_smart_constructors then begin

@@ -57,5 +57,3 @@ val seen_attempt : t -> value StringMap.t -> bool
 
 val reset_model_space : t -> t
 val refine_model_space : t -> test -> t
-val set_model_space : t -> test -> t
-

@@ -134,10 +134,10 @@ let negate_model problem (model : value StringMap.t) (es : Edit.t list) : test =
      then StringMap.fold model
             ~init:True
             ~f:(fun ~key ~data:(Int(i,sz)) acc ->
-              acc %&%
-                (Hole(key, sz) %=% Value(Int(i,sz))))
+              mkAnd acc @@
+                Hole(key, sz) %=% Value(Int(i,sz)))
      else
-       !%(Edit.test_of_list (Problem.phys problem) es)
+       Edit.test_of_list (Problem.phys problem) es
     )
 
 
@@ -293,9 +293,10 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
     else
       if is_sat params (Problem.model_space problem)
       then begin
-          if Problem.phys_edits problem |> List.length > params.edits_depth then None else
-            ModelFinder.make_searcher params data problem
-            |> drive_search params.search_width params data problem
+          List.length(Problem.phys_edits problem) <= params.edits_depth
+          |=> fun _ ->
+              ModelFinder.make_searcher params data problem
+              |> drive_search params.search_width params data problem
         end
       else begin
           Printf.printf "Exhausted the Space\n%!";
@@ -318,30 +319,32 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
     let st = Time.now () in
     let model_opt = ModelFinder.search params data problem searcher in
     ProfData.update_time !data.model_search_time st;
-    model_opt
-    >>= fun (model, searcher) ->
-    let problem = Problem.add_attempt problem model in
+    model_opt >>= fun (model, searcher) ->
     let es = extract_reached_edits params data problem model in
+
     Log.print_search_state true problem es model;
+    Interactive.pause true ~prompt:"\n" (*params.interactive*);
 
     let problem' = Problem.(append_phys_edits problem es
                             |> reset_model_space
                             |> reset_attempts) in
     Log.print_problem params problem';
 
-    List.is_empty es
-    <||> fun _ ->
-         cegis_math params data problem'
-         <|> fun _ ->
-             Log.backtracking params;
+    let problem = Problem.add_attempt problem model in
+    let problem = negate_model problem model es
+                  |> Problem.refine_model_space problem in
 
-             let problem = negate_model problem model es
-                           |> Problem.refine_model_space problem in
-
-             drive_search (i - 1) params data problem searcher
-             <|> fun _ ->
-                 ProfData.incr !data.num_backtracks;
-                 solve_math (i - 1) params data problem
+    not(List.is_empty es)
+    |=> fun _ ->
+        try_in_sequence [
+            (fun _ -> cegis_math params data problem');
+            (fun _ -> Log.backtracking params;
+                      Printf.printf "the model_space is \n %s\n---\n%!"
+                        (string_of_test @@ Problem.model_space problem);
+                      drive_search (i - 1) params data problem searcher);
+            (fun _ -> ProfData.incr !data.num_backtracks;
+                      solve_math (i - 1) params data problem)
+          ]
 
 and try_cache params data problem =
   match EAbstr.infer !edit_cache (Problem.log_edits problem |> List.hd_exn) with

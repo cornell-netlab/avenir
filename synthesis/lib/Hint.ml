@@ -15,8 +15,6 @@ let well_formed (hint : t) : bool =
   | _     , Some _, _      -> true  (*Action Id without data is okay*)
   | _     , None  , Some _ -> false (*Action Data without id is bad*)
 
-
-
 let subset_list ks vs =
   let open List in
   for_all ks ~f:(fun k -> exists vs ~f:((=) k))
@@ -105,22 +103,25 @@ let added_to_row (table : string) (m : value StringMap.t)  : bool =
 let add_to_model (phys : cmd) (hints : t list) (m : value StringMap.t) : value StringMap.t =
   List.fold hints ~init:m
     ~f:(fun acc hint ->
-      if added_to_row hint.table acc
-      then
+      if added_to_row hint.table acc then
         match hint.match_opt with
         | None -> acc
         | Some matches ->
            match get_schema_of_table hint.table phys with
            | None -> acc
            | Some (keys,_,_) ->
-              List.fold2_exn keys matches ~init:acc ~f:(fun acc (ky,_) mtch ->
+              List.fold2_exn keys matches ~init:acc ~f:(fun acc (ky,sz) mtch ->
                   match mtch with
                   | None ->
                      (* Printf.printf "Skipping key %s\n%!" ky; *)
                      acc
                   | Some (Match.Exact data) ->
                      (* Printf.printf "Exact Matching key %s\n%!" ky; *)
-                     let m = StringMap.set acc ~key:(Hole.match_hole_exact hint.table ky) ~data in
+                     let (hv, hm) = Hole.match_holes_mask hint.table ky in
+                     let m =
+                       StringMap.set acc ~key:hv ~data
+                       |> StringMap.set ~key:hm ~data:(Int(max_int sz, sz))
+                     in
                      (* Printf.printf "Model is now: %s\n%!" (string_of_map m); *)
                      m
 
@@ -131,9 +132,9 @@ let add_to_model (phys : cmd) (hints : t list) (m : value StringMap.t) : value S
                      |> StringMap.set ~key:khi ~data:hi
                   | Some (Match.Mask (v, m)) ->
                      (* Printf.printf "Mask Matching key %s\n" ky; *)
-                     let (k,km) = Hole.match_holes_mask hint.table ky in
-                     StringMap.set acc ~key:k ~data:v
-                     |> StringMap.set ~key:km ~data:m
+                     let (hv,hm) = Hole.match_holes_mask hint.table ky in
+                     StringMap.set acc ~key:hv ~data:v
+                     |> StringMap.set ~key:hm ~data:m
                 )
       else
         acc)
@@ -142,10 +143,7 @@ let add_to_model (phys : cmd) (hints : t list) (m : value StringMap.t) : value S
 let default_match_holes tbl encode_tag keys  =
   List.fold keys ~init:True
     ~f:(fun acc (x,sz) ->
-      acc %&% if x = "l3_metadata__nexthop_index" then
-                Hole.match_holes `Exact tbl x sz
-              else
-                Hole.match_holes encode_tag tbl x sz)
+      acc %&% Hole.match_holes encode_tag tbl x sz)
 
 
 let tbl_hole encode_tag (keys: (string * size) list) tbl row_hole act_hole i actSize (hs : t list) =

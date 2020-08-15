@@ -6,20 +6,30 @@ open Packet
  * Interface to Z3
  *)
 
-(* Checks a formula as satisfiable. *)
+(* Checks whether a formula is satisfiable; returns an optional model
+   and timing data if it is *)
 val check_sat : Parameters.t  -> test -> ((value StringMap.t) option * Time.Span.t)
 
 (* Is a formula satisfiable? returns a boolean *)
 val is_sat : Parameters.t -> test -> bool
 
-(* Checks SMT Query for validity. *)
+(* Checks SMT Query for validity. returning an optional model and timing data *)
 val check_valid : Parameters.t -> test -> ((value StringMap.t) option * Time.Span.t)
 
-(* Checks SMT Query for validity. *)
+(* returns true iff the test is valid *)
+val is_valid : Parameters.t -> test -> bool
+
+(* Checks SMT Query for validity, using the abstraction cache;
+   returns an optional model and timing data if it is *)
 val check_valid_cached : Parameters.t -> test -> ((value StringMap.t) option * Time.Span.t)
 
+(* Checks SMT Query for validity, using the abstraction cache; returns
+   an optional model and timing data if it is *)
+val is_valid_cached : Parameters.t -> test -> bool
 
-(* Checks SMT Query as satisfiable, with the difference between h_lo and h_hi minimized. *)
+
+(* Checks SMT Query as satisfiable, with the difference between h_lo
+   and h_hi minimized. *)
 val check_min : Parameters.t -> test -> ((value StringMap.t) option * Time.Span.t)
 
 (*Converts an AST test into an SMT-lib string. Assumes [check_sat] is intended. *)

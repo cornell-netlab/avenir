@@ -14,7 +14,7 @@ let add_row_hole_name = prefix add_row_prefix
 
 let delete_row_hole_name i tbl = Printf.sprintf "%s%d%s%s" delete_row_prefix i delete_row_infix tbl
 let is_delete_hole n = String.(is_prefix ~prefix:delete_row_prefix n
-                                    && is_substring ~substring:delete_row_infix n)
+                               && is_substring ~substring:delete_row_infix n)
 
 let which_act_hole_name = prefix which_act_prefix
 let is_which_act_hole = String.is_prefix ~prefix:which_act_prefix
@@ -60,3 +60,4 @@ let action_data_prefix tbl i = Printf.sprintf "%s_%d_" tbl i
 (* let action_data_prefix _ _ = Printf.sprintf "" *)
 
 let action_data tbl i v sz = Printf.sprintf "%s%s_%d" (action_data_prefix tbl i) v sz
+let action_data_hole tbl i v sz = Hole(action_data tbl i v sz, sz)

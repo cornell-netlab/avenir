@@ -94,21 +94,31 @@ let delete_phys_edits (p : t) : t = replace_phys_edits p []
 let commit_edits_phys params (p : t) : t = {p with phys = Switch.commit_edits params p.phys}
 let commit_edits_log params (p : t) : t = {p with log = Switch.commit_edits params p.log}
 
+let set_attempts (p : t) attempts =
+  {p with attempts}
 
-let reset_attempts (p : t) : t = {p with attempts = []}
+let reset_attempts (p : t) : t =
+  Printf.printf "RESETTING ATTEMPTS\n%!";
+  set_attempts p []
+
 let add_attempt (p : t) (attempt : value StringMap.t) : t =
-  {p with attempts = attempt :: p.attempts}
+  Printf.printf "ADDING ATTEMPT\n%!";
+  set_attempts p @@ attempt :: p.attempts
+
 let seen_attempt (p : t)  (attempt : value StringMap.t) : bool =
   List.exists p.attempts ~f:(StringMap.equal veq attempt)
 
-let reset_model_space (p : t) : t =
-  {p with model_space = True}
-
-let refine_model_space (p : t) (b : test) : t =
-  {p with model_space = p.model_space %&% b }
-
 let set_model_space (p : t) (model_space : test) : t =
   {p with model_space}
+
+let reset_model_space (p : t) : t =
+  Printf.printf "RESETTING THE MODEL SPACE\n%!";
+  set_model_space p True
+
+let refine_model_space (p : t) (b : test) : t =
+  Printf.printf "REFINING THE MODEL SPACE\n%!";
+  set_model_space p @@ p.model_space %&% b
+
 
 let apply_edits_to_log params (p : t) (es : Edit.t list) : t =
   {p with log = Switch.update_inst params p.log es}
@@ -125,6 +135,6 @@ let update_log (p : t) (log_cmd : cmd) : t =
 
 let attempts_to_string (p : t) : string =
   List.map p.attempts ~f:(string_of_map)
-  |> List.fold ~init:"" ~f:(Printf.sprintf "%s\n%s")
+  |> List.fold ~init:"" ~f:(Printf.sprintf "%s,\n%s")
 
 let num_attempts (p : t) : int = List.length p.attempts

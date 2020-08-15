@@ -217,10 +217,15 @@ let restrict_mask (opts : opts) query_holes =
           if String.is_suffix h ~suffix:"_mask"
           then
             let h_value = String.chop_suffix_exn h ~suffix:"_mask" in
-            let allfs = Printf.sprintf "0b%s" (String.make sz '1') |> Bigint.of_string in
-            acc %&% ((Hole(h, sz) %=% Value(Int(allfs, sz)))
-                     %+%  (Hole(h,sz) %=% mkVInt(0,sz)))
-            %&% (Mask(Hole(h_value,sz), Hole(h,sz)) %=% Hole(h_value,sz))
+            let all_1s = max_int sz in
+            mkAnd acc @@
+              bigor [
+                  Hole(h, sz) %=% Value(Int(all_1s, sz));
+                  bigand [
+                      (Hole(h_value,sz) %=% mkVInt(0,sz));
+                      (Hole(h,sz) %=% mkVInt(0,sz));
+                    ]
+                ]
           else True)
 
 let active_domain_restrict params problem opts query_holes : test =
@@ -230,24 +235,24 @@ let active_domain_restrict params problem opts query_holes : test =
                |> List.dedup_and_sort ~compare:(Stdlib.compare)
                |> List.filter ~f:(fun (v,_) -> Bigint.(v <> zero && v <> one)) in
     let test = List.fold query_holes ~init:True
-      ~f:(fun acc (h,sz) ->
-        let restr =
-          List.fold ints
-            ~init:(False)
-            ~f:(fun acci (i,szi) ->
-              mkOr acci @@
-                if sz = szi
-                   && not (String.is_suffix h ~suffix:"_mask")
-                   && not (Hole.is_add_row_hole h)
-                   && not (Hole.is_delete_hole h)
-                   && not (Hole.is_which_act_hole h)
-                then (Hole(h,sz) %=% Value(Int(i,szi))
-                      %+% (Hole(h,sz) %=% mkVInt(0,szi))
-                      %+% (Hole(h,sz) %=% mkVInt(1,szi)))
-                else False)
-        in
-        if restr = False then acc else (acc %&% restr)
-      )
+                 ~f:(fun acc (h,sz) ->
+                   let restr =
+                     List.fold ints
+                       ~init:(False)
+                       ~f:(fun acci (i,szi) ->
+                         mkOr acci @@
+                           if sz = szi
+                              && not (String.is_suffix h ~suffix:"_mask")
+                              && not (Hole.is_add_row_hole h)
+                              && not (Hole.is_delete_hole h)
+                              && not (Hole.is_which_act_hole h)
+                           then (Hole(h,sz) %=% Value(Int(i,szi))
+                                 %+% (Hole(h,sz) %=% mkVInt(0,szi))
+                                 %+% (Hole(h,sz) %=% mkVInt(1,szi)))
+                           else False)
+                   in
+                   if restr = False then acc else (acc %&% restr)
+                 )
     in
     (* let () = Printf.printf "\n\n\n\nactive domain restr \n %s\n\n\n\n%!" (string_of_test test) in *)
     test
@@ -329,14 +334,15 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
           let query_test = wf_holes %&% pre_condition in
           let query_holes = holes_of_test query_test |> List.dedup_and_sort ~compare:(Stdlib.compare) in
           let out_test =
-            query_test
-            %&% adds_are_reachable params problem opts hole_type
-            %&% no_defaults params opts fvs phys
-            %&% single problem opts query_holes
-            %&% active_domain_restrict params problem opts query_holes
-            %&% restrict_mask opts query_holes
-            %&% well_formed_adds params problem hole_type
-            %&% non_empty_adds problem
+            bigand [
+                restrict_mask opts query_holes;
+                query_test;
+                adds_are_reachable params problem opts hole_type;
+                no_defaults params opts fvs phys;
+                single problem opts query_holes;
+                active_domain_restrict params problem opts query_holes;
+                well_formed_adds params problem hole_type;
+                non_empty_adds problem ]
           in
           Some (out_test, hints)) in
   tests
@@ -379,7 +385,7 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
         let search_space = apply_opts params data problem opts in
         (* Printf.printf "Searching with %d opts and %d paths\n%!" (List.length schedule) (List.length search_space); *)
         search params data problem {schedule; search_space}
-     | (test,hints)::search_space, schedule ->
+     | (test,hints) :: search_space, schedule ->
         (* Printf.printf "Check sat\n%!"; *)
         (* if params.debug then Printf.printf "MODELSPACE:\n%s\nTEST\n%s\n%!" (Problem.model_space problem |> string_of_test) (test |> string_of_test); *)
         let model_opt, dur = check_sat params (Problem.model_space problem %&% test) in
@@ -387,17 +393,22 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
         ProfData.update_time_val !data.model_z3_time dur;
         (* Printf.printf "Sat Checked\n%!\n"; *)
         match model_opt with
-        | Some model ->
+        | Some raw_model ->
            (* Printf.printf "Found a model, done \n%!"; *)
-           let model = Hint.add_to_model (Problem.phys problem) hints model in
-           if Problem.seen_attempt problem model then
-             failwith @@
-               Printf.sprintf "model has already been seen and its novel? %s"
+           let model = Hint.add_to_model (Problem.phys problem) hints raw_model in
+
+           if Problem.seen_attempt problem model then begin
+               Printf.printf "%s\n%!" (Problem.attempts_to_string problem);
+               Printf.printf "current model is %s\n%!" (string_of_map model);
+
+               Printf.printf "model_space is %s \n%!" (string_of_test @@ Problem.model_space problem);
+               Printf.printf "model has already been seen and is allowed? %s"
                  (if Problem.model_space problem |> fixup_test model = True
-                  then "yes! thats a contradiction"
-                  else "no we're safe, so i guess we should keep searching?"
-                 )
-                 (* search params data problem {schedule; search_space} *)
+                  then "yes! thats a contradiction\n%!"
+                  else "no, but somehow we synthesized it... a contradiction"
+                 );
+               failwith ""
+             end
            else begin
                if params.debug then
                  Printf.printf "IsNOVEL??? \n    %s \n"
