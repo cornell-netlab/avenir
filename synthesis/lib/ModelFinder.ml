@@ -161,7 +161,7 @@ let well_formed_adds (params : Parameters.t) (problem : Problem.t) encode_tag =
                )
        )
 
-let adds_are_reachable params (problem : Problem.t) (opts : opts) encode_tag =
+let adds_are_reachable params (problem : Problem.t) (opts : opts) fvs encode_tag =
   if not opts.reachable_adds then True else
     let phys = Problem.phys problem in
     get_tables_vars phys ~keys_only:true
@@ -177,11 +177,12 @@ let adds_are_reachable params (problem : Problem.t) (opts : opts) encode_tag =
         in
         mkAnd acc @@
           mkImplies (Hole.add_row_hole tbl_name %=% mkVInt(1,1)) @@
-            wp `Negs trunc @@
-            Hint.default_match_holes tbl_name encode_tag keys
-            %&% Instance.negate_rows phys_inst tbl_name keys
+          passive_hoare_triple ~fvs
+            (List.hd_exn (Problem.cexs problem) |> fst |> Packet.to_test ~fvs)
+            trunc
+            (Hint.default_match_holes tbl_name encode_tag keys
+             %&% Instance.negate_rows phys_inst tbl_name keys)
       )
-
 
 let non_empty_adds (problem : Problem.t) =
   Problem.phys problem
@@ -273,11 +274,8 @@ let no_defaults (params : Parameters.t) opts fvs phys =
 
 
 
-
-let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) (opts : opts)  =
+let compute_vc (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t)  (opts : opts)  =
   let (in_pkt, out_pkt) = Problem.cexs problem |> List.hd_exn in
-  (* |> refine_counter params problem in *)
-  (* let () = Printf.printf "in : %s \n out: %s\n%!" (string_of_map in_pkt) (string_of_map out_pkt) in *)
   let st = Time.now () in
   let deletions = compute_deletions in_pkt problem in
   let hints = if opts.hints then
@@ -289,7 +287,6 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                       else Instance.WithHoles (deletions, hints) in
   let hole_type =  if opts.mask then `Mask else `Exact in
   let phys = Problem.phys_gcl_holes {params with no_defaults = opts.no_defaults} problem hole_protocol hole_type  in
-  if params.debug then Printf.printf "NEW Phys\n %s\n%!" (string_of_cmd phys);
   ProfData.update_time !data.model_holes_time st;
   let st = Time.now () in
   let fvs = List.(free_vars_of_cmd phys
@@ -299,21 +296,29 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   let wp_list =
     if opts.paths then
       wp_paths `NoNegs phys out_pkt_form |> List.map ~f:(fun (c,t) -> c, in_pkt_form %=>% t)
+
     else
       let (sub, _(*passive_phys*), good_N, _) = good_execs fvs phys in
       let test =
-        (if opts.double && List.length (Problem.cexs problem) > 1 then
-           let (in_pkt', out_pkt') =  List.nth_exn (Problem.cexs problem) 1 in
-           let in_pkt_form' = apply_init_test (Packet.to_test in_pkt' ~fvs) in
-           let out_pkt_form' = apply_finals_sub_test (Packet.to_test out_pkt') sub in
-           in_pkt_form' %=>% (good_N %=>% out_pkt_form')
-         else
-           True)
-        %&% (apply_init_test in_pkt_form) %=>% (good_N %=>% apply_finals_sub_test out_pkt_form sub) in
+      hoare_triple_passified sub in_pkt_form good_N out_pkt_form
+      %&% (if opts.double && List.length (Problem.cexs problem) > 1 then
+             let (in_pkt', out_pkt') =  List.nth_exn (Problem.cexs problem) 1 in
+             let in_pkt_form' = Packet.to_test in_pkt' ~fvs in
+             let out_pkt_form' = Packet.to_test out_pkt' ~fvs in
+             hoare_triple_passified sub in_pkt_form' good_N out_pkt_form'
+           else
+             True)
+      in
       (* Printf.printf "--------------%s---------------\n%!" (string_of_test test); *)
-      [phys, test ]
+      [phys, test];
   in
   ProfData.update_time !data.search_wp_time st;
+  (wp_list, phys, hints)
+
+
+let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_list,phys,hints)  =
+  let hole_type = if opts.mask then `Mask else `Exact in
+  let fvs = Problem.fvs problem  in
   let tests =
     List.filter_map wp_list
       ~f:(fun (cmd, spec) ->
@@ -322,11 +327,16 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
           let () = if params.debug then
                      Printf.printf "Checking path with hole!\n  %s\n\n%!" (string_of_cmd cmd) in
 
+          let () = Printf.printf"TEST:\n%s\n--------\n\n%!" (string_of_test spec) in
+
           let wf_holes = List.fold (Problem.phys problem |> get_tables_actsizes) ~init:True
                            ~f:(fun acc (tbl,num_acts) ->
                              acc %&%
                                (Hole(Hole.which_act_hole_name tbl,max (log2 num_acts) 1)
-                                %<=% mkVInt(num_acts-1,max (log2 num_acts) 1))) in
+                                %<=% mkVInt(num_acts-1,max (log2 num_acts) 1)))
+                         |> Log.print_and_return_test ~pre:"WF holes:\n" ~post:"\n--------\n\n"
+          in
+
           let pre_condition =
             (Problem.model_space problem) %&% wf_holes %&% spec
             |> Injection.optimization {params with injection = opts.injection} problem
@@ -335,17 +345,42 @@ let apply_opts (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
           let query_holes = holes_of_test query_test |> List.dedup_and_sort ~compare:(Stdlib.compare) in
           let out_test =
             bigand [
-                restrict_mask opts query_holes;
-                query_test;
-                adds_are_reachable params problem opts hole_type;
-                no_defaults params opts fvs phys;
-                single problem opts query_holes;
-                active_domain_restrict params problem opts query_holes;
-                well_formed_adds params problem hole_type;
-                non_empty_adds problem ]
+                query_test
+                |> Log.print_and_return_test ~pre:"The Query:\n" ~post:"\n--------\n\n";
+
+
+
+                adds_are_reachable params problem opts fvs hole_type
+                |> Log.print_and_return_test ~pre:"Adds_are_reachable:\n" ~post:"\n--------\n\n";
+
+                restrict_mask opts query_holes
+                |> Log.print_and_return_test ~pre:"Restricting Masks:\n" ~post:"\n--------\n\n";
+
+                no_defaults params opts fvs phys
+                |> Log.print_and_return_test ~pre:"No Defaults:\n" ~post:"\n--------\n\n";
+
+                single problem opts query_holes
+                |> Log.print_and_return_test ~pre:"Single:\n" ~post:"\n--------\n\n";
+
+                active_domain_restrict params problem opts query_holes
+                |> Log.print_and_return_test ~pre:"Active Domain Restriction:\n" ~post:"\n--------\n\n";
+
+                well_formed_adds params problem hole_type
+                |> Log.print_and_return_test ~pre:"Well-Formed Additions:\n" ~post:"\n--------\n\n";
+
+                non_empty_adds problem
+                |> Log.print_and_return_test ~pre:"Non-Empty Additions:\n" ~post:"\n--------\n\n" ]
           in
           Some (out_test, hints)) in
   tests
+
+
+let compute_queries (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) (opts : opts)  =
+  let st = Time.now() in
+  let queries = compute_vc params data problem opts
+                |> with_opts params problem opts in
+  ProfData.update_time !data.search_wp_time st;
+  queries
 
 let holes_for_table table phys =
   match get_schema_of_table table phys with
@@ -382,16 +417,14 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
           Printf.printf "trying heuristics |%s|\n\n%!"
             (string_of_opts opts)
         in
-        let search_space = apply_opts params data problem opts in
-        (* Printf.printf "Searching with %d opts and %d paths\n%!" (List.length schedule) (List.length search_space); *)
+        let search_space = compute_queries params data problem opts in
+        Printf.printf "search space rebuild, recursing!\n%!";
         search params data problem {schedule; search_space}
      | (test,hints) :: search_space, schedule ->
-        (* Printf.printf "Check sat\n%!"; *)
-        (* if params.debug then Printf.printf "MODELSPACE:\n%s\nTEST\n%s\n%!" (Problem.model_space problem |> string_of_test) (test |> string_of_test); *)
         let model_opt, dur = check_sat params (Problem.model_space problem %&% test) in
         ProfData.incr !data.model_z3_calls;
         ProfData.update_time_val !data.model_z3_time dur;
-        (* Printf.printf "Sat Checked\n%!\n"; *)
+        Printf.printf "Sat Checked\n%!\n";
         match model_opt with
         | Some raw_model ->
            (* Printf.printf "Found a model, done \n%!"; *)

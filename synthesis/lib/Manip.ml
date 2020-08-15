@@ -541,8 +541,32 @@ let equivalent ?neg:(neg = True) eq_fvs l p =
      (* Printf.printf "============ NORMAL VC =========\n%!"; *)
   ((gl %&% gp (*%&% (!%bl) %&% (!%bp)*) %&% in_eq) %=>% out_eq)
   (* %&% (bl %<=>% bp) *)
-    
-  
+
+
+let hoare_triple_passified_relabelled assum good_n conseq =
+  mkImplies assum @@ mkImplies good_n conseq
+
+let hoare_triple_passified sub assum good_n conseq =
+  hoare_triple_passified_relabelled
+    (apply_init_test assum)
+    good_n
+    (apply_finals_sub_test conseq sub)
+
+
+let passive_hoare_triple_pkt ~fvs in_pkt cmd out_pkt =
+  let sub, _, good_N, _ = good_execs fvs cmd in
+  hoare_triple_passified sub
+    (Packet.to_test in_pkt ~fvs)
+    good_N
+    (Packet.to_test out_pkt ~fvs)
+
+let passive_hoare_triple ~fvs assum cmd conseq =
+  let sub, _, good_N, _ = good_execs fvs cmd  in
+  hoare_triple_passified sub
+    assum
+    good_N
+    conseq
+
 
 (** [fill_holes(|_value|_test]) replace the applies the substitution
    [subst] to the supplied cmd|value|test. It only replaces HOLES, and

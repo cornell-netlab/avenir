@@ -1,5 +1,6 @@
 open Core
 open Tables
+open Ast
 
 
 
@@ -56,3 +57,7 @@ let print_problem (params : Parameters.t) (problem : Problem.t) =
 
 let backtracking (_ : Parameters.t) =
   Printf.printf "those edits were wrong, backtracking\n%!"
+
+let print_and_return_test ?(pre="") ?(post="") t =
+  Printf.printf "%s%s%s%!" pre (string_of_test t) post ;
+  t

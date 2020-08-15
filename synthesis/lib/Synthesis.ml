@@ -314,7 +314,10 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
       Printf.printf "Timeout\n%!";
       None
     end
-  else if i = 0 then None
+  else if i = 0 then begin
+      Printf.printf "Out of gas\n%!";
+      None
+    end
   else
     let st = Time.now () in
     let model_opt = ModelFinder.search params data problem searcher in
@@ -323,7 +326,7 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
     let es = extract_reached_edits params data problem model in
 
     Log.print_search_state true problem es model;
-    Interactive.pause true ~prompt:"\n" (*params.interactive*);
+    Interactive.pause ~prompt:"\n" params.interactive;
 
     let problem' = Problem.(append_phys_edits problem es
                             |> reset_model_space
@@ -341,6 +344,7 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
             (fun _ -> Log.backtracking params;
                       Printf.printf "the model_space is \n %s\n---\n%!"
                         (string_of_test @@ Problem.model_space problem);
+                      Interactive.pause params.interactive;
                       drive_search (i - 1) params data problem searcher);
             (fun _ -> ProfData.incr !data.num_backtracks;
                       solve_math (i - 1) params data problem)
