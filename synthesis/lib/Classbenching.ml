@@ -58,11 +58,11 @@ let parse_ip_mask str =
    *            @@ Printf.sprintf "0x%s"
    *            @@ String.substr_replace_all addr_str ~pattern:"." ~with_:"" in *)
   match len_str with
-  | None -> Match.Exact(Int(addr,32))
+  | None -> Match.exact_(Int(addr,32))
   | Some len_str ->
      let len = int_of_string len_str in
      if len = 32 then
-       Match.Exact(Int(addr,32))
+       Match.exact_(Int(addr,32))
      else
        let mask = Bigint.of_string
                   @@ Printf.sprintf "0b%s%s"
@@ -70,7 +70,7 @@ let parse_ip_mask str =
                        (String.make (32-len) '0')
        in
        let lo_addr = Bigint.(addr land mask) in
-       Match.Mask(Int(lo_addr, 32), Int(mask, 32))
+       Match.mask_ (Int(lo_addr, 32)) (Int(mask, 32))
 
 
 let parse_port_range str =
@@ -78,13 +78,13 @@ let parse_port_range str =
   let lo_int = String.strip lo |> int_of_string in
   let hi_int = String.strip hi |> int_of_string in
   if lo_int = hi_int
-  then Match.Exact(mkInt(lo_int, 16))
-  else Match.Between(mkInt(lo_int, 16), mkInt(hi_int, 16))
+  then Match.exact_(mkInt(lo_int, 16))
+  else Match.between_ (mkInt(lo_int, 16)) ( mkInt(hi_int, 16))
 
 let parse_proto str =
   let list = String.split str ~on:'\t' in
   let proto,mask = String.lsplit2_exn (List.hd_exn list) ~on:'/' in
-  Match.Mask(Int(Bigint.of_string proto, 8), Int(Bigint.of_string mask, 8))
+  Match.mask_ (Int(Bigint.of_string proto, 8)) (Int(Bigint.of_string mask, 8))
 
 
 

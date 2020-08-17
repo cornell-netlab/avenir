@@ -334,16 +334,18 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
     Log.print_problem params problem';
 
     let problem = Problem.add_attempt problem model in
-    let problem = negate_model problem model es
-                  |> Problem.refine_model_space problem in
+    let restriction = negate_model problem model es in
+    let problem = Problem.refine_model_space problem restriction in
+    assert (List.for_all (Problem.attempts problem)
+              ~f:(fun m -> False = fixup_test m (Problem.model_space problem)));
 
     not(List.is_empty es)
     |=> fun _ ->
         try_in_sequence [
             (fun _ -> cegis_math params data problem');
             (fun _ -> Log.backtracking params;
-                      Printf.printf "the model_space is \n %s\n---\n%!"
-                        (string_of_test @@ Problem.model_space problem);
+                      (* Printf.printf "the model_space is \n %s\n---\n%!"
+                       *   (string_of_test @@ Problem.model_space problem); *)
                       Interactive.pause params.interactive;
                       drive_search (i - 1) params data problem searcher);
             (fun _ -> ProfData.incr !data.num_backtracks;
@@ -353,12 +355,14 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
 and try_cache params data problem =
   match EAbstr.infer !edit_cache (Problem.log_edits problem |> List.hd_exn) with
   | None ->
+     Log.edit_cache_miss params.debug;
      let params =
        {params with ecache = false;   (* caching failed so disable it *)
                     do_slice = false  (* dont slice.. I don't remember why not *)
        } in
      cegis_math params data problem
   | Some ps ->
+     Log.edit_cache_hit params.debug ps;
 
      (* fastCX's preconditions may be violated, so make sure its turned off*)
      let params_nofastcx = {params with fastcx = false} in

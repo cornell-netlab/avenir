@@ -26,7 +26,7 @@ let matches_of_string (data_str : string) : Match.t list =
             let range = String.strip
                           ~drop:(fun c -> c = '[' || c = ']') vals in
             begin match String.lsplit2 range ~on:':' with
-            | Some (hi, lo) -> Match.Between (Int(Bigint.of_string hi, size), Int(Bigint.of_string lo, size))
+            | Some (hi, lo) -> Match.between_ (Int(Bigint.of_string hi, size)) (Int(Bigint.of_string lo, size))
             | _ -> Printf.sprintf "Couldn't parse match from string %s" range
                    |> failwith
             end
@@ -40,7 +40,7 @@ let matches_of_string (data_str : string) : Match.t list =
                let size = int_of_string size_str in
                let mask = Bigint.of_string prefix_str in
                let addr = Bigint.of_string fst in
-               Match.Mask(Int(addr, size), Int(mask, size))
+               Match.mask_(Int(addr, size)) (Int(mask, size))
             | _ -> Printf.sprintf "Couldn't parse match from string %s" match_str
                    |> failwith
             end
@@ -60,7 +60,7 @@ let matches_of_string (data_str : string) : Match.t list =
               | Some (value_str, size_str) ->
                  let size = int_of_string size_str in
                  let value = Bigint.of_string value_str in
-                 Match.Exact(Int(value, size))
+                 Match.exact_ (Int(value, size))
               | None ->
                  Printf.sprintf "Couldn't parse match from string %s" match_str
                  |> failwith

@@ -10,6 +10,10 @@ module Match = struct
     | Between of value * value
     | Mask of value * value
 
+  let exact_ v = Exact v
+  let between_ lo hi = if lo = hi then exact_ lo else Between (lo, hi)
+  let mask_ v m = if Bigint.(get_int m >= max_int (size_of_value v)) then exact_ v else Mask(v,m)
+
   let equal m m' =
     match m, m' with
     | Exact v, Exact v' -> veq v v'
@@ -228,21 +232,21 @@ module Row = struct
                          fixup_val match_model (Hole(hm,sz))
                    with
                    | Hole _,_ ->
-                      Some (ks @ [Match.Mask(mkInt(0,sz),mkInt(0,sz))])
+                      Some (ks @ [Match.mask_ (mkInt(0,sz)) (mkInt(0,sz))])
                    (*    Printf.sprintf "when filling %s couldn't find %s in model %s" tbl_name h (string_of_map match_model)
                     * |> failwith *)
                 | Value v,Hole _ ->
-                   Some (ks @ [Match.Exact v])
+                   Some (ks @ [Match.exact_ v])
                 | Value v, Value m ->
-                   Some (ks @ [Match.Mask (v,m)])
+                   Some (ks @ [Match.mask_ v m])
                 | _ -> failwith "Model did something weird"
                 end
               | Some ks, Value lo, Value hi ->
                 let k = if veq lo hi
-                  then [Match.Exact lo]
+                  then [Match.exact_ lo]
                   else if vleq hi lo
                   then failwith "Low value greater than high value in model from z3"
-                  else [Match.Between (lo, hi)] in
+                  else [Match.between_ lo hi] in
                 Some (ks @ k)
               | _, _,_ -> failwith "got something that wasn't a model"
             ) in

@@ -32,10 +32,10 @@ let print_edits =
 
 
 
-let print_search_state do_print problem es model =
+let print_search_state do_print problem es _ (*model*) =
   if do_print then begin
-      let space = Problem.model_space problem in
-      Printf.printf "\n\t***Space***\n\t%s\n\t***     ***" (Ast.string_of_test space);
+      (* let space = Problem.model_space problem in *)
+      (* Printf.printf "\n\t***Space***\n\t%s\n\t***     ***" (Ast.string_of_test space); *)
 
       Printf.printf "\n\t***Edits*** (%d CEXs)\n%!" (List.length @@ Problem.cexs problem);
       print_edits (Problem.phys_edits problem);
@@ -44,8 +44,8 @@ let print_search_state do_print problem es model =
       print_edits es;
       Printf.printf "\t***     ***\n";
 
-      Printf.printf "\t ***model***\n";
-      Printf.printf "\t%s\n%!" (Ast.string_of_map model);
+      (* Printf.printf "\t ***model***\n";
+       * Printf.printf "\t%s\n%!" (Ast.string_of_map model); *)
       (* ignore(Stdio.In_channel.(input_char stdin) : char option); *)
     end
 
@@ -58,6 +58,17 @@ let print_problem (params : Parameters.t) (problem : Problem.t) =
 let backtracking (_ : Parameters.t) =
   Printf.printf "those edits were wrong, backtracking\n%!"
 
-let print_and_return_test ?(pre="") ?(post="") t =
-  Printf.printf "%s%s%s%!" pre (string_of_test t) post ;
+let print_and_return_test ?(pre="") ?(post="") debug t =
+  if debug then Printf.printf "%s%s%s%!" pre (string_of_test t) post;
   t
+
+
+let edit_cache_miss d =
+  if d then Printf.printf "tried edit_cache, missed\n%!"
+
+let edit_cache_hit d es =
+  if d then begin
+      Printf.printf "tried edit_cache, hit!\n";
+      print_edits es;
+      Printf.printf "---\n%!"
+    end

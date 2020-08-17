@@ -444,7 +444,7 @@ let create_bench sz num_tables num_xs num_ms =
 
 let match_row sz num_xs ~ith ~has_value =
   let open Match in
-  let wildcard =  Mask(mkInt(0,32),mkInt(0,32)) in
+  let wildcard =  mask_ (mkInt(0,32)) (mkInt(0,32)) in
   let matches =
     Util.repeat (ith) wildcard
     @ [ Exact(mkInt(has_value,sz)) ]
@@ -454,7 +454,7 @@ let match_row sz num_xs ~ith ~has_value =
 
 let match_row_easier sz num_xs ~has_value =
   let open Match in
-  let wildcard =  Mask(mkInt(0,32),mkInt(0,32)) in
+  let wildcard =  mask_ (mkInt(0,32)) (mkInt(0,32)) in
   let matches =
     Exact(mkInt(has_value,sz)) :: Util.repeat (num_xs) wildcard
   in
@@ -522,7 +522,7 @@ let square_bench params sz n max_edits =
 let cb_to_matches fvs cb_row =
   List.map fvs ~f:(fun (f,sz) ->
                     get cb_row f
-                    |> Option.value ~default:(Mask(mkInt(0,sz),mkInt(0,sz))))
+                    |> Option.value ~default:(Match.mask_ (mkInt(0,sz)) (mkInt(0,sz))))
 
 let generate_out acc  =
   let open Edit in

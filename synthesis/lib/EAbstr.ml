@@ -145,6 +145,13 @@ let sub_consts (adata : value StringMap.t option) (map : Match.t StringMap.t) (e
                       Add (table, (ms', ad', idx)) |> Some
 
 
+let print_template subst =
+  StringMap.iteri subst
+    ~f:(fun ~key ~data ->
+      Printf.printf "\t%s->%s\n%!" key (Match.to_string data)
+    )
+
+
 let infer (cache : t) (e : Edit.t) =
   (* Printf.printf "Log edits\n\t%s\n%!" (Edit.to_string e); *)
   List.find_map cache
@@ -152,15 +159,19 @@ let infer (cache : t) (e : Edit.t) =
       match similar log_edit e with
       | None -> None
       | Some (adata, subst) ->
+         Printf.printf "[EABSTR] New Logical Edit is \n%!";
+         Log.print_edits [e];
+         Printf.printf "[EABSTR] Template is:\n%!";
+         print_template subst;
+         Printf.printf "[EABSTR] Physical guess is\n%!";
          List.fold phys_edits ~init:(Some [])
            ~f:(fun acc e -> match acc with
                             | None -> None
                             | Some acc ->
-                               (* Printf.printf "%s\n%!" (Edit.to_string e); *)
                                match sub_consts adata subst e with
                                | None -> None
                                | Some e' ->
-                                  (* Printf.printf "%s\n%!" (Edit.to_string e'); *)
+                                  Log.print_edits [e'];
                                   acc @ [e'] |> Some))
 
 

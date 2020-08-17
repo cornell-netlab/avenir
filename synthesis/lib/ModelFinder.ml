@@ -23,7 +23,7 @@ type opts =
 
 type t = {
     schedule : opts list;
-    search_space : (test * Hint.t list) list;
+    search_space : (test * Hint.t list * opts) list;
   }
 
 let condcat b app s =
@@ -68,13 +68,13 @@ let rec make_schedule opt =
   opt ::
     if opt.double then
       let opt' = {opt with double = false} in
-      opt' :: make_schedule opt'
+       make_schedule opt'
     else if opt.injection || opt.hints || opt.paths || opt.only_holes || opt.nlp || opt.domain then
       let opt' = {opt with injection=false;hints=false;paths=false;only_holes=false; nlp=false;domain = false} in
-      opt' :: make_schedule opt'
+      make_schedule opt'
     else if opt.no_defaults then
       let opt' = {opt with no_defaults = false} in
-      opt' :: make_schedule opt'
+      make_schedule opt'
     else []
 
 let make_searcher (params : Parameters.t) (_ : ProfData.t ref) (_ : Problem.t) : t =
@@ -327,14 +327,15 @@ let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_li
           let () = if params.debug then
                      Printf.printf "Checking path with hole!\n  %s\n\n%!" (string_of_cmd cmd) in
 
-          let () = Printf.printf"TEST:\n%s\n--------\n\n%!" (string_of_test spec) in
+          let () = if params.debug then
+                     Printf.printf"TEST:\n%s\n--------\n\n%!" (string_of_test spec) in
 
           let wf_holes = List.fold (Problem.phys problem |> get_tables_actsizes) ~init:True
                            ~f:(fun acc (tbl,num_acts) ->
                              acc %&%
                                (Hole(Hole.which_act_hole_name tbl,max (log2 num_acts) 1)
                                 %<=% mkVInt(num_acts-1,max (log2 num_acts) 1)))
-                         |> Log.print_and_return_test ~pre:"WF holes:\n" ~post:"\n--------\n\n"
+                         |> Log.print_and_return_test params.debug ~pre:"WF holes:\n" ~post:"\n--------\n\n"
           in
 
           let pre_condition =
@@ -346,32 +347,32 @@ let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_li
           let out_test =
             bigand [
                 query_test
-                |> Log.print_and_return_test ~pre:"The Query:\n" ~post:"\n--------\n\n";
+                |> Log.print_and_return_test params.debug ~pre:"The Query:\n" ~post:"\n--------\n\n";
 
 
 
                 adds_are_reachable params problem opts fvs hole_type
-                |> Log.print_and_return_test ~pre:"Adds_are_reachable:\n" ~post:"\n--------\n\n";
+                |> Log.print_and_return_test params.debug ~pre:"Adds_are_reachable:\n" ~post:"\n--------\n\n";
 
                 restrict_mask opts query_holes
-                |> Log.print_and_return_test ~pre:"Restricting Masks:\n" ~post:"\n--------\n\n";
+                |> Log.print_and_return_test params.debug ~pre:"Restricting Masks:\n" ~post:"\n--------\n\n";
 
                 no_defaults params opts fvs phys
-                |> Log.print_and_return_test ~pre:"No Defaults:\n" ~post:"\n--------\n\n";
+                |> Log.print_and_return_test params.debug ~pre:"No Defaults:\n" ~post:"\n--------\n\n";
 
                 single problem opts query_holes
-                |> Log.print_and_return_test ~pre:"Single:\n" ~post:"\n--------\n\n";
+                |> Log.print_and_return_test params.debug ~pre:"Single:\n" ~post:"\n--------\n\n";
 
                 active_domain_restrict params problem opts query_holes
-                |> Log.print_and_return_test ~pre:"Active Domain Restriction:\n" ~post:"\n--------\n\n";
+                |> Log.print_and_return_test params.debug ~pre:"Active Domain Restriction:\n" ~post:"\n--------\n\n";
 
                 well_formed_adds params problem hole_type
-                |> Log.print_and_return_test ~pre:"Well-Formed Additions:\n" ~post:"\n--------\n\n";
+                |> Log.print_and_return_test params.debug  ~pre:"Well-Formed Additions:\n" ~post:"\n--------\n\n";
 
                 non_empty_adds problem
-                |> Log.print_and_return_test ~pre:"Non-Empty Additions:\n" ~post:"\n--------\n\n" ]
+                |> Log.print_and_return_test params.debug ~pre:"Non-Empty Additions:\n" ~post:"\n--------\n\n" ]
           in
-          Some (out_test, hints)) in
+          Some (out_test, hints, opts)) in
   tests
 
 
@@ -420,29 +421,38 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
         let search_space = compute_queries params data problem opts in
         Printf.printf "search space rebuild, recursing!\n%!";
         search params data problem {schedule; search_space}
-     | (test,hints) :: search_space, schedule ->
-        let model_opt, dur = check_sat params (Problem.model_space problem %&% test) in
+     | (test,hints, opts) :: search_space, schedule ->
+        assert (List.for_all (Problem.attempts problem)
+                  ~f:(fun m -> False = fixup_test m (Problem.model_space problem)));
+        let encode_tag = if opts.mask then `Mask else `Exact in
+        let model_opt, dur = bigand [
+                                 Hint.restriction encode_tag hints (Problem.phys problem);
+                                 Problem.model_space problem;
+                                 test
+                               ]
+                             |> check_sat params in
         ProfData.incr !data.model_z3_calls;
         ProfData.update_time_val !data.model_z3_time dur;
-        Printf.printf "Sat Checked\n%!\n";
+        (* Printf.printf "Sat Checked\n%!\n"; *)
         match model_opt with
         | Some raw_model ->
            (* Printf.printf "Found a model, done \n%!"; *)
-           let model = Hint.add_to_model (Problem.phys problem) hints raw_model in
-
-           if Problem.seen_attempt problem model then begin
+           if Problem.seen_attempt problem raw_model then begin
                Printf.printf "%s\n%!" (Problem.attempts_to_string problem);
-               Printf.printf "current model is %s\n%!" (string_of_map model);
 
-               Printf.printf "model_space is %s \n%!" (string_of_test @@ Problem.model_space problem);
-               Printf.printf "model has already been seen and is allowed? %s"
-                 (if Problem.model_space problem |> fixup_test model = True
+               Printf.printf "\ncurrent model is %s\n%!" (string_of_map raw_model);
+
+               Printf.printf "\nmodel_space is %s \n%!" (string_of_test @@ Problem.model_space problem);
+               Printf.printf "\nmodel has already been seen and is allowed? %s"
+                 (if Problem.model_space problem |> fixup_test raw_model = True
                   then "yes! thats a contradiction\n%!"
-                  else "no, but somehow we synthesized it... a contradiction"
+                  else "no, but somehow we synthesized it... a contradiction\n%!"
                  );
                failwith ""
              end
            else begin
+               let model = Hint.add_to_model (Problem.phys problem) hints raw_model in
+
                if params.debug then
                  Printf.printf "IsNOVEL??? \n    %s \n"
                    (Problem.model_space problem
@@ -450,7 +460,6 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
                     |> string_of_test);
                Some (model,t)
              end
-        (* end *)
         | _ ->
            (* Printf.printf "No model, keep searching with %d opts and %d paths \n%!" (List.length schedule) (List.length search_space); *)
            search params data problem {schedule; search_space}
