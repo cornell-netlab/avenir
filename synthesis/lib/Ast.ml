@@ -335,12 +335,12 @@ let mkEq (e : expr) (e':expr) =
     | _ -> norm
 
 
-let mkLe (e : expr) (e' : expr) : test = Le(e,e')
-  (* if not enable_smart_constructors then Le(e,e') else
-   * match e, e' with
-   *   | Value(Int first), Value(Int second) ->
-   *      if first <= second then True else False
-   *   | _, _ -> Le(e, e') *)
+let mkLe (e : expr) (e' : expr) : test =
+  if not enable_smart_constructors then Le(e,e') else
+  match e, e' with
+    | Value(Int first), Value(Int second) ->
+       if first < second then True else False
+    | _, _ -> Le(e, e')
             
 let (%=%) = mkEq
 let (%<>%) v v' = Neg(v %=% v') 
@@ -510,6 +510,29 @@ type cmd =
               actions:(((string * size) list * cmd) list);
               default: cmd}
 
+let mkSeq first scnd =
+  if not enable_smart_constructors then Seq(first, scnd) else
+  match first, scnd with
+  | Skip, x | x, Skip
+    | Assert True, x | x, Assert True
+    | Assume True, x | x, Assume False
+    -> x
+  | Assert False, _ | _, Assert False
+    -> Assert False
+  | _,_ -> Seq(first, scnd)
+
+
+let (%:%) = mkSeq
+
+let mkAssn f v =
+  match v with
+  | Var(x, _) when x = f -> Skip
+  | _ -> Assign (f, v)
+let (%<-%)= mkAssn
+
+
+let mkAssume t =
+  if t = True then Skip else Assume t
 
 let clean_selects_list ss = ss
   (* List.filter ~f:(fun (c,a) -> c <> False) *)
@@ -546,21 +569,10 @@ let mkOrdered ss =
                   ~which_to_keep:`First
                   ~equal:(fun (cond,_) (cond',_) -> cond = cond')
   in
-  if List.length selects = 0 then
-    Skip
-  else
-    Select (Ordered, selects)
-
-let mkSeq first scnd =
-  if not enable_smart_constructors then Seq(first, scnd) else
-  match first, scnd with
-  | Skip, x | x, Skip
-    | Assert True, x | x, Assert True
-    | Assume True, x | x, Assume False
-    -> x
-  | Assert False, _ | _, Assert False
-    -> Assert False
-  | _,_ -> Seq(first, scnd)
+  match selects with
+  | [] -> Skip
+  | [(b,c)] -> (mkAssume b) %:% c
+  | _ -> Select (Ordered, selects)
 
 let mkSelect styp =
   match styp with
@@ -571,14 +583,6 @@ let mkSelect styp =
 
 let mkApply (name,keys,actions,default) = Apply{name;keys;actions;default}
 
-let (%:%) = mkSeq
-
-let mkAssn f v =
-  match v with
-  | Var(x, _) when x = f -> Skip
-  | _ -> Assign (f, v)
-let (%<-%)= mkAssn
-         
 
 let combineSelects e e' =
   match e, e' with

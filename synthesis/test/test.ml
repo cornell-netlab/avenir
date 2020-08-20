@@ -5,9 +5,18 @@ open Ast
 let testable_string (type a) (f : a -> string) (eq : a -> a -> bool) =
   Alcotest.testable (Fmt.of_to_string f) (eq)
 
+let expr = testable_string string_of_expr Stdlib.(=)
+let same_expr = Alcotest.(check expr) "same expr"
 
 let test = testable_string string_of_test Stdlib.(=)
 let same_test = Alcotest.(check test) "same test"
+
+let cmd = testable_string string_of_cmd Stdlib.(=)
+let same_cmd = Alcotest.(check cmd) "same cmd"
+
+let packet = testable_string Packet.string__packet Packet.equal
+let same_packet = Alcotest.(check packet) "same packet"
+
 
 (* Testing equality smart constructor *)
 let eq_test _ =
@@ -79,12 +88,7 @@ let wp_assume_eq _ = (* wp behaves well with assertions *)
   let post =  Var ("h",8) %=% Var ("g",8) in
   same_test (phi %=>% post) (wp `Negs cmd post)
 
-
-
 (*Semantics*)
-let packet = testable_string Packet.string__packet Packet.equal
-
-let same_packet = Alcotest.(check packet) "same packet"
 let semantics =
   let open Semantics in
   let dst_is x = Var("dst", 2) %=% mkVInt(x,2) in
@@ -117,9 +121,98 @@ let semantics =
   ]
 
 
+(*Testing Constant Propogation *)
+let cp_wikipedia_ex1 _ =
+  let cmd =
+    sequence [
+        "x" %<-% mkVInt(14,32);
+        "y" %<-%
+          mkMinus (mkTimes (mkVInt(2,32)) (mkVInt(7,32))) (Var("x",32));
+        "return" %<-% mkTimes (Var("y",32)) (mkPlus (mkVInt(99,32)) (mkVInt(2,32)))
+      ]
+  in
+  let exp = sequence[
+                "x" %<-% mkVInt(14,32);
+                "y" %<-% mkVInt(0,32);
+                "return" %<-% mkVInt(0,32)
+              ] in
+  same_cmd exp (ConstantProp.propogate cmd)
+
+let cp_wikipedia_ex2 _ =
+  let int i = mkVInt(i,32) in
+  let var a = Var(a,32) in
+  let cmd =
+    sequence [
+        "a" %<-% int 30;
+        "b" %<-% mkMinus (int 9) (mkMinus(var "a") (int 24));
+        "c" %<-% mkTimes (var "b") (int 4);
+        mkOrdered [
+            var "c" %>% int 10, "c" %<-% mkMinus (var "c") (int 10);
+            True, Skip
+          ];
+        "return" %<-% mkTimes (var "c") (int 2)
+      ]
+  in
+  let exp =
+    sequence [
+        "a" %<-% int 30;
+        "b" %<-% int 3;
+        "c" %<-% int 12;
+        "c" %<-% int 2;
+        "return" %<-% int 4
+      ]
+  in
+  same_cmd exp (ConstantProp.propogate cmd)
 
 
-
+let cp_only_holes_and_constants _ =
+  let cmd =
+    sequence [
+        "ipv4.dst" %<-% mkVInt(9999,32);
+        "ipv4.ttl" %<-% mkVInt(12,8);
+        mkOrdered [
+            (Hole("?Del_0_fwd_table", 1) %=% mkVInt(0,1)) %&%
+              (Var("ipv4.dst",32) %=% mkVInt(3333,32)), "out_port" %<-% mkVInt(45,9);
+            (Hole("?AddTo_fwd_table",1) %=% mkVInt(1,1))
+            %&% (Var("ipv4.dst",32) %=% Hole("?ipv4.dst_fwd_table", 32))
+            , "out_port" %<-% Hole("?port_0_fwd_table",32);
+            True, "out_port" %<-% mkVInt(0,9)
+          ];
+        mkOrdered [
+            bigand [
+                Hole("?Del_0_punt_table",1) %=% mkVInt(0,1);
+                Var("ipv4.ttl",8) %=% mkVInt(1,8)
+              ], "out_port" %<-% mkVInt(0,9);
+            bigand [
+                Hole("?AddTo_punt_table",1) %=% mkVInt(1,1);
+                Var("ipv4.ttl",8) %=% Hole("?ipv4.ttl_punt_table",8)
+              ], "out_port" %<-% Hole("?port_0_punt",9);
+            True, Skip
+          ]
+      ]
+  in
+  let exp =
+    sequence [
+        "ipv4.dst" %<-% mkVInt(9999,32);
+        "ipv4.ttl" %<-% mkVInt(12,8);
+        mkOrdered [
+            False, "out_port" %<-% mkVInt(45,9);
+            (Hole("?AddTo_fwd_table",1) %=% mkVInt(1,1))
+            %&% (mkVInt(9999,32) %=% Hole("?ipv4.dst_fwd_table", 32))
+            , "out_port" %<-% Hole("?port_0_fwd_table",32);
+            True, "out_port" %<-% mkVInt(0,9)
+          ];
+        mkOrdered [
+            False, "out_port" %<-% mkVInt(0,9);
+            bigand [
+                Hole("?AddTo_punt_table",1) %=% mkVInt(1,1);
+                mkVInt(12,8) %=% Hole("?ipv4.ttl_punt_table",8)
+              ], "out_port" %<-% Hole("?port_0_punt",9);
+            True, Skip
+          ]
+      ]
+  in
+  same_cmd exp (ConstantProp.propogate cmd)
 
 
 let () =
@@ -139,5 +232,9 @@ let () =
       List.map semantics ~f:(fun (run_pkt, ex_pkt) ->
           test_case "cross product" `Quick @@
             fun _ -> same_packet ex_pkt run_pkt);
-
+      "constant propagation",
+      [test_case "straight line code" `Quick cp_wikipedia_ex1;
+       test_case "eliminate if" `Quick cp_wikipedia_ex2;
+       test_case "only holes and constants remain in tests" `Quick cp_only_holes_and_constants;
+      ]
     ]
