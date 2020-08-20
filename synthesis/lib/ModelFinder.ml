@@ -286,11 +286,12 @@ let compute_vc (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
                       then Instance.OnlyHoles hints
                       else Instance.WithHoles (deletions, hints) in
   let hole_type =  if opts.mask then `Mask else `Exact in
-  let phys = Problem.phys_gcl_holes {params with no_defaults = opts.no_defaults} problem hole_protocol hole_type  in
+  let phys = Problem.phys_gcl_holes {params with no_defaults = opts.no_defaults} problem hole_protocol hole_type in
   ProfData.update_time !data.model_holes_time st;
   let st = Time.now () in
   let fvs = List.(free_vars_of_cmd phys
                   |> filter ~f:(fun x -> exists (Problem.fvs problem) ~f:(Stdlib.(=) x))) in
+  (* let phys = CompilerOpts.optimize fvs phys in *)
   (* let fvs = problem.fvs in *)
   let in_pkt_form, out_pkt_form = Packet.to_test in_pkt ~fvs, Packet.to_test out_pkt ~fvs in
   let wp_list =

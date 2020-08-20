@@ -535,24 +535,14 @@ let mkAssume t =
   if t = True then Skip else Assume t
 
 let clean_selects_list ss = ss
-  (* List.filter ~f:(fun (c,a) -> c <> False) *)
-  (* List.rev ss
-   * |> List.fold ~init:([], [])
-   *   ~f:(fun (acc,seen) (c,a) ->
-   *     if c = False || List.exists seen ~f:((=) c) then
-   *       (acc,seen)
-   *     else
-   *       ((c,a) :: acc, c :: seen)
-   *   )
-   * |> fst *)
 
 let mkPartial ss = 
   if not enable_smart_constructors then Select(Partial, ss) else
-  let selects = clean_selects_list ss in
-  if List.length selects = 0 then
-    Skip
-  else
-    Select (Partial, selects)
+    let selects = clean_selects_list ss in
+    if List.length selects = 0 then
+      Skip
+    else
+      Select (Partial, selects)
 
 let mkTotal ss =
   if not enable_smart_constructors then Select(Total, ss) else
@@ -568,6 +558,15 @@ let mkOrdered ss =
                 |> List.remove_consecutive_duplicates
                   ~which_to_keep:`First
                   ~equal:(fun (cond,_) (cond',_) -> cond = cond')
+                |> List.fold_until ~init:[] ~f:(fun acc (b,c) ->
+                       if b = False then
+                         Continue acc
+                       else if b = True then
+                         Stop acc
+                       else
+                         Continue (acc @ [(b,c)])
+                     )
+              ~finish:Fn.id
   in
   match selects with
   | [] -> Skip
