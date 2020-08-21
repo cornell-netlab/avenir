@@ -9,6 +9,7 @@ module Encode = Avenir.Encode
 module Manip = Avenir.Manip
 module Benchmark = Avenir.Benchmark
 module Classbenching = Avenir.Classbenching
+module OneBigTable = Avenir.OneBigTable
 module Parameters = Avenir.Parameters
 module ProfData = Avenir.ProfData
 module Problem = Avenir.Problem
