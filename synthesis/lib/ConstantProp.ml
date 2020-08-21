@@ -3,14 +3,20 @@ open Util
 open Ast
 
 
-let join m m' : expr StringMap.t =
+let meet m m' : 'a StringMap.t =
   StringMap.merge m m'
-    ~f:(fun ~key:_ case ->
+    ~f:(fun ~key case ->
       match case with
-      | `Both (l,r) when l = r -> Some l
-      | `Both (_,_) -> None
-      | `Left  l -> Some l
-      | `Right r -> Some r)
+      | `Both (l,r) when Stdlib.(l = r) -> Some l
+      | `Both (_,_) ->
+         Printf.printf "branches disagree on value of %s\n%!" key;
+         None
+      | `Left  _ ->
+         Printf.printf "Forgetting the Left value of %s\n%!" key;
+         None
+      | `Right _ ->
+         Printf.printf "Forgetting the Right value of %s\n%!" key;
+         None)
 
 let rec eval_const_expr e =
   let binop op (e1, e2) =
@@ -96,27 +102,122 @@ let rec propogate_cmd (map : expr StringMap.t) (cmd : cmd) =
      let map'', c2' = propogate_cmd map' c2 in
      map'', c1' %:% c2'
   | Assert t -> map, Assert (propogate_test map t)
-  | Assume t -> map, Assume (propogate_test map t)
+  | Assume t -> map, mkAssume (propogate_test map t)
   | Select (typ, cases) ->
      let map', cases',_ =
-       List.fold cases ~init:(StringMap.empty, [], false)
+       List.fold cases ~init:(None, [], false)
          ~f:(fun (accMap, cases, _) (b,c) ->
              let b' = propogate_test map b in
              let map',c' = propogate_cmd map c in
-             join accMap map', cases @ [b', c'], (b' = True && typ = Ordered)
+             Some (Option.map accMap ~f:(meet map')
+                   |> Option.value ~default:map')
+             , cases @ [b', c'], (b' = True && typ = Ordered)
          )
      in
-     map', mkSelect typ cases'
+     Option.value_exn map', mkSelect typ cases'
 
   | Apply _ -> failwith "unsupported"
   | While _ -> failwith "unsupported"
 
 
-let propogate cmd =
-  let f cmd = propogate_cmd StringMap.empty cmd |> snd in
-  let rec fix cmd_last cmd =
-    if cmd_last = cmd
-    then cmd
-    else fix cmd (f cmd)
-  in
-  fix Skip cmd
+let propogate cmd = propogate_cmd StringMap.empty cmd |> snd
+
+let rec fix ~equal f x_old x_new =
+  if equal x_old x_new
+  then x_new
+  else fix ~equal f x_new (f x_new)
+
+
+let propogate_fix cmd =
+  fix propogate Skip cmd ~equal:Stdlib.(=)
+
+
+
+(*known facts is a collection of facts we know*)
+let rec infer (known_facts : expr StringMap.t) (b : test) : (expr StringMap.t * test) =
+  let open Manip in
+  let binop mk f (e1,e2) = mk (f e1) (f e2) in
+  match b with
+  | True | False -> (known_facts, b)
+  | Eq (Var (x,_),Value v) ->
+     begin match StringMap.find known_facts x with
+     | None ->
+        (StringMap.set known_facts ~key:x ~data:(Value v), b)
+     | Some (Value v') when veq v v' -> (known_facts, True)
+     | Some (Value _) -> (known_facts, False)
+     | _ -> (known_facts, substitute b known_facts)
+     end
+  | Eq es -> (known_facts, binop mkEq (substituteE known_facts) es)
+  | Le es -> (known_facts, binop mkLe (substituteE known_facts) es)
+  | And (t1,t2) ->
+     let known_facts2, t2' = infer known_facts t2 in
+     let known_facts1, t1' = infer known_facts2 t1 in
+     known_facts1, t1' %&% t2'
+  | Or (t1,t2) ->
+     let known_facts2, t2' = infer known_facts t2 in
+     let known_facts1, t1' = infer known_facts t1 in
+     meet known_facts2 known_facts1, t1' %+% t2'
+
+  | Impl ts -> (known_facts, binop mkIff (Fn.flip substitute known_facts) ts)
+  | Iff ts -> (known_facts, binop mkIff (Fn.flip substitute  known_facts) ts)
+
+  | Neg t -> (known_facts, !%(substitute t known_facts))
+
+let to_value_map (emap : expr StringMap.t) : value StringMap.t =
+  StringMap.filter_map emap ~f:(fun data ->
+      match data with
+      | Value v -> Some v
+      | _ -> None)
+
+let to_expr_map (vmap : value StringMap.t) : expr StringMap.t =
+  StringMap.map vmap ~f:(fun v -> Value v)
+
+let rec passive_propogate_aux dir map cmd =
+  match cmd with
+  | Skip -> map, Skip
+  | Assign (_,_) -> failwith "[ERROR] Assumed in passive form but got ASSIGN"
+  | Assert _ -> failwith "[DeprecatedError] Assertions are not supported in passive form"
+  | Assume t ->
+     let t' = Manip.substitute t map in
+     let map', t'' = infer map t' in
+     map', mkAssume t''
+  | Seq(c1,c2) ->
+     let proc_fst, proc_snd =
+       match dir with
+       | `Fwd -> (c1,c2)
+       | `Rev -> (c2,c1)
+     in
+     let map', proc_fst'  = passive_propogate_aux dir map  proc_fst in
+     let map'', proc_snd' = passive_propogate_aux dir map' proc_snd in
+     let cmd' = match dir with
+       | `Fwd -> proc_fst' %:% proc_snd'
+       | `Rev -> proc_snd' %:% proc_fst'
+     in
+     map'', cmd'
+  | Select (typ,cases) ->
+     let map', cases' =
+       List.fold cases ~init:(None,[])
+         ~f:(fun (acc_map,acc_cases) (b,c) ->
+           let map_b, b' = Manip.substitute b map |> infer map in
+           let map',c' = passive_propogate_aux dir map_b c in
+           let map_opt =
+             let open Option in
+             (acc_map >>| meet map') |> value ~default:map' |> return
+           in
+           map_opt, acc_cases @ [b',c']
+         )
+     in
+     Option.value_exn map', mkSelect typ cases'
+  | Apply _ -> failwith "[Error] assumed tables are applied out"
+  | While _ -> failwith "[DeprecatedError] while loops are deprecated"
+
+let passive_propogate (map, cmd) =
+  let (map, cmd') = passive_propogate_aux `Rev map cmd in
+  passive_propogate_aux `Fwd map cmd'
+
+let passive_propogate_fix map cmd =
+  fix (passive_propogate) (StringMap.empty,Skip) (map,cmd)
+    ~equal:(fun (map,cmd) (map',cmd') ->
+      StringMap.equal (Stdlib.(=)) map map'
+      && Stdlib.(cmd = cmd'))
+  |> snd

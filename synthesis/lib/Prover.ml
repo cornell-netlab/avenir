@@ -3,11 +3,11 @@ open Ast
 open Packet
 open Z3
 
+let force_print = true
 let print_debug = false
 
 let debug term =
-  if print_debug then
-
+  if force_print || print_debug then
     let res = Smtlib.term_to_sexp term |> Smtlib.sexp_to_string in
     Printf.printf "TERM: %s\n%!" res
 
@@ -17,7 +17,7 @@ let test_str test =
   else ()
 
 let expr_str test =
-  if print_debug then
+  if force_print || print_debug then
     let res = Ast.string_of_expr test in Printf.printf "EXPR: %s"res
   else ()
 
@@ -160,18 +160,18 @@ let toZ3String test = test_to_term_help test `Sat
                       |> Smtlib.term_to_sexp |> Smtlib.sexp_to_string
 
 let expr_to_term e styp d =
-  if d
+  if force_print || d
   then (expr_str e; let res = expr_to_term_help e styp in (*debug res;*) res)
   else expr_to_term_help e styp
 
 let test_to_term test styp d =
-  if d
+  if force_print || d
   then (test_str test; let res = test_to_term_help test styp in (*debug res;*) res)
   else test_to_term_help test styp
 
 let vars_to_term vars d =
   let open Smtlib in
-  if d && print_debug
+  if force_print || d && print_debug
   then begin
       let open List in
       iter vars ~f:(fun (id, i) -> Printf.printf "VAR: %s %d\n%!" id i);
@@ -197,14 +197,14 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
                 ~compare:(fun (idx, _) (idy, _) -> Stdlib.compare idx idy) in
   let () = List.iter holes
              ~f:(fun (id, i) ->
-               if params.debug && print_debug then
+               if force_print || params.debug && print_debug then
                     Printf.printf "(declare-const %s (_ BitVec %d))\n%!" id i;
                declare_const sat_prover (Id id) (BitVecSort i)) in
   let term = forall_ vars (test_to_term test `Sat params.debug) in
   let response =
-    if params.debug && print_debug then debug term;
+    if force_print || params.debug && print_debug then debug term;
     assert_ sat_prover term;
-    if params.debug && print_debug then Printf.printf "Asserted!\n%!";
+    if force_print || params.debug && print_debug then Printf.printf "Asserted!\n%!";
     check_sat(* _using (ParOr (UFBV, SMT)) *) sat_prover in
   let dur = Time.(diff (now()) st) in
   if params.debug && print_debug then Printf.printf "Got a Result\n%!";
@@ -237,13 +237,13 @@ let check_valid (params : Parameters.t) (longtest : Ast.test)  =
   let () =
     List.iter vars
       ~f:(fun (id, i) ->
-        if params.debug && print_debug then
+        if force_print || params.debug && print_debug then
           Printf.printf "(declare-const %s (_ BitVec %d))\n%!" id i;
         declare_const valid_prover (Id id) (BitVecSort i)) in
   let st = Time.now() in
   let term = not_ (test_to_term test `Valid params.debug) in
   let response =
-    if params.debug && print_debug then debug term;
+    if force_print || params.debug && print_debug then debug term;
     assert_ valid_prover term;
     check_sat_using QFBV valid_prover in
   let dur = Time.(diff (now()) st) in

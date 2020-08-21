@@ -222,14 +222,14 @@ module Row = struct
            ~f:(fun acc (v, sz) ->
              let hlo,hhi = Hole.match_holes_range tbl_name v in
              match acc,
-                   fixup_val match_model (Hole(hlo, sz)),
-                   fixup_val match_model (Hole(hhi, sz))
+                   fixup_expr match_model (Hole(hlo, sz)),
+                   fixup_expr match_model (Hole(hhi, sz))
              with
              | None, _,_ -> None
              | Some ks, Hole _, Hole _ ->  begin
                  let h, hm = Hole.match_holes_mask tbl_name v in
-                   match fixup_val match_model (Hole(h, sz)),
-                         fixup_val match_model (Hole(hm,sz))
+                   match fixup_expr match_model (Hole(h, sz)),
+                         fixup_expr match_model (Hole(hm,sz))
                    with
                    | Hole _,_ ->
                       Some (ks @ [Match.mask_ (mkInt(0,sz)) (mkInt(0,sz))])

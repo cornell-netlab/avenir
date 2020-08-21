@@ -75,12 +75,10 @@ let rec unroll n p =
 let get_val subsMap str default =
   StringMap.find subsMap str |> Option.value ~default
 
-                                             
-(** computes ex[xs -> vs], replacing only Vars whenever holes is false, replacing both whenever holes is true *)
-let rec substitute ?holes:(holes = false) ex subsMap =
-  let subst = get_val subsMap in
-  let rec substituteE e =
-    let binop op (e,e') = op (substituteE e) (substituteE e') in
+
+let rec substituteE ?holes:(holes = false) substMap e =
+  let binop op (e,e') = op (substituteE ~holes substMap e) (substituteE ~holes substMap e') in
+  let subst = get_val substMap in
     match e with
     | Value _ -> e
     | Var (field,_) ->
@@ -93,11 +91,14 @@ let rec substitute ?holes:(holes = false) ex subsMap =
          ((*Printf.printf "%s -> %s \n%!" field (string_of_expr e');*)
           e')
        else ((*Printf.printf "NO SUBST\n%!";*)  e)
-    | Cast (i,e) -> mkCast i @@ substituteE e
-    | Slice {hi;lo;bits} -> mkSlice hi lo @@ substituteE bits
+    | Cast (i,e) -> mkCast i @@ substituteE ~holes substMap e
+    | Slice {hi;lo;bits} -> mkSlice hi lo @@ substituteE ~holes substMap bits
     | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es
       -> binop (ctor_for_binexpr e) es
-  in
+
+                                             
+(** computes ex[xs -> vs], replacing only Vars whenever holes is false, replacing both whenever holes is true *)
+let rec substitute ?holes:(holes = false) ex subsMap =
   match ex with
   | True | False -> ex
   (* Homomorphic Rules*)               
@@ -107,8 +108,8 @@ let rec substitute ?holes:(holes = false) ex subsMap =
   | Impl (e, e') -> substitute ~holes e subsMap %=>% substitute ~holes e' subsMap
   | Iff  (e, e') -> substitute ~holes e subsMap %<=>% substitute ~holes e' subsMap
   (* Do the work *)
-  | Eq (e,e') ->  substituteE e %=% substituteE e'
-  | Le (e,e') ->  substituteE e %<=% substituteE e'
+  | Eq (e,e') ->  substituteE ~holes subsMap e %=% substituteE ~holes subsMap e'
+  | Le (e,e') ->  substituteE ~holes subsMap e %<=% substituteE ~holes subsMap e'
 
 let substV ?holes:(holes = false) ex substMap =
   StringMap.fold substMap ~init:StringMap.empty ~f:(fun ~key ~data acc ->
@@ -194,168 +195,178 @@ let rec wp negs c phi =
     phi
 
 let freshen v sz i = (v ^ "$" ^ string_of_int i, sz)
-      
-let good_execs fvs c =
-  let rec indexVars_expr e (sub : ((int * int) StringMap.t)) =
-    let binop f (e1,e2) =
-      let (e1', sub1) = indexVars_expr e1 sub in
-      let (e2', sub2) = indexVars_expr e2 sub in
-      f e1' e2', StringMap.merge sub1 sub2
-                   ~f:(fun ~key -> function
-                     | `Both (i1, i2) -> if i1 = i2
-                                         then Some i1
-                                         else failwith @@ Printf.sprintf "collision on %s: (%d,%d) <> (%d,%d)"
-                                                            key (fst i1) (snd i1) (fst i2) (snd i2)
-                     | `Left i | `Right i -> Some i
-                   )
-    in
-    match e with
-    | Value _ -> (e, sub)
-    | Var (x,sz) ->
-       begin match StringMap.find sub x with
-       | None  -> (Var (freshen x sz 0), StringMap.set sub ~key:x ~data:(0,sz))
-       | Some (i,_) ->  (Var (freshen x sz i), sub)
-       end
-    | Hole (x, sz) ->
-       begin match StringMap.find sub x with
-       | None  -> (Hole (x,sz), sub) (*"couldn't find "^x^" in substitution map " |> failwith*)
-       | Some (i,_) ->  (Hole (freshen x sz i), sub)
-       end
-    | Cast (i,e) ->
-       let e', sub' = indexVars_expr e sub in
-       mkCast i e', sub'
-    | Slice {hi;lo;bits} ->
-       let e', sub' = indexVars_expr bits sub in
-       mkSlice hi lo e', sub'
-    | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es
-      -> binop (ctor_for_binexpr e) es
+
+let rec indexVars_expr e (sub : ((int * int) StringMap.t)) =
+  let binop f (e1,e2) =
+    let (e1', sub1) = indexVars_expr e1 sub in
+    let (e2', sub2) = indexVars_expr e2 sub in
+    f e1' e2', StringMap.merge sub1 sub2
+                 ~f:(fun ~key -> function
+                   | `Both (i1, i2) -> if i1 = i2
+                                       then Some i1
+                                       else failwith @@ Printf.sprintf "collision on %s: (%d,%d) <> (%d,%d)"
+                                                          key (fst i1) (snd i1) (fst i2) (snd i2)
+                   | `Left i | `Right i -> Some i
+                 )
   in
-  let rec indexVars b sub =
-    let binop_t op a b = op (indexVars a sub) (indexVars b sub) in
-    let binop_e f (e1,e2) =
-      let (e1',_) = indexVars_expr e1 sub in
-      let (e2',_) = indexVars_expr e2 sub in
-      f e1' e2'
-    in
-    match b with
-    | True | False -> b
-    | Neg b -> !%(indexVars b sub)
-    | And  (a,b) -> binop_t (%&%) a b
-    | Or   (a,b) -> binop_t (%+%) a b
-    | Impl (a,b) -> binop_t (%=>%) a b
-    | Iff  (a,b) -> binop_t (%<=>%) a b
-    | Eq es -> binop_e (%=%) es
-    | Le es -> binop_e (%<=%) es
+  match e with
+  | Value _ -> (e, sub)
+  | Var (x,sz) ->
+     begin match StringMap.find sub x with
+     | None  -> (Var (freshen x sz 0), StringMap.set sub ~key:x ~data:(0,sz))
+     | Some (i,_) ->  (Var (freshen x sz i), sub)
+     end
+  | Hole (x, sz) ->
+     begin match StringMap.find sub x with
+     | None  -> (Hole (x,sz), sub) (*"couldn't find "^x^" in substitution map " |> failwith*)
+     | Some (i,_) ->  (Hole (freshen x sz i), sub)
+     end
+  | Cast (i,e) ->
+     let e', sub' = indexVars_expr e sub in
+     mkCast i e', sub'
+  | Slice {hi;lo;bits} ->
+     let e', sub' = indexVars_expr bits sub in
+     mkSlice hi lo e', sub'
+  | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es
+    -> binop (ctor_for_binexpr e) es
+
+let rec indexVars b sub =
+  let binop_t op a b = op (indexVars a sub) (indexVars b sub) in
+  let binop_e f (e1,e2) =
+    let (e1',_) = indexVars_expr e1 sub in
+    let (e2',_) = indexVars_expr e2 sub in
+    f e1' e2'
   in
-  let rec passify sub c : ((int * int) StringMap.t * cmd) =
-    match c with
-    | Skip -> (sub, Skip)
-    | Assert b ->
-       (sub, Assert (indexVars b sub))
-    | Assume b ->
-       (sub, Assert (indexVars b sub))
-    | Assign (f,e) ->
-       begin match StringMap.find sub f with
-       | None ->
-          let sz = size_of_expr e in
-          (StringMap.set sub ~key:f ~data:(1, sz)
-          , Assume (Var (freshen f sz 1) %=% fst(indexVars_expr e sub)))
-       | Some (idx, sz) ->
-          (StringMap.set sub ~key:f ~data:(idx + 1,sz)
-          , Assume (Var (freshen f sz (idx + 1)) %=% fst(indexVars_expr e sub)))
-       end
-    | Seq (c1, c2) ->
-       let (sub1, c1') = passify sub  c1 in
-       let (sub2, c2') = passify sub1 c2 in
-       (sub2, c1' %:% c2')
-    | Select (Total, _) -> failwith "Don't know what to do for if total"
-    | Select (typ, ss) ->
-       let sub_lst = List.map ss ~f:(fun (t,c) ->
-                         let sub', c' = passify sub c in
-                         (sub', (indexVars t sub, c'))) in
-       let merged_subst =
-         List.fold sub_lst ~init:StringMap.empty
-           ~f:(fun acc (sub', _) ->
-             StringMap.merge acc sub'
-               ~f:(fun ~key:_ ->
-                 function
-                 | `Left i -> Some i
-                 | `Right i -> Some i
-                 | `Both ((i,sz),(j,_)) -> Some (max i j, sz)))
-       in
-       let rewriting sub =
-         StringMap.fold sub ~init:Skip
-           ~f:(fun ~key:v ~data:(idx,_) acc ->
-             let merged_idx,sz = StringMap.find_exn merged_subst v in
-             if merged_idx > idx then
-               Assume (Var(freshen v sz merged_idx)
-                       %=% Var(freshen v sz idx))
-               %:% acc
-             else acc
-           )
-       in
-       let ss' =
-         List.filter_map sub_lst ~f:(fun (sub', (t', c')) ->
-             let rc = rewriting sub' in
-             Some (t', c' %:% rc)
-           )
-       in
-       (merged_subst, mkSelect typ ss')
-         
-    | While _ ->
-       failwith "Cannot passify While loops Unsupported"
-    | Apply _ ->
-       failwith "Cannot passify (yet) table applications"
+  match b with
+  | True | False -> b
+  | Neg b -> !%(indexVars b sub)
+  | And  (a,b) -> binop_t (%&%) a b
+  | Or   (a,b) -> binop_t (%+%) a b
+  | Impl (a,b) -> binop_t (%=>%) a b
+  | Iff  (a,b) -> binop_t (%<=>%) a b
+  | Eq es -> binop_e (%=%) es
+  | Le es -> binop_e (%<=%) es
+
+
+
+
+let rec passify_aux sub c : ((int * int) StringMap.t * cmd) =
+  match c with
+  | Skip -> (sub, Skip)
+  | Assert b ->
+     (sub, Assert (indexVars b sub))
+  | Assume b ->
+     (sub, Assert (indexVars b sub))
+  | Assign (f,e) ->
+     begin match StringMap.find sub f with
+     | None ->
+        let sz = size_of_expr e in
+        (StringMap.set sub ~key:f ~data:(1, sz)
+        , Assume (Var (freshen f sz 1) %=% fst(indexVars_expr e sub)))
+     | Some (idx, sz) ->
+        (StringMap.set sub ~key:f ~data:(idx + 1,sz)
+        , Assume (Var (freshen f sz (idx + 1)) %=% fst(indexVars_expr e sub)))
+     end
+  | Seq (c1, c2) ->
+     let (sub1, c1') = passify_aux sub  c1 in
+     let (sub2, c2') = passify_aux sub1 c2 in
+     (sub2, c1' %:% c2')
+  | Select (Total, _) -> failwith "Don't know what to do for if total"
+  | Select (typ, ss) ->
+     let sub_lst = List.map ss ~f:(fun (t,c) ->
+                       let sub', c' = passify_aux sub c in
+                       (sub', (indexVars t sub, c'))) in
+     let merged_subst =
+       List.fold sub_lst ~init:StringMap.empty
+         ~f:(fun acc (sub', _) ->
+           StringMap.merge acc sub'
+             ~f:(fun ~key:_ ->
+               function
+               | `Left i -> Some i
+               | `Right i -> Some i
+               | `Both ((i,sz),(j,_)) -> Some (max i j, sz)))
+     in
+     let rewriting sub =
+       StringMap.fold sub ~init:Skip
+         ~f:(fun ~key:v ~data:(idx,_) acc ->
+           let merged_idx,sz = StringMap.find_exn merged_subst v in
+           if merged_idx > idx then
+             Assume (Var(freshen v sz merged_idx)
+                     %=% Var(freshen v sz idx))
+             %:% acc
+           else acc
+         )
+     in
+     let ss' =
+       List.filter_map sub_lst ~f:(fun (sub', (t', c')) ->
+           let rc = rewriting sub' in
+           Some (t', c' %:% rc)
+         )
+     in
+     (merged_subst, mkSelect typ ss')
+
+  | While _ ->
+     failwith "Cannot passify While loops Unsupported"
+  | Apply _ ->
+     failwith "Cannot passify (yet) table applications"
+
+let passify fvs c =
+  let init_sub =
+    List.fold fvs ~init:StringMap.empty ~f:(fun sub (v,sz) ->
+        StringMap.set sub ~key:v ~data:(0,sz)
+      )
   in
-  let rec good_wp c =
-    match c with
-    | Skip -> True
-    | Assert b
-      | Assume b -> b
-    | Seq (c1,c2) -> good_wp c1 %&% good_wp c2
-    | Select(Total, _) -> failwith "Totality eludes me"
-    | Select(Partial, ss) ->
-       List.fold ss ~init:False
-         ~f:(fun cond (t,c) -> cond %+% (t %&% good_wp (c)))
-    | Select(Ordered,  ss) ->
-       List.fold ss ~init:(False,False)
-         ~f:(fun (cond, misses) (t,c) ->
-           (cond %+% (
-              t %&% !%(misses) %&% good_wp c
-            )
-           , t %+% misses))
-       |> fst
-    | Assign _ -> failwith "ERROR: PROGRAM NOT IN PASSIVE FORM! Assignments should have been removed"
-    | While _ -> failwith "While Loops Deprecated"
-    | Apply _ -> failwith "Tables should be applied at this stage"
-  in
-  let rec bad_wp c =
-    match c with
-    | Skip -> False
-    | Assume _ -> False
-    | Assert t -> !%t
-    | Seq(c1,c2) -> bad_wp c1 %+% (good_wp c1 %&% bad_wp c2)
-    | Select (Total, _) -> failwith "totality eludes me "
-    | Select (Partial, ss) ->
-       List.fold ss ~init:(True)
-         ~f:(fun acc (t,c) -> acc %+% (t %&% bad_wp (c)))
-    | Select(Ordered,  ss) ->
-       List.fold ss ~init:(False,False)
-         ~f:(fun (cond, misses) (t,c) ->
-           (cond %+% (
-              t %&% !%(misses) %&% bad_wp c
-            )
-           , t %+% misses))
-       |> fst         
-    | Assign _ -> failwith "ERROR: PROGRAM NOT IN PASSIVE FORM! Assignments should have been removed"
-    | While _ -> failwith "While Loops Deprecated"
-    | Apply _ -> failwith "Tables should be applied at this stage"
-  in
-  let init_sub = List.fold fvs ~init:StringMap.empty ~f:(fun sub (v,sz) ->
-                     StringMap.set sub ~key:v ~data:(0,sz)
-                   ) in
   (* Printf.printf "active : \n %s \n" (string_of_cmd c); *)
-  let merged_sub, passive_c = passify init_sub c  in
+  passify_aux init_sub c
+
+
+let rec good_wp c =
+  match c with
+  | Skip -> True
+  | Assert b
+    | Assume b -> b
+  | Seq (c1,c2) -> good_wp c1 %&% good_wp c2
+  | Select(Total, _) -> failwith "Totality eludes me"
+  | Select(Partial, ss) ->
+     List.fold ss ~init:False
+       ~f:(fun cond (t,c) -> cond %+% (t %&% good_wp (c)))
+  | Select(Ordered,  ss) ->
+     List.fold ss ~init:(False,False)
+       ~f:(fun (cond, misses) (t,c) ->
+         (cond %+% (
+            t %&% !%(misses) %&% good_wp c
+          )
+         , t %+% misses))
+     |> fst
+  | Assign _ -> failwith "ERROR: PROGRAM NOT IN PASSIVE FORM! Assignments should have been removed"
+  | While _ -> failwith "While Loops Deprecated"
+  | Apply _ -> failwith "Tables should be applied at this stage"
+
+let rec bad_wp c =
+  match c with
+  | Skip -> False
+  | Assume _ -> False
+  | Assert t -> !%t
+  | Seq(c1,c2) -> bad_wp c1 %+% (good_wp c1 %&% bad_wp c2)
+  | Select (Total, _) -> failwith "totality eludes me "
+  | Select (Partial, ss) ->
+     List.fold ss ~init:(True)
+       ~f:(fun acc (t,c) -> acc %+% (t %&% bad_wp (c)))
+  | Select(Ordered,  ss) ->
+     List.fold ss ~init:(False,False)
+       ~f:(fun (cond, misses) (t,c) ->
+         (cond %+% (
+            t %&% !%(misses) %&% bad_wp c
+          )
+         , t %+% misses))
+     |> fst
+  | Assign _ -> failwith "ERROR: PROGRAM NOT IN PASSIVE FORM! Assignments should have been removed"
+  | While _ -> failwith "While Loops Deprecated"
+  | Apply _ -> failwith "Tables should be applied at this stage"
+
+
+let good_execs fvs c =
+  let merged_sub, passive_c = passify fvs c in
   (* Printf.printf "passive : \n %s\n" (string_of_cmd passive_c); *)
   (* let vc = good_wp passive_c in *)
   (* Printf.printf "good_executions:\n %s\n%!" (string_of_test vc); *)
@@ -408,6 +419,18 @@ let finals fvs sub =
       then (freshen v sz i) :: vs
       else vs)
   |> List.sort ~compare:(fun (u,_) (v,_) -> Stdlib.compare u v)
+
+let apply_finals_sub_packet pkt sub =
+  StringMap.fold pkt ~init:StringMap.empty
+    ~f:(fun ~key ~data acc ->
+      let key =
+        match StringMap.find sub key with
+        | Some (i,_) -> fst (freshen key (size_of_value data) i)
+        | None -> key
+      in
+      let data = Value data in
+      StringMap.set acc ~key ~data
+    )
 
 
 let rec apply_finals_sub_expr e sub =
@@ -692,21 +715,15 @@ let rec wp_paths negs c phi : (cmd * test) list =
 
 let bind_action_data vals (scope, cmd) : cmd =
   let holes = List.map scope ~f:fst in
-  (* Printf.printf "holes:";
-   * List.iter holes ~f:(Printf.printf " %s");
-   * Printf.printf "\n%!";
-   * Printf.printf "vals:";
-   * List.iter holes ~f:(Printf.printf " %s");
-   * Printf.printf "\n%!"; *)
   List.fold2_exn holes vals
     ~init:StringMap.empty
     ~f:(fun acc x v -> StringMap.set acc ~key:x ~data:v)
   |> fill_holes (holify holes cmd) 
 
 
-let rec fixup_val (model : value StringMap.t) (e : expr)  : expr =
+let rec fixup_expr (model : value StringMap.t) (e : expr)  : expr =
   (* let _ = Printf.printf "FIXUP\n%!" in *)
-  let binop op (e,e') = op (fixup_val model e) (fixup_val model e') in
+  let binop op (e,e') = op (fixup_expr model e) (fixup_expr model e') in
   match e with
   | Value _ | Var _ -> e
   | Hole (h,sz) -> 
@@ -721,8 +738,8 @@ let rec fixup_val (model : value StringMap.t) (e : expr)  : expr =
                                     truth\n%!" h sz strv strv));
                  Value v
      end
-  | Cast (i,e) -> mkCast i @@ fixup_val model e
-  | Slice {hi;lo;bits} -> mkSlice hi lo @@ fixup_val model bits
+  | Cast (i,e) -> mkCast i @@ fixup_expr model e
+  | Slice {hi;lo;bits} -> mkSlice hi lo @@ fixup_expr model bits
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es
     -> binop (ctor_for_binexpr e) es
 
@@ -735,8 +752,8 @@ let rec fixup_test (model : value StringMap.t) (t : test) : test =
   | Or   (p, q) -> binop (%+%)   (fixup_test model) p q
   | Impl (p, q) -> binop (%=>%)  (fixup_test model) p q
   | Iff  (p, q) -> binop (%<=>%) (fixup_test model) p q
-  | Eq (v, w) -> binop (%=%)  (fixup_val model) v w
-  | Le (v, w) -> binop (%<=%) (fixup_val model) v w
+  | Eq (v, w) -> binop (%=%)  (fixup_expr model) v w
+  | Le (v, w) -> binop (%<=%) (fixup_expr model) v w
 
 let rec fixup_selects (model : value StringMap.t) (es : (test * cmd) list) =
   match es with
@@ -758,7 +775,7 @@ and fixup (real:cmd) (model : value StringMap.t) : cmd =
   (* Printf.printf "FIXUP WITH MODEL: %s\n%!\n" (string_of_map model); *)
   match real with
   | Skip -> Skip
-  | Assign (f, v) -> Assign(f, fixup_val model v)
+  | Assign (f, v) -> Assign(f, fixup_expr model v)
   | Assert t -> Assert (fixup_test model t)
   | Assume t -> Assume (fixup_test model t)
   | Seq (p, q) -> Seq (fixup p model, fixup q model)

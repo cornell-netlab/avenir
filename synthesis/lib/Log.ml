@@ -30,12 +30,21 @@ let already_explored_error model_space model =
 let print_edits =
   List.iter ~f:(fun e -> Printf.printf "\t %s\n%!" (Edit.to_string e))
 
+let string_vars vs =
+  let first = ref true in
+  List.fold vs ~init:""
+    ~f:(fun acc (v,sz) ->
+      let s = Printf.sprintf "%s%s%s#%d" acc (if !first then "" else "; ") v sz in
+      first := false;
+      s
+    )
+  |> Printf.sprintf "[%s]"
 
 
-let print_search_state do_print problem es _ (*model*) =
+let print_search_state do_print problem es model =
   if do_print then begin
-      (* let space = Problem.model_space problem in *)
-      (* Printf.printf "\n\t***Space***\n\t%s\n\t***     ***" (Ast.string_of_test space); *)
+      let space = Problem.model_space problem in
+      Printf.printf "\n\t***Space***\n\t%s\n\t***     ***" (Ast.string_of_test space);
 
       Printf.printf "\n\t***Edits*** (%d CEXs)\n%!" (List.length @@ Problem.cexs problem);
       print_edits (Problem.phys_edits problem);
@@ -44,8 +53,8 @@ let print_search_state do_print problem es _ (*model*) =
       print_edits es;
       Printf.printf "\t***     ***\n";
 
-      (* Printf.printf "\t ***model***\n";
-       * Printf.printf "\t%s\n%!" (Ast.string_of_map model); *)
+      Printf.printf "\t ***model***\n";
+      Printf.printf "\t%s\n%!" (Ast.string_of_map model);
       (* ignore(Stdio.In_channel.(input_char stdin) : char option); *)
     end
 
@@ -72,3 +81,33 @@ let edit_cache_hit d es =
       print_edits es;
       Printf.printf "---\n%!"
     end
+
+
+let check_attempts do_check problem =
+  if do_check then
+    match (List.find (Problem.attempts problem)
+             ~f:(fun m -> True = Manip.fixup_test m (Problem.model_space problem))) with
+    | None -> ()
+    | Some model ->
+       Printf.printf "Model\n %s \n is allowed by model space:\n%s\n\n There are %d total attempts\n%!"
+         (string_of_map model)
+         (string_of_test (Problem.model_space problem))
+         (List.length (Problem.attempts problem));
+       failwith "Duplicate model"
+
+
+(* Check whether the quantifiers have all been eliminated *)
+let check_qe do_check test =
+  if do_check then
+    let frees =
+      free_of_test `Var test
+      |> List.dedup_and_sort ~compare:(fun (x,_) (y,_) -> String.compare x y)
+    in
+    if List.is_empty frees
+    then ()
+    else begin
+        Printf.printf "%d quantified variables have not been eliminated. Still have: %s"
+          (List.length frees)
+          (string_vars frees);
+        failwith ""
+      end

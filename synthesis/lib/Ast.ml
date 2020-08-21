@@ -89,7 +89,7 @@ let rec string_of_expr (e : expr) : string =
 
 let sexp_string_of_value (v : value) =
   match v with
-  | Int (i,sz) -> Printf.sprintf "Int(%s,%d)" (Bigint.to_string i) sz
+  | Int (i,sz) -> Printf.sprintf "mkInt(%s,%d)" (Bigint.to_string i) sz
                    
 let rec sexp_string_of_expr (e : expr) =
   let string_binop ctor (e1, e2) = Printf.sprintf "%s(%s, %s)" ctor (sexp_string_of_expr e1) (sexp_string_of_expr e2) in
@@ -552,26 +552,45 @@ let mkTotal ss =
   else
     Select (Total, selects)
 
+let rec assumes_false c =
+  let f = fun (_,c) -> assumes_false c in
+  match c with
+  | Skip | Assign _ | Assert _ -> false
+  | Seq (c1,c2) -> assumes_false c1 || assumes_false  c2
+  | Assume (t) -> t = False
+  | Select (Ordered, cases) ->
+     List.for_all cases ~f
+  | Apply {actions;default;_} ->
+     assumes_false default && List.for_all actions ~f
+  | Select _ -> failwith "deprecated"
+  | While _ -> failwith "deprecated"
+
+
 let mkOrdered ss =
   if not enable_smart_constructors then Select(Ordered, ss) else
-  let selects = clean_selects_list ss
-                |> List.remove_consecutive_duplicates
-                  ~which_to_keep:`First
-                  ~equal:(fun (cond,_) (cond',_) -> cond = cond')
-                |> List.fold_until ~init:[] ~f:(fun acc (b,c) ->
-                       if b = False then
-                         Continue acc
-                       else if b = True then
-                         Stop acc
-                       else
-                         Continue (acc @ [(b,c)])
-                     )
-              ~finish:Fn.id
-  in
-  match selects with
-  | [] -> Skip
-  | [(b,c)] -> (mkAssume b) %:% c
-  | _ -> Select (Ordered, selects)
+    (*make these all a single pass *)
+    let selects = clean_selects_list ss
+                  |> List.remove_consecutive_duplicates
+                       ~which_to_keep:`First
+                       ~equal:(fun (cond,_) (cond',_) -> cond = cond')
+                  |> List.filter ~f:(fun (b,c) ->
+                         b <> False && not (assumes_false c)
+                       )
+                  |> List.fold ~init:([],true) ~f:(fun (cases,reachable) (b,c) ->
+                         if reachable then
+                           (cases @ [b,c], b <> True)
+                         else
+                           (cases, reachable)
+                       )
+                  |> fst
+    in
+    if List.for_all selects ~f:(fun (_,c) -> c = Skip) then
+      Skip
+    else
+      match selects with
+      | [] -> Skip
+      | [(b,c)] -> (mkAssume b) %:% c
+      | _ -> Select (Ordered, selects)
 
 let mkSelect styp =
   match styp with
@@ -661,7 +680,7 @@ let rec sexp_string_of_cmd e : string =
   | Seq (p, q) -> "Seq(" ^ sexp_string_of_cmd p ^ "," ^ sexp_string_of_cmd q ^ ")"
   | Assert t -> "Assert(" ^ sexp_string_of_test t ^ ")"
   | Assume t -> "Assume(" ^ sexp_string_of_test t ^ ")"
-  | Assign (f,e) -> "Assign(" ^ f ^ "," ^ string_of_expr e ^")"
+  | Assign (f,e) -> "Assign(\"" ^ f ^ "\"," ^ sexp_string_of_expr e ^")"
   | Select (styp,es) ->
     let cases_string = match es with
       | [] -> "[]"
@@ -690,6 +709,21 @@ let rec tables_of_cmd (c:cmd) : string list =
   | Apply t -> [t.name]
                                                               
 
+let rec num_nodes_in_cmd c =
+  1 +
+  match c with
+  | Skip -> 0
+  | Assign (_, e) -> num_nodes_in_expr e
+  | Seq (c1,c2) -> num_nodes_in_cmd c1 + num_nodes_in_cmd c2
+  | While (cond, body) -> num_nodes_in_test cond + num_nodes_in_cmd body
+  | Assert t | Assume t -> num_nodes_in_test t
+  | Select (_, cases) -> List.fold cases ~init:0 ~f:(fun acc (b, c) -> acc + num_nodes_in_test b + num_nodes_in_cmd c)
+  | Apply {keys;actions;default;_} ->
+     List.length keys + num_nodes_in_cmd default
+     + List.fold actions ~init:0
+         ~f:(fun acc (data, act) ->
+           acc + List.length data + num_nodes_in_cmd act
+         )
     
 let rec free_of_cmd typ (c:cmd) : (string * size) list =
   begin match c with

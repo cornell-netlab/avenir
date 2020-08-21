@@ -273,6 +273,44 @@ let no_defaults (params : Parameters.t) opts fvs phys =
            acc %&% (Hole(v,sz) %<>% mkVInt(0,sz)))
 
 
+let construct_model_query form fvs in_pkt phys out_pkt =
+  match form with
+  | `Passive ->
+     let sub, passive_phys = passify fvs (Packet.to_assignment in_pkt %:% phys) in
+     let phys' = CompilerOpts.optimize fvs passive_phys in
+     let () = Printf.printf "Optimized passive program\n%s\n\n%!" (string_of_cmd phys'); in
+     let good = good_wp phys'
+                |> Log.print_and_return_test ~pre:"normal executions:\n" ~post:"\n---------------------\n" true
+     in
+     hoare_triple_passified sub True good (Packet.to_test ~fvs out_pkt)
+     |> Log.print_and_return_test ~pre:"Passive optimized query:\n" ~post:"\n---------------------\n" true
+  | `PassiveAggressive ->
+     let sub, passive_phys = passify fvs (Packet.to_assignment in_pkt %:% phys |> CompilerOpts.optimize fvs) in
+     let phys' = CompilerOpts.optimize fvs passive_phys in
+     let () = Printf.printf "optimized physical program \n%s\n---\n%!" (string_of_cmd phys') in
+     let phys' = CompilerOpts.passive_optimize (apply_finals_sub_packet out_pkt sub) phys' in
+     let () = Printf.printf "passive optimized physical program \n%s\n---\n%!" (string_of_cmd phys') in
+     let out_test =
+       good_wp phys'
+       |> Log.print_and_return_test true ~pre:"PassiveAggressive formula \n" ~post:"\n------\n"
+     in
+     (* if List.is_empty @@ free_of_test `Var out_test
+      * then out_test
+      * else begin
+      *     let () = Printf.printf "Manual QE failed, letting Z3 do it" in
+      *     construct_model_query `Passive fvs in_pkt phys out_pkt
+      *   end *)
+     Log.check_qe true out_test;
+     out_test
+
+
+  | `WP ->
+     let phys' = Packet.to_assignment in_pkt %:% phys in
+     let opt_phys = CompilerOpts.optimize fvs phys' in
+     let out_pkt_form = Packet.to_test ~fvs out_pkt in
+     wp `Negs opt_phys out_pkt_form
+
+
 
 let compute_vc (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t)  (opts : opts)  =
   let (in_pkt, out_pkt) = Problem.cexs problem |> List.hd_exn in
@@ -291,28 +329,28 @@ let compute_vc (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   let st = Time.now () in
   let fvs = List.(free_vars_of_cmd phys
                   |> filter ~f:(fun x -> exists (Problem.fvs problem) ~f:(Stdlib.(=) x))) in
-  (* let phys = CompilerOpts.optimize fvs phys in *)
   (* let fvs = problem.fvs in *)
-  let in_pkt_form, out_pkt_form = Packet.to_test in_pkt ~fvs, Packet.to_test out_pkt ~fvs in
+  Printf.printf "Constructing Wps \n%!";
   let wp_list =
     if opts.paths then
-      wp_paths `NoNegs phys out_pkt_form |> List.map ~f:(fun (c,t) -> c, in_pkt_form %=>% t)
-
+      let phys = Packet.to_assignment in_pkt %:% phys |> CompilerOpts.optimize fvs in
+      wp_paths `NoNegs phys (Packet.to_test ~fvs out_pkt)
     else
-      let (sub, _(*passive_phys*), good_N, _) = good_execs fvs phys in
+      (* let (sub, _(\*passive_phys*\), good_N, _) = good_execs fvs phys in *)
       let test =
-      hoare_triple_passified sub in_pkt_form good_N out_pkt_form
-      %&% (if opts.double && List.length (Problem.cexs problem) > 1 then
-             let (in_pkt', out_pkt') =  List.nth_exn (Problem.cexs problem) 1 in
-             let in_pkt_form' = Packet.to_test in_pkt' ~fvs in
-             let out_pkt_form' = Packet.to_test out_pkt' ~fvs in
-             hoare_triple_passified sub in_pkt_form' good_N out_pkt_form'
-           else
-             True)
+        (* hoare_triple_passified sub in_pkt_form good_N out_pkt_form *)
+        construct_model_query `PassiveAggressive fvs in_pkt phys out_pkt
+        %&% (if opts.double && List.length (Problem.cexs problem) > 1 then
+               let (in_pkt', out_pkt') =  List.nth_exn (Problem.cexs problem) 1 in
+               construct_model_query `PassiveAggressive fvs in_pkt' phys out_pkt'
+             else
+               True)
       in
+      Log.check_qe false test;
       (* Printf.printf "--------------%s---------------\n%!" (string_of_test test); *)
       [phys, test];
   in
+  Printf.printf "Constructed WPS\n%!";
   ProfData.update_time !data.search_wp_time st;
   (wp_list, phys, hints)
 
@@ -328,7 +366,7 @@ let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_li
           let () = if params.debug then
                      Printf.printf "Checking path with hole!\n  %s\n\n%!" (string_of_cmd cmd) in
 
-          let () = if params.debug then
+          let () = if true then
                      Printf.printf"TEST:\n%s\n--------\n\n%!" (string_of_test spec) in
 
           let wf_holes = List.fold (Problem.phys problem |> get_tables_actsizes) ~init:True
@@ -349,8 +387,6 @@ let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_li
             bigand [
                 query_test
                 |> Log.print_and_return_test params.debug ~pre:"The Query:\n" ~post:"\n--------\n\n";
-
-
 
                 adds_are_reachable params problem opts fvs hole_type
                 |> Log.print_and_return_test params.debug ~pre:"Adds_are_reachable:\n" ~post:"\n--------\n\n";
@@ -423,15 +459,16 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
         Printf.printf "search space rebuild, recursing!\n%!";
         search params data problem {schedule; search_space}
      | (test,hints, opts) :: search_space, schedule ->
-        assert (List.for_all (Problem.attempts problem)
-                  ~f:(fun m -> False = fixup_test m (Problem.model_space problem)));
+        Log.check_attempts params.debug problem;
         let encode_tag = if opts.mask then `Mask else `Exact in
-        let model_opt, dur = bigand [
-                                 Hint.restriction encode_tag hints (Problem.phys problem);
-                                 Problem.model_space problem;
-                                 test
-                               ]
-                             |> check_sat params in
+        Printf.printf "Sending query to Z3\n%!";
+        let model_opt, dur =
+          check_sat params @@
+            bigand [
+                Hint.restriction encode_tag hints (Problem.phys problem);
+                Problem.model_space problem;
+                test
+              ] in
         ProfData.incr !data.model_z3_calls;
         ProfData.update_time_val !data.model_z3_time dur;
         (* Printf.printf "Sat Checked\n%!\n"; *)
@@ -452,14 +489,12 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
                failwith ""
              end
            else begin
-               let model = Hint.add_to_model (Problem.phys problem) hints raw_model in
-
-               if params.debug then
+               (* if params.debug then *)
                  Printf.printf "IsNOVEL??? \n    %s \n"
                    (Problem.model_space problem
-                    |> fixup_test model
+                    |> fixup_test raw_model
                     |> string_of_test);
-               Some (model,t)
+               Some (raw_model,t)
              end
         | _ ->
            (* Printf.printf "No model, keep searching with %d opts and %d paths \n%!" (List.length schedule) (List.length search_space); *)

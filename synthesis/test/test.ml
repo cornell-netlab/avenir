@@ -136,7 +136,7 @@ let cp_wikipedia_ex1 _ =
                 "y" %<-% mkVInt(0,32);
                 "return" %<-% mkVInt(0,32)
               ] in
-  same_cmd exp (ConstantProp.propogate cmd)
+  same_cmd exp (ConstantProp.propogate_fix cmd)
 
 let cp_wikipedia_ex2 _ =
   let int i = mkVInt(i,32) in
@@ -162,7 +162,7 @@ let cp_wikipedia_ex2 _ =
         "return" %<-% int 4
       ]
   in
-  same_cmd exp (ConstantProp.propogate cmd)
+  same_cmd exp (ConstantProp.propogate_fix cmd)
 
 
 let cp_only_holes_and_constants _ =
@@ -210,7 +210,7 @@ let cp_only_holes_and_constants _ =
           ]
       ]
   in
-  same_cmd exp (ConstantProp.propogate cmd)
+  same_cmd exp (ConstantProp.propogate_fix cmd)
 
 
 let cp_also_props_copies _ =
@@ -226,7 +226,7 @@ let cp_also_props_copies _ =
         "y" %<-% mkPlus (var "x") (int 1);
         "z" %<-% mkPlus (mkPlus (var "x") (int 1)) (var "x");
       ] in
-  same_cmd exp (ConstantProp.propogate cmd)
+  same_cmd exp (ConstantProp.propogate_fix cmd)
 
 
 let opts_minimize _ =
@@ -276,6 +276,467 @@ let opts_minimize _ =
   same_cmd exp (CompilerOpts.optimize fvs cmd)
 
 
+let opt_bcm_example _ =
+  let bcm =
+    sequence [
+        "x" %<-% mkVInt(333,32);
+        "o" %<-% mkVInt(0,9);
+        mkOrdered [
+            bigand [Hole("?Addtbl",1) %=% mkVInt(1,1);
+                    Hole("?x",32) %=% Var("x",32);
+                    Hole("?Acttbl",1) %=% mkVInt(0,1)
+              ], "meta" %<-% mkVInt(99,32);
+            bigand [Hole("?Addtbl",1) %=% mkVInt(1,1);
+                    Hole("?x",32) %=% Var("x",32);
+                    Hole("?Acttbl",1) %=% mkVInt(1,1)
+              ], sequence [
+                     "o" %<-% Hole("?outtie_1_tbl", 9);
+                     "meta" %<-% mkVInt(44,32)
+                   ];
+            bigand [Hole("?Addtbl",1) %=% mkVInt(1,1);
+                    Hole("?x",32) %=% Var("x",32);
+                    Hole("?Acttbl",1) %=% mkVInt(2,1)
+              ], sequence [
+                     "o" %<-% Hole("?outtie_2_tbl", 9);
+                     "meta" %<-% mkVInt(44,32)
+                   ];
+            True, Skip
+          ];
+        mkOrdered [
+            Var("o", 9) %=% mkVInt(0,9),
+            sequence [
+                "o" %<-% mkVInt(0,9);
+                "meta" %<-% mkVInt(0,9);
+                "x" %<-% mkVInt(0,32);
+              ];
+            True, Skip
+          ]
+      ]
+  in
+  let expected =
+    sequence [
+        "x" %<-% mkVInt(333,32);
+        "o" %<-% mkVInt(0,9);
+        mkOrdered [
+            bigand [Hole("?Addtbl",1) %=% mkVInt(1,1);
+                    Hole("?x",32) %=% mkVInt(333,32);
+                    Hole("?Acttbl",1) %=% mkVInt(0,1)
+              ], "meta" %<-% mkVInt(99,32);
+            bigand [Hole("?Addtbl",1) %=% mkVInt(1,1);
+                    Hole("?x",32) %=% mkVInt(333,32);
+                    Hole("?Acttbl",1) %=% mkVInt(1,1)
+              ], sequence [
+                     "o" %<-% Hole("?outtie_1_tbl", 9);
+                     "meta" %<-% mkVInt(44,32)
+                   ];
+            bigand [Hole("?Addtbl",1) %=% mkVInt(1,1);
+                    Hole("?x",32) %=% mkVInt(333,32);
+                    Hole("?Acttbl",1) %=% mkVInt(2,1)
+              ], sequence [
+                     "o" %<-% Hole("?outtie_2_tbl", 9);
+                     "meta" %<-% mkVInt(44,32)
+                   ];
+            True, Skip
+          ];
+        mkOrdered [
+            Var("o", 9) %=% mkVInt(0,9),
+            sequence [
+                "o" %<-% mkVInt(0,9);
+                "meta" %<-% mkVInt(0,9);
+                "x" %<-% mkVInt(0,32);
+              ];
+            True, Skip
+          ]
+      ]
+  in
+  same_cmd expected (ConstantProp.propogate bcm)
+
+
+let rev_propogate_computes_single_path _ =
+  let var x = Var (x, 32) in
+  let int i = mkVInt(i,32) in
+  let vareq x e = var x %=% e in
+  let assign x e = Assume (vareq x e) in
+  let cmd =
+    sequence [
+        assign "port$1" (int 0);
+        mkOrdered [
+            bigand [Hole("?AddRowtoipv4",1) %=% mkVInt(1,1);
+                    Hole("?ipv4.dst_ipv4",32) %=% mkVInt(5,32);
+                    Hole("?ActInipv4",2) %=% mkVInt(0,2)
+              ], assign "port$2" @@ Hole("?port_ipv4_0",32);
+
+            True, assign "port$2" @@ var "port$1";
+          ];
+        mkOrdered [
+            !%(vareq "port$2" @@ mkVInt (0,32)),
+            sequence [
+                assign "ipv4.dst$1" @@ mkVInt(0,32);
+                assign "port$3" @@ mkVInt(0,32)
+              ];
+            True,
+            sequence [
+                assign "ipv4.dst$1" @@ mkVInt(5,32);
+                assign "port$3" @@ var "port$2"
+              ]
+          ];
+      ]
+  in
+  let out_packet =
+    Util.StringMap.of_alist_exn
+      [ "port$3", mkVInt(99,32);
+        "ipv4.dst$1", mkVInt(5,32);
+      ]
+  in
+  same_cmd (mkAssume(bigand [
+                      Hole("?AddRowtoipv4",1) %=% mkVInt(1,1);
+                      Hole("?ipv4.dst_ipv4",32) %=% mkVInt(5,32);
+                      Hole("?ActInipv4",2) %=% mkVInt(0,2)])
+            %:% mkAssume(Hole("?port_ipv4_0",32) %=% mkVInt(99,32)))
+  @@ CompilerOpts.passive_optimize out_packet cmd
+
+
+let construct_model_query_PA_is_sat1 _ =
+  let inpkt = Packet.mk_packet_from_list
+                ["ipv4.dst", mkInt(5,32);
+                 "port", mkInt(8,9)] in
+  let outpkt = Packet.mk_packet_from_list
+                 ["ipv4.dst", mkInt(5,32);
+                  "port", mkInt(99,9)] in
+  let fvs = ["port", 9; "ipv4.dst", 32] in
+  let phys =
+    sequence [
+        "port" %<-% mkVInt(0,9);
+        "ipv4_action_run" %<-% mkVInt(0,1);
+        "exit" %<-% mkVInt(0,1);
+        mkOrdered [
+            Var("exit",1) %<>% mkVInt(1,1),
+            mkOrdered [
+                bigand [
+                    Hole("?AddRowtoipv4", 1) %=% mkVInt(1,1);
+                    Hole("?ipv4.dst_ipv4", 32) %=% Var("ipv4.dst", 32);
+                    Hole("?ActInipv4",1) %=% mkVInt(0,1)
+                  ], sequence [
+                         "port" %<-% Hole("?port_tbl_0", 9);
+                         "ipv4_action_run" %<-% mkVInt(1,1)
+                       ];
+                True, Skip
+              ];
+            True, Skip
+          ];
+        mkOrdered [
+            Var("port",9) %=% mkVInt(0,9),
+            sequence [
+                "ipv4.dst" %<-% mkVInt (0,0);
+                "port" %<-% mkVInt(0,0)
+              ];
+            True, Skip
+          ]
+      ]
+  in
+  let query = ModelFinder.construct_model_query `PassiveAggressive fvs inpkt phys outpkt in
+  let res = Prover.is_sat Parameters.default query in
+  Alcotest.(check bool) "is true" true res
+
+
+let passive_propogation_learns_from_tests1 _ =
+  let open Util in
+  let cmd =
+    sequence [
+        mkAssume(Hole("?dst_addr_0_ipv4_rewrite",48) %=% mkVInt(0,48));
+        mkAssume(Var("standard_metadata.egress_spec$2",9) %=% mkVInt(1,9))
+      ]
+  in
+  let map = StringMap.of_alist_exn ["standard_metadata.egress_spec$2", mkVInt(1,9)] in
+  let (map, _) = ConstantProp.passive_propogate_aux `Rev map cmd in
+  match StringMap.find map "standard_metadata.egress_spec$2" with
+  | None -> Alcotest.(check string) "Should have found" "Some 1" "None"
+  | Some e ->
+     same_expr (mkVInt(1,9)) e
+
+let passive_propogation_learns_from_tests2 _ =
+  let open Util in
+  let cmd =
+    mkAssume(Var("standard_metadata.egress_spec$2",9) %=% mkVInt(1,9))
+  in
+  let (map, _) = ConstantProp.passive_propogate_aux `Rev (StringMap.empty) cmd in
+  match StringMap.find map "standard_metadata.egress_spec$2" with
+  | None -> Alcotest.(check string) "Should have found" "Some 1" "None"
+  | Some e ->
+     same_expr (mkVInt(1,9)) e
+
+
+
+let passive_propogation_learns_disjoint _ =
+  let open Util in
+  let cmd =
+    mkOrdered [
+        bigand [
+            Hole("?AddRowToipv4_fwd",1) %=% mkVInt(1,1);
+            Hole("?hdr.ipv4.dstAddr_ipv4_fwd",32) %=% mkVInt(0,32);
+            Hole("?ActInipv4_rewrite",2) %=% mkVInt(0,2)
+          ], sequence [
+                 mkAssume(Hole("?dst_addr_0_ipv4_rewrite",48) %=% mkVInt(0,48));
+                 mkAssume(Var("standard_metadata.egress_spec$2",9) %=% mkVInt(1,9));
+               ];
+        bigand[
+            Hole("?AddRowToipv4_fwd",1) %=% mkVInt(1,1);
+            Hole("?hdr.ipv4.dstAddr_ipv4_fwd",32) %=% mkVInt(0,0);
+            Hole("?ActInipv4_rewrite",2) %=% mkVInt(1,2)
+          ], mkAssume(Var("standard_metadata.egress_spec$2",9) %=% mkVInt(1,9))
+      ]
+  in
+  let (map, _) = ConstantProp.passive_propogate_aux `Rev (StringMap.empty) cmd in
+  match StringMap.find map "standard_metadata.egress_spec$2" with
+  | None -> Alcotest.(check string) "Should have found" "Some 1" "None"
+  | Some e ->
+     same_expr (mkVInt(1,9)) e
+
+
+let meet_combines_facts _ =
+  let open Util in
+  let map =
+    ConstantProp.meet
+      (StringMap.of_alist_exn ["standard_metadata.egress_spec$2", mkVInt(1,9)])
+      (StringMap.of_alist_exn ["standard_metadata.egress_spec$2", mkVInt(1,9)])
+  in
+  match StringMap.find map "standard_metadata.egress_spec$2" with
+  | None -> Alcotest.(check string) "Should have found" "Some 1" "None"
+  | Some e ->
+     same_expr (mkVInt(1,9)) e
+
+
+let construct_model_query_PA_is_sat_hello _ =
+  let set_port e = "standard_metadata.egress_spec" %<-% e in
+  let drop = set_port @@ mkVInt(0,9) in
+  let ipv4_tbl =
+    let add = Hole("?AddRowtoipv4_fwd",1) %=% mkVInt(1,1)in
+    let key = Hole("?hdr.ipv4.dstAddr_ipv4_fwd",32)
+              %=% Var("hdr.ipv4.dstAddr",32) in
+    let act i = Hole("?ActInipv4_fwd",2) %=% mkVInt(i,2) in
+    let actrun i = "ipv4_fwd_action_run" %<-% mkVInt(i,3) in
+    mkOrdered [
+        bigand [add;key;act 0],
+        sequence [actrun 1; set_port (Hole("?port_0_ipv4_fwd",9))];
+        bigand [add;key;act 1],
+        sequence [actrun 2; drop];
+        bigand [add;key;act 2],
+        sequence [actrun 3];
+        True, drop;
+      ]
+  in
+  let ipv4_rewrite_table =
+    let add = Hole("?AddRowtoipv4_rewrite",1) %=% mkVInt(1,1)in
+    let key = Hole("?hdr.ipv4.dstAddr_ipv4_rewrite",32)
+              %=% Var("hdr.ipv4.dstAddr",32) in
+    let act i = Hole("?ActInipv4_rewrite",2) %=% mkVInt(i,2) in
+    let actrun i = "ipv4_rewrite_action_run" %<-% mkVInt(i,3) in
+    mkOrdered [
+        bigand [add;key;act 0],
+        sequence [actrun 1;
+                  "hdr.ethernet.srcAddr"
+                  %<-% Var("hdr.ethernet.dstAddr",48);
+                  "hdr.ethernet.dstAddr"
+                  %<-% Hole("?dstAddr_0_ipv4_rewrite",48);
+                  "hdr.ipv4.ttl" %<-% mkMinus(Var("hdr.ipv4.ttl",8))(mkVInt(1,8))
+          ];
+        bigand [add;key;act 1],
+        sequence [actrun 2; drop ];
+        bigand [add;key;act 2],
+        sequence [actrun 3];
+        True, drop;
+      ]
+  in
+  let hello_phys =
+    sequence [
+        "exit" %<-% mkVInt(0,1);
+        "ipv4_fwd_action_run" %<-% mkVInt(0,3);
+        "ipv4_fwd_rewrite_action_run" %<-% mkVInt(0,3);
+        "return3" %<-% mkVInt(0,1);
+        "return4" %<-% mkVInt(0,1);
+        "standard_metadata.egress_port" %<-% mkVInt(0,9);
+        "return4" %<-% mkVInt(0,1);
+        mkOrdered [
+            Var("hdr.ipv4_valid",1) %=% mkVInt(1,1),
+            sequence["ipv4_fwd_action_run"%<-% mkVInt(0,3);
+                     ipv4_tbl;
+                     mkOrdered [
+                         Var("exit",1) %=% mkVInt(0,1),
+                         mkOrdered [
+                             Var("return4",1) %=% mkVInt(0,1),
+                             sequence [
+                                 "ipv4_rewrite_action_run" %<-% mkVInt(0,3);
+                                 ipv4_rewrite_table;
+                               ];
+                             True, Skip
+                           ];
+                         True, Skip
+                       ];
+              ];
+            True, Skip
+          ];
+        "standard_metadata.egress_port"
+        %<-% Var("standard_metadata.egress_spec",9);
+        mkOrdered [
+            Var("standard_metadata.egress_spec",9) %<>% mkVInt(0,9),
+            "return3" %<-% mkVInt(0,1);
+            True, Skip
+          ];
+        mkOrdered [
+            Var("standard_metadata.egress_spec",9) %=% mkVInt(0,9),
+            sequence [
+                "hdr.ipv4.valid" %<-% mkVInt(0,1);
+                "hdr.ethernet.srcAddr" %<-% mkVInt(0,48);
+                "hdr.ethernet.dstAddr" %<-% mkVInt(0,48);
+                "hdr.ipv4.ttl" %<-% mkVInt(0,8);
+                "hdr.ipv4.dstAddr" %<-% mkVInt(0,32);
+                "hdr.ipv4.srcAddr" %<-% mkVInt(0,32);
+                "standard_metadata.egress_spec" %<-% mkVInt(0,9)
+              ];
+            True,Skip;
+          ]
+      ]
+  in
+  let fvs = [
+      "standard_metadata.egress_spec",9;
+      "hdr.ipv4_valid",1;
+      "hdr.ethernet.srcAddr",48;
+      "hdr.ethernet.dstAddr",48;
+      "hdr.ipv4.ttl", 8;
+      "hdr.ipv4.dstAddr",32;
+      "hdr.ipv4.srcAddr",32;
+      "standard_metadata.egress_spec",9;
+    ]
+  in
+  let inpkt = Packet.mk_packet_from_list
+                [ "hdr.ethernet.dstAddr", Int(Bigint.of_string "0x287bb416626", 48);
+                  "hdr.ethernet.srcAddr", Int(Bigint.of_string "0xffffffffffff", 48);
+                  "hdr.ipv4.dstAddr", Int(Bigint.of_string "0x0", 32);
+                  "hdr.ipv4.srcAddr", Int(Bigint.of_string "0xabd62d8b", 32);
+                  "hdr.ipv4.ttl", Int(Bigint.of_string "0x65", 8);
+                  "hdr.ipv4_valid", Int(Bigint.of_string "0x1", 1);
+                  "standard_metadata.egress_spec", Int(Bigint.of_string "0x1ff",9)] in
+  let outpkt =
+    Packet.mk_packet_from_list
+      ["hdr.ethernet.dstAddr", Int(Bigint.of_string "0x0",48);
+       "hdr.ethernet.srcAddr", Int(Bigint.of_string "0x287bb416626",48);
+       "hdr.ipv4.dstAddr", Int(Bigint.of_string "0x0",32);
+       "hdr.ipv4.srcAddr", Int(Bigint.of_string "0xabd62d8b",32);
+       "hdr.ipv4.ttl", Int(Bigint.of_string "0x64",8);
+       "hdr.ipv4_valid", Int(Bigint.of_string "0x1",1);
+       "ipv4_lpm_action_run", Int(Bigint.of_string "0x1",1);
+       "return1", Int(Bigint.of_string "0x0",1);
+       "return2", Int(Bigint.of_string "0x0",1);
+       "standard_metadata.egress_port", Int(Bigint.of_string "0x1",9);
+       "standard_metadata.egress_spec", Int(Bigint.of_string "0x1",9)] in
+  let query =
+    ModelFinder.construct_model_query `PassiveAggressive fvs inpkt hello_phys outpkt
+  in
+  let res = Prover.is_sat Parameters.default query in
+  Alcotest.(check bool) "is true" true res
+
+let construct_model_query_PA_is_sat_hello_smaller _ =
+  let set_port e = "standard_metadata.egress_spec" %<-% e in
+  let drop = set_port @@ mkVInt(0,9) in
+  let ipv4_tbl =
+    let add = Hole("?AddRowtoipv4_fwd",1) %=% mkVInt(1,1)in
+    let key = Hole("?hdr.ipv4.dstAddr_ipv4_fwd",32)
+              %=% Var("hdr.ipv4.dstAddr",32) in
+    let act i = Hole("?ActInipv4_fwd",2) %=% mkVInt(i,2) in
+    let actrun i = "ipv4_fwd_action_run" %<-% mkVInt(i,3) in
+    mkOrdered [
+        bigand [add;key;act 0],
+        sequence [actrun 1; set_port (Hole("?port_0_ipv4_fwd",9))];
+
+        bigand [add;key;act 1], sequence [actrun 2; drop];
+
+        True, drop;
+      ]
+  in
+  let ipv4_rewrite_table =
+    let add = Hole("?AddRowtoipv4_rewrite",1) %=% mkVInt(1,1)in
+    let key = Hole("?hdr.ipv4.dstAddr_ipv4_rewrite",32)
+              %=% Var("hdr.ipv4.dstAddr",32) in
+    let act i = Hole("?ActInipv4_rewrite",2) %=% mkVInt(i,2) in
+    let actrun i = "ipv4_rewrite_action_run" %<-% mkVInt(i,3) in
+    mkOrdered [
+        bigand [add;key;act 0],
+        sequence [actrun 1;
+                  "hdr.ethernet.srcAddr"
+                  %<-% Var("hdr.ethernet.dstAddr",48);
+                  "hdr.ethernet.dstAddr"
+                  %<-% Hole("?dstAddr_0_ipv4_rewrite",48)];
+
+        bigand [add;key;act 1], actrun 2;
+
+        True, drop;
+      ]
+  in
+  let hello_phys =
+    sequence [
+        "ipv4_fwd_action_run" %<-% mkVInt(0,3);
+        "ipv4_fwd_rewrite_action_run" %<-% mkVInt(0,3);
+        "standard_metadata.egress_port" %<-% mkVInt(0,9);
+        ipv4_tbl;
+        ipv4_rewrite_table;
+        mkOrdered [
+            Var("standard_metadata.egress_spec",9) %=% mkVInt(0,9),
+            sequence [
+                "hdr.ipv4.valid" %<-% mkVInt(0,1);
+                "hdr.ethernet.srcAddr" %<-% mkVInt(0,48);
+                "hdr.ethernet.dstAddr" %<-% mkVInt(0,48);
+                "hdr.ipv4.ttl" %<-% mkVInt(0,8);
+                "hdr.ipv4.dstAddr" %<-% mkVInt(0,32);
+                "hdr.ipv4.srcAddr" %<-% mkVInt(0,32);
+                "standard_metadata.egress_spec" %<-% mkVInt(0,9)
+              ];
+            True,Skip;
+          ]
+      ]
+  in
+  let fvs = [
+      "standard_metadata.egress_spec",9;
+      "hdr.ipv4_valid",1;
+      "hdr.ethernet.srcAddr",48;
+      "hdr.ethernet.dstAddr",48;
+      "hdr.ipv4.ttl", 8;
+      "hdr.ipv4.dstAddr",32;
+      "hdr.ipv4.srcAddr",32;
+      "standard_metadata.egress_spec",9;
+    ]
+  in
+  let inpkt = Packet.mk_packet_from_list
+                [ "hdr.ethernet.dstAddr", Int(Bigint.of_string "0x287bb416626", 48);
+                  "hdr.ethernet.srcAddr", Int(Bigint.of_string "0xffffffffffff", 48);
+                  "hdr.ipv4.dstAddr", Int(Bigint.of_string "0x0", 32);
+                  "hdr.ipv4.srcAddr", Int(Bigint.of_string "0xabd62d8b", 32);
+                  "hdr.ipv4.ttl", Int(Bigint.of_string "0x65", 8);
+                  "hdr.ipv4_valid", Int(Bigint.of_string "0x1", 1);
+                  "standard_metadata.egress_spec", Int(Bigint.of_string "0x1ff",9)] in
+  let outpkt =
+    Packet.mk_packet_from_list
+      ["hdr.ethernet.dstAddr", Int(Bigint.of_string "0x0",48);
+       "hdr.ethernet.srcAddr", Int(Bigint.of_string "0x287bb416626",48);
+       "hdr.ipv4.dstAddr", Int(Bigint.of_string "0x0",32);
+       "hdr.ipv4.srcAddr", Int(Bigint.of_string "0xabd62d8b",32);
+       "hdr.ipv4.ttl", Int(Bigint.of_string "0x65",8);
+       "hdr.ipv4_valid", Int(Bigint.of_string "0x1",1);
+       "ipv4_lpm_action_run", Int(Bigint.of_string "0x1",1);
+       "return1", Int(Bigint.of_string "0x0",1);
+       "return2", Int(Bigint.of_string "0x0",1);
+       "standard_metadata.egress_port", Int(Bigint.of_string "0x1",9);
+       "standard_metadata.egress_spec", Int(Bigint.of_string "0x1",9)] in
+  let query form =
+    ModelFinder.construct_model_query form fvs inpkt hello_phys outpkt
+  in
+  let exp = Prover.is_sat Parameters.default (query `Passive) in
+  let got = Prover.is_sat Parameters.default (query `PassiveAggressive) in
+  if exp
+  then Alcotest.(check bool) "PassiveAggressive is true" true got
+  else Alcotest.(check bool) "Passive Failed!!!" true exp
+
+
+
 let () =
   let open Alcotest in
   run "Tests" [
@@ -298,5 +759,17 @@ let () =
        test_case "eliminate if" `Quick cp_wikipedia_ex2;
        test_case "only holes, constants, and output vars remain in tests" `Quick cp_only_holes_and_constants;
        test_case "cp_also_props_copies" `Quick cp_also_props_copies;
-      ]
+       test_case "opt_bcm_example" `Quick opt_bcm_example;
+      ];
+      "passive propogation",
+      [test_case "handwritten example" `Quick rev_propogate_computes_single_path;
+       test_case "learns from tests 1" `Quick passive_propogation_learns_from_tests1;
+       test_case "learns from tests 2" `Quick passive_propogation_learns_from_tests2;
+       test_case "learns facts common to disjoint paths" `Quick
+         passive_propogation_learns_disjoint];
+      "meet",
+      [test_case "combines facts" `Quick meet_combines_facts];
+      "quantifier elimination",
+      [test_case "handwritten example" `Quick construct_model_query_PA_is_sat1;
+       test_case "hello_world example" `Quick construct_model_query_PA_is_sat_hello_smaller]
     ]

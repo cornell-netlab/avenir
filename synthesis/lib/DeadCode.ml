@@ -26,7 +26,7 @@ let rec eliminate_unused_vars cmd (used : StringSet.t) =
      (c1' %:% c2', used1)
   | Select (typ, cases) ->
      let cases', used' =
-       List.fold cases ~init:(cases,used)
+       List.fold cases ~init:([],used)
          ~f:(fun (acc_cases,acc_used) (b,c) ->
            let b_fvs = free_of_test `Var b in
            let c',used' = eliminate_unused_vars c used in
@@ -41,5 +41,7 @@ let rec eliminate_unused_vars cmd (used : StringSet.t) =
   | While _ ->
      failwith "[DeadCode] While is deprecated"
 
-let elim_vars cmd =
-  eliminate_unused_vars cmd StringSet.empty |> fst
+let elim_vars fvs cmd =
+  StringSet.of_list @@ fsts fvs
+  |> eliminate_unused_vars cmd
+  |> fst

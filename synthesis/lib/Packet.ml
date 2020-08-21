@@ -89,6 +89,10 @@ let test_of_wide ?fvs:(fvs = []) wide =
         ) %&% test
       else ( test ))
 
+let to_assignment (pkt : t) =
+  StringMap.fold pkt ~init:Skip
+    ~f:(fun ~key ~data acc -> (%:%) acc @@ key %<-% Value data)
+
 let empty = StringMap.empty
 
 

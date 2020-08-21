@@ -325,7 +325,7 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
     model_opt >>= fun (model, searcher) ->
     let es = extract_reached_edits params data problem model in
 
-    Log.print_search_state true problem es model;
+    Log.print_search_state params.debug problem es model;
     Interactive.pause ~prompt:"\n" params.interactive;
 
     let problem' = Problem.(append_phys_edits problem es
@@ -336,8 +336,8 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
     let problem = Problem.add_attempt problem model in
     let restriction = negate_model problem model es in
     let problem = Problem.refine_model_space problem restriction in
-    assert (List.for_all (Problem.attempts problem)
-              ~f:(fun m -> False = fixup_test m (Problem.model_space problem)));
+
+    Log.check_attempts params.debug problem;
 
     not(List.is_empty es)
     |=> fun _ ->
