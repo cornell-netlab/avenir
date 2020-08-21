@@ -81,12 +81,14 @@ let rec mk_one_big_table' (tbl : only_apply) c =
   | Assert _ | Assume _ -> failwith "Assert/Assume not handled"
   | Seq(c1, c2) -> mk_one_big_table' (mk_one_big_table' tbl c1) c2
   | While _ -> failwith "While not handled"
-  | Select(_, _) -> failwith "Select not handled"
+  | Select(_, tcl) ->
+                  let free = List.map tcl ~f:(fun (t, _) -> free_vars_of_test t)  |> List.concat in
+    {tbl with keys = dedup (tbl.keys @ free)}
   | Apply t ->
     let cross_actions = List.map
                           (cross tbl.actions t.actions |> List.concat)
                           ~f:(fun (x, y) -> combine_actions x y) in
-    { keys = tbl.keys @ t.keys;
+    { keys = dedup (tbl.keys @ t.keys);
       actions = tbl.actions @ t.actions @ cross_actions;
       default = tbl.default %:% t.default }
 
