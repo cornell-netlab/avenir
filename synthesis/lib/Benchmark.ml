@@ -233,7 +233,9 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
             |> Encode.unify_names var_mapping |> zero_init fvs |> drop_handle fvs in
 
   let phys = (assume %:% Encode.encode_from_p4 phys_inc phys_p4 false)
-             |> Encode.unify_names var_mapping |> zero_init fvs |> drop_handle fvs in
+             |> Encode.unify_names var_mapping |> zero_init fvs |> drop_handle fvs
+             |> CompilerOpts.optimize fvs
+  in
 
   (* let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in *)
   (* let fvs = parse_fvs fvs in *)

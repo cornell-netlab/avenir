@@ -38,12 +38,14 @@ let empty = make
 
 
 let to_string params (p : t) =
-  Printf.sprintf "+-------------------------+\nLogical:\n%s\n\nPhysical:\n%s\nWRT:[%s]\n+-------------------------------+\n"
+  Printf.sprintf "+-------------------------+\nLogical:\n%s\n\nPhysical:\n%s\nWRT:[%s]\n Search Space is: %s paths\n+-------------------------------+\n"
     (Switch.to_string params p.log)
     (Switch.to_string params p.phys)
     (List.map p.fvs ~f:(fun (x,sz) -> "(" ^ x ^ "#" ^ string_of_int sz ^ ")")
      |> List.reduce ~f:(fun x y -> x ^","^ y)
      |> Option.value ~default:"")
+    (Bigint.to_string @@ num_table_paths @@ Switch.pipeline p.phys)
+
 
 let fvs (p : t) : (string * int) list = p.fvs
 let cexs (p : t) : (Packet.t * Packet.t) list = p.cexs

@@ -197,7 +197,7 @@ let cast_value w (v : value) : value =
   match v with
   | Int(x,sz) ->
      if w < sz then
-       Int(Bigint.(x land ((pow (one + one) (of_int w)) - one)), sz)
+       Int(Bigint.(x land ((pow (one + one) (of_int w)) - one)), w)
      else if w > sz then
        Int(x,w)
      else
@@ -724,6 +724,34 @@ let rec num_nodes_in_cmd c =
          ~f:(fun acc (data, act) ->
            acc + List.length data + num_nodes_in_cmd act
          )
+
+let rec num_table_paths (c : cmd) : Bigint.t =
+  let open Bigint in
+  match c with
+  | Skip | Assign _ | Assert _ | Assume _ -> one
+  | Seq(c1,c2) -> num_table_paths c1 * num_table_paths c2
+  | Select (_, cases) ->
+     List.fold cases ~init:one
+       ~f:(fun acc (_,c) ->
+         let res = num_table_paths c in
+         if res = one then acc else acc + res
+       )
+  | Apply {actions; _} ->
+     of_int (List.length actions) + one (* for the default action*)
+  | _ -> failwith "deprecated"
+
+let rec num_paths (c : cmd) : Bigint.t =
+  let open Bigint in
+  match c with
+  | Skip | Assign _ | Assert _ | Assume _ -> one
+  | Seq (c1,c2) -> num_paths c1 * num_paths c2
+  | Select (_, cases) ->
+     List.fold cases ~init:one ~f:(fun acc (_,c) -> acc + num_paths c)
+  | Apply _ ->
+     (* Assume apply will execute the default action *)
+     one
+  | _ -> failwith "deprecated"
+
     
 let rec free_of_cmd typ (c:cmd) : (string * size) list =
   begin match c with

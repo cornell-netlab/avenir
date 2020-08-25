@@ -5,18 +5,22 @@ open Ast
 
 let meet m m' : 'a StringMap.t =
   StringMap.merge m m'
-    ~f:(fun ~key case ->
+    ~f:(fun ~key:_ case ->
       match case with
       | `Both (l,r) when Stdlib.(l = r) -> Some l
       | `Both (_,_) ->
-         Printf.printf "branches disagree on value of %s\n%!" key;
+         (* Printf.printf "branches disagree on value of %s\n%!" key; *)
          None
       | `Left  _ ->
-         Printf.printf "Forgetting the Left value of %s\n%!" key;
+         (* Printf.printf "Forgetting the Left value of %s\n%!" key; *)
          None
       | `Right _ ->
-         Printf.printf "Forgetting the Right value of %s\n%!" key;
+         (* Printf.printf "Forgetting the Right value of %s\n%!" key; *)
          None)
+
+let meet_opt m_opt m : 'a StringMap.t =
+  Option.value_map m_opt ~default:m ~f:(meet m)
+
 
 let rec eval_const_expr e =
   let binop op (e1, e2) =
@@ -109,14 +113,48 @@ let rec propogate_cmd (map : expr StringMap.t) (cmd : cmd) =
          ~f:(fun (accMap, cases, _) (b,c) ->
              let b' = propogate_test map b in
              let map',c' = propogate_cmd map c in
-             Some (Option.map accMap ~f:(meet map')
-                   |> Option.value ~default:map')
-             , cases @ [b', c'], (b' = True && typ = Ordered)
+             Some(meet_opt accMap map'), cases @ [b', c'], (b' = True && typ = Ordered)
          )
      in
      Option.value_exn map', mkSelect typ cases'
 
-  | Apply _ -> failwith "unsupported"
+  | Apply {name;keys;actions;default} ->
+     let facts_acts, actions' =
+       List.fold actions ~init:(None,[])
+         ~f:(fun (acc_map,acc_acts) (data, act) ->
+           let map', act' = propogate_cmd (strmap_remove_list map (fsts data)) act in
+           let post_action_facts = strmap_remove_list map' (fsts data) in
+           let pre_action_facts = strmap_project_list map (fsts data) in
+           let facts =
+             StringMap.merge pre_action_facts post_action_facts
+               ~f:(fun ~key -> function
+                 | `Both(pre,post) when Stdlib.(pre = post) -> Some pre
+                 | `Both(pre,post) ->
+                    Printf.sprintf "got different expressions for %s pre action and post action: %s and %s"
+                      key
+                      (string_of_expr pre)
+                      (string_of_expr post)
+                    |> failwith
+                 | `Left pre -> Some pre
+                 | `Right post -> Some post
+               )
+           in
+           (Some (meet_opt acc_map facts),acc_acts@[(data, act')])
+         )
+     in
+     let facts_def, default' = propogate_cmd map default in
+     let keys' =
+       List.map keys
+         ~f:(fun (k,sz) ->
+           match StringMap.find map k with
+           | Some (Var(k',_)) -> (k',sz)
+           | Some (e) ->
+              Printf.printf "[INFO] could replace key %s in table %s with value %s\n%!" (k) (name) (string_of_expr e);
+              (k,sz)
+           | None -> (k,sz)
+         )
+     in
+     (meet_opt facts_acts facts_def, mkApply (name, keys', actions', default'))
   | While _ -> failwith "unsupported"
 
 

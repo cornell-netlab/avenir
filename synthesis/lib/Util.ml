@@ -287,3 +287,14 @@ let stringset_add_list s l =
 let fsts = List.map ~f:fst
 
 let map_snd lst ~f = List.map lst ~f:(fun (a,b) -> (a, f b))
+
+let strset_remove_list s l = List.fold l ~init:s ~f:(StringSet.remove)
+let strmap_remove_list m l = List.fold l ~init:m ~f:(StringMap.remove)
+
+let strmap_project_list m l =
+  List.dedup_and_sort l ~compare:(String.compare)
+  |> List.fold ~init:StringMap.empty ~f:(fun acc key ->
+      match StringMap.find m key with
+      | None -> acc
+      | Some data -> StringMap.set acc ~key ~data
+       )

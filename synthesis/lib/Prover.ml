@@ -3,7 +3,7 @@ open Ast
 open Packet
 open Z3
 
-let force_print = true
+let force_print = false
 let print_debug = false
 
 let debug term =
@@ -204,7 +204,7 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
   let response =
     if force_print || params.debug && print_debug then debug term;
     assert_ sat_prover term;
-    if force_print || params.debug && print_debug then Printf.printf "Asserted!\n%!";
+    if force_print || params.debug && print_debug then Printf.printf " Asserted % dnodes!\n%!" (num_nodes_in_test test);
     check_sat(* _using (ParOr (UFBV, SMT)) *) sat_prover in
   let dur = Time.(diff (now()) st) in
   if params.debug && print_debug then Printf.printf "Got a Result\n%!";

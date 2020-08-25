@@ -255,6 +255,7 @@ let minimize_solution (params : Parameters.t) data problem =
 
 let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (Edit.t list option) =
   Printf.printf "cegis_math\n%!";
+  Log.print_problem params problem;
   (* Printf.printf "%s\n%!" (List.hd_exn (Problem.log_edits problem) |> Edit.to_string); *)
   if timed_out params.timeout then None else
     if params.ecache then
@@ -331,7 +332,6 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
     let problem' = Problem.(append_phys_edits problem es
                             |> reset_model_space
                             |> reset_attempts) in
-    Log.print_problem params problem';
 
     let problem = Problem.add_attempt problem model in
     let restriction = negate_model problem model es in

@@ -229,6 +229,79 @@ let cp_also_props_copies _ =
   same_cmd exp (ConstantProp.propogate_fix cmd)
 
 
+let cp_affects_actions_and_keys _ =
+  let var x = Var(x,32) in
+  let int i = mkVInt(i,32) in
+  let cmd =
+    sequence [
+        "z" %<-% int 99;
+        "out" %<-% int 0;
+        "meta" %<-% var "addr";
+        Apply {name = "tbl";
+               keys = [("z",32); ("meta",32)];
+               actions = [ ["port",9], sequence [
+                                           "out" %<-% mkPlus (Var("port",9)) (mkCast 9 @@ var "z");
+                                           "meta" %<-% mkPlus (var "z") (var "z");
+                                         ]
+                         ; ["port",9], sequence [
+                                           "out" %<-% mkVInt (0,9);
+                                           "meta" %<-% int (2*99);
+                         ] ];
+               default = "meta" %<-% mkTimes (var "z") (int 2);
+          };
+        "addr" %<-% var "meta";
+      ]
+
+  in
+  let exp =
+    sequence [
+        "z" %<-% int 99;
+        "out" %<-% int 0;
+        "meta" %<-% var "addr";
+        Apply {name = "tbl";
+               keys = [("z",32); ("addr",32)];
+               actions = [ ["port",9],
+                           sequence [
+                               "out" %<-% mkPlus (Var("port",9)) (mkVInt(99,9));
+                               "meta" %<-% int (198);
+                             ]
+                         ; ["port",9], sequence [
+                                           "out" %<-% mkVInt (0,9);
+                                           "meta" %<-% int (198);
+                         ] ];
+               default = "meta" %<-% int 198;
+          };
+        "addr" %<-% int 198;
+      ]
+  in
+  same_cmd exp @@ ConstantProp.propogate cmd
+
+
+let dc_remove_table _ =
+  let var x = Var(x,32) in
+  let int i = mkVInt(i,32) in
+  let cmd =
+    sequence [
+        Apply {name = "tbl";
+               keys = [("z",32); ("meta",32)];
+               actions = [ ["port",9], sequence [
+                                           "out" %<-% mkPlus (Var("port",9)) (mkCast 9 @@ var "z");
+                                           "meta" %<-% mkPlus (var "z") (var "z");
+                                         ]
+                         ; ["port",9], sequence [
+                                           "out" %<-% mkVInt (0,9);
+                                           "meta" %<-% int (2*99);
+                         ] ];
+               default = "meta" %<-% mkTimes (var "z") (int 2);
+          };
+        "addr" %<-% var "meta";
+      ]
+  in
+  let exp = Skip in
+  same_cmd exp @@ DeadCode.elim_vars ["mac",48] cmd
+
+
+
 let opts_minimize _ =
   let fvs = ["ipv4.dst", 32; "ipv4.ttl", 8; "out_port",9 ] in
   let cmd =
@@ -760,7 +833,10 @@ let () =
        test_case "only holes, constants, and output vars remain in tests" `Quick cp_only_holes_and_constants;
        test_case "cp_also_props_copies" `Quick cp_also_props_copies;
        test_case "opt_bcm_example" `Quick opt_bcm_example;
+       test_case "cp_affects_actions_and_keys" `Quick cp_affects_actions_and_keys;
       ];
+      "dead code elimination",
+      [test_case "eliminates irrelevant tables" `Quick dc_remove_table];
       "passive propogation",
       [test_case "handwritten example" `Quick rev_propogate_computes_single_path;
        test_case "learns from tests 1" `Quick passive_propogation_learns_from_tests1;

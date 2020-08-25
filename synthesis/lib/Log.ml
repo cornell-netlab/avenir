@@ -60,8 +60,10 @@ let print_search_state do_print problem es model =
 
 
 let print_problem (params : Parameters.t) (problem : Problem.t) =
-  if params.debug then
-    Printf.printf "\n%s\n%!" (Problem.to_string params problem)
+  if params.debug then begin
+      Printf.printf "\n%s\n%!" (Problem.to_string params problem);
+      Interactive.pause true;
+    end
 
 
 let backtracking (_ : Parameters.t) =

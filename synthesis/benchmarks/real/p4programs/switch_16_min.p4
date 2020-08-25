@@ -1351,9 +1351,9 @@ control process_vlan_xlate(inout headers hdr, inout metadata meta, inout standar
 
 control process_egress_filter(inout headers hdr, inout metadata meta, inout standard_metadata_t standard_metadata) {
     @name(".egress_filter_check") action egress_filter_check() {
-        meta.egress_filter_metadata.ifindex_check = meta.ingress_metadata.ifindex ^ meta.egress_metadata.ifindex;
-        meta.egress_filter_metadata.bd = meta.ingress_metadata.outer_bd ^ meta.egress_metadata.outer_bd;
-        meta.egress_filter_metadata.inner_bd = meta.ingress_metadata.bd ^ meta.egress_metadata.bd;
+        meta.egress_filter_metadata.ifindex_check = meta.ingress_metadata.ifindex;
+        meta.egress_filter_metadata.bd = meta.ingress_metadata.outer_bd;
+        meta.egress_filter_metadata.inner_bd = meta.ingress_metadata.bd;
     }
     @name(".set_egress_filter_drop") action set_egress_filter_drop() {
         mark_to_drop(standard_metadata);
@@ -2003,7 +2003,7 @@ control process_mac(inout headers hdr, inout metadata meta, inout standard_metad
     }
     @name(".dmac_hit") action dmac_hit(bit<16> ifindex) {
         meta.ingress_metadata.egress_ifindex = ifindex;
-        meta.l2_metadata.same_if_check = meta.l2_metadata.same_if_check ^ ifindex;
+        meta.l2_metadata.same_if_check = meta.l2_metadata.same_if_check;
     }
     @name(".dmac_multicast_hit") action dmac_multicast_hit(bit<16> mc_index) {
         standard_metadata.mcast_grp = mc_index;
@@ -2030,7 +2030,7 @@ control process_mac(inout headers hdr, inout metadata meta, inout standard_metad
         meta.l2_metadata.l2_src_miss = 1w1;
     }
     @name(".smac_hit") action smac_hit(bit<16> ifindex) {
-        meta.l2_metadata.l2_src_move = meta.ingress_metadata.ifindex ^ ifindex;
+        meta.l2_metadata.l2_src_move = meta.ingress_metadata.ifindex;
     }
     @name(".dmac") table dmac {
         support_timeout = true;
@@ -2555,27 +2555,27 @@ control process_nexthop(inout headers hdr, inout metadata meta, inout standard_m
     @name(".set_ecmp_nexthop_details") action set_ecmp_nexthop_details(bit<16> ifindex, bit<16> bd, bit<16> nhop_index, bit<1> tunnel) {
         meta.ingress_metadata.egress_ifindex = ifindex;
         meta.l3_metadata.nexthop_index = nhop_index;
-        meta.l3_metadata.same_bd_check = meta.ingress_metadata.bd ^ bd;
-        meta.l2_metadata.same_if_check = meta.l2_metadata.same_if_check ^ ifindex;
-        meta.tunnel_metadata.tunnel_if_check = meta.tunnel_metadata.tunnel_terminate ^ tunnel;
+        meta.l3_metadata.same_bd_check = meta.ingress_metadata.bd;
+        meta.l2_metadata.same_if_check = meta.l2_metadata.same_if_check;
+        meta.tunnel_metadata.tunnel_if_check = meta.tunnel_metadata.tunnel_terminate;
     }
     @name(".set_ecmp_nexthop_details_for_post_routed_flood") action set_ecmp_nexthop_details_for_post_routed_flood(bit<16> bd, bit<16> uuc_mc_index, bit<16> nhop_index) {
         standard_metadata.mcast_grp = uuc_mc_index;
         meta.l3_metadata.nexthop_index = nhop_index;
         meta.ingress_metadata.egress_ifindex = 16w0;
-        meta.l3_metadata.same_bd_check = meta.ingress_metadata.bd ^ bd;
+        meta.l3_metadata.same_bd_check = meta.ingress_metadata.bd;
         meta.fabric_metadata.dst_device = 8w127;
     }
     @name(".set_nexthop_details") action set_nexthop_details(bit<16> ifindex, bit<16> bd, bit<1> tunnel) {
         meta.ingress_metadata.egress_ifindex = ifindex;
-        meta.l3_metadata.same_bd_check = meta.ingress_metadata.bd ^ bd;
-        meta.l2_metadata.same_if_check = meta.l2_metadata.same_if_check ^ ifindex;
-        meta.tunnel_metadata.tunnel_if_check = meta.tunnel_metadata.tunnel_terminate ^ tunnel;
+        meta.l3_metadata.same_bd_check = meta.ingress_metadata.bd;
+        meta.l2_metadata.same_if_check = meta.l2_metadata.same_if_check;
+        meta.tunnel_metadata.tunnel_if_check = meta.tunnel_metadata.tunnel_terminate;
     }
     @name(".set_nexthop_details_for_post_routed_flood") action set_nexthop_details_for_post_routed_flood(bit<16> bd, bit<16> uuc_mc_index) {
         standard_metadata.mcast_grp = uuc_mc_index;
         meta.ingress_metadata.egress_ifindex = 16w0;
-        meta.l3_metadata.same_bd_check = meta.ingress_metadata.bd ^ bd;
+        meta.l3_metadata.same_bd_check = meta.ingress_metadata.bd;
         meta.fabric_metadata.dst_device = 8w127;
     }
     @name(".ecmp_group") table ecmp_group {
