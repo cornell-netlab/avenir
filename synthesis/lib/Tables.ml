@@ -11,10 +11,7 @@ module Row = struct
 
   let to_string ((mtchs, ad, actid) : t) =
     Printf.sprintf "%s,%s,%d"
-      ( List.map mtchs ~f:(Match.to_string)
-        |> List.reduce ~f:(Printf.sprintf "%s;%s")
-        |> Option.value ~default:""
-      )
+      (Match.list_to_string mtchs)
       (List.map ad ~f:(string_of_value)
        |> List.reduce ~f:(Printf.sprintf "%s;%s")
        |> Option.value ~default:"")
@@ -41,37 +38,33 @@ module Row = struct
     | Some (ks, acts, _) ->
        let keys_holes =
          List.fold ks ~init:(Some [])
-           ~f:(fun acc (v, sz, v_opt) ->
+           ~f:(fun acc (key, sz, v_opt) ->
              match v_opt with
              | Some _ -> acc
              | None ->
-                let hlo,hhi = Hole.match_holes_range tbl_name v in
+                let hlo,hhi = Hole.match_holes_range tbl_name key in
                 match acc,
                       fixup_expr match_model (Hole(hlo, sz)),
                       fixup_expr match_model (Hole(hhi, sz))
                 with
                 | None, _,_ -> None
                 | Some ks, Hole _, Hole _ ->  begin
-                    let h, hm = Hole.match_holes_mask tbl_name v in
+                    let h, hm = Hole.match_holes_mask tbl_name key in
                     match fixup_expr match_model (Hole(h, sz)),
                           fixup_expr match_model (Hole(hm,sz))
                     with
                     | Hole _,_ ->
-                       Some (ks @ [Match.mask_ (mkInt(0,sz)) (mkInt(0,sz))])
-                    (*    Printf.sprintf "when filling %s couldn't find %s in model %s" tbl_name h (string_of_map match_model)
-                     * |> failwith *)
+                       Some (ks @ [Match.mask_ key (mkInt(0,sz)) (mkInt(0,sz))])
                     | Value v,Hole _ ->
-                       Some (ks @ [Match.exact_ v])
+                       Some (ks @ [Match.exact_ key v])
                     | Value v, Value m ->
-                       Some (ks @ [Match.mask_ v m])
+                       Some (ks @ [Match.mask_ key v m])
                     | _ -> failwith "Model did something weird"
                   end
                 | Some ks, Value lo, Value hi ->
-                   let k = if veq lo hi
-                           then [Match.exact_ lo]
-                           else if vleq hi lo
+                   let k = if vleq hi lo
                            then failwith "Low value greater than high value in model from z3"
-                           else [Match.between_ lo hi] in
+                           else [Match.between_ key lo hi] in
                    Some (ks @ k)
                 | _, _,_ -> failwith "got something that wasn't a model"
            ) in
@@ -151,13 +144,13 @@ module Edit = struct
     | Add(t,(ms,ds,i)) ->
        match get_schema_of_table t phys with
        | None -> failwith @@ Printf.sprintf "Couldn't find table %s" t
-       | Some (keys,actions,_) ->
+       | Some (_,actions,_) ->
           let actSize = max (log2 (List.length actions)) 1 in
           Hole.add_row_hole t %=% mkVInt(1,1)
           %&%
             (Hole.which_act_hole t actSize %=% mkVInt(i,actSize))
           %&%
-            (Match.test_hole_of_lists t keys ms)
+            (Match.test_hole_of_lists t ms)
           %&%
             (Row.test_of_data t i (List.nth_exn actions i |> fst) ds)
 

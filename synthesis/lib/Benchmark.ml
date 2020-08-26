@@ -96,20 +96,21 @@ let rec generate_n_insertions varsize length n avail_tables maxes : Edit.t list 
       else
         let i = Random.int (List.length avail_tables) |> List.nth_exn avail_tables in
         let max_i = StringMap.find maxes (tbl i) |> Option.value ~default:0 in
+        let k = Printf.sprintf "k_%d" i in
         Printf.printf "%s max : %d\n%!" (tbl i) max_i;
         if max_i >= pow 2 varsize
         then loop_free_match (List.filter avail_tables ~f:((<>) i))
         else
           let (max', mtch) =
             if Random.int 6 < 1 then
-              (max_i + 1, Match.exact_ (mkInt(max_i, varsize)))
+              (max_i + 1, Match.exact_ k (mkInt(max_i, varsize)))
             else
               let lo = max_i in
               let hi = min (lo + Random.int 3) (pow 2 varsize - 1) in
               if lo = hi then
-                (hi + 1, Match.exact_ (mkInt(hi, varsize)))
+                (hi + 1, Match.exact_ k (mkInt(hi, varsize)))
               else
-                (hi + 1, Match.between_ (mkInt(lo, varsize)) (mkInt(hi, varsize)))
+                (hi + 1, Match.between_ k (mkInt(lo, varsize)) (mkInt(hi, varsize)))
           in
           let maxes' = StringMap.set maxes ~key:(tbl i) ~data:max' in
           let act_data = mkInt(Random.int (pow 2 varsize),varsize) in
@@ -156,12 +157,12 @@ let reorder_benchmark varsize length max_inserts params =
             
 (** ONF BENCHMARK **)
     
-let onos_to_edits filename tbl_nm =
+let onos_to_edits filename tbl_nm key =
   let lines = In_channel.read_lines filename in
   let make_edit data : Edit.t =
     match data with
     | [_; "ADD"; _; ipv6; id] ->
-       Add (tbl_nm, ([Match.mk_ipv6_match ipv6], [Int(Bigint.of_string id, 32)], 0))
+       Add (tbl_nm, ([Match.mk_ipv6_match key ipv6], [Int(Bigint.of_string id, 32)], 0))
     | [_; "REMOVE"; _; _; _] ->
        failwith "cannot yet handle removes"
     | _ ->
@@ -220,7 +221,7 @@ let basic_onf_ipv4 params filename =
       ~log_edits:[]
       ~phys_inst:StringMap.(set empty ~key:"l3_fwd" ~data:[]) ()
   in
-  measure params None problem (onos_to_edits filename "ipv6")
+  measure params None problem (onos_to_edits filename "ipv6" "ipv6_dst")
 
 let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_edits_file fvs_file assume_file log_inc phys_inc =
   let var_mapping = parse_fvs fvs_file in
@@ -239,8 +240,8 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
 
   (* let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in *)
   (* let fvs = parse_fvs fvs in *)
-  let log_edits = Runtime.parse log_edits_file in
-  let phys_edits = Runtime.parse phys_edits_file in
+  let log_edits = Runtime.parse log log_edits_file in
+  let phys_edits = Runtime.parse phys phys_edits_file in
 
   let problem =
     Problem.make
@@ -249,7 +250,7 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
       ~phys_inst:Instance.(update_list params empty phys_edits)
       ~log_edits:[] ()
   in
-  measure params None problem (log_edits :: onos_to_edits data_file "routing_v6")
+  measure params None problem (log_edits :: onos_to_edits data_file "routing_v6" "hdr.ipv6.dst_addr")
 
 and zero_init fvs cmd =
   let vs = variables cmd |> List.dedup_and_sort ~compare:(fun (v1, _) (v2, _) -> String.compare v1 v2) in
@@ -314,79 +315,6 @@ let rec to_int (bytes : int list) =
   | x::xs -> Int.shift_left x (8 * List.length xs) + to_int xs
 
 
-let parse_ip_mask str =
-  let addr, mask =
-    String.substr_replace_all str ~pattern:"@" ~with_:""
-    |> String.rsplit2_exn ~on:'/' in
-  let addr_ints =
-    String.split addr ~on:'.'
-    |> List.map ~f:(fun i -> int_of_string i)
-  in
-  let mask_idx =
-    let f_idx = float_of_string(mask) /. 4.0 in
-    if Float.round_up f_idx = Float.round_down f_idx then
-      int_of_float f_idx
-    else failwith ("unknown mask " ^ mask)
-  in
-  let lo, hi = List.foldi addr_ints ~init:([],[])
-                 ~f:(fun i (lo, hi) char ->
-                   if i < mask_idx then
-                     (lo @ [char], hi @ [char])
-                   else
-                     (lo @ [0], hi @ [255])) in
-  let lo_int = to_int lo in
-  let hi_int = to_int hi in
-  if lo_int = hi_int then
-    Match.exact_(mkInt(lo_int, 32))
-  else
-    Match.between_ (mkInt(lo_int, 32)) (mkInt(hi_int, 32))
-  
-    
-let parse_port_range str =
-  let lo,hi = String.lsplit2_exn str ~on:':' in
-  let () = Printf.printf "(%s:%s)\n%!" lo hi in
-  let lo_int = String.strip lo |> int_of_string in
-  let hi_int = String.strip hi |> int_of_string in
-  if lo = hi
-  then Match.exact_(mkInt(lo_int, 9))
-  else Match.between_(mkInt(lo_int, 9)) (mkInt(hi_int, 9))
-
-let parse_proto str =
-  let proto,_ = String.lsplit2_exn str ~on:'/' in
-  Match.exact_(Int(Bigint.of_string proto, 8))
-              
-let generate_edits cb_rules =
-  let drop_table = List.fold (pow 2 9 |> range_ex 0) ~init:IntMap.empty
-                     ~f:(fun acc port -> IntMap.set acc ~key:port ~data:(Random.int 2)) in
-  List.fold cb_rules ~init:[]
-    ~f:(fun acc (_, ip_dst, _,_,_) ->
-      let out_port = Random.int (pow 2 9) in
-      acc @ [
-          IntMap.fold drop_table ~init:[]
-            ~f:(fun ~key ~data acc ->
-                acc @ [("of", ([ip_dst; Match.exact_(mkInt(key, 9))], [mkInt(out_port, 9)], data))]
-            )
-        ]
-    )
-
-let generate_pipe1_edits cb_rules : Edit.t list list =
-  let drop_table = List.fold (pow 2 9 |> range_ex 0) ~init:IntMap.empty
-                     ~f:(fun acc port -> IntMap.set acc ~key:port ~data:(Random.int 2)) in
-  let ip_table =
-    List.fold cb_rules ~init:[]
-    ~f:(fun acc (_, ip_dst, _,_,_) ->
-      let out_port = Random.int (pow 2 9) in
-      acc
-      @ (if Random.int 2 = 0
-          then []
-          else let pt = Random.int (pow 2 9) in
-               [[Tables.Edit.Add ("ingress", ([Match.exact_(mkInt(pt,9))], [], IntMap.find_exn drop_table pt))]]
-        )
-      @ [[Tables.Edit.Add ("ipv4_fwd", ([ip_dst], [mkInt(out_port, 9)], 0))]]
-    )
-  in
-  ip_table
-
 let restart_timer (params : Parameters.t) st =
   match params.timeout with
   | None -> params
@@ -442,22 +370,23 @@ let create_bench sz num_tables num_xs num_ms =
                  )
     ]
 
+let wildcard k = Match.mask_ k (mkInt(0,32)) (mkInt(0,32))
+let wildcards_between lo hi =
+  List.map (range_ex lo hi) ~f:(fun k -> wildcard (Printf.sprintf "x%d" k))
 
-let match_row sz num_xs ~ith ~has_value =
-  let open Match in
-  let wildcard =  mask_ (mkInt(0,32)) (mkInt(0,32)) in
+
+let match_row sz num_xs ~ith ~has_value : Edit.t =
   let matches =
-    Util.repeat (ith) wildcard
-    @ [ exact_ (mkInt(has_value,sz)) ]
-    @ Util.repeat (num_xs - ith) wildcard
+    wildcards_between 0 (ith-1)
+    @ [ Match.exact_ (Printf.sprintf "x%d" ith) (mkInt(has_value,sz)) ]
+    @ wildcards_between (num_xs - ith) num_xs
   in
   Edit.Add("logical",(matches, [mkInt(has_value,9)], 0))
 
 let match_row_easier sz num_xs ~has_value =
   let open Match in
-  let wildcard =  mask_ (mkInt(0,32)) (mkInt(0,32)) in
   let matches =
-    exact_(mkInt(has_value,sz)) :: Util.repeat (num_xs) wildcard
+    exact_ "x0" (mkInt(has_value,sz)) :: wildcards_between 1 num_xs
   in
   Edit.Add("logical",(matches, [mkInt(has_value,9)], 0))
 
@@ -523,7 +452,7 @@ let square_bench params sz n max_edits =
 let cb_to_matches fvs cb_row =
   List.map fvs ~f:(fun (f,sz) ->
                     get cb_row f
-                    |> Option.value ~default:(Match.mask_ (mkInt(0,sz)) (mkInt(0,sz))))
+                    |> Option.value ~default:(Match.mask_ f (mkInt(0,sz)) (mkInt(0,sz))))
 
 let generate_out acc  =
   let open Edit in
@@ -926,7 +855,7 @@ let metadata params sz nmeta nedits =
         let log_edits =
           List.map (range_ex 0 nedits)
             ~f:(fun i ->
-              [Edit.Add("logical", ([Match.exact_(mkInt(i,sz))], [mkInt(i,9)],0)) ]
+              [Edit.Add("logical", ([Match.exact_ "x" (mkInt(i,sz))], [mkInt(i,9)],0)) ]
             )
         in
         Printf.printf "Log:\n%s\n%!" (string_of_cmd logical_table);

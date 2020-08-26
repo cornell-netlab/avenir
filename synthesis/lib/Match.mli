@@ -2,18 +2,18 @@ open Ast
 
 type t
 
-val exact_ : value -> t
-val between_ : value -> value -> t
-val mask_ : value -> value -> t
+val exact_ : string -> value -> t
+val between_ : string -> value -> value -> t
+val mask_ : string -> value -> value -> t
 val equal : t -> t -> bool
 val to_string : t -> string
-val to_test : string * size -> t -> test
-val to_test_hole : string -> string -> t -> test
-val test_hole_of_lists : string -> (string * 'a * 'b option) list -> t list -> test
-val to_valuation_test :  string -> (string * size) -> [`Mask | `Exact] -> t -> test
+val to_test : t -> test
+val to_test_hole : string -> t -> test
+val test_hole_of_lists : string -> t list -> test
+val to_valuation_test :  string ->  [`Mask | `Exact] -> t -> test
 val list_to_string : t list -> string
-val list_to_test : (string * size * value option) list -> t list -> test
-val mk_ipv6_match : string -> t
+val list_to_test : t list -> test
+val mk_ipv6_match : string -> string -> t
 val is_wildcard : t -> bool
 val cap : t -> t -> t list
 val has_inter : t -> t -> bool

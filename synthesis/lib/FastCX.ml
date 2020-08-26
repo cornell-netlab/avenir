@@ -31,20 +31,18 @@ and truncated (table : string) (program : Ast.cmd) : Ast.cmd option =
 let hits_pred params (_: ProfData.t ref) prog inst edits e : test =
   match e with
   | Edit.Add (t, (ms, _, _)) ->
-    let (ks, _, _) = get_schema_of_table t prog |> Option.value_exn in
-    let phi = Match.list_to_test ks ms %&% Instance.negate_rows inst t ks in
+    let phi = Match.list_to_test ms %&% Instance.negate_rows inst t in
     (* Printf.printf "Condition: %s\n%!" (string_of_test phi); *)
     let prefix = truncated t prog |> Option.value_exn in
     let pref_gcl = Instance.(apply params NoHoles `Exact (update_list params inst edits) prefix) in
     wp `Negs pref_gcl phi
   | Edit.Del (t, i) ->
-     let (ks, _, _) = get_schema_of_table t prog |> Option.value_exn in
      let (ms, _, _) = Instance.get_row inst t i |> Option.value_exn in
-     let phi = Match.list_to_test ks ms %&%
+     let phi = Match.list_to_test ms %&%
                  List.fold (Instance.get_rows_before inst t i) ~init:True
                    ~f:(fun acc (matches,_,_) ->
                      (* Printf.printf "combining %s\n%!" (Match.list_to_test ks matches |> string_of_test); *)
-                     acc %&% !%(Match.list_to_test ks matches))
+                     acc %&% !%(Match.list_to_test matches))
      in
      (* Printf.printf "Condition: %s\n%!" (string_of_test phi); *)
      let prefix = truncated t prog |> Option.value_exn in

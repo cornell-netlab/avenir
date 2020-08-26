@@ -138,12 +138,12 @@ module Solver = struct
                     |> Benchmark.zero_init fvs
                     |> Benchmark.drop_handle fvs
                else Benchmark.parse_file real in
-    let log_inst = Runtime.parse logical_edits
+    let log_inst = Runtime.parse log logical_edits
                    |> Instance.(update_list params empty) in
     let log_edits = if onos
-                    then Benchmark.onos_to_edits data "ipv6"
-                    else Runtime.parse data |> List.(map ~f:return)  in
-    let phys_inst = Runtime.parse physical_edits |> Instance.(update_list params empty) in
+                    then Benchmark.onos_to_edits data "ipv6" "hdr.ipv6.dst_addr"
+                    else Runtime.parse log data |> List.(map ~f:return)  in
+    let phys_inst = Runtime.parse phys physical_edits |> Instance.(update_list params empty) in
     let phys_drop_spec = None in
     if measure then
       let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits:[] ~fvs ~phys_drop_spec () in
@@ -233,7 +233,7 @@ module RunTest = struct
            | [log_str;phys_str;edits_str] ->
               let log = Benchmark.parse_file log_str in
               let phys = Benchmark.parse_file phys_str in
-              let log_edits = Runtime.parse edits_str in
+              let log_edits = Runtime.parse log edits_str in
               let params = Parameters.({
                               widening;
                               do_slice;
@@ -542,8 +542,8 @@ module Equality = struct
   let run log phys log_edits phys_edits fvs_fp debug () =
     let log = Benchmark.parse_file log in
     let phys = Benchmark.parse_file phys in
-    let log_edits = Runtime.parse log_edits in
-    let phys_edits = Runtime.parse phys_edits in
+    let log_edits = Runtime.parse log log_edits in
+    let phys_edits = Runtime.parse phys phys_edits in
     let params = Parameters.(
         { default with
           debug;
@@ -637,8 +637,8 @@ module EqualityReal = struct
     (* let log = Encode.encode_from_p4 log_incs log false in
     let phys = Encode.encode_from_p4 phys_incs phys false in
     *)
-    let log_edits = Runtime.parse log_edits in
-    let phys_edits = Runtime.parse phys_edits in
+    let log_edits = Runtime.parse log log_edits in
+    let phys_edits = Runtime.parse phys phys_edits in
     let params = Parameters.(
         { default with
           debug;
@@ -1248,8 +1248,8 @@ module ServerCmd = struct
                then Encode.encode_from_p4 phys_incl real false
                     |> Benchmark.zero_init fvs |> Benchmark.drop_handle fvs
                else Benchmark.parse_file real in
-    let log_inst = Runtime.parse logical_edits |> Instance.(update_list params empty) in
-    let phys_inst = Runtime.parse physical_edits |> Instance.(update_list params empty) in
+    let log_inst = Runtime.parse log logical_edits |> Instance.(update_list params empty) in
+    let phys_inst = Runtime.parse phys physical_edits |> Instance.(update_list params empty) in
     let phys_drop_spec = None in
     let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits:[] ~fvs ~phys_drop_spec () in
     Server.runserver params problem ()

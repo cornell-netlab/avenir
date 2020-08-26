@@ -52,11 +52,11 @@ let get_row_exn inst table idx : Row.t =
   | Some row -> row
 
 
-let negate_rows inst tbl keys =
+let negate_rows inst tbl =
   get_rows inst tbl
   |> List.fold ~init:True
        ~f:(fun acc (matches,_,_) ->
-         acc %&% !%(Match.list_to_test keys matches))
+         acc %&% !%(Match.list_to_test matches))
 
 
 let overwrite (old_inst : t) (new_inst : t) : t =
@@ -109,7 +109,7 @@ let rec apply ?no_miss:(no_miss = false)
                  *   (List.fold t.keys ~init:"" ~f:(fun acc (k,_) -> Printf.sprintf "%s %s" acc k))
                  *   (List.fold matches ~init:"" ~f:(fun acc m -> Printf.sprintf "%s %s" acc (Match.to_string m)))
                  *   ; *)
-                Match.list_to_test t.keys matches
+                Match.list_to_test matches
                 %&% match tag with
                     | WithHoles (ds,_) ->
                        (* Hole.delete_hole i t.name %=% mkVInt(0,1) *)

@@ -49,7 +49,7 @@ let make edit table (log_keys, _, _) (phys_keys,_, _) =
         match List.findi log_keys ~f:(fun _ (key',_) -> key = key') with
         | None ->
            let string = Printf.sprintf "0b%s" (String.make sz '0') in
-           Some (Match.mask_ (mkInt(0,sz)) (mkInt(int_of_string string, sz)))
+           Some (Match.mask_ key (mkInt(0,sz)) (mkInt(int_of_string string, sz)))
         | Some (i,_) -> Edit.get_ith_match ~i edit
       ) |> Some
   in
@@ -92,21 +92,18 @@ let added_to_row (table : string) (m : value StringMap.t)  : bool =
   | _ -> false
 
 
-let restriction encode_tag (hints : t list) (phys : cmd) : test =
+let restriction encode_tag (hints : t list) : test =
   List.fold hints ~init:True
     ~f:(fun acc h ->
       match h.match_opt with
       | None -> acc
       | Some matches ->
-         match get_schema_of_table h.table phys with
-         | Some (keys,_,_) ->
-            List.fold2_exn (free_keys keys) matches ~init:acc
-              ~f:(fun acc key mtch_opt ->
-                match mtch_opt with
-                | None -> acc
-                | Some m -> acc %&% Match.to_valuation_test h.table key encode_tag m
-              )
-         | None -> failwith @@ Printf.sprintf "[Hint.restriction] couldn't find table %s" h.table
+         List.fold matches ~init:acc
+           ~f:(fun acc mtch_opt ->
+             match mtch_opt with
+             | None -> acc
+             | Some m -> acc %&% Match.to_valuation_test h.table encode_tag m
+           )
     )
 
 

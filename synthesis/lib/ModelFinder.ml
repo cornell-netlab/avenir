@@ -121,18 +121,18 @@ let compute_deletions (_ : value StringMap.t) (problem : Problem.t) =
 let well_formed_adds (params : Parameters.t) (problem : Problem.t) encode_tag =
   let phys_inst = Problem.phys_edited_instance params problem in
   let phys = Problem.phys problem in
-  get_tables_vars phys ~keys_only:true
+  tables_of_cmd phys
   |> List.fold
        ~init:True
-       ~f:(fun accum (t,vs) ->
+       ~f:(fun accum t ->
          let t_rows = Instance.get_rows phys_inst t in
          mkAnd accum @@
            (Hole.add_row_hole t %=% mkVInt(1,1)) %=>%
              List.fold t_rows ~init:True
                ~f:(fun acc (ms,_,_) ->
-                 acc %&% !%(List.fold2_exn vs ms ~init:False
-                              ~f:(fun acc (v,vsz) m ->
-                                acc %+% Match.to_valuation_test t (v,vsz) encode_tag m
+                 acc %&% !%(List.fold ms ~init:False
+                              ~f:(fun acc m ->
+                                acc %+% Match.to_valuation_test t encode_tag m
                               )
                            )
                )
@@ -158,7 +158,7 @@ let adds_are_reachable params (problem : Problem.t) (opts : opts) fvs encode_tag
             (List.hd_exn (Problem.cexs problem) |> fst |> Packet.to_test ~fvs)
             trunc
             (Hint.default_match_holes tbl_name encode_tag keys
-             %&% Instance.negate_rows phys_inst tbl_name keys)
+             %&% Instance.negate_rows phys_inst tbl_name)
       )
 
 let non_empty_adds (problem : Problem.t) =
@@ -444,7 +444,7 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
         let model_opt, dur =
           check_sat params @@
             bigand [
-                Hint.restriction encode_tag hints (Problem.phys problem);
+                Hint.restriction encode_tag hints;
                 Problem.model_space problem;
                 test
               ] in

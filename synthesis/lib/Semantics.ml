@@ -138,12 +138,12 @@ let widening_match pkt wide matches =
     )
 *)
 
-let action_to_execute pkt wide keys (rows : Row.t list ) =
+let action_to_execute pkt wide (rows : Row.t list ) =
   List.fold rows ~init:(True,None,None)
     ~f:(fun rst (matches, data, action) ->
       match rst  with
       | (missed, _, None) ->
-         let cond = Match.list_to_test keys matches in
+         let cond = Match.list_to_test matches in
          if check_test cond pkt
          then
            (missed %&% cond, None, Some (data, action))
@@ -204,7 +204,7 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
           | Some rules ->
              begin
                (* Printf.printf "Widening a match! %s\n" (Packet.test_of_wide wide |> string_of_test); *)
-               match action_to_execute pkt_loc wide t.keys rules with
+               match action_to_execute pkt_loc wide rules with
                | (cond, Some wide, Some (data, aid)) ->
                   (* Printf.printf "HIT A RULE\n%!"; *)
                   let pkt', wide', cmd', trace = trace_eval_inst ~wide (List.nth_exn t.actions aid |> bind_action_data data) inst pkt_loc in
@@ -271,7 +271,7 @@ let rec trace_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : ((string 
      | None -> trace_nd_hits t.default inst pkt
      | Some rules ->
         List.foldi rules ~init:[] ~f:(fun i acc (ms, data, aid) ->
-            let cond = Match.list_to_test t.keys ms in
+            let cond = Match.list_to_test ms in
             if check_test cond (pkt,None)
             then List.map (trace_nd_hits (List.nth_exn t.actions aid |> bind_action_data data) inst pkt)
                    ~f:(fun (hits, pkt') -> (t.name,i) :: hits, pkt')

@@ -8,12 +8,8 @@ open Runtime
 let params = ref Parameters.default
 let problem = ref Problem.empty
 
-
-type tableID = string
-type matchEntry = string
-
-type op = Add of tableID * matchEntry list * string list * int
-        | Delete of tableID * int
+type op = Add of string * string list * string list * int
+        | Delete of string * int
 
 type avenir_request =  Op of op | Verify of op list * op list
 
@@ -83,13 +79,18 @@ let parse_json body_string =
 
 
 
-let edit_of_op op =
+let edit_of_op prog op =
   match op with
   | Add (table, matches, actionData, actId) ->
-     Edit.Add(table,
-              (matches_of_string @@ String.concat ~sep:";" matches,
-               action_data_of_string @@ String.concat ~sep:";" actionData,
-               actId))
+     begin match Ast.get_schema_of_table table prog with
+     | None -> failwith @@ Printf.sprintf "unrecognized table %s" table
+     | Some (keys,_,_) ->
+        let ks = List.map keys ~f:(fun (k,_,_) -> k) in
+        Edit.Add(table,
+                 (matches_of_string ks @@ String.concat ~sep:";" matches,
+                  action_data_of_string @@ String.concat ~sep:";" actionData,
+                  actId))
+     end
   | Delete (table, rowId) -> Edit.Del(table, rowId)
 
 let op_of_edit e =
@@ -103,7 +104,7 @@ let op_of_edit e =
 
 
 let avenir_stub op : op list =
-  let e = edit_of_op op in
+  let e = edit_of_op (Problem.log !problem) op in
   problem := Problem.replace_log_edits !(problem) [e];
   let es = Synthesis.cegis_math
              !(params)
@@ -121,10 +122,10 @@ let avenir_stub op : op list =
 let verify_stub abstract_ops physical_ops =
   let problem_ =
     Problem.append_log_edits !problem
-    @@ List.map abstract_ops ~f:(edit_of_op) in
+    @@ List.map abstract_ops ~f:(edit_of_op (Problem.log !problem)) in
   let problem_ =
     Problem.append_phys_edits problem_
-    @@ List.map physical_ops ~f:(edit_of_op) in
+    @@ List.map physical_ops ~f:(edit_of_op (Problem.phys !problem)) in
   match Synthesis.implements !params (ProfData.zero ()) problem_ with
   | `Yes -> true
   | _ -> false
