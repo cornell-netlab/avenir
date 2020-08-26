@@ -25,11 +25,10 @@ let symb_wp ?fvs:(fvs=[]) cmd =
 let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t)
     : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
   let params = {params with no_defaults = false} in
-  let st_mk_cond = Time.now () in
   (* let slice = StaticSlicing.static_slice (Problem.fvs problem) in *)
   let log = Problem.log_gcl_program params problem(* |> slice*) in
   let phys = Problem.phys_gcl_program params problem (* |> slice*) in
-  assert (fails_on_some_example log (Problem.fvs problem) (Problem.cexs problem) |> Option.is_none);
+  (* assert (fails_on_some_example log (Problem.fvs problem) (Problem.cexs problem) |> Option.is_none); *)
 
   match fails_on_some_example phys (Problem.fvs problem) (Problem.cexs problem) with
   | Some (in_pkt, out_pkt) -> `NoAndCE (in_pkt,out_pkt)
@@ -37,8 +36,9 @@ let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref)
      if params.debug then
        Printf.printf "-------------------------------------------\n%s \n???====?=====????\n %s\n-------------------------------------\n%!"
          (string_of_cmd log) (string_of_cmd phys);
+     let st_mk_cond = Time.now () in
+     let condition = equivalent ~neg data Problem.(fvs problem) log phys in
      ProfData.update_time !data.make_vc_time st_mk_cond;
-     let condition = equivalent ~neg Problem.(fvs problem) log phys in
      let cv_st = Time.now () in
      let model_opt, z3time = if params.vcache then check_valid_cached params condition else check_valid params condition in
      ProfData.update_time !data.check_valid_time cv_st;

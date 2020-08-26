@@ -475,12 +475,14 @@ let rec apply_finals_sub_test t sub =
 let zip_eq_exn xs ys =
   List.fold2_exn xs ys ~init:True ~f:(fun acc x y -> acc %&% (Var x %=% Var y) )
 
+let prepend_str = Printf.sprintf "%s%s"
+
 let rec prepend_expr pfx e =
   let binop op (e,e') = op (prepend_expr pfx e) (prepend_expr pfx e') in
   match e with
   | Value _ -> e
-  | Var (v,sz) -> Var(pfx^v, sz)
-  | Hole(v, sz) -> Var(pfx^v, sz)
+  | Var (v,sz) -> Var(prepend_str pfx v, sz)
+  | Hole(v, sz) -> Var(prepend_str pfx v, sz)
   | Cast (i,e) -> mkCast i @@ prepend_expr pfx e
   | Slice {hi;lo;bits} -> mkSlice hi lo @@ prepend_expr pfx bits
   | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es
@@ -500,7 +502,7 @@ let rec prepend_test pfx b =
 let rec prepend pfx c =
   match c with
   | Skip -> Skip
-  | Assign(f,e) -> Assign(pfx^f, prepend_expr pfx e)
+  | Assign(f,e) -> Assign(prepend_str pfx f, prepend_expr pfx e)
   | Assert b -> prepend_test pfx b |> Assert
   | Assume b -> prepend_test pfx b |> Assume
   | Seq(c1,c2) -> prepend pfx c1 %:% prepend pfx c2
@@ -509,61 +511,43 @@ let rec prepend pfx c =
      List.map cs ~f:(fun (t,c) -> (prepend_test pfx t, prepend pfx c))
      |> mkSelect typ
   | Apply t ->
-     Apply {name = pfx ^ t.name;
-            keys = List.map t.keys ~f:(fun (k,sz,v_opt) -> (pfx ^ k, sz,v_opt));
-            actions = List.map t.actions ~f:(fun (scope, act) -> (List.map scope ~f:(fun (x,sz) -> (pfx ^ x, sz)), prepend pfx act));
+     Apply {name = prepend_str pfx t.name;
+            keys = List.map t.keys ~f:(fun (k,sz,v_opt) -> (prepend_str pfx k, sz,v_opt));
+            actions = List.map t.actions ~f:(fun (scope, act) -> (List.map scope ~f:(fun (x,sz) -> (prepend_str pfx x, sz)), prepend pfx act));
             default = prepend pfx t.default}
   
                  
-let equivalent ?neg:(neg = True) eq_fvs l p =
+let equivalent ?neg:(neg = True) (data : ProfData.t ref) eq_fvs l p =
   (* Printf.printf "assuming %s\n%!" (string_of_test neg); *)
   let l = Assume neg %:% l in
   let p = Assume neg %:% p in
-  let phys_prefix = "phys_"in
+  let phys_prefix = "phys_" in
   let p' = prepend phys_prefix p in
+  let st = Time.now () in
   let fvs =
     free_of_cmd `Hole l
     @ free_of_cmd `Var l
     @ free_of_cmd `Hole p
     @ free_of_cmd `Var p
   in
+  ProfData.update_time !data.prefixing_time st;
   let prefix_list =  List.map ~f:(fun (x,sz) -> (phys_prefix ^ x, sz)) in
   let fvs_p = prefix_list fvs in
   let eq_fvs_p = prefix_list eq_fvs in
+
+  let st = Time.now() in
   let sub_l, _, gl, _ = good_execs fvs l in
   let sub_p, _, gp, _ = good_execs fvs_p p' in
+  ProfData.update_time !data.good_execs_time st;
+  let st = Time.now () in
   let lin = inits eq_fvs sub_l in
   let pin = inits eq_fvs_p sub_p in
   let lout = finals eq_fvs sub_l in
   let pout = finals eq_fvs_p sub_p in
-  (* let _ = Printf.printf "lin: ";
-   *         List.iter lin ~f:(fun (v, _) -> Printf.printf " %s" v);
-   *         Printf.printf "\n";
-   *         Printf.printf "pin: ";
-   *         List.iter pin ~f:(fun (v, _) -> Printf.printf " %s" v);
-   *         Printf.printf "\n"
-   * in *)
   let in_eq = zip_eq_exn lin pin in
   let out_eq = zip_eq_exn lout pout in
-  (* Printf.printf "===Verifying===\n%s\nand\n%s\nand\n%s\nimplies\n%s"
-   *   (string_of_test gl)
-   *   (string_of_test gp)
-   *   (string_of_test in_eq)
-   *   (string_of_test out_eq); *)
-  (* match StringMap.find sub_l "drop", StringMap.find sub_p "phys_drop" with
-   * | Some (i,_), Some (j,_) ->
-   *    (\* let ldrop = Var(freshen "drop" 1 i) in
-   *     * let pdrop = Var(freshen "phys_drop" 1 j) in
-   *     * let tt = mkVInt(1,1) in
-   *     * let ff = mkVInt(0,1) in
-   *     * let cond = ((ldrop %=% ff) %&% (pdrop %=% ff) %&% out_eq)
-   *     *            %+% ((ldrop %=% tt) %&% (pdrop %=% tt)) in *\)
-   *    (\* Printf.printf "============ DROP VC =========\n%!"; *\)
-   *    (gl %&% gp %&% (!%bl) %&% (!%bl) %&% in_eq) %=>% out_eq
-   * | _, _ -> *)
-     (* Printf.printf "============ NORMAL VC =========\n%!"; *)
-  ((gl %&% gp (*%&% (!%bl) %&% (!%bp)*) %&% in_eq) %=>% out_eq)
-  (* %&% (bl %<=>% bp) *)
+  ProfData.update_time !data.ingress_egress_time st;
+  ((gl %&% gp %&% in_eq) %=>% out_eq)
 
 
 let hoare_triple_passified_relabelled assum good_n conseq =

@@ -89,7 +89,7 @@ let make_searcher (params : Parameters.t) (_ : ProfData.t ref) (_ : Problem.t) :
                      single = params.unique_edits;
                      domain = params.domain;
                      no_defaults = params.no_defaults;
-                     double = false;
+                     double = true;
                      reachable_adds = true;
                    } in
   {schedule; search_space = []}
@@ -364,8 +364,8 @@ let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_li
                 query_test
                 |> Log.print_and_return_test params.debug ~pre:"The Query:\n" ~post:"\n--------\n\n";
 
-                (* adds_are_reachable params problem opts fvs hole_type
-                 * |> Log.print_and_return_test params.debug ~pre:"Adds_are_reachable:\n" ~post:"\n--------\n\n"; *)
+                adds_are_reachable params problem opts fvs hole_type
+                |> Log.print_and_return_test params.debug ~pre:"Adds_are_reachable:\n" ~post:"\n--------\n\n";
 
                 restrict_mask opts query_holes
                 |> Log.print_and_return_test params.debug ~pre:"Restricting Masks:\n" ~post:"\n--------\n\n";

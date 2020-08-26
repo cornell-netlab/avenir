@@ -10,8 +10,11 @@ type t = {
     check_valid_time : Time.Span.t ref;
     eq_time : Time.Span.t ref;
     make_vc_time: Time.Span.t ref;
+    good_execs_time : Time.Span.t ref;
+    ingress_egress_time : Time.Span.t ref;
     normalize_packet_time : Time.Span.t ref;
     check_sliceable_time : Time.Span.t ref;
+    prefixing_time : Time.Span.t ref;
     eq_num_z3_calls : int ref;
     model_search_time : Time.Span.t ref;
     cand_time : Time.Span.t ref;
@@ -34,8 +37,12 @@ let headers =
    "fast_cex_time";
    "impl_time";
    "check_valid_time";
+   "normalize_packet_time";
    "eq_time";
    "make_vc_time";
+   "good_execs_time";
+   "prefixing_time";
+   "ingress_packet_time";
    "check_sliceable_time";
    "eq_num_z3_calls";
    "model_search_time";
@@ -69,16 +76,20 @@ let min_tree_size data = List.fold !(data.tree_sizes) ~init:(max_tree_size data)
 
 
 let to_string (data : t) =
-  Printf.sprintf "%d,%f,%f,%f,%f,%f,%f,%f,%d,%f,%f,%f,%f,%f,%d,%d"
+  Printf.sprintf "%d,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%d,%f,%f,%f,%f,%f,%d,%d"
     !(data.log_inst_size)
     (* data.phys_inst_size *)
     (!(data.time) |> Time.Span.to_ms)
     (!(data.fast_cex_time) |> Time.Span.to_ms)
     (!(data.impl_time) |> Time.Span.to_ms)
     (!(data.check_valid_time) |> Time.Span.to_ms)
+    (!(data.normalize_packet_time) |> Time.Span.to_ms)
     (!(data.eq_time) |> Time.Span.to_ms)
     (!(data.make_vc_time) |> Time.Span.to_ms)
+    (!(data.good_execs_time) |> Time.Span.to_ms)
+    (!(data.ingress_egress_time) |> Time.Span.to_ms)
     (!(data.check_sliceable_time) |> Time.Span.to_ms)
+    (!(data.prefixing_time) |> Time.Span.to_ms)
     !(data.eq_num_z3_calls)
     (!(data.model_search_time) |> Time.Span.to_ms)
     (!(data.model_holes_time) |> Time.Span.to_ms)
@@ -113,6 +124,9 @@ let zero _ : t ref =
         eq_time = ref Time.Span.zero;
         normalize_packet_time = ref Time.Span.zero;
         make_vc_time = ref Time.Span.zero;
+        good_execs_time = ref Time.Span.zero;
+        ingress_egress_time = ref Time.Span.zero;
+        prefixing_time = ref Time.Span.zero;
         check_sliceable_time = ref Time.Span.zero;
         eq_num_z3_calls = ref 0;
         model_search_time = ref Time.Span.zero;
