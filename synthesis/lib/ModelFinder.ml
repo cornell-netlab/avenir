@@ -3,7 +3,6 @@ open Ast
 open Manip
 open Util
 open Prover
-open Tables
 
 type opts =
   {injection : bool;
@@ -119,28 +118,6 @@ let compute_deletions (_ : value StringMap.t) (problem : Problem.t) =
                )
     )
 
-let hole_is_matched encode_tag tbl x sz (m : Match.t) =
-  match encode_tag,m with
-  | `Mask, Match.Mask (v,msk) ->
-     let (h,hmsk) = Hole.match_holes_mask tbl x in
-     (* Bitmask subsumption -- h&hm is subsumed by v &vm when (v & vm) & (h&hm) = (v & vm) *)
-     let match_mask = mkMask (Value v) (Value msk) in
-     match_mask
-     %=% mkMask match_mask (mkMask (Hole(h,sz)) (Hole(hmsk,sz)))
-  | `Exact, Match.Exact (v) ->
-     let h = Hole.match_hole_exact tbl x in
-     Hole(h,sz) %=% Value v
-  | `Exact, Match.Mask (v,msk) ->
-     let h = Hole.match_hole_exact tbl x in
-     mkMask (Hole(h,sz)) (Value msk)
-     %=% mkMask (Value v) (Value msk)
-  | `Mask, Match.Exact (v) ->
-     let (h,hmsk) = Hole.match_holes_mask tbl x in
-     (Hole (h,sz) %=% Value v)
-     %&% (Hole (hmsk,sz) %=% Value(Int(Bigint.(pow (of_int 2) (of_int sz) - one), sz)))
-  | _, _ -> failwith "unexpected hole_is_match construction"
-
-
 let well_formed_adds (params : Parameters.t) (problem : Problem.t) encode_tag =
   let phys_inst = Problem.phys_edited_instance params problem in
   let phys = Problem.phys problem in
@@ -155,7 +132,7 @@ let well_formed_adds (params : Parameters.t) (problem : Problem.t) encode_tag =
                ~f:(fun acc (ms,_,_) ->
                  acc %&% !%(List.fold2_exn vs ms ~init:False
                               ~f:(fun acc (v,vsz) m ->
-                                acc %+% hole_is_matched encode_tag t v vsz m
+                                acc %+% Match.to_valuation_test t (v,vsz) encode_tag m
                               )
                            )
                )
@@ -164,7 +141,7 @@ let well_formed_adds (params : Parameters.t) (problem : Problem.t) encode_tag =
 let adds_are_reachable params (problem : Problem.t) (opts : opts) fvs encode_tag =
   if not opts.reachable_adds then True else
     let phys = Problem.phys problem in
-    get_tables_vars phys ~keys_only:true
+    get_tables_keys phys
     |> List.fold
       ~init:True
       ~f:(fun acc (tbl_name,keys) ->
@@ -423,11 +400,14 @@ let holes_for_table table phys =
   match get_schema_of_table table phys with
   | None -> failwith @@ Printf.sprintf "couldn't find schema for %s\n%!" table
   | Some (ks, acts, _) ->
-     List.bind ks ~f:(fun (k,_) ->
-         let lo,hi = Hole.match_holes_range table k in
-         let v,m = Hole.match_holes_mask table k in
-         [Hole.match_hole_exact table k;lo;hi;v;m]
-         |> List.dedup_and_sort ~compare:String.compare
+     List.bind ks ~f:(fun (k,_,v_opt) ->
+         match v_opt with
+         | Some _ -> []
+         | None ->
+            let lo,hi = Hole.match_holes_range table k in
+            let v,m = Hole.match_holes_mask table k in
+            [Hole.match_hole_exact table k;lo;hi;v;m]
+            |> List.dedup_and_sort ~compare:String.compare
        )
      @ List.(acts >>= fun (params,_) ->
              params >>| fst )

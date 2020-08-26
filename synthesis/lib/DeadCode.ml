@@ -52,7 +52,7 @@ let rec eliminate_unused_vars cmd (used : StringSet.t) =
                   keys;
                   actions = actions';
                   default = default'},
-           stringset_add_list used' (fsts keys))
+           stringset_add_list used' (fsts @@ free_keys keys))
   | While _ ->
      failwith "[DeadCode] While is deprecated"
 

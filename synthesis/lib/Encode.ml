@@ -1065,7 +1065,7 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
          ) in
   let str_keys = List.map p4keys ~f:(fun k -> let kn = dispatch_name (snd k).key in
                                               (* Printf.printf "Getting key?\n"; *)
-                                              (kn, lookup_field_width_exn type_ctx kn)) in
+                                              (kn, lookup_field_width_exn type_ctx kn, None)) in
   
   let lookup_and_encode_action i (info,a) =
     (* Printf.printf "Encoding action %s\n%!" (snd a.name); *)
@@ -1234,12 +1234,16 @@ let rec rewrite (m : (string * int) StringMap.t) (c : cmd) : cmd =
   | Apply {name; keys; actions; default} ->
      Apply {name;
             keys = List.map keys
-                     ~f:(fun (x,sz) -> StringMap.find m x |> Option.value ~default:(x,sz));
+                     ~f:(fun (x,sz,v_opt) ->
+                       StringMap.find m x
+                       |> Option.value_map
+                            ~default:(x,sz,v_opt)
+                            ~f:(fun (x',sz') -> (x',sz', v_opt)));
             actions = List.map actions
                         ~f:(fun (data, action) ->
                           let m' = List.fold data ~init:m
                                      ~f:(fun acc (x,_) -> StringMap.remove acc x) in
-                         (data, rewrite m' action));
+                          (data, rewrite m' action));
             default = rewrite m default}
   | While _ -> failwith "[rewrite] deprecated"
 

@@ -102,14 +102,14 @@ let rec generate_n_insertions varsize length n avail_tables maxes : Edit.t list 
         else
           let (max', mtch) =
             if Random.int 6 < 1 then
-              (max_i + 1, Match.Exact (mkInt(max_i, varsize)))
+              (max_i + 1, Match.exact_ (mkInt(max_i, varsize)))
             else
               let lo = max_i in
               let hi = min (lo + Random.int 3) (pow 2 varsize - 1) in
               if lo = hi then
-                (hi + 1, Match.Exact (mkInt(hi, varsize)))
+                (hi + 1, Match.exact_ (mkInt(hi, varsize)))
               else
-                (hi + 1, Match.Between (mkInt(lo, varsize), mkInt(hi, varsize)))
+                (hi + 1, Match.between_ (mkInt(lo, varsize)) (mkInt(hi, varsize)))
           in
           let maxes' = StringMap.set maxes ~key:(tbl i) ~data:max' in
           let act_data = mkInt(Random.int (pow 2 varsize),varsize) in
@@ -273,7 +273,7 @@ and variables cmd =
   | Seq (c1, c2) -> variables c1 @ variables c2
   | While(_, c1) -> variables c1
   | Select(_, tc) -> List.concat_map tc ~f:(fun (t, c) -> variables_test t @  variables c)
-  | Apply {keys;_} -> keys
+  | Apply {keys;_} -> free_keys keys
   | _ -> []
 
 and variables_expr e =
@@ -337,9 +337,9 @@ let parse_ip_mask str =
   let lo_int = to_int lo in
   let hi_int = to_int hi in
   if lo_int = hi_int then
-    Match.Exact(mkInt(lo_int, 32))
+    Match.exact_(mkInt(lo_int, 32))
   else
-    Match.Between(mkInt(lo_int, 32), mkInt(hi_int, 32))
+    Match.between_ (mkInt(lo_int, 32)) (mkInt(hi_int, 32))
   
     
 let parse_port_range str =
@@ -348,12 +348,12 @@ let parse_port_range str =
   let lo_int = String.strip lo |> int_of_string in
   let hi_int = String.strip hi |> int_of_string in
   if lo = hi
-  then Match.Exact(mkInt(lo_int, 9))
-  else Match.Between(mkInt(lo_int, 9), mkInt(hi_int, 9))
+  then Match.exact_(mkInt(lo_int, 9))
+  else Match.between_(mkInt(lo_int, 9)) (mkInt(hi_int, 9))
 
 let parse_proto str =
   let proto,_ = String.lsplit2_exn str ~on:'/' in
-  Match.Exact(Int(Bigint.of_string proto, 8))
+  Match.exact_(Int(Bigint.of_string proto, 8))
               
 let generate_edits cb_rules =
   let drop_table = List.fold (pow 2 9 |> range_ex 0) ~init:IntMap.empty
@@ -364,7 +364,7 @@ let generate_edits cb_rules =
       acc @ [
           IntMap.fold drop_table ~init:[]
             ~f:(fun ~key ~data acc ->
-                acc @ [("of", ([ip_dst; Match.Exact(mkInt(key, 9))], [mkInt(out_port, 9)], data))]
+                acc @ [("of", ([ip_dst; Match.exact_(mkInt(key, 9))], [mkInt(out_port, 9)], data))]
             )
         ]
     )
@@ -380,7 +380,7 @@ let generate_pipe1_edits cb_rules : Edit.t list list =
       @ (if Random.int 2 = 0
           then []
           else let pt = Random.int (pow 2 9) in
-               [[Tables.Edit.Add ("ingress", ([Match.Exact(mkInt(pt,9))], [], IntMap.find_exn drop_table pt))]]
+               [[Tables.Edit.Add ("ingress", ([Match.exact_(mkInt(pt,9))], [], IntMap.find_exn drop_table pt))]]
         )
       @ [[Tables.Edit.Add ("ipv4_fwd", ([ip_dst], [mkInt(out_port, 9)], 0))]]
     )
@@ -397,8 +397,7 @@ let mk_ith_var i =  Printf.sprintf "x%d" i
 
 
 let mk_normal_keys sz num_xs =
-  List.map (range_ex 0 (num_xs+1)) ~f:(fun i ->
-      mk_ith_var i, sz)
+  List.map (range_ex 0 (num_xs+1)) ~f:(fun i -> mk_ith_var i, sz)
 
 let mk_ith_keys sz num_xs ith_meta =
   List.map (range_ex 0 (num_xs+1))
@@ -449,7 +448,7 @@ let match_row sz num_xs ~ith ~has_value =
   let wildcard =  mask_ (mkInt(0,32)) (mkInt(0,32)) in
   let matches =
     Util.repeat (ith) wildcard
-    @ [ Exact(mkInt(has_value,sz)) ]
+    @ [ exact_ (mkInt(has_value,sz)) ]
     @ Util.repeat (num_xs - ith) wildcard
   in
   Edit.Add("logical",(matches, [mkInt(has_value,9)], 0))
@@ -458,7 +457,7 @@ let match_row_easier sz num_xs ~has_value =
   let open Match in
   let wildcard =  mask_ (mkInt(0,32)) (mkInt(0,32)) in
   let matches =
-    Exact(mkInt(has_value,sz)) :: Util.repeat (num_xs) wildcard
+    exact_(mkInt(has_value,sz)) :: Util.repeat (num_xs) wildcard
   in
   Edit.Add("logical",(matches, [mkInt(has_value,9)], 0))
 
@@ -551,9 +550,7 @@ let rep params data nrules =
            if List.exists acc ~f:(function
                   | Add (_,(ms,_,_)) -> ms = matches
                   | _ -> false)
-              || List.for_all matches ~f:(function
-                     | Mask(_,m) -> Bigint.(get_int m = zero)
-                     | _ -> false)
+              || List.for_all matches ~f:(Match.is_wildcard)
            then acc
            else
              let outp = generate_out acc in
@@ -620,9 +617,7 @@ let rep_middle params data nrules =
            if List.exists acc ~f:(function
                   | Add (_,(ms,_,_)) -> ms = matches
                   | _ -> false)
-              || List.for_all matches ~f:(function
-                     | Mask(_,m) -> Bigint.(get_int m = zero)
-                     | _ -> false)
+              || List.for_all matches ~f:(Match.is_wildcard)
            then acc
            else
              let outp = generate_out acc in
@@ -683,21 +678,6 @@ let rep_middle params data nrules =
   let problem = Problem.make ~log:log ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
   measure (restart_timer params (Time.now())) None problem (List.(gen_data >>| return))
 
-
-
-let exactify_matches =
-  let open Tables in
-  List.map ~f:(fun m ->
-      if Match.is_wildcard m then m else
-      match m with
-      | Mask (v,_) | Exact (v) -> Exact v
-      | Between (lo,hi) ->
-         if Bigint.(get_int lo = zero)
-         then Exact hi
-         else Exact lo
-    )
-
-
 let rep_of params exactify data nrules =
   let fvs = ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16;"vlan", 12; "pcp", 3] in
   let cb_fvs = List.map ~f:fst fvs in
@@ -709,13 +689,14 @@ let rep_of params exactify data nrules =
            let open Edit in
            let fields = cb_fvs in
            let matches = project cb_row fields |> (cb_to_matches fvs) in
-           let matches = if exactify then exactify_matches matches else matches in
+           let matches = if exactify then
+                           List.map ~f:Match.exactify matches
+                         else
+                           matches in
            if List.exists acc ~f:(function
                   | Add (_,(ms,_,_)) -> ms = matches
                   | _ -> false)
-              || List.for_all matches ~f:(function
-                     | Mask(_,m) -> Bigint.(get_int m = zero)
-                     | _ -> false)
+              || List.for_all matches ~f:(Match.is_wildcard)
            then
              (* let () = Printf.printf "\tthrowing out %s\n" (Edit.to_string (Add("obt",(matches, [], -1)))) in *)
              acc
@@ -788,9 +769,7 @@ let rep_par params data nrules =
         if List.exists acc ~f:(function
                | Add (_,(ms,_,_)) -> ms = matches
                | _ -> false)
-           || List.for_all matches ~f:(function
-                  | Mask(_,m) -> Bigint.(get_int m = zero)
-                  | _ -> false)
+           || List.for_all matches ~f:(Match.is_wildcard)
         then
           (* let () = Printf.printf "\tthrowing out %s\n" (Edit.to_string (Add("obt",(matches, [], -1)))) in *)
           acc
@@ -947,7 +926,7 @@ let metadata params sz nmeta nedits =
         let log_edits =
           List.map (range_ex 0 nedits)
             ~f:(fun i ->
-              [Edit.Add("logical", ([Match.Exact(mkInt(i,sz))], [mkInt(i,9)],0)) ]
+              [Edit.Add("logical", ([Match.exact_(mkInt(i,sz))], [mkInt(i,9)],0)) ]
             )
         in
         Printf.printf "Log:\n%s\n%!" (string_of_cmd logical_table);

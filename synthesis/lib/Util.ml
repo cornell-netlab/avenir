@@ -296,5 +296,4 @@ let strmap_project_list m l =
   |> List.fold ~init:StringMap.empty ~f:(fun acc key ->
       match StringMap.find m key with
       | None -> acc
-      | Some data -> StringMap.set acc ~key ~data
-       )
+      | Some data -> StringMap.set acc ~key ~data)

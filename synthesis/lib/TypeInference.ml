@@ -71,9 +71,9 @@ let rec infer (p : cmd) : cmd =
   | Select (typ, bs) ->
      mkSelect typ @@
        List.map bs ~f:(fun (t,c) -> infer_test t, infer c)
-  | Apply {name; keys; actions; default} ->
-     let actions' = List.map actions ~f:(infer_action) in
-     mkApply (name, keys, actions', default)
+  | Apply t ->
+     let actions' = List.map t.actions ~f:(infer_action) in
+     Apply {t with actions = actions'}
   | While _ -> failwith "b t?"
 
 and infer_action (params,c) = (params,infer c)

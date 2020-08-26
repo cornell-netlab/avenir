@@ -510,7 +510,7 @@ let rec prepend pfx c =
      |> mkSelect typ
   | Apply t ->
      Apply {name = pfx ^ t.name;
-            keys = List.map t.keys ~f:(fun (k,sz) -> (pfx ^ k, sz));
+            keys = List.map t.keys ~f:(fun (k,sz,v_opt) -> (pfx ^ k, sz,v_opt));
             actions = List.map t.actions ~f:(fun (scope, act) -> (List.map scope ~f:(fun (x,sz) -> (pfx ^ x, sz)), prepend pfx act));
             default = prepend pfx t.default}
   

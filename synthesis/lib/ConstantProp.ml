@@ -145,16 +145,29 @@ let rec propogate_cmd (map : expr StringMap.t) (cmd : cmd) =
      let facts_def, default' = propogate_cmd map default in
      let keys' =
        List.map keys
-         ~f:(fun (k,sz) ->
+         ~f:(fun (k,sz,v_opt) ->
            match StringMap.find map k with
-           | Some (Var(k',_)) -> (k',sz)
+           | Some (Var(k',_)) -> (k',sz, None)
+           | Some (Value v) ->
+              begin match v_opt with
+              | Some v' when not(veq v v') ->
+                 Printf.sprintf "conflicting values for key %s in table %s : have %s inferred %s"
+                   k name (string_of_value v') (string_of_value v)
+                 |> failwith
+              | _ ->
+                 (k,sz, Some v)
+              end
            | Some (e) ->
               Printf.printf "[INFO] could replace key %s in table %s with value %s\n%!" (k) (name) (string_of_expr e);
-              (k,sz)
-           | None -> (k,sz)
+              (k,sz, None)
+           | None -> (k,sz, None)
          )
      in
-     (meet_opt facts_acts facts_def, mkApply (name, keys', actions', default'))
+     (meet_opt facts_acts facts_def
+     , Apply {name;
+              keys = keys';
+              actions = actions';
+              default = default'})
   | While _ -> failwith "unsupported"
 
 

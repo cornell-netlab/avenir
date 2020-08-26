@@ -1,7 +1,5 @@
 open Core
 open Ast
-open Tables
-
 
 type tuple = {
     in_port : Match.t option;
@@ -90,31 +88,28 @@ let parse_proto str =
 
 let parse_eth_addr str =
   let str' = "0x" ^ String.substr_replace_all str ~pattern:":" ~with_:"" in
-  Match.Exact(Int(Bigint.of_string str',48))
+  Match.exact_ (Int(Bigint.of_string str',48))
 
-let debug (q, w, e, r, t) = (Tables.Match.to_string q) ^ " " ^ (Tables.Match.to_string w) ^ " " ^  (Tables.Match.to_string e) ^ " " ^ (Tables.Match.to_string r) ^ " " ^ (Tables.Match.to_string t)
+let debug (q, w, e, r, t) = (Match.to_string q) ^ " " ^ (Match.to_string w) ^ " " ^  (Match.to_string e) ^ " " ^ (Match.to_string r) ^ " " ^ (Match.to_string t)
 
+(* let get_mask mtch_opt =
+ *   Option.value_map mtch_opt
+ *     ~f:Match.get_bitmask
+ *     ~default:Bigint.zero *)
 
-
-let get_mask = function
-  | Some Match.Mask(_,m) -> get_int m
-  | Some Match.Exact(v) -> Bigint.of_string ("0b"^String.make (size_of_value v) '1')
-  | Some Match.Between(lo,hi) -> Bigint.(get_int hi - get_int lo)
-  | None -> Bigint.zero
-
-let to_mask_tuple cb =
-  let open Bigint in
-  get_mask cb.in_port
-  + get_mask cb.ip_dst
-  + get_mask cb.ip_src
-  + get_mask cb.eth_dst
-  + get_mask cb.eth_src
-  + get_mask cb.tcp_dport
-  + get_mask cb.tcp_sport
-  + get_mask cb.eth_typ
-  + get_mask cb.vlan
-  + get_mask cb.pcp
-  + get_mask cb.proto
+(* let to_mask_tuple cb =
+ *   let open Bigint in
+ *   get_mask cb.in_port
+ *   + get_mask cb.ip_dst
+ *   + get_mask cb.ip_src
+ *   + get_mask cb.eth_dst
+ *   + get_mask cb.eth_src
+ *   + get_mask cb.tcp_dport
+ *   + get_mask cb.tcp_sport
+ *   + get_mask cb.eth_typ
+ *   + get_mask cb.vlan
+ *   + get_mask cb.pcp
+ *   + get_mask cb.proto *)
 
 
 
@@ -143,9 +138,9 @@ let parse_of ident line : Match.t option =
      let data1 = String.drop_suffix line (String.length line - nd)  in
      let data = String.drop_prefix data1 (st + (String.length ident) + 1)in
      let out = match ident with
-       | "in_port" -> Match.Exact(Int(Bigint.of_string data, 9))
-       | "nw_proto" -> Match.Exact(Int(Bigint.of_string data, 8))
-       | "eth_type" | "tp_src" | "tp_dst" -> Match.Exact(Int(Bigint.of_string data ,16))
+       | "in_port" -> Match.exact_(Int(Bigint.of_string data, 9))
+       | "nw_proto" -> Match.exact_(Int(Bigint.of_string data, 8))
+       | "eth_type" | "tp_src" | "tp_dst" -> Match.exact_(Int(Bigint.of_string data ,16))
        | "nw_dst" | "nw_src" -> parse_ip_mask data
        | "dl_src" | "dl_dst" -> parse_eth_addr data
        | _ -> failwith @@ Printf.sprintf "unrecognized header %s" ident
@@ -208,10 +203,15 @@ let rec project cb_row hdrs =
 let generate f acc cb_row sz =
   let biggest = List.fold acc ~init:Bigint.one ~f:(fun max_so_far curr ->
                     match get curr "out_port" with
-                    | Some (Exact Int (i,_)) when Bigint.(i > max_so_far) -> i
-                    | _ -> max_so_far
+                    | None -> max_so_far
+                    | Some mtch ->
+                       let Int (i,_) =  Match.get_exact_val mtch in
+                       if Bigint.(i > max_so_far) then
+                         i
+                       else
+                         max_so_far
                   ) in
-  set cb_row f (Some (Exact (Int(Bigint.(biggest + one), sz))))
+  set cb_row f (Some (Match.exact_ (Int(Bigint.(biggest + one), sz))))
 
 (* let classbench_to_acl fp table =
  *   let edits = parse_classbench fp in

@@ -506,7 +506,7 @@ type cmd =
   | While of (test * cmd)
   | Select of (select_typ * ((test * cmd) list))
   | Apply of {name:string;
-              keys:(string * size) list;
+              keys:(string * size * value option) list;
               actions:(((string * size) list * cmd) list);
               default: cmd}
 
@@ -599,7 +599,8 @@ let mkSelect styp =
   | Ordered -> mkOrdered
 
 
-let mkApply (name,keys,actions,default) = Apply{name;keys;actions;default}
+let mkApply (name,keys,actions,default) =
+  Apply{name;keys = List.map keys ~f:(fun (x,sz) -> (x,sz,None)); actions;default}
 
 
 let combineSelects e e' =
@@ -656,8 +657,9 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
      repeat "\t" depth ^
        "apply (" ^ t.name ^ ",("
       ^ List.fold t.keys ~init:""
-          ~f:(fun str (k,sz) ->
-            str ^ k ^ "#" ^ string_of_int sz ^ ",") ^ ")"
+          ~f:(fun str (k,sz,v_opt) ->
+            let eq = match v_opt with | None -> "" | Some v -> " = " ^ string_of_value v in
+            str ^ k ^ "#" ^ string_of_int sz ^ eq ^ ",") ^ ")"
       ^ ",(" ^ List.foldi t.actions ~init:""
                 ~f:(fun i str a ->
                   str ^ (if i > 0 then " |" else "") ^ " { " ^
@@ -690,7 +692,10 @@ let rec sexp_string_of_cmd e : string =
   | Apply t ->
      "Apply("
      ^ t.name ^ ",["
-     ^ List.fold_left t.keys ~init:"" ~f:(fun str (k,sz) -> str ^ ";\"" ^ k ^ "\"," ^ string_of_int sz ^ "")
+     ^ List.fold_left t.keys ~init:"" ~f:(fun str (k,sz,v) -> str ^ ";\"" ^ k ^ "\"," ^ string_of_int sz ^ "," ^
+                                                                match v with
+                                                                | None -> "None"
+                                                                | Some v -> "Some(" ^ string_of_value v ^ ")")
      ^ "],["
      ^ List.fold_left t.actions ~init:"" ~f:(fun str a -> str ^ ";((SOME ACTION DATA), " ^ sexp_string_of_cmd (snd a) ^")")
      ^ "]," ^ sexp_string_of_cmd t.default
@@ -752,7 +757,14 @@ let rec num_paths (c : cmd) : Bigint.t =
      one
   | _ -> failwith "deprecated"
 
-    
+
+let free_keys =
+  List.filter_map ~f:(fun (k,sz,v_opt) ->
+      match v_opt with
+      | None -> Some (k,sz)
+      | Some _ -> None
+    )
+
 let rec free_of_cmd typ (c:cmd) : (string * size) list =
   begin match c with
   | Skip -> []
@@ -770,7 +782,7 @@ let rec free_of_cmd typ (c:cmd) : (string * size) list =
         @ fvs
       )
   | Apply t ->
-     t.keys
+     free_keys t.keys
      @ List.fold t.actions
          ~init:(free_of_cmd typ t.default)
          ~f:(fun acc (data, a) ->
@@ -889,7 +901,7 @@ let rec get_schema_of_table name phys =
   | Select (_, cs) ->
      List.find_map cs ~f:(fun (_, c) -> get_schema_of_table name c)
   | Apply t
-    -> if name = t.name then Some (t.keys, t.actions,t.default) else None
+    -> if name = t.name then Some (t.keys, t.actions, t.default) else None
   | While (_, c) -> get_schema_of_table name c
                  
 
@@ -903,7 +915,7 @@ let rec get_tables_actsizes = function
 
 let table_vars ?keys_only:(keys_only=false) (keys, acts, default) =
   let open List in
-  keys
+  free_keys keys
   @ if keys_only then
       []
     else
@@ -920,6 +932,16 @@ let rec get_tables_vars ?keys_only:(keys_only=false) = function
      List.fold cs ~init:[] ~f:(fun acc (_,c) -> acc @ get_tables_vars ~keys_only c)
   | Apply t -> [t.name, table_vars ~keys_only (t.keys, t.actions, t.default)]
   | While(_,c) -> get_tables_vars ~keys_only c
+
+
+let rec get_tables_keys = function
+  | Skip | Assume _ | Assert _ | Assign _ -> []
+  | Seq (c1,c2) -> get_tables_keys c1 @ get_tables_keys c2
+  | Select (_, cs) ->
+     List.bind cs ~f:(fun (_,c) -> get_tables_keys c)
+  | Apply t -> [t.name, t.keys]
+  | While (_,c) -> get_tables_keys c
+
 
 let string_of_map m =
   StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value v) ^ ") " ^ acc)) m ~init:""

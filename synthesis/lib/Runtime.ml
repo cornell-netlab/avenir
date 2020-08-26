@@ -10,9 +10,8 @@ let action_data_of_string (data_str : string) : Row.action_data =
       let value_str, size_str = String.lsplit2_exn arg_str ~on:'#' in
       if String.is_substring value_str ~substring:"."
       then let addr_str = Option.(String.lsplit2 value_str ~on:'/' >>| fst |> value ~default:value_str) in
-           match Classbenching.parse_ip_mask (addr_str ^ "/32") with
-           | Match.Exact (addr) | Match.Mask (addr,_) -> addr
-           |  _ -> failwith @@ Printf.sprintf "ERROR::Range extracted from match %s. Expected Exact or Mask!" arg_str
+           Classbenching.parse_ip_mask (addr_str ^ "/32")
+           |> Match.get_base_value
       else Int(Bigint.of_string value_str, int_of_string size_str))
 
 let matches_of_string (data_str : string) : Match.t list =

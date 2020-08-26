@@ -57,8 +57,8 @@ keys :
 
 params :
   | { [] }
-  | k = ID; POUND; size = INT { [k,int_of_string size] }
-  | k = ID; POUND; size = INT; COMMA; ks = keys { ((k, int_of_string size)::ks) }
+  | p = ID; POUND; size = INT { [p,int_of_string size] }
+  | p = ID; POUND; size = INT; COMMA; ps = params { ((p, int_of_string size)::ps) }
 
 actions :
   | LBRACE; c = command; RBRACE;  { [([],c)] }

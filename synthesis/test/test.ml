@@ -238,7 +238,7 @@ let cp_affects_actions_and_keys _ =
         "out" %<-% int 0;
         "meta" %<-% var "addr";
         Apply {name = "tbl";
-               keys = [("z",32); ("meta",32)];
+               keys = [("z",32,None); ("meta",32,None)];
                actions = [ ["port",9], sequence [
                                            "out" %<-% mkPlus (Var("port",9)) (mkCast 9 @@ var "z");
                                            "meta" %<-% mkPlus (var "z") (var "z");
@@ -259,7 +259,7 @@ let cp_affects_actions_and_keys _ =
         "out" %<-% int 0;
         "meta" %<-% var "addr";
         Apply {name = "tbl";
-               keys = [("z",32); ("addr",32)];
+               keys = [("z",32,Some (mkInt(99,32))); ("addr",32,None)];
                actions = [ ["port",9],
                            sequence [
                                "out" %<-% mkPlus (Var("port",9)) (mkVInt(99,9));
@@ -283,7 +283,7 @@ let dc_remove_table _ =
   let cmd =
     sequence [
         Apply {name = "tbl";
-               keys = [("z",32); ("meta",32)];
+               keys = [("z",32, None); ("meta",32,None)];
                actions = [ ["port",9], sequence [
                                            "out" %<-% mkPlus (Var("port",9)) (mkCast 9 @@ var "z");
                                            "meta" %<-% mkPlus (var "z") (var "z");
