@@ -326,7 +326,7 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
     model_opt >>= fun (model, searcher) ->
     let es = extract_reached_edits params data problem model in
 
-    Log.print_search_state params.debug problem es model;
+    Log.print_search_state true problem es model;
     Interactive.pause ~prompt:"\n" params.interactive;
 
     let problem' = Problem.(append_phys_edits problem es

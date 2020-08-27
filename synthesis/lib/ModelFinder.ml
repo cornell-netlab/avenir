@@ -22,7 +22,7 @@ type opts =
 
 type t = {
     schedule : opts list;
-    search_space : (test * Hint.t list * opts) list;
+    search_space : (test * value StringMap.t) list;
   }
 
 let condcat b app s =
@@ -157,7 +157,7 @@ let adds_are_reachable params (problem : Problem.t) (opts : opts) fvs encode_tag
           passive_hoare_triple ~fvs
             (List.hd_exn (Problem.cexs problem) |> fst |> Packet.to_test ~fvs)
             trunc
-            (Hint.default_match_holes tbl_name encode_tag keys
+            (Hole.match_holes_table encode_tag tbl_name keys
              %&% Instance.negate_rows phys_inst tbl_name)
       )
 
@@ -385,7 +385,12 @@ let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_li
                 non_empty_adds problem
                 |> Log.print_and_return_test params.debug ~pre:"Non-Empty Additions:\n" ~post:"\n--------\n\n" ]
           in
-          Some (out_test, hints, opts)) in
+          Printf.printf "There are %d hints in ModelFinder\n%!" (List.length hints);
+          Log.print_hints true hints;
+          let partial_model = Hint.list_to_model (Problem.phys problem) hints in
+          Log.print_hints_map true partial_model;
+          Some (out_test, partial_model))
+  in
   tests
 
 
@@ -414,7 +419,7 @@ let holes_for_table table phys =
 
 let holes_for_other_actions table phys actId =
   match get_schema_of_table table phys with
-  | None -> failwith @@ Printf.sprintf"couldnt find schema for %s\n%!" table
+  | None -> failwith @@ Printf.sprintf "couldnt find schema for %s\n%!" table
   | Some (_, acts, _) ->
      List.foldi acts ~init:[]
        ~f:(fun i acc (params,_) ->
@@ -437,23 +442,23 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
         let search_space = compute_queries params data problem opts in
         (* Printf.printf "search space rebuild, recursing!\n%!"; *)
         search params data problem {schedule; search_space}
-     | (test,hints, opts) :: search_space, schedule ->
+     | (test, partial_model) :: search_space, schedule ->
         Log.check_attempts params.debug problem;
-        let encode_tag = if opts.mask then `Mask else `Exact in
-        (* Printf.printf "Sending query to Z3\n%!"; *)
+        Log.print_hints_map true partial_model;
+        if params.debug then Printf.printf "Sending query to Z3\n%!";
         let model_opt, dur =
           check_sat params @@
-            bigand [
-                Hint.restriction encode_tag hints;
-                Problem.model_space problem;
-                test
-              ] in
+            fixup_test partial_model @@
+              bigand [
+                  Problem.model_space problem;
+                  test
+                ] in
         ProfData.incr !data.model_z3_calls;
         ProfData.update_time_val !data.model_z3_time dur;
-        (* Printf.printf "Sat Checked\n%!\n"; *)
+        if params.debug then Printf.printf "Sat Checked\n%!\n";
         match model_opt with
         | Some raw_model ->
-           (* Printf.printf "Found a model, done \n%!"; *)
+           if params.debug then Printf.printf "Found a model, done \n%!";
            if Problem.seen_attempt problem raw_model then begin
                Printf.printf "%s\n%!" (Problem.attempts_to_string problem);
 
@@ -473,7 +478,7 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
                    (Problem.model_space problem
                     |> fixup_test raw_model
                     |> string_of_test);
-               Some (raw_model,t)
+               Some (Hint.join_models partial_model raw_model, t)
              end
         | _ ->
            (* Printf.printf "No model, keep searching with %d opts and %d paths \n%!" (List.length schedule) (List.length search_space); *)

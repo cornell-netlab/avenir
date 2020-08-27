@@ -1,19 +1,44 @@
 open Core
+open Util
 open Ast
 open Tables
-open Util
 
 type t = {table:string;
           match_opt:Match.t option list option;
-          act_id_opt:int option; (* unused *)
+          act_id_opt:value option; (* unused *)
           act_data_opt:Row.action_data option} (* unused *)
 
-let well_formed (hint : t) : bool =
-  match hint.match_opt, hint.act_id_opt, hint.act_data_opt with
-  | None  , None  , None   -> false (*No point in an empty hint*)
-  | Some _, None  , None   -> true  (*An key-only hint is just fine!*)
-  | _     , Some _, _      -> true  (*Action Id without data is okay*)
-  | _     , None  , Some _ -> false (*Action Data without id is bad*)
+(* let well_formed (hint : t) : bool =
+ *   match hint.match_opt, hint.act_id_opt, hint.act_data_opt with
+ *   | None  , None  , None   -> false (\*No point in an empty hint*\)
+ *   | Some _, None  , None   -> true  (\*An key-only hint is just fine!*\)
+ *   | _     , Some _, _      -> true  (\*Action Id without data is okay*\)
+ *   | _     , None  , Some _ -> false (\*Action Data without id is bad*\) *)
+
+let to_string (h : t) =
+  let matches =
+    match h.match_opt with
+    | None -> ""
+    | Some ms ->
+       let first = ref true in
+       List.fold ms ~init:"" ~f:(fun acc m_opt ->
+           match m_opt with
+           | None -> acc
+           | Some m ->
+              let sep = if !first then "" else ";" in
+              first := false;
+              Printf.sprintf "%s%s%s" acc sep (Match.to_string m)
+         )
+  in
+  let (acts, act_id) = match h.act_id_opt with
+    | None -> ("","")
+    | Some a ->
+       (Printf.sprintf "%s" (string_of_value a),
+        match h.act_data_opt with
+        | None -> ""
+        | Some data -> Printf.sprintf "(%s)" (Row.action_data_to_string data))
+  in
+  Printf.sprintf "%s [%s] %s%s" h.table matches acts act_id
 
 let subset_list ks vs =
   let open List in
@@ -71,106 +96,76 @@ let construct log phys (e : Edit.t) : t list =
                acc @ [make e table log_schema phys_schema]
           )
 
-let encode_match (keys : (string * size * value option) list) (h : t) encode_tag =
-  match h.match_opt with
-  | None -> None
-  | Some matches ->
-     List.fold2 keys matches ~init:True
-       ~f:(fun acc (x, sz, v_opt) _ (*match_opt*) ->
-         acc %&%
-           (match v_opt with
-            | Some _ -> True
-            | None ->
-               let tst = Hole.match_holes encode_tag h.table x sz in
-               tst))
-     |> or_unequal_lengths_to_option
+(* let restriction encode_tag (hints : t list) : test =
+ *   List.fold hints ~init:True
+ *     ~f:(fun acc h ->
+ *       match h.match_opt with
+ *       | None -> acc
+ *       | Some matches ->
+ *          List.fold matches ~init:acc
+ *            ~f:(fun acc mtch_opt ->
+ *              match mtch_opt with
+ *              | None -> acc
+ *              | Some m -> acc %&% Match.to_valuation_test h.table encode_tag m
+ *            )
+ *     ) *)
+
+let extract_action_data table act_id params (data_opt : Row.action_data option) : (string * value) list =
+  match data_opt with
+  | None -> []
+  | Some data ->
+     List.fold2_exn params data ~init:[]
+       ~f:(fun acc (param,sz) value  ->
+         acc @ [Hole.action_data table act_id param sz, value]
+       )
+
+let aggregate_models =
+  List.fold ~init:StringMap.empty
+    ~f:(fun acc m ->
+      StringMap.merge acc m ~f:(fun ~key -> function
+          | `Left l -> Some l
+          | `Right r -> Some r
+          | `Both (l,r) when veq l r -> Some l
+          | `Both (l,r) ->
+             failwith @@
+               Printf.sprintf "[Hint.aggregate_models] conflicting values %s is both %s and %s"
+                 key (string_of_value l) (string_of_value r)
+    ))
+
+let join_models m1 m2 = aggregate_models [m1;m2]
+
+let to_model (phys : cmd) (hint : t): value StringMap.t =
+  let (_, actions, _) = get_schema_of_table hint.table phys
+                        |> Option.value_exn
+                             ~message:(Printf.sprintf "couldn't find table %s in %s" hint.table (string_of_cmd phys))
+  in
+  let action =
+    let add_hole = Hole.add_row_hole_name hint.table in
+    match hint.act_id_opt with
+    | None -> StringMap.empty
+    | Some Int(act_id, act_size) ->
+       let act_id_int = Bigint.to_int_exn act_id in
+       let which_act = Hole.which_act_hole_name hint.table in
+       let act_params, _ = List.nth_exn actions (act_id_int) in
+       StringMap.of_alist_exn @@  [
+           which_act, Int(act_id, act_size);
+           add_hole, mkInt(1,1);
+         ] @ extract_action_data hint.table act_id_int act_params hint.act_data_opt
+  in
+  let matches =
+    match hint.match_opt with
+    | None -> StringMap.empty
+    | Some ms ->
+       List.filter_map ms ~f:(Option.map ~f:(Match.to_model hint.table))
+       |> aggregate_models
+  in
+  aggregate_models [matches;action]
 
 
-let added_to_row (table : string) (m : value StringMap.t)  : bool =
-  match Hole.add_row_hole_name table |> StringMap.find m with
-  | Some data -> get_int data = Bigint.one
-  | _ -> false
 
 
-let restriction encode_tag (hints : t list) : test =
-  List.fold hints ~init:True
-    ~f:(fun acc h ->
-      match h.match_opt with
-      | None -> acc
-      | Some matches ->
-         List.fold matches ~init:acc
-           ~f:(fun acc mtch_opt ->
-             match mtch_opt with
-             | None -> acc
-             | Some m -> acc %&% Match.to_valuation_test h.table encode_tag m
-           )
-    )
-
-
-(* let add_to_model (phys : cmd) (hints : t list) (m : value StringMap.t) : value StringMap.t =
- *   List.fold hints ~init:m
- *     ~f:(fun acc hint ->
- *       if added_to_row hint.table acc then
- *         match hint.match_opt with
- *         | None -> acc
- *         | Some matches ->
- *            match get_schema_of_table hint.table phys with
- *            | None -> acc
- *            | Some (keys,_,_) ->
- *               List.fold2_exn (free_keys keys) matches ~init:acc ~f:(fun acc (ky,sz) mtch ->
- *                   match mtch with
- *                   | None ->
- *                      (\* Printf.printf "Skipping key %s\n%!" ky; *\)
- *                      acc
- *                   | Some (Match.Exact data) ->
- *                      (\* Printf.printf "Exact Matching key %s\n%!" ky; *\)
- *                      let (hv, hm) = Hole.match_holes_mask hint.table ky in
- *                      let m =
- *                        StringMap.set acc ~key:hv ~data
- *                        |> StringMap.set ~key:hm ~data:(Int(max_int sz, sz))
- *                      in
- *                      (\* Printf.printf "Model is now: %s\n%!" (string_of_map m); *\)
- *                      m
- *
- *                   | Some (Match.Between (lo, hi)) ->
- *                      (\* Printf.printf "Between Matching key %s\n%!" ky; *\)
- *                      let (klo, khi) = Hole.match_holes_range hint.table ky in
- *                      StringMap.set acc ~key:klo ~data:lo
- *                      |> StringMap.set ~key:khi ~data:hi
- *                   | Some (Match.Mask (v, m)) ->
- *                      (\* Printf.printf "Mask Matching key %s\n" ky; *\)
- *                      let (hv,hm) = Hole.match_holes_mask hint.table ky in
- *                      StringMap.set acc ~key:hv ~data:v
- *                      |> StringMap.set ~key:hm ~data:m
- *                 )
- *       else
- *         acc) *)
-
-
-let default_match_holes tbl encode_tag keys  =
-  List.fold keys ~init:True
-    ~f:(fun acc (x,sz,v_opt) ->
-      acc %&% match v_opt with
-              | None -> Hole.match_holes encode_tag tbl x sz
-              | Some _ -> True
-    )
-
-
-let tbl_hole encode_tag (keys: (string * size * value option) list) tbl row_hole act_hole i actSize (hs : t list) =
-  let matches_holes =
-(*     if List.exists ["acl";"vlan"] ~f:(fun x -> String.is_substring tbl ~substring:x)
-    then False
-    else *)
-    match List.find hs ~f:(fun h -> Stdlib.(h.table = tbl)) with
-    | Some h ->
-       (* if String.is_substring h.table ~substring:"punt" then False else *)
-       begin match encode_match keys h encode_tag with
-       | None ->  default_match_holes tbl encode_tag keys
-       | Some phi -> phi
-       end
-    (* | None when List.length hs > 0 -> False *)
-    | _ -> default_match_holes tbl encode_tag keys
- in
-  matches_holes
-  %&% (row_hole %=% mkVInt (1,1))
-  %&% (act_hole %=% mkVInt (i,actSize))
+let list_to_model (phys : cmd) (hints : t list) : value StringMap.t =
+  let hints = List.map hints ~f:(to_model phys) in
+  Printf.printf "Print out the hints\n%!";
+  List.iter hints ~f:(fun h -> Printf.printf "%s\n%!" (string_of_map h));
+  aggregate_models hints

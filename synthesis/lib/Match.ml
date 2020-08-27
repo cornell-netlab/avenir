@@ -268,3 +268,16 @@ let exactify (m : t) : t =
                       else Exact lo }
 
 let exactify_list = List.map ~f:exactify
+
+
+let to_model table (m:t) =
+  StringMap.of_alist_exn @@
+    match m.data with
+    | Exact (e) ->
+       [Hole.match_hole_exact table m.key, e]
+    | Mask (v, msk)->
+       let (hv, hmsk) = Hole.match_holes_mask table m.key in
+       [hv,v; hmsk, msk]
+    | Between (lo, hi) ->
+       let hlo, hhi = Hole.match_holes_range table m.key in
+       [hlo,lo; hhi,hi]

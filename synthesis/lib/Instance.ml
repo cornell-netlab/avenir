@@ -94,8 +94,6 @@ let rec apply ?no_miss:(no_miss = false)
      mkSelect typ ss
   | Apply t ->
      let actSize = max (log2(List.length t.actions)) 1 in
-     let row_hole = Hole.add_row_hole t.name in
-     let act_hole = Hole.which_act_hole t.name actSize in
      let rows = StringMap.find_multi inst t.name in
      let selects =
        match tag with
@@ -105,14 +103,9 @@ let rec apply ?no_miss:(no_miss = false)
             ~f:(fun i acc (matches, data, action) ->
               let prev_tst = False in
               let tst =
-                (* Printf.printf "Trying to encode:%s \n as             :%s\n"
-                 *   (List.fold t.keys ~init:"" ~f:(fun acc (k,_) -> Printf.sprintf "%s %s" acc k))
-                 *   (List.fold matches ~init:"" ~f:(fun acc m -> Printf.sprintf "%s %s" acc (Match.to_string m)))
-                 *   ; *)
                 Match.list_to_test matches
                 %&% match tag with
                     | WithHoles (ds,_) ->
-                       (* Hole.delete_hole i t.name %=% mkVInt(0,1) *)
                        let i = List.length rows - i - 1 in
                        if List.exists ds ~f:((=) (t.name, i))
                        then (Hole.delete_hole i t.name %=% mkVInt(0,1))
@@ -122,7 +115,6 @@ let rec apply ?no_miss:(no_miss = false)
                 acc
               else begin
                   let cond = tst %&% !%(prev_tst) in
-                  (* if params.debug then Printf.printf "[%s] Adding %s\n%!" tbl (string_of_test cond); *)
                   (cond, (List.nth t.actions action
                           |> Option.value ~default:([], t.default)
                           |> bind_action_data data))
@@ -132,12 +124,10 @@ let rec apply ?no_miss:(no_miss = false)
      let holes =
        match tag with
        | NoHoles -> []
-       | WithHoles (_,hs) | OnlyHoles hs ->
+       | _ ->
           List.mapi t.actions
             ~f:(fun i (params, act) ->
-              (Hint.tbl_hole encode_tag t.keys t.name row_hole act_hole i actSize hs
-               (* %&% List.fold selects ~init:True
-                *       ~f:(fun acc (cond, _) -> acc %&% !%(cond)) *)
+              (Hole.table_hole encode_tag t.keys t.name i actSize
               , holify ~f:(fun (h,sz) -> (Hole.action_data t.name i h sz, sz)) (List.map params ~f:fst) act))
      in
      let dflt_row = [(True, t.default)] in

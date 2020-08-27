@@ -1,6 +1,7 @@
 open Core
 open Tables
 open Ast
+open Util
 
 
 
@@ -55,14 +56,14 @@ let print_search_state do_print problem es model =
 
       Printf.printf "\t ***model***\n";
       Printf.printf "\t%s\n%!" (Ast.string_of_map model);
-      (* ignore(Stdio.In_channel.(input_char stdin) : char option); *)
+      (* Interactive.pause true; *)
     end
 
 
 let print_problem (params : Parameters.t) (problem : Problem.t) =
   if params.debug then begin
       Printf.printf "\n%s\n%!" (Problem.to_string params problem);
-      Interactive.pause true;
+      Interactive.pause params.interactive;
     end
 
 
@@ -113,3 +114,23 @@ let check_qe do_check test =
           (string_vars frees);
         failwith ""
       end
+
+
+let print_hints_map do_print (partial_model : value StringMap.t) =
+  if do_print then begin
+      Printf.printf "Hints are : {\n%!";
+      StringMap.iteri partial_model
+        ~f:(fun ~key ~data ->
+          Printf.printf "\t%s -> %s\n" key (string_of_value data)
+        );
+      Printf.printf "}\n%!";
+    end
+
+let print_hints do_print (hints : Hint.t list) =
+  if do_print then begin
+      Printf.printf "Hints are :\n%!";
+      List.iter hints ~f:(fun h ->
+          Printf.printf "\t%s\n" (Hint.to_string h)
+        );
+      Printf.printf "\n%!"
+    end

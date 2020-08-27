@@ -9,12 +9,15 @@ module Row = struct
   (* Match expresssions, action data, action index*)
   type t = Match.t list * action_data * int
 
-  let to_string ((mtchs, ad, actid) : t) =
-    Printf.sprintf "%s,%s,%d"
-      (Match.list_to_string mtchs)
+  let action_data_to_string ad =
       (List.map ad ~f:(string_of_value)
        |> List.reduce ~f:(Printf.sprintf "%s;%s")
        |> Option.value ~default:"")
+
+  let to_string ((mtchs, ad, actid) : t) =
+    Printf.sprintf "%s,%s,%d"
+      (Match.list_to_string mtchs)
+      (action_data_to_string ad)
       actid
 
   let test_of_data (tbl : string) (act_id : int) (vars : (string * size) list) (vals : action_data) =

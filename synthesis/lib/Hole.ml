@@ -56,8 +56,23 @@ let match_holes encode_tag tbl x sz =
      let h = match_hole_exact tbl x in
      Var(x, sz) %=% Hole (h,sz)
 
+let match_holes_table encode_tag tbl keys  =
+  List.fold keys ~init:True
+    ~f:(fun acc (x,sz,v_opt) ->
+      acc %&% match v_opt with
+              | None -> match_holes encode_tag tbl x sz
+              | Some _ -> True
+    )
+
+
 let action_data_prefix tbl i = Printf.sprintf "%s_%d_" tbl i
 (* let action_data_prefix _ _ = Printf.sprintf "" *)
 
 let action_data tbl i v sz = Printf.sprintf "%s%s_%d" (action_data_prefix tbl i) v sz
 let action_data_hole tbl i v sz = Hole(action_data tbl i v sz, sz)
+
+
+let table_hole encode_tag (keys: (string * size * value option) list) tbl actID actSize =
+  match_holes_table encode_tag tbl keys
+  %&% (add_row_hole tbl %=% mkVInt (1,1))
+  %&% (which_act_hole tbl actSize %=% mkVInt (actID,actSize))

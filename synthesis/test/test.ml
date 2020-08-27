@@ -18,6 +18,9 @@ let packet = testable_string Packet.string__packet Packet.equal
 let same_packet = Alcotest.(check packet) "same packet"
 
 
+let model = testable_string string_of_map (Util.StringMap.equal veq)
+let same_model = Alcotest.(check model) "same model"
+
 (* Testing equality smart constructor *)
 let eq_test _ =
   let exp = Var ("x",8) %=%  mkVInt(7,8) in
@@ -810,11 +813,36 @@ let construct_model_query_PA_is_sat_hello_smaller _ =
 
 
 
+let hints_injects_keys _ =
+  let log = mkApply ("logical", ["x",32; "y", 32; "q", 32], [[], Skip],Skip) in
+  let phys =
+    sequence [
+        mkApply ("p1", ["x",32;"y",32], [[],Skip], Skip);
+        mkOrdered [
+            Var("x",32) %=% mkVInt(100,32), mkApply ("p2a", ["y", 32; "q",32], [[], Skip], Skip);
+            True, mkApply("p2b", ["x",32; "q",32], [[], Skip], Skip);
+          ]
+      ]
+  in
+  let edit = Tables.Edit.Add ("logical", (Match.([exact_ "x" (mkInt (5,32));
+                                                  mask_ "y" (mkInt(0,32)) (mkInt(0,32));
+                                                  exact_ "q" (mkInt(55,32))])
+                                         , [], 0)) in
+  let model = Hint.(construct log phys edit |> list_to_model phys) in
+  let expected = Util.StringMap.of_alist_exn
+                   [ "?x_p2b", mkInt(5,32);
+                     "?q_p2b", mkInt(55,32) ]
+  in
+  same_model expected model
+
+  
 let () =
   let open Alcotest in
   run "Tests" [
+
       "smart constructors",
       [test_case "equality (Var, Value)" `Quick eq_test];
+
       "weakest precondition",
       [test_case "wp(skip,phi) = phi" `Quick wp_skip_eq;
        test_case "int assignment" `Quick wp_int_assign_eq;
@@ -823,10 +851,12 @@ let () =
        test_case "sequence" `Quick wp_seq_eq;
        test_case "assume" `Quick wp_assume_eq;
       ];
+
       "semantics",
       List.map semantics ~f:(fun (run_pkt, ex_pkt) ->
           test_case "cross product" `Quick @@
             fun _ -> same_packet ex_pkt run_pkt);
+
       "constant propagation",
       [test_case "straight line code" `Quick cp_wikipedia_ex1;
        test_case "eliminate if" `Quick cp_wikipedia_ex2;
@@ -835,17 +865,26 @@ let () =
        test_case "opt_bcm_example" `Quick opt_bcm_example;
        test_case "cp_affects_actions_and_keys" `Quick cp_affects_actions_and_keys;
       ];
+
       "dead code elimination",
       [test_case "eliminates irrelevant tables" `Quick dc_remove_table];
+
       "passive propogation",
       [test_case "handwritten example" `Quick rev_propogate_computes_single_path;
        test_case "learns from tests 1" `Quick passive_propogation_learns_from_tests1;
        test_case "learns from tests 2" `Quick passive_propogation_learns_from_tests2;
        test_case "learns facts common to disjoint paths" `Quick
          passive_propogation_learns_disjoint];
+
       "meet",
       [test_case "combines facts" `Quick meet_combines_facts];
+
       "quantifier elimination",
       [test_case "handwritten example" `Quick construct_model_query_PA_is_sat1;
-       test_case "hello_world example" `Quick construct_model_query_PA_is_sat_hello_smaller]
+       test_case "hello_world example" `Quick construct_model_query_PA_is_sat_hello_smaller];
+
+      "Hints",
+      [test_case "injects logical keys into physical table" `Quick hints_injects_keys]
+
+
     ]
