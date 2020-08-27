@@ -27,8 +27,7 @@ let to_string (h : t) =
            | Some m ->
               let sep = if !first then "" else ";" in
               first := false;
-              Printf.sprintf "%s%s%s" acc sep (Match.to_string m)
-         )
+              Printf.sprintf "%s%s%s" acc sep (Match.to_string m))
   in
   let (acts, act_id) = match h.act_id_opt with
     | None -> ("","")
@@ -75,8 +74,8 @@ let make edit table (log_keys, _, _) (phys_keys,_, _) =
         | None ->
            let string = Printf.sprintf "0b%s" (String.make sz '0') in
            Some (Match.mask_ key (mkInt(0,sz)) (mkInt(int_of_string string, sz)))
-        | Some (i,_) -> Edit.get_ith_match ~i edit
-      ) |> Some
+        | Some (i,_) -> Edit.get_ith_match ~i edit)
+    |> Some
   in
   { table;
     match_opt;
@@ -93,22 +92,8 @@ let construct log phys (e : Edit.t) : t list =
             match get_schema_of_table table phys with
             | None -> acc
             | Some phys_schema ->
-               acc @ [make e table log_schema phys_schema]
-          )
+               acc @ [make e table log_schema phys_schema])
 
-(* let restriction encode_tag (hints : t list) : test =
- *   List.fold hints ~init:True
- *     ~f:(fun acc h ->
- *       match h.match_opt with
- *       | None -> acc
- *       | Some matches ->
- *          List.fold matches ~init:acc
- *            ~f:(fun acc mtch_opt ->
- *              match mtch_opt with
- *              | None -> acc
- *              | Some m -> acc %&% Match.to_valuation_test h.table encode_tag m
- *            )
- *     ) *)
 
 let extract_action_data table act_id params (data_opt : Row.action_data option) : (string * value) list =
   match data_opt with
@@ -129,8 +114,8 @@ let aggregate_models =
           | `Both (l,r) ->
              failwith @@
                Printf.sprintf "[Hint.aggregate_models] conflicting values %s is both %s and %s"
-                 key (string_of_value l) (string_of_value r)
-    ))
+                 key (string_of_value l) (string_of_value r)))
+
 
 let join_models m1 m2 = aggregate_models [m1;m2]
 
