@@ -57,9 +57,12 @@ let string_vars vs =
 
 
 let print_search_state do_print problem es model =
+  let print_space = false in
+  let print_model = false in
   if do_print then begin
       let space = Problem.model_space problem in
-      Printf.printf "\n\t***Space***\n\t%s\n\t***     ***" (Ast.string_of_test space);
+      if print_space then
+        Printf.printf "\n\t***Space***\n\t%s\n\t***     ***" (Ast.string_of_test space);
 
       Printf.printf "\n\t***Edits*** (%d CEXs)\n%!" (List.length @@ Problem.cexs problem);
       print_edits (Problem.phys_edits problem);
@@ -68,8 +71,10 @@ let print_search_state do_print problem es model =
       print_edits es;
       Printf.printf "\t***     ***\n";
 
-      Printf.printf "\t ***model***\n";
-      Printf.printf "\t%s\n%!" (Ast.string_of_map model);
+      if print_model then begin
+          Printf.printf "\t ***model***\n";
+          Printf.printf "\t%s\n%!" (Ast.string_of_map model)
+        end
       (* Interactive.pause true; *)
     end
 

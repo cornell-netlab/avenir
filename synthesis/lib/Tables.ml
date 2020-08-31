@@ -78,9 +78,9 @@ module Row = struct
             match List.nth acts act with
             | None -> []
             | Some (params, _) ->
-               Printf.printf "Params for %s.action[%d] :%s\n%!" tbl_name act
-                 (List.fold params ~init:""
-                    ~f:(fun acc (p,_) -> Printf.sprintf "%s %s" acc p));
+               (* Printf.printf "Params for %s.action[%d] :%s\n%!" tbl_name act
+                *   (List.fold params ~init:""
+                *      ~f:(fun acc (p,_) -> Printf.sprintf "%s %s" acc p)); *)
                List.fold params ~init:[]
                  ~f:(fun acc (p,sz) ->
                    let v =
@@ -90,7 +90,7 @@ module Row = struct
                      | None -> Int (Random.int (pow 2 sz) |> Bigint.of_int_exn, sz)
                      | Some v -> v
                    in
-                   Printf.printf "\t%s -> %s\n" p (string_of_value v);
+                   (* Printf.printf "\t%s -> %s\n" p (string_of_value v); *)
                    acc @ [v]
                  )
        in

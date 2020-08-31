@@ -143,6 +143,6 @@ let to_model (phys : cmd) (hint : t): value StringMap.t =
 
 let list_to_model (phys : cmd) (hints : t list) : value StringMap.t =
   let hints = List.map hints ~f:(to_model phys) in
-  Printf.printf "Print out the hints\n%!";
-  List.iter hints ~f:(fun h -> Printf.printf "%s\n%!" (string_of_map h));
+  (* Printf.printf "Print out the hints\n%!";
+   * List.iter hints ~f:(fun h -> Printf.printf "%s\n%!" (string_of_map h)); *)
   aggregate_models hints

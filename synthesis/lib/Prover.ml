@@ -3,7 +3,7 @@ open Ast
 open Packet
 open Z3
 
-let force_print = true
+let force_print = false
 let print_debug = false
 
 let debug term =

@@ -376,10 +376,11 @@ let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_li
                 non_empty_adds problem
                 |> Log.print_and_return_test params.debug ~pre:"Non-Empty Additions:\n" ~post:"\n--------\n\n" ]
           in
-          Printf.printf "There are %d hints in ModelFinder\n%!" (List.length hints);
-          Log.print_hints true hints;
+          if params.debug then
+            Printf.printf "There are %d hints in ModelFinder\n%!" (List.length hints);
+          Log.print_hints params.debug hints;
           let partial_model = Hint.list_to_model (Problem.phys problem) hints in
-          Log.print_hints_map true partial_model;
+          Log.print_hints_map params.debug partial_model;
           Some (out_test, partial_model))
   in
   tests
@@ -435,7 +436,7 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
         search params data problem {schedule; search_space}
      | (test, partial_model) :: search_space, schedule ->
         Log.check_attempts params.debug problem;
-        Log.print_hints_map true partial_model;
+        Log.print_hints_map params.debug partial_model;
         if params.debug then Printf.printf "Sending query to Z3\n%!";
         let model_opt, dur =
           check_sat params @@
