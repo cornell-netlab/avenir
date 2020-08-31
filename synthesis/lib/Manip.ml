@@ -113,6 +113,24 @@ let substV ?holes:(holes = false) ex substMap =
       StringMap.set acc ~key ~data:(Value data))
   |> substitute ~holes ex
 
+let rec substitute_cmd ?holes:(holes = false) cmd subst =
+  match cmd with
+  | Skip -> Skip
+  | Assume t -> substitute ~holes t subst |> mkAssume
+  | Assign (f,e) ->
+     begin match StringMap.find subst f with
+     | Some e' -> failwith @@ Printf.sprintf "Tried to substitute %s for %s but it occurs on the right hand side of the assignment %s" f (string_of_expr e') (string_of_cmd cmd)
+     | None ->
+        f %<-% substituteE ~holes subst e
+     end
+  | Seq (c1, c2) ->
+     substitute_cmd ~holes c1 subst %:% substitute_cmd ~holes c2 subst
+  | Select (typ, cs) ->
+     List.map cs ~f:(fun (b,c) ->
+         substitute ~holes b subst, substitute_cmd ~holes c subst)
+     |> mkSelect typ
+  | Apply _ -> failwith "[Manip.substitute_cmd] Don't know how to substitute into table"
+
 let rec exact_only t =
   match t with
   | Le _ -> false
@@ -677,8 +695,8 @@ let bind_action_data vals (scope, cmd) : cmd =
   let holes = List.map scope ~f:fst in
   List.fold2_exn holes vals
     ~init:StringMap.empty
-    ~f:(fun acc x v -> StringMap.set acc ~key:x ~data:v)
-  |> fill_holes (holify holes cmd) 
+    ~f:(fun acc x v -> StringMap.set acc ~key:x ~data:(Value v))
+  |> substitute_cmd cmd
 
 
 let rec fixup_expr (model : value StringMap.t) (e : expr)  : expr =
