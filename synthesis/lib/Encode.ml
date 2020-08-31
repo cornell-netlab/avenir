@@ -894,10 +894,20 @@ and encode_action3 prog (ctx : Declaration.t list) (type_ctx : Declaration.t lis
 
 and encode_switch prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : Expression.t) (rv : int) ( cases : Statement.switch_case list) : cmd * ((test * cmd) list) =
   let tbl, e, acs = encode_switch_expr prog ctx type_ctx rv expr in
+  let rec last_is_only_default =
+    let open Statement in
+    function
+    | [] -> true
+    | [_] -> true
+    | c::cs ->
+       match snd c with
+       | Action {label = (_, Default);_}
+         | FallThrough {label = (_,Default)} -> false
+       | _ -> last_is_only_default cs
+  in
+  assert (last_is_only_default cases);
   tbl,
-  (List.fold_map cases ~f:(encode_switch_case prog ctx type_ctx e acs rv) ~init:True)
-  |> snd |> List.filter_map ~f:(fun x -> x)
-
+  (List.filter_map cases ~f:(encode_switch_case prog ctx type_ctx e acs rv))
 
 and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) (e : Expression.t) : cmd * expr * Table.action_ref list =
   let dispList = dispatch_list e in
@@ -928,31 +938,30 @@ and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t
 
 
 
-
- and encode_switch_case prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : expr)
-                      (ts : Table.action_ref list) (rv : int) (fall_test : test)
-                      (case : Statement.switch_case) : test * ((test * cmd) option) =
-    let open Statement in
-    match snd case with
-      | Action {label;code} ->
-        begin match snd label with
-        | Default ->
-           True, Some (fall_test, encode_block prog ctx type_ctx rv code)
-        | Name lbl_name ->
-            let act_i = List.findi ts ~f:(fun _ a -> name_string (snd a).name = snd lbl_name) in
-            let block = encode_block prog ctx type_ctx rv code in
-            begin match act_i with
-              | Some (i, _) ->
-                let test = Or(fall_test, Eq(expr, mkVInt(i + 1, -1))) in
-                True, Some (test, block)
-              | None -> failwith ("Action not found when encoding switch statement")
-            end
+and encode_switch_case prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : expr)
+                      (ts : Table.action_ref list) (rv : int)
+                      (case : Statement.switch_case) : ((test * cmd) option) =
+  let open Statement in
+  let c = snd case in
+  match c with
+  | Action {label;code} ->
+     begin match snd label with
+     | Default -> Some (True, encode_block prog ctx type_ctx rv code)
+     | Name lbl_name ->
+        let act_i = List.findi ts ~f:(fun _ a -> name_string (snd a).name = snd lbl_name) in
+        let block = encode_block prog ctx type_ctx rv code in
+        begin match act_i with
+        | Some (i, _) ->
+           let test = expr %=% mkVInt(i + 1, -1) in
+           Some (test, block)
+        | None -> failwith ("Action not found when encoding switch statement")
         end
-      | FallThrough {label} ->
-        begin match snd label with
-          | Default -> failwith "Default in switch" (* True, None *)
-          | Name _ -> failwith "encode_switch_case"
-        end
+     end
+  | FallThrough {label} ->
+     begin match snd label with
+     | Default -> failwith "Default in switch" (* True, None *)
+     | Name _ -> failwith "encode_switch_case"
+     end
 
 and assign_constants (type_ctx : Declaration.t list) (decl : Declaration.t list) =
   let es = List.filter_map decl
