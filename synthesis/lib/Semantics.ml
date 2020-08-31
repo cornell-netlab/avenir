@@ -166,13 +166,7 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
           ((Packet.set_field_of_expr pkt f e, loc_opt),
            StringMap.empty,
            cmd, StringMap.empty)
-       | Assert _
-         (* failwith "Asserts are deprecated" *)
-         (* if check_test t pkt_loc then
-          *   (pkt_loc, StringMap.empty, cmd, StringMap.empty)
-          * else
-          *   failwith ("AssertionFailure: " ^ string_of_test t ^ "was false") *)
-         | Assume _ ->
+       | Assume _ ->
           (pkt_loc, StringMap.empty, cmd, StringMap.empty)
        | Seq (firstdo, thendo) ->
           let pkt_loc', wide', cmd', trace' = trace_eval_inst ~gas ~wide firstdo inst pkt_loc in
@@ -208,19 +202,13 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
                | (cond, Some wide, Some (data, aid)) ->
                   (* Printf.printf "HIT A RULE\n%!"; *)
                   let pkt', wide', cmd', trace = trace_eval_inst ~wide (List.nth_exn t.actions aid |> bind_action_data data) inst pkt_loc in
-                  (pkt', wide', Assert cond %:% cmd', StringMap.set ~key:t.name ~data:(data, aid) trace)
+                  (pkt', wide', mkAssume cond %:% cmd', StringMap.set ~key:t.name ~data:(data, aid) trace)
                | (cond, _, _) ->
                   (* Printf.printf "Missed everything\n%!"; *)
                   let pkt',wide', cmd', trace = trace_eval_inst ~wide t.default inst pkt_loc in
-                  (pkt' , wide', Assert cond %:% cmd', StringMap.set ~key:t.name ~data:([],List.length t.actions) trace )
+                  (pkt' , wide', mkAssume cond %:% cmd', StringMap.set ~key:t.name ~data:([],List.length t.actions) trace )
              end
           end
-       | While ( _ , _ ) ->
-          failwith "Cannot process while loops"
-                   (* if check_test cond pkt_loc then
-                    *   trace_eval ~gas:(gas-1) (Seq(body,cmd)) pkt_loc
-                    * else
-                    *   Some (pkt_loc, []) *)
 
 
 
@@ -250,10 +238,6 @@ let rec trace_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : ((string 
      if check_test b (pkt, None)
      then [[], pkt]
      else []
-  | Assert b ->
-     if check_test b (pkt, None)
-     then failwith ("Assertion failure")
-     else [[],pkt]
   | Assign (f,e) ->
      [[],
       eval_expr (pkt, None) e
@@ -294,7 +278,6 @@ let rec trace_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : ((string 
      |> Option.value ~default:[]
 
   | Select(Total, _ ) -> failwith "Deprecated"
-  | While _ -> failwith "unsupported"
 
 let get_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : (string * int) list =
   let open List in

@@ -10,8 +10,7 @@ type trace = (Row.action_data * int) StringMap.t
 let rec compute_cand_for_trace (tag : [`Exact | `Mask]) (line: cmd) (pinst : Instance.t) (trace : trace) : cmd =
   match line with
   | Skip 
-    | Assert _
-    | Assume _ 
+    | Assume _
     | Assign _
     -> line
   | Seq (c1,c2) -> compute_cand_for_trace tag c1 pinst trace
@@ -43,12 +42,10 @@ let rec compute_cand_for_trace (tag : [`Exact | `Mask]) (line: cmd) (pinst : Ins
                        ~f:(fun acc param arg ->
                          acc %&% (Hole param %=% Value arg)
                        ) in
-          Assert cond
-          %:% Assert args
+          mkAssume cond
+          %:% mkAssume args
           %:% holify List.(params >>| fst) act
      end
-  | While _ -> failwith "go away"
-  
 
                                      
 let apply_hints
@@ -74,7 +71,6 @@ let rec project_cmd_on_acts c (subst : expr StringMap.t) : cmd list =
      | False -> []
      | b' -> [Assume b']
      end
-  | Assert b -> [subst |> substitute ~holes b |> Assert]
   | Assign (v, e) ->
      begin match StringMap.find subst v with
      | None -> [v %<-% e]
@@ -99,8 +95,7 @@ let rec project_cmd_on_acts c (subst : expr StringMap.t) : cmd list =
      |> mkSelect typ
      |> return 
   | Apply _ -> failwith "Shouldnt have applys at this stage"
-  | While _ -> failwith "idk what to do with while loops"
-     
+
               
 let compute_candidates h pkt phys =
   match h with

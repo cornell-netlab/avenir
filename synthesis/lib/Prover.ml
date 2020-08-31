@@ -3,13 +3,13 @@ open Ast
 open Packet
 open Z3
 
-let force_print = false
+let force_print = true
 let print_debug = false
 
 let debug term =
   if force_print || print_debug then
     let res = Smtlib.term_to_sexp term |> Smtlib.sexp_to_string in
-    Printf.printf "TERM: %s\n%!" res
+    Printf.eprintf "(assert %s)\n%!" res
 
 let test_str test =
   if false then
@@ -198,7 +198,7 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
   let () = List.iter holes
              ~f:(fun (id, i) ->
                if force_print || params.debug && print_debug then
-                    Printf.printf "(declare-const %s (_ BitVec %d))\n%!" id i;
+                    Printf.eprintf "(declare-const %s (_ BitVec %d))\n%!" id i;
                declare_const sat_prover (Id id) (BitVecSort i)) in
   let term = forall_ vars (test_to_term test `Sat params.debug) in
   let response =

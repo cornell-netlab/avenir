@@ -14,13 +14,10 @@ rule tokens = parse
 | ['0'-'9']+ as i { INT i }
 | "partial"       { PARTIAL }
 | "ordered"       { ORDERED }
-| "assert"        { ASSERT }
 | "assume"        { ASSUME }
-| "abort"         { ABORT }
 | "apply"         { APPLY }
 | "true"          { TRUE }
 | "false"         { FALSE }
-| "while"         { WHILE }
 | "total"         { TOTAL }
 | "skip"          { SKIP }
 | "==>"           { IMPLIES }

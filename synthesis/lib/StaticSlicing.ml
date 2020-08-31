@@ -59,8 +59,6 @@ let rec static_slice_aux (fvs : (string * int) list) (c : cmd) : (string*int) li
        (fvs, Apply {name; keys; actions = actions'; default = def'})
      else
        (fvs, Skip)
-  | Assert _
-  | While _ -> failwith "unsupported"
 
 
 let static_slice fvs cmd = snd @@ static_slice_aux fvs cmd

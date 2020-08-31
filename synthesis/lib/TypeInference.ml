@@ -66,7 +66,6 @@ let rec infer (p : cmd) : cmd =
   | Skip -> Skip
   | Assign (s, e) -> s %<-% infer_expr e
   | Assume t -> Assume (infer_test t)
-  | Assert t -> Assert (infer_test t)
   | Seq (c1,c2) -> infer c1 %:% infer c2
   | Select (typ, bs) ->
      mkSelect typ @@
@@ -74,6 +73,5 @@ let rec infer (p : cmd) : cmd =
   | Apply t ->
      let actions' = List.map t.actions ~f:(infer_action) in
      Apply {t with actions = actions'}
-  | While _ -> failwith "b t?"
 
 and infer_action (params,c) = (params,infer c)

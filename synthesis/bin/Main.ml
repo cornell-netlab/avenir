@@ -141,7 +141,7 @@ module Solver = struct
     let log_inst = Runtime.parse log logical_edits
                    |> Instance.(update_list params empty) in
     let log_edits = if onos
-                    then Benchmark.onos_to_edits data "ipv6" "hdr.ipv6.dst_addr"
+                    then Benchmark.(onos_to_edits var_mapping data "ipv6" "hdr.ipv6.dst_addr")
                     else Runtime.parse log data |> List.(map ~f:return)  in
     let phys_inst = Runtime.parse phys physical_edits |> Instance.(update_list params empty) in
     let phys_drop_spec = None in
@@ -363,83 +363,6 @@ let benchmark : Command.t =
     ~summary: "Run some benchmarks"
     Bench.spec
     Bench.run
-
-
-module ONF = struct
-  let spec = Command.Spec.(
-      empty
-      +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
-      +> flag "-i" no_arg ~doc:"interactive mode"
-      +> flag "-data" (required string) ~doc:"the input log"
-      +> flag "-p" no_arg ~doc:"show_result_at_end"
-      ++ opt_flags )
-
-
-  let run debug interactive data print
-        widening
-        do_slice
-        edits_depth
-        search_width
-        monotonic
-        injection
-        fastcx
-        vcache
-        ecache
-        shortening
-        above
-        minimize
-        hints
-        only_holes
-        allow_annotations
-        nlp
-        unique_edits
-        domain
-        restrict_mask
-        no_defaults
-    () =
-    let res = Benchmark.basic_onf_ipv4
-              Parameters.({
-          widening;
-          do_slice;
-          edits_depth;
-          search_width;
-          debug;
-          monotonic;
-          interactive;
-          injection;
-          fastcx;
-          vcache;
-          ecache;
-          shortening;
-          above;
-          minimize;
-          hints;
-          only_holes;
-          allow_annotations;
-          nlp;
-          unique_edits;
-          domain;
-          restrict_mask;
-          no_defaults;
-          timeout = None})
-              data
-    in
-    match res with
-    | None -> Core.Printf.printf "no example could be found\n"
-    | Some r when print ->
-       List.iter r ~f:(fun edit ->
-           Tables.Edit.to_string edit
-           |> Core.Printf.printf "%s\n%!"
-         )
-    | _ -> ()
-end
-
-let onf : Command.t =
-  Command.basic_spec
-    ~summary: "Run the onf benchmark"
-    ONF.spec
-    ONF.run
-
 
 module ONFReal = struct
   let spec = Command.Spec.(
@@ -1275,7 +1198,6 @@ let main : Command.t =
     ; ("tables", ntbls_cmd)
     ; ("metadata", metadata_cmd)
     ; ("classbench", classbench_cmd)
-    ; ("onf", onf)
     ; ("onf-real", onf_real)
     ; ("eq", equality)
     ; ("eq-real", equality_real)

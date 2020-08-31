@@ -156,8 +156,14 @@ let reorder_benchmark varsize length max_inserts params =
   
             
 (** ONF BENCHMARK **)
-    
-let onos_to_edits filename tbl_nm key =
+
+let translate_key var_mapping key =
+  match List.find_map var_mapping ~f:(fun ((k,_),(k',_)) -> Option.some_if (k = key) k') with
+  | Some key -> key
+  | None -> key
+
+let onos_to_edits var_mapping filename tbl_nm key =
+  let key = translate_key var_mapping key in
   let lines = In_channel.read_lines filename in
   let make_edit data : Edit.t =
     match data with
@@ -180,48 +186,6 @@ let onos_to_edits filename tbl_nm key =
 
 let (%>) c c' = ignore c; c'
 
-
-let basic_onf_ipv4 params filename = 
-  let log =
-    sequence [
-        "class_id" %<-% mkVInt(0,32)
-      ; mkApply("ipv6",
-              [("ipv6_dst", 128)],
-              [([("next_id",32)], "class_id"%<-% Var("next_id",32))],
-              Skip)
-      ;
-        mkOrdered [
-            Var("class_id",32) %=% mkVInt(1017,32), "out_port" %<-% mkVInt(17,9) ;
-            Var("class_id",32) %=% mkVInt(1018,32), "out_port" %<-% mkVInt(18,9) ;
-            Var("class_id",32) %=% mkVInt(1010,32), "out_port" %<-% mkVInt(10,9) ;
-            Var("class_id",32) %=% mkVInt(1012,32), "out_port" %<-% mkVInt(12,9) ;
-            Var("class_id",32) %=% mkVInt(1011,32), "out_port" %<-% mkVInt(11,9) ;
-            Var("class_id",32) %=% mkVInt(1008,32), "out_port" %<-% mkVInt(08,9) ;
-            Var("class_id",32) %=% mkVInt(1003,32), "out_port" %<-% mkVInt(03,9) ;
-            Var("class_id",32) %=% mkVInt(1019,32), "out_port" %<-% mkVInt(19,9) ;
-            True, "out_port" %<-% mkVInt(0,9)
-          ]
-      ] in
-  let phys =
-    mkApply("l3_fwd"
-        , [ ("ipv6_dst", 128) (*; ("ipv4_src", 32); ("ipv4_proto", 16)*) ]
-        , [ ([("port",9)], "out_port"%<-% Var("port",9))]
-        , "out_port" %<-% mkVInt(0,9)) in
-  let fvs = [("ipv6_dst", 128); ("out_port", 9); (*("ipv4_src", 32); ("ipv4_proto", 16)*)] in
-  (* synthesize_edit  ~gas ~iter ~fvs p 
-   *   logical
-   *   physical
-   *   StringMap.empty
-   *   StringMap.empty
-   *   ("next", ([Exact (1,32)], [(1,9)],0))
-   * %> *)
-  let problem =
-    Problem.make ~log ~phys ~fvs
-      ~log_inst:StringMap.(set empty ~key:"ipv6" ~data:[])
-      ~log_edits:[]
-      ~phys_inst:StringMap.(set empty ~key:"l3_fwd" ~data:[]) ()
-  in
-  measure params None problem (onos_to_edits filename "ipv6" "ipv6_dst")
 
 let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_edits_file fvs_file assume_file log_inc phys_inc =
   let var_mapping = parse_fvs fvs_file in
@@ -250,13 +214,15 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
       ~phys_inst:Instance.(update_list params empty phys_edits)
       ~log_edits:[] ()
   in
-  measure params None problem (log_edits :: onos_to_edits data_file "routing_v6" "hdr.ipv6.dst_addr")
+  measure params None problem (log_edits :: onos_to_edits var_mapping data_file "routing_v6" "hdr.ipv6.dst_addr")
 
 and zero_init fvs cmd =
-  let vs = variables cmd |> List.dedup_and_sort ~compare:(fun (v1, _) (v2, _) -> String.compare v1 v2) in
-  let zi = List.filter vs ~f:(fun (v,_) -> List.(mem (fvs >>| fst) v ~equal:(=) |> not)) in
+  let fvs = StringSet.of_list @@ fsts @@ fvs in
+  let vs = free_of_cmd `Var cmd
+           |> List.dedup_and_sort ~compare:(fun (v1, _) (v2, _) -> String.compare v1 v2) in
+  let zi = List.filter vs ~f:(fun (v,_) -> StringSet.(mem fvs v) |> not) in
   sequence @@
-    List.map zi ~f:(fun (v, w) ->  mkAssn v  (mkVInt(0, w)))
+    List.map zi ~f:(fun (v, w) -> v %<-% mkVInt(0, w))
     @ [cmd]
 
 
@@ -272,7 +238,6 @@ and variables cmd =
   | Skip -> []
   | Assign(s, e) -> (s, get_width e) :: variables_expr e
   | Seq (c1, c2) -> variables c1 @ variables c2
-  | While(_, c1) -> variables c1
   | Select(_, tc) -> List.concat_map tc ~f:(fun (t, c) -> variables_test t @  variables c)
   | Apply {keys;_} -> free_keys keys
   | _ -> []

@@ -283,7 +283,7 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
          let log_out_pkt = Semantics.eval_act (Problem.log_gcl_program params problem) in_pkt in
          let params = {params with fastcx = false; ecache = false} in
          let problem = Problem.add_cex problem (in_pkt, log_out_pkt) in
-         Log.cexs ~log_out_pkt:(Some log_out_pkt) params (Problem.phys_gcl_program params problem) in_pkt;
+         Log.cexs params problem log_out_pkt in_pkt;
          solve_math params.search_width params data problem
 
 and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =

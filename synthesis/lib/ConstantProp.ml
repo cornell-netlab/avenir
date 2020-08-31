@@ -105,7 +105,6 @@ let rec propogate_cmd (map : expr StringMap.t) (cmd : cmd) =
      let map',c1' = propogate_cmd map c1 in
      let map'', c2' = propogate_cmd map' c2 in
      map'', c1' %:% c2'
-  | Assert t -> map, Assert (propogate_test map t)
   | Assume t -> map, mkAssume (propogate_test map t)
   | Select (typ, cases) ->
      let map', cases',_ =
@@ -168,7 +167,6 @@ let rec propogate_cmd (map : expr StringMap.t) (cmd : cmd) =
               keys = keys';
               actions = actions';
               default = default'})
-  | While _ -> failwith "unsupported"
 
 
 let propogate cmd = propogate_cmd StringMap.empty cmd |> snd
@@ -227,7 +225,6 @@ let rec passive_propogate_aux dir map cmd =
   match cmd with
   | Skip -> map, Skip
   | Assign (_,_) -> failwith "[ERROR] Assumed in passive form but got ASSIGN"
-  | Assert _ -> failwith "[DeprecatedError] Assertions are not supported in passive form"
   | Assume t ->
      let t' = Manip.substitute t map in
      let map', t'' = infer map t' in
@@ -260,7 +257,6 @@ let rec passive_propogate_aux dir map cmd =
      in
      Option.value_exn map', mkSelect typ cases'
   | Apply _ -> failwith "[Error] assumed tables are applied out"
-  | While _ -> failwith "[DeprecatedError] while loops are deprecated"
 
 let passive_propogate (map, cmd) =
   let (map, cmd') = passive_propogate_aux `Rev map cmd in

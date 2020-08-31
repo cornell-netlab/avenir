@@ -138,27 +138,18 @@ let well_formed_adds (params : Parameters.t) (problem : Problem.t) encode_tag =
                )
        )
 
+
 let adds_are_reachable params (problem : Problem.t) (opts : opts) fvs encode_tag =
   if not opts.reachable_adds then True else
     let phys = Problem.phys problem in
+    let in_pkt = Problem.cexs problem |> List.hd_exn |> fst in
     get_tables_keys phys
     |> List.fold
       ~init:True
       ~f:(fun acc (tbl_name,keys) ->
-        let phys_inst = Problem.phys_inst problem in
-        let phys_edits = Problem.phys_edits problem in
-        let trunc =
-          FastCX.truncated tbl_name phys
-          |> Option.value_exn ~message:(Printf.sprintf "Couldn't find table %s" tbl_name)
-          |> Instance.(apply params NoHoles `Exact (update_list params phys_inst phys_edits))
-        in
         mkAnd acc @@
           mkImplies (Hole.add_row_hole tbl_name %=% mkVInt(1,1)) @@
-          passive_hoare_triple ~fvs
-            (List.hd_exn (Problem.cexs problem) |> fst |> Packet.to_test ~fvs)
-            trunc
-            (Hole.match_holes_table encode_tag tbl_name keys
-             %&% Instance.negate_rows phys_inst tbl_name)
+            FastCX.is_reachable encode_tag params problem fvs in_pkt tbl_name keys
       )
 
 let non_empty_adds (problem : Problem.t) =

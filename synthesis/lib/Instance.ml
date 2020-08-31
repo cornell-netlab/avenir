@@ -77,13 +77,11 @@ let rec apply ?no_miss:(no_miss = false)
   match prog with
   | Skip
     | Assign _
-    | Assert _
     | Assume _ -> prog
   | Seq (c1,c2) ->
      let c1' = apply ~no_miss params tag encode_tag inst c1 in
      let c2' = apply ~no_miss params tag encode_tag inst c2 in
      c1' %:% c2'
-  | While _ -> failwith "while loops not supported"
   | Select (typ, ss) ->
      let ss =
        List.fold ss ~init:[]

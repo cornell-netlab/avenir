@@ -17,9 +17,14 @@ let same_cmd = Alcotest.(check cmd) "same cmd"
 let packet = testable_string Packet.string__packet Packet.equal
 let same_packet = Alcotest.(check packet) "same packet"
 
-
 let model = testable_string string_of_map (Util.StringMap.equal veq)
 let same_model = Alcotest.(check model) "same model"
+
+let stringlist = testable_string (List.fold ~init:"" ~f:(Printf.sprintf "%s %s")) (Stdlib.(=))
+let same_stringlist = Alcotest.(check stringlist) "same string list"
+
+let stringset = testable_string (Util.string_of_strset) (Util.StringSet.equal)
+let same_stringset = Alcotest.(check stringset) "same string set"
 
 (* Testing equality smart constructor *)
 let eq_test _ =
@@ -835,6 +840,194 @@ let hints_injects_keys _ =
   in
   same_model expected model
 
+
+let packet_diff _ =
+  let inpkt = Packet.mk_packet_from_list ["x", mkInt(11,32); "y", mkInt(100,32); "q", mkInt(55,32)] in
+  let oupkt = Packet.mk_packet_from_list ["x", mkInt(11,32); "y", mkInt(5,32);   "z", mkInt(4,32)] in
+  let open String in
+  List.sort ~compare @@ Packet.diff_vars inpkt oupkt
+  |> same_stringlist @@ List.sort ~compare ["y";"q";"z"]
+
+
+
+
+
+let trace = ActionGenerator.(testable_string string_of_traces equal_trace_lists)
+let same_trace = Alcotest.(check trace) "same trace"
+
+let ag_feasible_traces _ =
+  let open Tables in
+  let open Util in
+  let phys = mkApply ("phys", ["x",32], [[], "y" %<-% mkVInt(5,32)], Skip) in
+  let inpkt = Packet.mk_packet_from_list ["x", mkInt(11,32); "y", mkInt(100,32)] in
+  let oupkt = Packet.mk_packet_from_list ["x", mkInt(11,32); "y", mkInt(5,32)] in
+  let fvs = ["x", 32; "y", 32] in
+  let edit = Edit.Add("log", ([Match.exact_ "x" (mkInt(11,32))], [], 0)) in
+  ActionGenerator.traces edit fvs phys inpkt oupkt
+  |> same_trace [{target_vars = StringSet.empty; source_keys = StringSet.empty}, ["phys",0]]
+
+
+let ag_feasible_traces_branch _ =
+  let open Tables in
+  let open Util in
+  let phys =
+    mkOrdered [Var("x",32) %=% mkVInt(11, 32), mkApply ("phys", ["x",32], [[], "y" %<-% mkVInt(5,32)], Skip);
+               True, mkApply ("phys2", [], [[], "y" %<-% Var("x",32);
+                                            ["yy",32], "y" %<-% Var("yy",32);
+                                            ["xx", 32], "x" %<-% Var("xx",32);
+                                           ], "y" %<-% mkVInt(5,32))]
+  in
+  let inpkt = Packet.mk_packet_from_list ["x", mkInt(11,32); "y", mkInt(100,32)] in
+  let oupkt = Packet.mk_packet_from_list ["x", mkInt(11,32); "y", mkInt(5,32)] in
+  let fvs = ["x", 32; "y", 32] in
+  let edit = Edit.Add("log", ([Match.exact_ "x" (mkInt(11,32))], [], 0)) in
+  let open ActionGenerator in
+  let open StringSet in
+  (* Notice that the default action is not considered. This is still
+     complete in this case, because action 1 subsumes the default
+     action, however it wouldn't be if we removed this action *)
+  traces edit fvs phys inpkt oupkt
+  |> same_trace [
+         mkstate empty empty, ["phys",0];
+         mkstate empty empty, ["phys2", 0];  (* demonstates unsoundness, we know x is 11*)
+         mkstate (singleton "x") empty, ["phys2",1];
+       ]
+
+let ag_feasible_traces_metadata_table _ =
+  let open Tables in
+  let open Util in
+  let phys =
+    sequence [
+    "meta" %<-% mkVInt(0,32);
+    mkApply("stage", ["x",32], [["m",32], "meta" %<-% Var("m",32)], "meta" %<-% mkVInt(0,32));
+    mkOrdered [Var("meta",32) %=% mkVInt(0, 32), mkApply ("phys", ["x",32], [[], "y" %<-% mkVInt(5,32)], Skip);
+               True, mkApply ("phys2", ["meta", 32], [[], Skip;
+                                            ["yy",32], "y" %<-% Var("yy",32);
+                                            ["xx", 32], "x" %<-% Var("xx",32);
+                                           ], "y" %<-% mkVInt(5,32))]
+      ]
+  in
+  let inpkt = Packet.mk_packet_from_list ["x", mkInt(11,32); "y", mkInt(100,32)] in
+  let oupkt = Packet.mk_packet_from_list ["x", mkInt(11,32); "y", mkInt(5,32)] in
+  let fvs = ["x", 32; "y", 32] in
+  let edit = Edit.Add("log", ([Match.exact_ "x" (mkInt(11,32))], [], 0)) in
+  let open ActionGenerator in
+  let open StringSet in
+  traces edit fvs phys inpkt oupkt
+  |> same_trace [
+         mkstate empty empty, ["phys",0];
+         mkstate empty empty, ["stage", 0; "phys2",1]
+       ]
+
+
+let ag_feasible_traces_bcm_punt_table _ =
+  let open Tables in
+  let open Util in
+  let punt =
+    mkApply("punt_table", ["standard_metadata.ingress_port",9;
+                           "standard_metadata.egress_spec", 9;
+                           "hdr.ipv6.traffic_class", 8;
+                           "hdr.ipv6.hop_limit", 8;
+                           "hdr.ipv6.src_addr", 128;
+                           "hdr.ipv6.dst_addr", 128;
+                           "hdr.ipv6.next_hdr", 8;
+                           "hdr.vlan_tag[0].vid", 12;
+                           "hdr.vlan_tag[0].pcp", 3;
+                           "local_metadata.class_id", 8;
+                           "local_metadata.vrf_id", 10],
+            [["queue_id",5], (*set_queue_and_clone_to_cpu*)
+             sequence[ "local_metadata.cpu_cos_queue_id" %<-% Var("queue_id", 5);
+                       "local_metadata.egress_spec_at_punt_match" %<-% Var("standard_metadata.egress_spec",9)
+               ];
+             ["queue_id", 5], (*  set_queue_and_send_to_cpu *)
+             sequence [
+                 "local_metadata.cpu_cos_queue_id" %<-% Var("queue_id",5);
+                 "local_metadata.egress_spec_at_punt_match" %<-% Var("standard_metadata.egress_spec",9);
+                 "standard_metadata.egress_spec" %<-% mkVInt(511,9)
+               ];
+             ["port",9], (* set_egress_port *)
+             sequence [
+                 "local_metadata.egress_spec_at_punt_match" %<-% Var("standard_metadata.egress_spec",9);
+                 "standard_metadata.egress_spec" %<-% Var("port",9)
+               ]
+            ], Skip);
+  in
+  let inpkt = Packet.mk_packet_from_list [
+                  "hdr.ipv4_valid", mkInt(0,1);
+                  "hdr.ipv6.dst_addr", Int(Bigint.of_string "0x20014860486100000000729a00008888",128);
+                  "hdr.ipv6.flow_label", Int(Bigint.of_string "0x323fb", 20);
+                  "hdr.ipv6.hop_limit", Int(Bigint.of_string "0xbf", 8);
+                  "hdr.ipv6.next_hdr", Int(Bigint.of_string "0x39", 8);
+                  "hdr.ipv6.payload_length", Int(Bigint.of_string "0xd958", 16);
+                  "hdr.ipv6.src_addr", mkInt(0,128);
+                  "hdr.ipv6.traffic_class", Int(Bigint.of_string "0x8c",8);
+                  "hdr.ipv6.version", mkInt(8,4);
+                  "hdr.ipv6_valid", mkInt(0,1);
+                  "hdr.mpls_valid", mkInt(0,1);
+                  "standard_metadata.egress_port", Int(Bigint.of_string "0x103",9);
+                  "standard_metadata.egress_spec", Int(Bigint.of_string "0x1bc", 9);
+                  "standard_metadata.ingress_port", Int(Bigint.of_string "0x34", 9);
+                ] in
+  let zero sz = mkInt(0,sz) in
+  let oupkt = Packet.mk_packet_from_list [
+                "hdr.ipv4_valid", zero 1;
+                "hdr.ipv6.dst_addr", zero 128;
+                "hdr.ipv6.flow_label", zero 20;
+                "hdr.ipv6.hop_limit", zero 8;
+                "hdr.ipv6.next_hdr", zero 8;
+                "hdr.ipv6.payload_length", zero 16;
+                "hdr.ipv6.src_addr", zero 128;
+                "hdr.ipv6.traffic_class", zero 8;
+                "hdr.ipv6.version", zero 4;
+                "hdr.ipv6_valid", zero 1;
+                "hdr.mpls_valid", zero 1;
+                "local_metadata.l3_admit", zero 1;
+                "standard_metadata.egress_port", zero 9;
+                "standard_metadata.egress_spec", zero 9;
+                "standard_metadata.ingress_port", zero 9 ]
+  in
+  let fvs = [ "hdr.ipv4_valid", 1;
+              "hdr.ipv6.dst_addr", 128;
+              "hdr.ipv6.flow_label", 20;
+              "hdr.ipv6.hop_limit", 8;
+              "hdr.ipv6.next_hdr", 8;
+              "hdr.ipv6.payload_length", 16;
+              "hdr.ipv6.src_addr", 128;
+              "hdr.ipv6.traffic_class", 8;
+              "hdr.ipv6.version", 4;
+              "hdr.ipv6_valid", 1;
+              "hdr.mpls_valid", 1;
+              "local_metadata.l3_admit", 1;
+              "standard_metadata.egress_port", 9;
+              "standard_metadata.egress_spec", 9;
+              "standard_metadata.ingress_port", 9]
+  in
+  let edit = Edit.Add("log", ([Match.exact_ "hdr.ipv6.dst_addr" (Int(Bigint.of_string "0x20014860486100000000729a00008888",128))], [], 0)) in
+  let open ActionGenerator in
+  let open StringSet in
+  traces edit fvs punt inpkt oupkt
+  |> same_trace [
+         mkstate empty empty, ["phys",0];
+         mkstate empty empty, ["stage", 0; "phys2",1]
+       ]
+
+
+let ag_affected_by_keys _ =
+  let phys =
+    sequence [
+        mkApply ("miss_table", ["x",48], [["typ",3], "fwd_type" %<-% Var("typ",3)], "fwd_type" %<-% mkVInt(0,3));
+        mkOrdered [
+            Var("fwd_type", 3) %=% mkVInt(3,3),
+            mkApply("univ_table", ["key1",32; "key2",32], [["port",9], "out_port" %<-% Var("port",9)], "out_port" %<-% mkVInt(0,9));
+            True,
+            mkApply("miss_table2", ["x", 48], [["p",9], "out_port" %<-% Var("port", 9)], "out_port" %<-% mkVInt(0,9))
+          ]
+      ] in
+  let expected = Util.StringSet.of_list ["univ_table"] in
+  let _, got = ActionGenerator.tables_affected_by_keys phys (Util.StringSet.of_list ["key1"; "key2"]) in
+  same_stringset expected got
+
+
   
 let () =
   let open Alcotest in
@@ -883,8 +1076,19 @@ let () =
       [test_case "handwritten example" `Quick construct_model_query_PA_is_sat1;
        test_case "hello_world example" `Quick construct_model_query_PA_is_sat_hello_smaller];
 
-      "Hints",
-      [test_case "injects logical keys into physical table" `Quick hints_injects_keys]
+      "hints",
+      [test_case "injects logical keys into physical table" `Quick hints_injects_keys];
+
+      "action generator",
+      [test_case "computes feasible traces" `Quick ag_feasible_traces;
+       test_case "computes_feasible traces across branches" `Quick ag_feasible_traces_branch;
+       test_case "computes_feasible traces for a metadata assignment table" `Quick ag_feasible_traces_metadata_table;
+       test_case "computes_correct result for bcm's punt table" `Quick  ag_feasible_traces_bcm_punt_table;
+       test_case "says guarded table can be affected by keys" `Quick ag_affected_by_keys;
+      ];
+
+      "packets",
+      [test_case "diff computes differing vars" `Quick packet_diff]
 
 
     ]

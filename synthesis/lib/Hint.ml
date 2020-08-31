@@ -47,20 +47,12 @@ let get_poss_injections keys phys e : string list =
   match e with
   | Edit.Del _ -> []
   | Edit.Add (_, (matches, _,_)) ->
-     let relevant_keys =
-       List.fold2_exn keys matches ~init:[]
-         ~f:(fun acc k m ->
-           if Match.is_wildcard m then
-             acc
-           else
-             acc @ [k]
-         )
-     in
      get_tables_vars ~keys_only:true phys
      |> List.filter_map
           ~f:(fun (t,vars) ->
-            if List.is_empty relevant_keys && keys = vars
-               || subset_list relevant_keys vars
+            let rel_keys = Match.relevant_keys matches in
+            if List.is_empty rel_keys && keys = vars
+               || subset_list rel_keys (fsts vars)
             then Some t
             else None)
 

@@ -297,3 +297,11 @@ let strmap_project_list m l =
       match StringMap.find m key with
       | None -> acc
       | Some data -> StringMap.set acc ~key ~data)
+
+let string_of_strset s =
+  StringSet.fold s ~init:"" ~f:(Printf.sprintf "%s %s")
+  |> Printf.sprintf "{%s }"
+
+let string_of_intlist (l : int list) : string =
+  List.fold l ~init:"" ~f:(Printf.sprintf "%s %d")
+  |> Printf.sprintf "[%s ]"

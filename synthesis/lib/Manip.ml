@@ -61,10 +61,6 @@ let rec dnf t : test list =
 (* Unrolls all loops in the program p n times *)
 let rec unroll n p =
   match p, n with
-  | While (_, _), 0 -> Skip
-  | While (cond, body), _ -> 
-    mkPartial [cond , (body %:% unroll (n-1) p)]
-    (* %:% Assert (!% cond) *)
   | Seq (firstdo, thendo), _ ->
     Seq (unroll n firstdo, unroll n thendo)
   | Select (styp, cmds), _ ->
@@ -149,7 +145,6 @@ let rec wp negs c phi =
      let phi' = substitute phi @@ StringMap.singleton field value in
      (* Printf.printf "replacing %s with %s in %s \n to get %s \n" field (string_of_expr value) (string_of_test phi) (string_of_test phi'); *)
      phi'
-  | Assert t -> t %&% phi
   | Assume t -> t %=>% phi
               
   (* requires at least one guard to be true *)
@@ -190,9 +185,6 @@ let rec wp negs c phi =
   (* concatMap acts ~f:(fun (scope, a) ->
        *      wp ~no_negations (holify (List.map scope ~f:fst) a) phi) ~c:(mkAnd) ~init:(Some True)
        * %&% wp ~no_negations dflt phi *)
-  | While _ ->
-    Printf.printf "[WARNING] skipping While loop, because loops must be unrolled\n%!";
-    phi
 
 let freshen v sz i = (v ^ "$" ^ string_of_int i, sz)
 
@@ -253,10 +245,8 @@ let rec indexVars b sub =
 let rec passify_aux sub c : ((int * int) StringMap.t * cmd) =
   match c with
   | Skip -> (sub, Skip)
-  | Assert b ->
-     (sub, Assert (indexVars b sub))
   | Assume b ->
-     (sub, Assert (indexVars b sub))
+     (sub, Assume (indexVars b sub))
   | Assign (f,e) ->
      begin match StringMap.find sub f with
      | None ->
@@ -305,8 +295,6 @@ let rec passify_aux sub c : ((int * int) StringMap.t * cmd) =
      in
      (merged_subst, mkSelect typ ss')
 
-  | While _ ->
-     failwith "Cannot passify While loops Unsupported"
   | Apply _ ->
      failwith "Cannot passify (yet) table applications"
 
@@ -323,8 +311,7 @@ let passify fvs c =
 let rec good_wp c =
   match c with
   | Skip -> True
-  | Assert b
-    | Assume b -> b
+  | Assume b -> b
   | Seq (c1,c2) -> good_wp c1 %&% good_wp c2
   | Select(Total, _) -> failwith "Totality eludes me"
   | Select(Partial, ss) ->
@@ -339,14 +326,12 @@ let rec good_wp c =
          , t %+% misses))
      |> fst
   | Assign _ -> failwith "ERROR: PROGRAM NOT IN PASSIVE FORM! Assignments should have been removed"
-  | While _ -> failwith "While Loops Deprecated"
   | Apply _ -> failwith "Tables should be applied at this stage"
 
 let rec bad_wp c =
   match c with
   | Skip -> False
   | Assume _ -> False
-  | Assert t -> !%t
   | Seq(c1,c2) -> bad_wp c1 %+% (good_wp c1 %&% bad_wp c2)
   | Select (Total, _) -> failwith "totality eludes me "
   | Select (Partial, ss) ->
@@ -361,7 +346,6 @@ let rec bad_wp c =
          , t %+% misses))
      |> fst
   | Assign _ -> failwith "ERROR: PROGRAM NOT IN PASSIVE FORM! Assignments should have been removed"
-  | While _ -> failwith "While Loops Deprecated"
   | Apply _ -> failwith "Tables should be applied at this stage"
 
 
@@ -503,10 +487,8 @@ let rec prepend pfx c =
   match c with
   | Skip -> Skip
   | Assign(f,e) -> Assign(prepend_str pfx f, prepend_expr pfx e)
-  | Assert b -> prepend_test pfx b |> Assert
   | Assume b -> prepend_test pfx b |> Assume
   | Seq(c1,c2) -> prepend pfx c1 %:% prepend pfx c2
-  | While (b,c) -> mkWhile (prepend_test pfx b) (prepend pfx c)
   | Select(typ, cs) ->
      List.map cs ~f:(fun (t,c) -> (prepend_test pfx t, prepend pfx c))
      |> mkSelect typ
@@ -626,15 +608,12 @@ let rec fill_holes (c : cmd) subst =
   | Assign (_, _) -> c
   | Seq (firstdo, thendo) ->
      fill_holes firstdo subst %:% fill_holes thendo subst
-  | Assert t ->
-     fill_holes_test t subst |> Assert
   | Assume t ->
      fill_holes_test t subst |> Assume
   | Select (_,[]) | Skip ->
      c
   | Select (styp, cmds) ->
      rec_select cmds |> mkSelect styp
-  | While (cond, body) -> While (fill_holes_test cond subst, fill_holes body subst)
   | Apply t
     -> Apply { t with
                actions = List.map t.actions ~f:(fun (scope, a) -> (scope, fill_holes a subst));
@@ -656,14 +635,13 @@ let rec wp_paths negs c phi : (cmd * test) list =
      let phi' = substitute phi (StringMap.singleton field e) in
      (* Printf.printf "substituting %s |-> %s\n into %s to get %s \n%!" field (string_of_expr e) (string_of_test phi') (string_of_test phi'); *)
      [(c,phi')]
-  | Assert t -> [(c, t %&% phi)]
   | Assume t -> [(c, t %=>% phi)]
                   
   (* requires at least one guard to be true *)
   | Select (Total, []) -> [(Skip, True)]
   | Select (Total, cmds) ->
      let open List in
-     (cmds >>| fun (t,c) -> Assert t %:% c)
+     (cmds >>| fun (t,c) -> mkAssume t %:% c)
      >>= flip (wp_paths negs) phi
 
                   
@@ -673,7 +651,7 @@ let rec wp_paths negs c phi : (cmd * test) list =
      List.fold cmds ~init:([]) ~f:(fun wp_so_far (cond, act) ->
           List.fold (wp_paths negs act phi) ~init:wp_so_far
              ~f:(fun acc (trace, act_wp) ->
-               acc @ [(Assert cond %:% trace, cond %&% act_wp)]))
+               acc @ [(mkAssume cond %:% trace, cond %&% act_wp)]))
 
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
@@ -688,14 +666,12 @@ let rec wp_paths negs c phi : (cmd * test) list =
                | `NoNegs ->  True
                | `Negs -> !%(prev_conds)
              in
-             (Assert (cond %&% misses) %:% trace, cond %&% misses %&% act_wp) :: acc), prev_conds %+% cond)
+             (mkAssume (cond %&% misses) %:% trace, cond %&% misses %&% act_wp) :: acc), prev_conds %+% cond)
      |> fst
 
   | Apply t ->
      let open List in
      (t.default :: List.map ~f:(fun (sc, a) -> holify (List.map sc ~f:fst) a) t.actions) >>= flip (wp_paths negs) phi
-  | While _ ->
-     failwith "[Error] loops must be unrolled\n%!"
 
 let bind_action_data vals (scope, cmd) : cmd =
   let holes = List.map scope ~f:fst in
@@ -760,12 +736,12 @@ and fixup (real:cmd) (model : value StringMap.t) : cmd =
   match real with
   | Skip -> Skip
   | Assign (f, v) -> Assign(f, fixup_expr model v)
-  | Assert t -> Assert (fixup_test model t)
   | Assume t -> Assume (fixup_test model t)
   | Seq (p, q) -> Seq (fixup p model, fixup q model)
-  | While (cond, body) -> While (fixup_test model cond, fixup body model)
   | Select (styp,cmds) -> fixup_selects model cmds |> mkSelect styp
   | Apply t
     -> Apply {t with
               actions = List.map t.actions ~f:(fun (data, a) -> (data, fixup a model));
               default = fixup t.default model}
+
+

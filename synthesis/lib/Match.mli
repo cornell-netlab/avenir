@@ -7,6 +7,7 @@ val exact_ : string -> value -> t
 val between_ : string -> value -> value -> t
 val mask_ : string -> value -> value -> t
 val equal : t -> t -> bool
+val get_key : t -> string
 val to_string : t -> string
 val to_test : t -> test
 val to_test_hole : string -> t -> test
@@ -26,3 +27,4 @@ val get_base_value : t -> value
 val exactify : t -> t
 val exactify_list : t list -> t list
 val to_model : string -> t -> value StringMap.t
+val relevant_keys : t list -> string list

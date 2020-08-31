@@ -16,8 +16,6 @@ let rec eliminate_unused_vars cmd (used : StringSet.t) =
        )
      else
        (Skip, used)
-  | Assert t ->
-     (Assert t, stringset_add_list used @@ List.map ~f:fst @@ free_of_test `Var t)
   | Assume t ->
      (Assume t, stringset_add_list used @@ List.map ~f:fst @@ free_of_test `Var t)
   | Seq (c1,c2) ->
@@ -53,8 +51,6 @@ let rec eliminate_unused_vars cmd (used : StringSet.t) =
                   actions = actions';
                   default = default'},
            stringset_add_list used' (fsts @@ free_keys keys))
-  | While _ ->
-     failwith "[DeadCode] While is deprecated"
 
 let elim_vars fvs cmd =
   StringSet.of_list @@ fsts fvs

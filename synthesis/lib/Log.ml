@@ -2,23 +2,37 @@ open Core
 open Tables
 open Ast
 open Util
+(* open ActionGenerator *)
 
 
-
-let cexs (params : Parameters.t) ?(log_out_pkt=None) ?(log_gcl=None) phy_gcl in_pkt =
+let cexs (params : Parameters.t) problem log_out_pkt in_pkt =
   if params.debug then
-    let log_out_pkt =
-      match log_out_pkt, log_gcl with
-      | Some pkt,_ -> pkt
-      | None, Some log_gcl -> Semantics.eval_act log_gcl in_pkt
-      | None, None ->
-         failwith "Tried to print counterexample, but missing logical program _and_ logical_output"
-    in
+    let phy_gcl = Problem.phys_gcl_program params problem in
+    (* let fvs = Problem.fvs problem in *)
     let phy_out_pkt = Semantics.eval_act phy_gcl in_pkt in
     Printf.printf "Counterexample found!\nin: %s\nlog:  %s\nphys:  %s\n\n%!"
       (Packet.string__packet in_pkt)
       (Packet.string__packet log_out_pkt)
-      (Packet.string__packet phy_out_pkt)
+      (Packet.string__packet phy_out_pkt);
+    (* let pos_acts = ActionGenerator.positive_actions params (Problem.phys problem) fvs in_pkt log_out_pkt in
+     * Printf.printf "There are %d positive actions across %d tables\n%!"
+     *   (List.length @@ List.bind pos_acts ~f:snd)
+     *   (List.length pos_acts); *)
+    (* let log_matches =  List.hd_exn (Problem.log_edits problem) |> Edit.get_matches_exn in *)
+    (* let traces =
+     *   ActionGenerator.traces log_edit fvs (Problem.phys problem) in_pkt log_out_pkt
+     * in *)
+    (* let ftables = feasible_tables (Problem.phys problem) fvs log_matches in_pkt log_out_pkt in
+     * Printf.printf "There are %d feasible tables:\n\n%!" (List.length ftables);
+     * List.iter ftables ~f:(fun (t,keys,vars) ->
+     *     Printf.printf "%s : %s -> %s\n%!" t (string_of_strset keys) (string_of_strset vars)
+     *   ); *)
+    (* let reach_pos_acts = reach_positive_actions params problem in_pkt log_out_pkt in *)
+    (* Printf.printf "There are %d queries of sizes: %s\n%!"
+     *   (List.length reach_pos_acts)
+     *   (List.map reach_pos_acts ~f:num_nodes_in_test |> string_of_intlist)
+     * ; *)
+    Interactive.pause params.interactive
 
 
 let already_explored_error model_space model =

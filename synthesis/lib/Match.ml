@@ -32,6 +32,7 @@ let equal_data d d' =
 
 let equal m m' = m.key = m'.key && equal_data m.data m'.data
 
+let get_key m = m.key
 
 let to_string (m : t) : string =
   match m.data with
@@ -281,3 +282,6 @@ let to_model table (m:t) =
     | Between (lo, hi) ->
        let hlo, hhi = Hole.match_holes_range table m.key in
        [hlo,lo; hhi,hi]
+
+
+let relevant_keys = List.filter_map ~f:(fun m -> Option.some_if (not @@ is_wildcard m) (m.key))

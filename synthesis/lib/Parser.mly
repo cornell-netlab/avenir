@@ -6,8 +6,8 @@
 %token OR AND NOT IMPLIES
 %token EQ LESS GREATER LEQ GEQ NEQ
 %token PLUS TIMES MINUS LAND
-%token WHILE SKIP SEMICOLON ASSIGN
-%token ASSERT ASSUME ABORT APPLY
+%token SKIP SEMICOLON ASSIGN
+%token ASSUME APPLY
 %token IF TOTAL PARTIAL ORDERED CASE BRACKETS FI
 %token LPAREN RPAREN LBRACE RBRACE
 %token EOF
@@ -32,16 +32,10 @@ command :
   { Ast.Skip }
 | c = command; SEMICOLON; cs = command
   { Ast.Seq (c, cs) }
-| WHILE; LPAREN; t = test; RPAREN; LBRACE; c = command; RBRACE
-  { Ast.mkWhile t c }
 | f = ID; ASSIGN; e = expr
   { Ast.Assign (f, e) }
-| ASSERT; LPAREN; t = test ; RPAREN
-  { Ast.Assert (t) }
-| ABORT
-  { Ast.Assert (Ast.False) }
 | ASSUME; LPAREN; t = test; RPAREN
-  { Ast.Assume (t) }
+  { Ast.mkAssume (t) }
 | IF; TOTAL; s = select; FI
   { Ast.(Select (Total, s)) }
 | IF; PARTIAL; s = select; FI

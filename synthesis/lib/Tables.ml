@@ -78,15 +78,20 @@ module Row = struct
             match List.nth acts act with
             | None -> []
             | Some (params, _) ->
-               (* Printf.printf "Params for act %d :%s\n%!" act
-                *   (List.fold params ~init:"" ~f:(fun acc (p,_) -> Printf.sprintf "%s %s" acc p)); *)
+               Printf.printf "Params for %s.action[%d] :%s\n%!" tbl_name act
+                 (List.fold params ~init:""
+                    ~f:(fun acc (p,_) -> Printf.sprintf "%s %s" acc p));
                List.fold params ~init:[]
                  ~f:(fun acc (p,sz) ->
-                   match StringMap.find match_model @@ Hole.action_data tbl_name act p sz with
-                   | None ->
-                      (* Printf.printf "Cannot find expected key %s in %s \n%!" p (string_of_map match_model);*)
-                      acc @ [Int (Random.int (pow 2 sz) |> Bigint.of_int_exn, sz)]
-                   | Some v -> acc @ [v]
+                   let v =
+                     match StringMap.find match_model @@
+                             Hole.action_data tbl_name act p sz
+                     with
+                     | None -> Int (Random.int (pow 2 sz) |> Bigint.of_int_exn, sz)
+                     | Some v -> v
+                   in
+                   Printf.printf "\t%s -> %s\n" p (string_of_value v);
+                   acc @ [v]
                  )
        in
        match keys_holes with
@@ -140,6 +145,11 @@ module Edit = struct
                         | Add _ -> None
                         | Del (n,i) -> Some (n,i)
                       )
+
+  let get_matches_exn = function
+    | Add (_, (matches,_,_)) -> matches
+    | Del _ -> failwith "[Edit.get_matches] tried to get matches of a deletion"
+
 
   let to_test phys e =
     match e with

@@ -26,6 +26,9 @@ let get_val_opt (pkt : t) (field : string) : value option =
   StringMap.find pkt field
 
 let rec set_field_of_expr (pkt : t) (field : string) (e : expr) : t =
+  if has_hole_expr e then
+    failwith @@ Printf.sprintf "[PacketHole] Tried to assign %s <- %s" field (string_of_expr e)
+  else
   let binop op e e'=
     let eVal = get_val (set_field_of_expr pkt field e) field in
     let eVal' = get_val (set_field_of_expr pkt field e') field in
@@ -36,8 +39,7 @@ let rec set_field_of_expr (pkt : t) (field : string) (e : expr) : t =
   | Var (x,_) ->
      get_val pkt x
      |> set_field pkt field
-  | Hole _ ->
-     failwith "Packets cannot have holes in them"
+  | Hole _ -> failwith "impossible"
   | Cast (i,e) -> set_field pkt field @@ cast_value i @@ get_val (set_field_of_expr pkt field e) field
   | Slice {hi;lo;bits} -> set_field pkt field @@ slice_value hi lo @@ get_val (set_field_of_expr pkt field bits) field
   | Plus  (e, e') -> binop add_values e e'
@@ -210,3 +212,29 @@ let extract_inout_ce (model : value StringMap.t) : (t * t) =
 let mk_packet_from_list (assoc : (string * value) list) : t =
   List.fold assoc ~init:empty
     ~f:(fun pkt (f, v) -> set_field pkt f v)
+
+let diff_vars (pkt : t) (pkt' : t) : string list =
+  let is_drop pkt = Option.(StringMap.find pkt "standard_metadata.egress_spec" >>| (=) (mkInt(0,9))) in
+  let alternate_drop =
+    match is_drop pkt, is_drop pkt' with
+    | Some dropped, Some dropped' ->
+       dropped && not dropped'
+       || dropped' && not dropped
+    | _ -> false
+  in
+  if alternate_drop
+  then
+    ["standard_metadata.egress_spec"]
+  else
+  let diff_map = StringMap.merge pkt pkt'
+    ~f:(fun ~key:_ -> function
+      | `Both (l,r) when veq l r -> None
+      | `Left v | `Right v | `Both(_,v) -> Some v)
+  in
+  StringMap.keys diff_map
+
+
+
+
+let restrict (pkt : t) (vars : StringSet.t) : t =
+  StringMap.filter_keys pkt ~f:(StringSet.mem vars)
