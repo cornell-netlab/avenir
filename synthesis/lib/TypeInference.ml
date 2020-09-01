@@ -16,7 +16,7 @@ let rec relabel (e : expr) (sz : size) : expr =
   | Slice {hi;lo;_} -> let sz' = hi - lo in
                        if sz = sz' then e else failwith "Tried to incorrectly relabel a slice"
   | Concat _ -> e
-  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
+  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | SatPlus es | SatMinus es
     -> binop (ctor_for_binexpr e) es
 
 let rec infer_expr (e : expr) : expr =
@@ -46,15 +46,29 @@ let rec infer_expr (e : expr) : expr =
   | Cast (i,e) -> mkCast i @@ infer_expr e
   | Slice {hi;lo;bits} -> mkSlice hi lo @@ infer_expr bits
   | Concat (e,e') -> mkConcat (infer_expr e) (infer_expr e')
-  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es
+  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | SatPlus es | SatMinus es
     -> binop (ctor_for_binexpr e) es
 
 let rec infer_test (t : test) : test =
+  let binop_e op e1 e2 =
+    let e1' = infer_expr e1 in
+    let e2' = infer_expr e2 in
+    let sz1 = size_of_expr e1' in
+    let sz2 = size_of_expr e2' in
+    if sz1 = -1 && sz2 >= 0 then
+      op (relabel e1' sz2) e2'
+    else if sz1 >= 0 && sz2 = -1 then
+      op e1' (relabel e2' sz1)
+    else if sz1 = sz2 then
+      op e1' e2'
+    else
+      failwith @@ Printf.sprintf "[TypeError] %s and %s have different bitwidths" (string_of_expr e1) (string_of_expr e2)
+  in
   match t with
   | True -> True
   | False -> False
-  | Eq (e1,e2) -> infer_expr e1 %=% infer_expr e2
-  | Le (e1,e2) -> infer_expr e1 %<=% infer_expr e2
+  | Eq (e1,e2) -> binop_e (%=%) e1 e2
+  | Le (e1,e2) -> binop_e (%<=%) e1 e2
   | And (b1,b2) -> infer_test b1 %&% infer_test b2
   | Or (b1,b2) -> infer_test b1 %+% infer_test b2
   | Impl (b1,b2) -> infer_test b1 %=>% infer_test b2

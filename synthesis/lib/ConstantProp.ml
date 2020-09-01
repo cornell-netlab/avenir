@@ -32,8 +32,10 @@ let rec eval_const_expr e =
   | Value v -> Some (v)
   | Var _ | Hole _ -> None
   | Plus es -> binop add_values es
+  | SatPlus es -> binop sat_add_values es
   | Times es -> binop multiply_values es
   | Minus es -> binop subtract_values es
+  | SatMinus es -> binop sat_subtract_values es
   | Mask es -> binop mask_values es
   | Xor es -> binop xor_values es
   | BOr es -> binop or_values es
@@ -71,7 +73,9 @@ let rec propogate_expr (map : expr StringMap.t) (e : expr) =
   | Xor es
   | BOr es
   | Shl es
-  | Concat es ->
+  | Concat es
+  | SatPlus es
+  | SatMinus es ->
      binop (ctor_for_binexpr e) es
   | Cast (i, e') ->
      unop (mkCast i) e'

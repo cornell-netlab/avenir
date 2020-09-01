@@ -32,6 +32,8 @@ type expr =
   | Var of (string * size)
   | Hole of (string * size)
   | Plus of (expr * expr)
+  | SatPlus of (expr * expr)
+  | SatMinus of (expr * expr)
   | Times of (expr * expr)
   | Minus of (expr * expr)
   | Mask of (expr * expr)
@@ -54,6 +56,8 @@ let mkCast i e = Cast(i,e)
 let mkPlus e e' = Plus(e,e')
 let mkMinus e e' = Minus (e, e')
 let mkTimes e e' = Times (e, e')
+let mkSatPlus e e' = SatPlus(e,e')
+let mkSatMinus e e' = SatMinus (e,e')
 let mkMask e e' = Mask(e,e')
 let mkXor e e' = Xor(e,e')
 let mkBOr e e' = BOr (e,e')
@@ -67,6 +71,8 @@ let ctor_for_binexpr =
   | Plus _ -> mkPlus
   | Times _ -> mkTimes
   | Minus _ -> mkMinus
+  | SatPlus _ -> mkSatPlus
+  | SatMinus _ -> mkSatMinus
   | Mask _ -> mkMask
   | Xor _ -> mkXor
   | BOr _ -> mkBOr
@@ -81,6 +87,8 @@ let rec string_of_expr (e : expr) : string =
   | Hole (x,s) -> "?" ^ x ^ "#" ^ string_of_int s
   | Cast (i,e)    -> Printf.sprintf "((<%d>) %s)" i (string_of_expr e)
   | Plus (e, e')  -> string_binop e "+" e'
+  | SatPlus (e,e') -> string_binop e "|+|" e'
+  | SatMinus(e,e') -> string_binop e "|-|" e'
   | Times (e, e') -> string_binop e "*" e'
   | Minus (e, e') -> string_binop e "-" e'
   | Mask (e,e')   -> string_binop e "&" e'
@@ -103,8 +111,10 @@ let rec sexp_string_of_expr (e : expr) =
   | Hole (x, s) -> "Hole(\"" ^ x ^ "\"," ^ string_of_int s ^ ")"  
   | Cast (i,e) -> Printf.sprintf "Cast(%d, %s)" i (string_of_expr e)
   | Plus es -> string_binop "Plus" es
+  | SatPlus es -> string_binop "SatPlus" es
   | Times es -> string_binop "Times" es
   | Minus es -> string_binop "Minus" es
+  | SatMinus es -> string_binop "SatMinus" es
   | Mask es -> string_binop "Mask" es
   | Xor es -> string_binop "Xor" es
   | BOr es     -> string_binop "BOr" es
@@ -127,7 +137,7 @@ let rec size_of_expr (e : expr) : size =
   | Hole (_,s) -> s
   | Cast (i,_) -> i
   | Concat (e,e') -> size_of_expr e + size_of_expr e'
-  | Plus (e, e') | Minus(e,e') | Times (e,e') | Mask(e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') ->
+  | Plus (e, e') | Minus(e,e') | Times (e,e') | Mask(e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') | SatPlus(e,e') | SatMinus (e,e') ->
      let s = size_of_expr e in
      let s' = size_of_expr e' in
      if s = s' then s
@@ -146,7 +156,7 @@ let rec num_nodes_in_expr e =
   match e with
   | Value _ | Var _ | Hole _ -> 1
   | Cast (_,e) | Slice {bits=e;_}-> 1 + num_nodes_in_expr e
-  | Plus (e,e') | Minus(e,e') | Times(e,e') | Mask(e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') | Concat (e,e') ->
+  | Plus (e,e') | Minus(e,e') | Times(e,e') | Mask(e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') | Concat (e,e') | SatPlus(e,e') | SatMinus (e,e') ->
      num_nodes_in_expr e
      + num_nodes_in_expr e'
      + 1
@@ -159,6 +169,15 @@ let add_values (v : value) (v' : value) : value =
   | Int (x, sz), Int(x',sz') ->
      failwith (Printf.sprintf "Type error %s#%d and %s#%d have different bitvec sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 
+let sat_add_values (v : value) (v' : value) : value =
+  match add_values v v' with
+  | Int (v, sz) ->
+     if Bigint.(v > max_int sz) then
+       Int(max_int sz, sz)
+     else
+       Int(v,sz)
+
+
 let multiply_values (v : value) (v' : value) : value =
   match v, v' with
   | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x * x'), sz)
@@ -168,11 +187,18 @@ let multiply_values (v : value) (v' : value) : value =
 let subtract_values (v : value) (v' : value) : value =
   match v, v' with
   | Int (x, sz), Int (x',sz') when sz = sz' ->
-     (* if Bigint.(x-x' < zero)
-      * then Int (Bigint.zero, sz)
-      * else  *)Int (Bigint.(x - x'), sz)
+     Int (Bigint.(x - x'), sz)
   | Int (x, sz), Int (x', sz') ->
      failwith (Printf.sprintf "Type error %s#%d and %s#%d have different bitvec sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
+
+let sat_subtract_values (v : value) (v' : value) : value =
+  match subtract_values v v' with
+  | Int (v,sz) ->
+     if Bigint.(v < zero) then
+       mkInt(0,sz)
+     else
+       Int(v,sz)
+
 
 let mask_values (v : value) (v' : value) : value =
   match v,v' with
@@ -303,21 +329,24 @@ let mkEq (e : expr) (e':expr) =
   if not enable_smart_constructors then Eq(e,e') else 
   if e = e' then
     ((*Printf.printf "[=] %s and %s are equal, so True\n" (string_of_expr e) (string_of_expr e');*)
-    True) else
+     True)
+  else
     let ord e = match e with
       | Var _ -> 0
       | Hole _ -> 1
       | Cast _ -> 2
       | Plus _ -> 3
-      | Minus _ -> 4
-      | Times _ -> 5
-      | Value _ -> 7
-      | Mask _ -> 8
-      | Xor _ -> 9
-      | BOr _ -> 10
-      | Shl _ -> 11
-      | Slice _ -> 12
-      | Concat _ -> 13
+      | SatPlus _ -> 4
+      | Minus _ -> 5
+      | SatMinus _ -> 6
+      | Times _ -> 7
+      | Value _ -> 8
+      | Mask _ -> 9
+      | Xor _ -> 10
+      | BOr _ -> 11
+      | Shl _ -> 12
+      | Slice _ -> 13
+      | Concat _ -> 14
     in
     let norm = match e, e' with
     | Value _, Value _
@@ -422,8 +451,8 @@ let rec free_of_expr typ e : (string * size) list =
   | Var _ , `Hole -> []
   | Hole _ , `Var -> []
   | Cast(_,e),_ | Slice {bits=e;_},_ -> free_of_expr typ e
-  | Plus(e,e'),_ | Times (e,e'),_ | Minus(e,e'),_ | Mask (e,e'), _ | Xor (e,e'), _ | BOr (e,e'), _ | Shl (e,e'), _ | Concat (e,e'),_
-    -> free_of_expr typ e @ free_of_expr typ e'
+  | Plus(e,e'),_ | Times (e,e'),_ | Minus(e,e'),_ | Mask (e,e'), _ | Xor (e,e'), _ | BOr (e,e'), _ | Shl (e,e'), _ | Concat (e,e'),_ | SatPlus (e,e'),_  | SatMinus(e,e'), _ ->
+     free_of_expr typ e @ free_of_expr typ e'
 
 let rec free_of_test typ test : (string * size) list =
   begin match test with
@@ -450,6 +479,7 @@ let rec has_hole_expr = function
   | Hole _ -> true
   | Cast (_,e) | Slice {bits=e;_} -> has_hole_expr e
   | Plus (e1,e2) | Minus(e1,e2) | Times (e1,e2) | Mask (e1,e2) | Xor (e1,e2) | BOr (e1,e2) | Shl (e1,e2) | Concat (e1,e2)
+    | SatPlus(e1,e2) | SatMinus (e1,e2)
     -> has_hole_expr e1 || has_hole_expr e2
                                  
 let rec has_hole_test = function
@@ -471,6 +501,7 @@ let rec multi_ints_of_expr e : (Bigint.t * size) list =
   | Var _ | Hole _ -> []
   | Cast (_,e) | Slice {bits=e;_} -> multi_ints_of_expr e
   | Plus (e,e') | Times (e,e') | Minus (e,e')  | Mask (e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') | Concat (e,e')
+    | SatPlus (e,e') | SatMinus(e,e')
     -> multi_ints_of_expr e @ multi_ints_of_expr e'
                   
 let rec multi_ints_of_test test : (Bigint.t * size) list =
@@ -821,8 +852,10 @@ let rec holify_expr ~f holes (e : expr) : expr =
   | Cast (i,e) -> mkCast i @@ holify_expr ~f holes e
   | Slice {hi;lo;bits} -> mkSlice hi lo @@ holify_expr ~f holes bits
   | Plus es
+    | SatPlus es
     | Times es
     | Minus es
+    | SatMinus es
     | Mask es
     | Xor es
     | BOr es

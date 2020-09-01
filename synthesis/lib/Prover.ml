@@ -28,11 +28,6 @@ let quantify expr etyp styp =
   | _, `Sat -> Smtlib.const expr
 
 let rec expr_to_term_help expr styp : Smtlib.term =
-  if size_of_expr expr = 33 then
-    Printf.sprintf "FOUND THE OFFENSE: \n%s\n" (string_of_expr expr)
-    |> failwith
-  else
-
   match expr with
   | Value (Int (num, sz)) ->
      Smtlib.bbv (num) sz
@@ -56,18 +51,42 @@ let rec expr_to_term_help expr styp : Smtlib.term =
      Smtlib.bvadd
        (expr_to_term_help e1 styp)
        (expr_to_term_help e2 styp)
+
+  | SatPlus(e1,e2) ->
+     if size_of_expr e1 <> size_of_expr e2
+     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     let t1 = expr_to_term_help e1 styp in
+     let t2 = expr_to_term_help e2 styp in
+     let sz = size_of_expr e1 in
+     let maxt = expr_to_term_help (Value(Int(Util.max_int sz, sz))) styp in
+     let bad = Smtlib.(bvugt t2 (bvsub maxt t1)) in
+     Smtlib.(ite bad maxt (bvadd t1 t2))
+
+
   | Times (e1, e2) ->
      if size_of_expr e1 <> size_of_expr e2
      then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
      Smtlib.bvmul
        (expr_to_term_help e1 styp)
        (expr_to_term_help e2 styp)
+
   | Minus (e1, e2) ->
      if size_of_expr e1 <> size_of_expr e2
      then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
      Smtlib.bvsub
        (expr_to_term_help e1 styp)
        (expr_to_term_help e2 styp)
+
+  | SatMinus (e1,e2) ->
+     if size_of_expr e1 <> size_of_expr e2
+     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     let t1 = expr_to_term_help e1 styp in
+     let t2 = expr_to_term_help e2 styp in
+     let sz = size_of_expr e1 in
+     let zero = expr_to_term_help (mkVInt(0, sz)) styp in
+     let bad = Smtlib.(bvult t1 t2) in
+     Smtlib.(ite bad zero (bvsub t1 t2))
+
   | Mask (e1,e2) ->
      if size_of_expr e1 <> size_of_expr e2
      then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);

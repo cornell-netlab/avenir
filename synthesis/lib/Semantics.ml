@@ -21,8 +21,10 @@ let rec eval_expr (pkt_loc : Packet.located) ( e : expr ) : value =
   | Hole (h,_) -> Packet.get_val (fst pkt_loc) h
   | Cast (i,e) -> cast_value i @@ eval_expr pkt_loc e
   | Plus  (e1, e2) -> binop add_values e1 e2
+  | SatPlus(e1,e2) -> binop sat_add_values e1 e2
   | Times (e1, e2) -> binop multiply_values e1 e2
   | Minus (e1, e2) -> binop subtract_values e1 e2
+  | SatMinus(e1,e2) -> binop sat_subtract_values e1 e2
   | Mask (e1, e2) -> binop mask_values e1 e2
   | Xor (e1,e2) -> binop xor_values e1 e2
   | BOr (e1,e2) -> binop or_values e1 e2

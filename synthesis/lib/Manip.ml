@@ -89,7 +89,7 @@ let rec substituteE ?holes:(holes = false) substMap e =
        else ((*Printf.printf "NO SUBST\n%!";*)  e)
     | Cast (i,e) -> mkCast i @@ substituteE ~holes substMap e
     | Slice {hi;lo;bits} -> mkSlice hi lo @@ substituteE ~holes substMap bits
-    | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es
+    | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
       -> binop (ctor_for_binexpr e) es
 
                                              
@@ -237,7 +237,7 @@ let rec indexVars_expr e (sub : ((int * int) StringMap.t)) =
   | Slice {hi;lo;bits} ->
      let e', sub' = indexVars_expr bits sub in
      mkSlice hi lo e', sub'
-  | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es
+  | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
     -> binop (ctor_for_binexpr e) es
 
 let rec indexVars b sub =
@@ -398,7 +398,9 @@ let rec apply_init_expr (e : expr) =
     | Xor es
     | BOr es
     | Shl es
-    | Concat es -> binop (ctor_for_binexpr e) es
+    | Concat es
+    | SatPlus es
+    | SatMinus es -> binop (ctor_for_binexpr e) es
 
 let rec apply_init_test t =
   let ebinop op (e,e') = op (apply_init_expr e) (apply_init_expr e') in
@@ -454,7 +456,9 @@ let rec apply_finals_sub_expr e sub =
     | Xor es
     | BOr es
     | Shl es
-    | Concat es -> binop (ctor_for_binexpr e) es
+    | Concat es
+    | SatPlus es
+    | SatMinus es -> binop (ctor_for_binexpr e) es
 
 
 let rec apply_finals_sub_test t sub =
@@ -487,7 +491,7 @@ let rec prepend_expr pfx e =
   | Hole(v, sz) -> Var(prepend_str pfx v, sz)
   | Cast (i,e) -> mkCast i @@ prepend_expr pfx e
   | Slice {hi;lo;bits} -> mkSlice hi lo @@ prepend_expr pfx bits
-  | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es
+  | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
     -> binop (ctor_for_binexpr e) es
 
 let rec prepend_test pfx b =
@@ -593,7 +597,7 @@ let rec fill_holes_expr e (subst : value StringMap.t) =
      end
   | Cast (i,e) -> mkCast i @@ fill_holesS e
   | Slice {hi;lo;bits} -> mkSlice hi lo @@ fill_holesS bits
-  | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es
+  | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es  | SatPlus es | SatMinus es
     -> binop (ctor_for_binexpr e) es
 
 
@@ -718,7 +722,7 @@ let rec fixup_expr (model : value StringMap.t) (e : expr)  : expr =
      end
   | Cast (i,e) -> mkCast i @@ fixup_expr model e
   | Slice {hi;lo;bits} -> mkSlice hi lo @@ fixup_expr model bits
-  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es
+  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es  | SatPlus es | SatMinus es
     -> binop (ctor_for_binexpr e) es
 
 let rec fixup_test (model : value StringMap.t) (t : test) : test =
