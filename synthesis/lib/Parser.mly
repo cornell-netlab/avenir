@@ -6,8 +6,8 @@
 %token OR AND NOT IMPLIES
 %token EQ LESS GREATER LEQ GEQ NEQ
 %token PLUS TIMES MINUS LAND
-%token WHILE SKIP SEMICOLON ASSIGN
-%token ASSERT ASSUME ABORT APPLY
+%token SKIP SEMICOLON ASSIGN
+%token ASSUME APPLY
 %token IF TOTAL PARTIAL ORDERED CASE BRACKETS FI
 %token LPAREN RPAREN LBRACE RBRACE
 %token EOF
@@ -32,16 +32,10 @@ command :
   { Ast.Skip }
 | c = command; SEMICOLON; cs = command
   { Ast.Seq (c, cs) }
-| WHILE; LPAREN; t = test; RPAREN; LBRACE; c = command; RBRACE
-  { Ast.mkWhile t c }
 | f = ID; ASSIGN; e = expr
   { Ast.Assign (f, e) }
-| ASSERT; LPAREN; t = test ; RPAREN
-  { Ast.Assert (t) }
-| ABORT
-  { Ast.Assert (Ast.False) }
 | ASSUME; LPAREN; t = test; RPAREN
-  { Ast.Assume (t) }
+  { Ast.mkAssume (t) }
 | IF; TOTAL; s = select; FI
   { Ast.(Select (Total, s)) }
 | IF; PARTIAL; s = select; FI
@@ -57,8 +51,8 @@ keys :
 
 params :
   | { [] }
-  | k = ID; POUND; size = INT { [k,int_of_string size] }
-  | k = ID; POUND; size = INT; COMMA; ks = keys { ((k, int_of_string size)::ks) }
+  | p = ID; POUND; size = INT { [p,int_of_string size] }
+  | p = ID; POUND; size = INT; COMMA; ps = params { ((p, int_of_string size)::ps) }
 
 actions :
   | LBRACE; c = command; RBRACE;  { [([],c)] }

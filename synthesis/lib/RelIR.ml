@@ -508,7 +508,7 @@ let dominating_vars (act_seq : action_set list) (keys : (string * size * size) l
        delta c2 (var, lo, hi)
        |> List.fold ~init:[]
             ~f:(fun acc var ->  acc @ delta c1 var)
-    | Assert (True) | Assume True -> [(var, lo, hi)]
+    | Assume True -> [(var, lo, hi)]
     | _ -> failwith "Don't know how to implement complicated \
                      assertions/assumptions or choice in actions"
   in

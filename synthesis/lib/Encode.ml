@@ -396,11 +396,11 @@ and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) 
      | BitOr -> binop mkBOr e e'
      | Shl -> binop mkShl e e'
      | MinusSat ->
-        Printf.eprintf "Warning, interpreting |-| as -\n%!";
-        binop mkMinus e e'
+        (* Printf.eprintf "Warning, interpreting |-| as -\n%!"; *)
+        binop mkSatMinus e e'
      | PlusSat ->
-        Printf.eprintf "Warning, interpreting |+| as +\n%!";
-        binop mkPlus e e'
+        (* Printf.eprintf "Warning, interpreting |+| as +\n%!"; *)
+        binop mkSatPlus e e'
 
      | Div | Mod
        -> unimplemented (string_of_binop op)
@@ -437,7 +437,7 @@ and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) 
      end
   | E.BitStringAccess {bits;lo;hi} ->
      begin match lo, hi with
-     | (_,Int (_,i)), (_,Int (_,j)) -> mkSlice (Bigint.to_int_exn i.value) (Bigint.to_int_exn j.value)
+     | (_,Int (_,i)), (_,Int (_,j)) -> mkSlice (Bigint.to_int_exn j.value) (Bigint.to_int_exn i.value)
                            @@ encode_expression_to_value_with_width width type_ctx bits
      | _, _ -> failwith "Bit string accesses must be ints"
      end
@@ -670,13 +670,16 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t l
         begin match encode_expression_to_value type_ctx lhs with
         | Var (f,s) -> f %<-% encode_expression_to_value_with_width s type_ctx rhs, false, false
         | Slice {hi;lo;bits=(Var(f,s) as bits)} ->
-           f %<-% mkConcat (
-                      mkConcat
-                        (mkSlice s hi bits)
-                        (encode_expression_to_value_with_width (hi - lo) type_ctx rhs)
-                    )
-                    (mkSlice (lo-1) 0 bits)
-
+           let concat_if_necessary =
+             if lo > 0 then
+               Fn.flip mkConcat (mkSlice (lo-1) 0 bits)
+             else
+               Fn.id
+             in
+           f %<-%(mkConcat
+                    (mkSlice s hi bits)
+                    (encode_expression_to_value_with_width (hi - lo) type_ctx rhs)
+                  |> concat_if_necessary)
           , false
           , false
 
@@ -891,10 +894,20 @@ and encode_action3 prog (ctx : Declaration.t list) (type_ctx : Declaration.t lis
 
 and encode_switch prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : Expression.t) (rv : int) ( cases : Statement.switch_case list) : cmd * ((test * cmd) list) =
   let tbl, e, acs = encode_switch_expr prog ctx type_ctx rv expr in
+  let rec last_is_only_default =
+    let open Statement in
+    function
+    | [] -> true
+    | [_] -> true
+    | c::cs ->
+       match snd c with
+       | Action {label = (_, Default);_}
+         | FallThrough {label = (_,Default)} -> false
+       | _ -> last_is_only_default cs
+  in
+  assert (last_is_only_default cases);
   tbl,
-  (List.fold_map cases ~f:(encode_switch_case prog ctx type_ctx e acs rv) ~init:True)
-  |> snd |> List.filter_map ~f:(fun x -> x)
-
+  (List.filter_map cases ~f:(encode_switch_case prog ctx type_ctx e acs rv))
 
 and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) (e : Expression.t) : cmd * expr * Table.action_ref list =
   let dispList = dispatch_list e in
@@ -925,31 +938,30 @@ and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t
 
 
 
-
- and encode_switch_case prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : expr)
-                      (ts : Table.action_ref list) (rv : int) (fall_test : test)
-                      (case : Statement.switch_case) : test * ((test * cmd) option) =
-    let open Statement in
-    match snd case with
-      | Action {label;code} ->
-        begin match snd label with
-        | Default ->
-           True, Some (fall_test, encode_block prog ctx type_ctx rv code)
-        | Name lbl_name ->
-            let act_i = List.findi ts ~f:(fun _ a -> name_string (snd a).name = snd lbl_name) in
-            let block = encode_block prog ctx type_ctx rv code in
-            begin match act_i with
-              | Some (i, _) ->
-                let test = Or(fall_test, Eq(expr, mkVInt(i + 1, -1))) in
-                True, Some (test, block)
-              | None -> failwith ("Action not found when encoding switch statement")
-            end
+and encode_switch_case prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : expr)
+                      (ts : Table.action_ref list) (rv : int)
+                      (case : Statement.switch_case) : ((test * cmd) option) =
+  let open Statement in
+  let c = snd case in
+  match c with
+  | Action {label;code} ->
+     begin match snd label with
+     | Default -> Some (True, encode_block prog ctx type_ctx rv code)
+     | Name lbl_name ->
+        let act_i = List.findi ts ~f:(fun _ a -> name_string (snd a).name = snd lbl_name) in
+        let block = encode_block prog ctx type_ctx rv code in
+        begin match act_i with
+        | Some (i, _) ->
+           let test = expr %=% mkVInt(i + 1, -1) in
+           Some (test, block)
+        | None -> failwith ("Action not found when encoding switch statement")
         end
-      | FallThrough {label} ->
-        begin match snd label with
-          | Default -> failwith "Default in switch" (* True, None *)
-          | Name _ -> failwith "encode_switch_case"
-        end
+     end
+  | FallThrough {label} ->
+     begin match snd label with
+     | Default -> failwith "Default in switch" (* True, None *)
+     | Name _ -> failwith "encode_switch_case"
+     end
 
 and assign_constants (type_ctx : Declaration.t list) (decl : Declaration.t list) =
   let es = List.filter_map decl
@@ -1065,8 +1077,10 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
          ) in
   let str_keys = List.map p4keys ~f:(fun k -> let kn = dispatch_name (snd k).key in
                                               (* Printf.printf "Getting key?\n"; *)
-                                              (kn, lookup_field_width_exn type_ctx kn)) in
-  
+                                              (kn, lookup_field_width_exn type_ctx kn, None)) in
+
+  let action_run_size = log2 (List.length p4actions + 1) in
+
   let lookup_and_encode_action i (info,a) =
     (* Printf.printf "Encoding action %s\n%!" (snd a.name); *)
 
@@ -1074,7 +1088,7 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
     let action_data = List.map ad ~f:(fun (_,p) -> Parameter.(p.variable, p.typ)) in
     (*let action_data_names = List.map action_data ~f:fst in*)
     (* Set up an action run variable so we can use it to figure out which action ran in switch statements *)
-    let set_action_run = mkAssn (snd name ^ action_run_suffix) (mkVInt(i + 1, 1)) in
+    let set_action_run = mkAssn (snd name ^ action_run_suffix) (mkVInt(i + 1, action_run_size)) in
     let add_tctx = List.map ad ~f:(update_typ_ctx_from_param type_ctx) in 
     let type_ctx2 = add_tctx @ type_ctx in
     let out = List.map action_data ~f:(fun ((_, ad), t) -> ad, lookup_type_width_exn type_ctx t)
@@ -1102,7 +1116,7 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
                       | None -> Skip
   in
 
-  let init_action_run = mkAssn (snd name ^ action_run_suffix) (mkVInt(0, 1)) in
+  let init_action_run = mkAssn (snd name ^ action_run_suffix) (mkVInt(0, action_run_size)) in
 
   init_action_run %:% Apply { name = snd name; keys = str_keys; actions =  action_cmds; default =  enc_def_act }
 
@@ -1118,10 +1132,8 @@ and replace_consts (consts : (string * expr)  list) (prog : cmd) =
   match prog with
   | Skip -> Skip
   | Assign(v, e) -> Assign(v, replace_consts_expr consts e)
-  | Assert t -> Assert(replace_consts_test consts t)
   | Assume t -> Assume(replace_consts_test consts t)
   | Seq(c1, c2) -> Seq(replace_consts consts c1, replace_consts consts c2)
-  | While(t, c) -> While(replace_consts_test consts t, replace_consts consts c)
   | Select(st, tc) ->
     Select(st,  List.map tc ~f:(fun (t, c) -> replace_consts_test consts t, replace_consts consts c))
   | Apply{name; keys; actions; default} ->
@@ -1141,7 +1153,7 @@ and replace_consts_expr (consts : (string * expr)  list) (e : expr) =
   | Hole h -> Hole h
   | Cast (i,e) -> mkCast i @@ replace_consts_expr consts e
   | Slice {hi;lo;bits} -> mkSlice hi lo @@ replace_consts_expr consts bits
-  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es
+  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
     -> binop (ctor_for_binexpr e) es
 
 and replace_consts_test (consts : (string * expr) list) (t : test) =
@@ -1202,7 +1214,7 @@ let rec rewrite_expr (m : (string * int) StringMap.t) (e : expr) : expr =
   | Var (v,sz) -> Var (StringMap.find m v |> Option.value ~default:(v,sz))
   | Cast (i,e) -> mkCast i @@ rewrite_expr m e
   | Slice {hi;lo;bits} -> mkSlice hi lo @@ rewrite_expr m bits
-  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es
+  | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
     -> binop (ctor_for_binexpr e) es
 
 let rec rewrite_test (m : (string * int) StringMap.t) (t : test) : test =
@@ -1226,29 +1238,32 @@ let rec rewrite (m : (string * int) StringMap.t) (c : cmd) : cmd =
      |> Option.map ~f:fst
      |> Option.value ~default:f
      |> flip mkAssn c'
-  | Assert t -> Assert (rewrite_test m t)
-  | Assume t -> Assert (rewrite_test m t)
+  | Assume t -> Assume (rewrite_test m t)
   | Seq (c1,c2) -> rewrite m c1 %:% rewrite m c2
   | Select (typ, ss) ->
      mkSelect typ @@ List.map ss ~f:(fun (t,c) -> rewrite_test m t, rewrite m c)
   | Apply {name; keys; actions; default} ->
      Apply {name;
             keys = List.map keys
-                     ~f:(fun (x,sz) -> StringMap.find m x |> Option.value ~default:(x,sz));
+                     ~f:(fun (x,sz,v_opt) ->
+                       StringMap.find m x
+                       |> Option.value_map
+                            ~default:(x,sz,v_opt)
+                            ~f:(fun (x',sz') -> (x',sz', v_opt)));
             actions = List.map actions
                         ~f:(fun (data, action) ->
                           let m' = List.fold data ~init:m
                                      ~f:(fun acc (x,_) -> StringMap.remove acc x) in
-                         (data, rewrite m' action));
+                          (data, rewrite m' action));
             default = rewrite m default}
-  | While _ -> failwith "[rewrite] deprecated"
+
+let make_tfx = List.fold ~init:StringMap.empty ~f:(fun acc (abs_var, phys_var) ->
+                   StringMap.set acc ~key:(fst abs_var) ~data:phys_var)
 
 
-  
+
 let unify_names (m : ((string * int) * (string * int)) list) (c : cmd) : cmd =
-  let tfx = List.fold m ~init:StringMap.empty ~f:(fun acc (abs_var, phys_var) ->
-                StringMap.set acc ~key:(fst abs_var) ~data:phys_var) in
-  rewrite tfx c
+  rewrite (make_tfx m) c
 
 let parse_p4 include_dirs p4_file verbose =
   let () = Lexer.reset () in

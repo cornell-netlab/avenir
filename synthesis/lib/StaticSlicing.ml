@@ -52,15 +52,13 @@ let rec static_slice_aux (fvs : (string * int) list) (c : cmd) : (string*int) li
      let def_fvs, def' = static_slice_aux fvs default in
      if List.exists tfx ~f:(fun (c,_,_) -> c <> Skip) || (def' <> Skip) then
        let fvs = List.fold tfx ~init:[] ~f:(fun acc (_,_,fvs) -> acc @ fvs )
-                 @ keys
+                 @ free_keys keys
                  @ def_fvs
                  |> List.dedup_and_sort ~compare:(fun (s,_) (s',_) -> String.compare s s') in
        let actions' = List.map tfx ~f:(fun (a,vars,_) -> (vars,a)) in
-       (fvs, mkApply (name, keys, actions', def'))
+       (fvs, Apply {name; keys; actions = actions'; default = def'})
      else
        (fvs, Skip)
-  | Assert _
-  | While _ -> failwith "unsupported"
 
 
 let static_slice fvs cmd = snd @@ static_slice_aux fvs cmd

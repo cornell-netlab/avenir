@@ -3,13 +3,13 @@ open Ast
 open Packet
 open Z3
 
+let force_print = false
 let print_debug = false
 
 let debug term =
-  if print_debug then
-
+  if force_print || print_debug then
     let res = Smtlib.term_to_sexp term |> Smtlib.sexp_to_string in
-    Printf.printf "TERM: %s\n%!" res
+    Printf.eprintf "(assert %s)\n%!" res
 
 let test_str test =
   if false then
@@ -17,7 +17,7 @@ let test_str test =
   else ()
 
 let expr_str test =
-  if print_debug then
+  if force_print || print_debug then
     let res = Ast.string_of_expr test in Printf.printf "EXPR: %s"res
   else ()
 
@@ -28,11 +28,6 @@ let quantify expr etyp styp =
   | _, `Sat -> Smtlib.const expr
 
 let rec expr_to_term_help expr styp : Smtlib.term =
-  if size_of_expr expr = 33 then
-    Printf.sprintf "FOUND THE OFFENSE: \n%s\n" (string_of_expr expr)
-    |> failwith
-  else
-
   match expr with
   | Value (Int (num, sz)) ->
      Smtlib.bbv (num) sz
@@ -56,18 +51,42 @@ let rec expr_to_term_help expr styp : Smtlib.term =
      Smtlib.bvadd
        (expr_to_term_help e1 styp)
        (expr_to_term_help e2 styp)
+
+  | SatPlus(e1,e2) ->
+     if size_of_expr e1 <> size_of_expr e2
+     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     let t1 = expr_to_term_help e1 styp in
+     let t2 = expr_to_term_help e2 styp in
+     let sz = size_of_expr e1 in
+     let maxt = expr_to_term_help (Value(Int(Util.max_int sz, sz))) styp in
+     let bad = Smtlib.(bvugt t2 (bvsub maxt t1)) in
+     Smtlib.(ite bad maxt (bvadd t1 t2))
+
+
   | Times (e1, e2) ->
      if size_of_expr e1 <> size_of_expr e2
      then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
      Smtlib.bvmul
        (expr_to_term_help e1 styp)
        (expr_to_term_help e2 styp)
+
   | Minus (e1, e2) ->
      if size_of_expr e1 <> size_of_expr e2
      then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
      Smtlib.bvsub
        (expr_to_term_help e1 styp)
        (expr_to_term_help e2 styp)
+
+  | SatMinus (e1,e2) ->
+     if size_of_expr e1 <> size_of_expr e2
+     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     let t1 = expr_to_term_help e1 styp in
+     let t2 = expr_to_term_help e2 styp in
+     let sz = size_of_expr e1 in
+     let zero = expr_to_term_help (mkVInt(0, sz)) styp in
+     let bad = Smtlib.(bvult t1 t2) in
+     Smtlib.(ite bad zero (bvsub t1 t2))
+
   | Mask (e1,e2) ->
      if size_of_expr e1 <> size_of_expr e2
      then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
@@ -160,18 +179,18 @@ let toZ3String test = test_to_term_help test `Sat
                       |> Smtlib.term_to_sexp |> Smtlib.sexp_to_string
 
 let expr_to_term e styp d =
-  if d
+  if force_print || d
   then (expr_str e; let res = expr_to_term_help e styp in (*debug res;*) res)
   else expr_to_term_help e styp
 
 let test_to_term test styp d =
-  if d
+  if force_print || d
   then (test_str test; let res = test_to_term_help test styp in (*debug res;*) res)
   else test_to_term_help test styp
 
 let vars_to_term vars d =
   let open Smtlib in
-  if d && print_debug
+  if force_print || d && print_debug
   then begin
       let open List in
       iter vars ~f:(fun (id, i) -> Printf.printf "VAR: %s %d\n%!" id i);
@@ -197,14 +216,14 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
                 ~compare:(fun (idx, _) (idy, _) -> Stdlib.compare idx idy) in
   let () = List.iter holes
              ~f:(fun (id, i) ->
-               if params.debug && print_debug then
-                    Printf.printf "(declare-const %s (_ BitVec %d))\n%!" id i;
+               if force_print || params.debug && print_debug then
+                    Printf.eprintf "(declare-const %s (_ BitVec %d))\n%!" id i;
                declare_const sat_prover (Id id) (BitVecSort i)) in
   let term = forall_ vars (test_to_term test `Sat params.debug) in
   let response =
-    if params.debug && print_debug then debug term;
+    if force_print || params.debug && print_debug then debug term;
     assert_ sat_prover term;
-    if params.debug && print_debug then Printf.printf "Asserted!\n%!";
+    if force_print || params.debug && print_debug then Printf.printf " Asserted % dnodes!\n%!" (num_nodes_in_test test);
     check_sat(* _using (ParOr (UFBV, SMT)) *) sat_prover in
   let dur = Time.(diff (now()) st) in
   if params.debug && print_debug then Printf.printf "Got a Result\n%!";
@@ -237,13 +256,13 @@ let check_valid (params : Parameters.t) (longtest : Ast.test)  =
   let () =
     List.iter vars
       ~f:(fun (id, i) ->
-        if params.debug && print_debug then
+        if force_print || params.debug && print_debug then
           Printf.printf "(declare-const %s (_ BitVec %d))\n%!" id i;
         declare_const valid_prover (Id id) (BitVecSort i)) in
   let st = Time.now() in
   let term = not_ (test_to_term test `Valid params.debug) in
   let response =
-    if params.debug && print_debug then debug term;
+    if force_print || params.debug && print_debug then debug term;
     assert_ valid_prover term;
     check_sat_using QFBV valid_prover in
   let dur = Time.(diff (now()) st) in

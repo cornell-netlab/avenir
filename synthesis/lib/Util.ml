@@ -2,6 +2,9 @@ open Core
 
 module StringMap = Map.Make (String)
 module IntMap = Map.Make(Int)
+module StringSet = Set.Make(String)
+
+
 
 (* Applies f to every element in the list and then combines them pairwise using c.
  * Roughly equivalent to [map exprs f |> fold ~init ~f:c], except that [init] is optional
@@ -277,3 +280,28 @@ let max_int nbits =
   |> Bigint.of_string
 
 
+let stringset_add_list s l =
+  StringSet.union s @@
+    StringSet.of_list l
+
+let fsts = List.map ~f:fst
+
+let map_snd lst ~f = List.map lst ~f:(fun (a,b) -> (a, f b))
+
+let strset_remove_list s l = List.fold l ~init:s ~f:(StringSet.remove)
+let strmap_remove_list m l = List.fold l ~init:m ~f:(StringMap.remove)
+
+let strmap_project_list m l =
+  List.dedup_and_sort l ~compare:(String.compare)
+  |> List.fold ~init:StringMap.empty ~f:(fun acc key ->
+      match StringMap.find m key with
+      | None -> acc
+      | Some data -> StringMap.set acc ~key ~data)
+
+let string_of_strset s =
+  StringSet.fold s ~init:"" ~f:(Printf.sprintf "%s %s")
+  |> Printf.sprintf "{%s }"
+
+let string_of_intlist (l : int list) : string =
+  List.fold l ~init:"" ~f:(Printf.sprintf "%s %d")
+  |> Printf.sprintf "[%s ]"

@@ -25,11 +25,10 @@ let symb_wp ?fvs:(fvs=[]) cmd =
 let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t)
     : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
   let params = {params with no_defaults = false} in
-  let st_mk_cond = Time.now () in
   (* let slice = StaticSlicing.static_slice (Problem.fvs problem) in *)
   let log = Problem.log_gcl_program params problem(* |> slice*) in
   let phys = Problem.phys_gcl_program params problem (* |> slice*) in
-  assert (fails_on_some_example log (Problem.fvs problem) (Problem.cexs problem) |> Option.is_none);
+  (* assert (fails_on_some_example log (Problem.fvs problem) (Problem.cexs problem) |> Option.is_none); *)
 
   match fails_on_some_example phys (Problem.fvs problem) (Problem.cexs problem) with
   | Some (in_pkt, out_pkt) -> `NoAndCE (in_pkt,out_pkt)
@@ -37,8 +36,9 @@ let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref)
      if params.debug then
        Printf.printf "-------------------------------------------\n%s \n???====?=====????\n %s\n-------------------------------------\n%!"
          (string_of_cmd log) (string_of_cmd phys);
+     let st_mk_cond = Time.now () in
+     let condition = equivalent ~neg data Problem.(fvs problem) log phys in
      ProfData.update_time !data.make_vc_time st_mk_cond;
-     let condition = equivalent ~neg Problem.(fvs problem) log phys in
      let cv_st = Time.now () in
      let model_opt, z3time = if params.vcache then check_valid_cached params condition else check_valid params condition in
      ProfData.update_time !data.check_valid_time cv_st;
@@ -255,6 +255,7 @@ let minimize_solution (params : Parameters.t) data problem =
 
 let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (Edit.t list option) =
   Printf.printf "cegis_math\n%!";
+  Log.print_problem params problem;
   (* Printf.printf "%s\n%!" (List.hd_exn (Problem.log_edits problem) |> Edit.to_string); *)
   if timed_out params.timeout then None else
     if params.ecache then
@@ -282,7 +283,7 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
          let log_out_pkt = Semantics.eval_act (Problem.log_gcl_program params problem) in_pkt in
          let params = {params with fastcx = false; ecache = false} in
          let problem = Problem.add_cex problem (in_pkt, log_out_pkt) in
-         Log.cexs ~log_out_pkt:(Some log_out_pkt) params (Problem.phys_gcl_program params problem) in_pkt;
+         Log.cexs params problem log_out_pkt in_pkt;
          solve_math params.search_width params data problem
 
 and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
@@ -331,13 +332,12 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
     let problem' = Problem.(append_phys_edits problem es
                             |> reset_model_space
                             |> reset_attempts) in
-    Log.print_problem params problem';
 
     let problem = Problem.add_attempt problem model in
     let restriction = negate_model problem model es in
     let problem = Problem.refine_model_space problem restriction in
-    assert (List.for_all (Problem.attempts problem)
-              ~f:(fun m -> False = fixup_test m (Problem.model_space problem)));
+
+    Log.check_attempts params.debug problem;
 
     not(List.is_empty es)
     |=> fun _ ->

@@ -21,8 +21,10 @@ let rec eval_expr (pkt_loc : Packet.located) ( e : expr ) : value =
   | Hole (h,_) -> Packet.get_val (fst pkt_loc) h
   | Cast (i,e) -> cast_value i @@ eval_expr pkt_loc e
   | Plus  (e1, e2) -> binop add_values e1 e2
+  | SatPlus(e1,e2) -> binop sat_add_values e1 e2
   | Times (e1, e2) -> binop multiply_values e1 e2
   | Minus (e1, e2) -> binop subtract_values e1 e2
+  | SatMinus(e1,e2) -> binop sat_subtract_values e1 e2
   | Mask (e1, e2) -> binop mask_values e1 e2
   | Xor (e1,e2) -> binop xor_values e1 e2
   | BOr (e1,e2) -> binop or_values e1 e2
@@ -138,12 +140,12 @@ let widening_match pkt wide matches =
     )
 *)
 
-let action_to_execute pkt wide keys (rows : Row.t list ) =
+let action_to_execute pkt wide (rows : Row.t list ) =
   List.fold rows ~init:(True,None,None)
     ~f:(fun rst (matches, data, action) ->
       match rst  with
       | (missed, _, None) ->
-         let cond = Match.list_to_test keys matches in
+         let cond = Match.list_to_test matches in
          if check_test cond pkt
          then
            (missed %&% cond, None, Some (data, action))
@@ -166,13 +168,7 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
           ((Packet.set_field_of_expr pkt f e, loc_opt),
            StringMap.empty,
            cmd, StringMap.empty)
-       | Assert _
-         (* failwith "Asserts are deprecated" *)
-         (* if check_test t pkt_loc then
-          *   (pkt_loc, StringMap.empty, cmd, StringMap.empty)
-          * else
-          *   failwith ("AssertionFailure: " ^ string_of_test t ^ "was false") *)
-         | Assume _ ->
+       | Assume _ ->
           (pkt_loc, StringMap.empty, cmd, StringMap.empty)
        | Seq (firstdo, thendo) ->
           let pkt_loc', wide', cmd', trace' = trace_eval_inst ~gas ~wide firstdo inst pkt_loc in
@@ -204,23 +200,17 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
           | Some rules ->
              begin
                (* Printf.printf "Widening a match! %s\n" (Packet.test_of_wide wide |> string_of_test); *)
-               match action_to_execute pkt_loc wide t.keys rules with
+               match action_to_execute pkt_loc wide rules with
                | (cond, Some wide, Some (data, aid)) ->
                   (* Printf.printf "HIT A RULE\n%!"; *)
                   let pkt', wide', cmd', trace = trace_eval_inst ~wide (List.nth_exn t.actions aid |> bind_action_data data) inst pkt_loc in
-                  (pkt', wide', Assert cond %:% cmd', StringMap.set ~key:t.name ~data:(data, aid) trace)
+                  (pkt', wide', mkAssume cond %:% cmd', StringMap.set ~key:t.name ~data:(data, aid) trace)
                | (cond, _, _) ->
                   (* Printf.printf "Missed everything\n%!"; *)
                   let pkt',wide', cmd', trace = trace_eval_inst ~wide t.default inst pkt_loc in
-                  (pkt' , wide', Assert cond %:% cmd', StringMap.set ~key:t.name ~data:([],List.length t.actions) trace )
+                  (pkt' , wide', mkAssume cond %:% cmd', StringMap.set ~key:t.name ~data:([],List.length t.actions) trace )
              end
           end
-       | While ( _ , _ ) ->
-          failwith "Cannot process while loops"
-                   (* if check_test cond pkt_loc then
-                    *   trace_eval ~gas:(gas-1) (Seq(body,cmd)) pkt_loc
-                    * else
-                    *   Some (pkt_loc, []) *)
 
 
 
@@ -250,10 +240,6 @@ let rec trace_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : ((string 
      if check_test b (pkt, None)
      then [[], pkt]
      else []
-  | Assert b ->
-     if check_test b (pkt, None)
-     then failwith ("Assertion failure")
-     else [[],pkt]
   | Assign (f,e) ->
      [[],
       eval_expr (pkt, None) e
@@ -271,7 +257,7 @@ let rec trace_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : ((string 
      | None -> trace_nd_hits t.default inst pkt
      | Some rules ->
         List.foldi rules ~init:[] ~f:(fun i acc (ms, data, aid) ->
-            let cond = Match.list_to_test t.keys ms in
+            let cond = Match.list_to_test ms in
             if check_test cond (pkt,None)
             then List.map (trace_nd_hits (List.nth_exn t.actions aid |> bind_action_data data) inst pkt)
                    ~f:(fun (hits, pkt') -> (t.name,i) :: hits, pkt')
@@ -294,7 +280,6 @@ let rec trace_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : ((string 
      |> Option.value ~default:[]
 
   | Select(Total, _ ) -> failwith "Deprecated"
-  | While _ -> failwith "unsupported"
 
 let get_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : (string * int) list =
   let open List in

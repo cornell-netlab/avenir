@@ -7,6 +7,7 @@ open Parameters
 open Semantics
 open Packet
 
+
 let rec one_some (table: string) (lst : ((test * cmd) list)) : Ast.cmd option =
   let processed = List.map lst ~f:(fun (b, c) -> (b, truncated table c)) in
   let elim = List.filter processed ~f:(fun (_,c) -> if c = None then false else true) in
@@ -18,9 +19,7 @@ and truncated (table : string) (program : Ast.cmd) : Ast.cmd option =
   match program with
   | Skip
   | Assign _
-  | Assert _
-  | Assume _
-  | While _ -> None
+  | Assume _ -> None
   | Seq (c1, c2) ->
     (match truncated table c2 with
      | None -> truncated table c1
@@ -28,23 +27,38 @@ and truncated (table : string) (program : Ast.cmd) : Ast.cmd option =
   | Select (_, lst) -> one_some table lst
   | Apply t -> if t.name = table then Some Skip else None
 
+
+let is_reachable encode_tag params problem fvs in_pkt tbl_name keys =
+  let phys = Problem.phys problem in
+  let phys_inst = Problem.phys_inst problem in
+  let phys_edits = Problem.phys_edits problem in
+  let trunc =
+    truncated tbl_name phys
+    |> Option.value_exn ~message:(Printf.sprintf "Couldn't find table %s" tbl_name)
+    |> Instance.(apply params NoHoles `Exact (update_list params phys_inst phys_edits))
+  in
+  passive_hoare_triple ~fvs
+    (Packet.to_test in_pkt ~fvs)
+    trunc
+    (Hole.match_holes_table encode_tag tbl_name keys
+     %&% Instance.negate_rows phys_inst tbl_name)
+
+
 let hits_pred params (_: ProfData.t ref) prog inst edits e : test =
   match e with
   | Edit.Add (t, (ms, _, _)) ->
-    let (ks, _, _) = get_schema_of_table t prog |> Option.value_exn in
-    let phi = Match.list_to_test ks ms %&% Instance.negate_rows inst t ks in
+    let phi = Match.list_to_test ms %&% Instance.negate_rows inst t in
     (* Printf.printf "Condition: %s\n%!" (string_of_test phi); *)
     let prefix = truncated t prog |> Option.value_exn in
     let pref_gcl = Instance.(apply params NoHoles `Exact (update_list params inst edits) prefix) in
     wp `Negs pref_gcl phi
   | Edit.Del (t, i) ->
-     let (ks, _, _) = get_schema_of_table t prog |> Option.value_exn in
      let (ms, _, _) = Instance.get_row inst t i |> Option.value_exn in
-     let phi = Match.list_to_test ks ms %&%
+     let phi = Match.list_to_test ms %&%
                  List.fold (Instance.get_rows_before inst t i) ~init:True
                    ~f:(fun acc (matches,_,_) ->
                      (* Printf.printf "combining %s\n%!" (Match.list_to_test ks matches |> string_of_test); *)
-                     acc %&% !%(Match.list_to_test ks matches))
+                     acc %&% !%(Match.list_to_test matches))
      in
      (* Printf.printf "Condition: %s\n%!" (string_of_test phi); *)
      let prefix = truncated t prog |> Option.value_exn in

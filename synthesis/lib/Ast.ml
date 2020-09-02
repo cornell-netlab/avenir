@@ -32,6 +32,8 @@ type expr =
   | Var of (string * size)
   | Hole of (string * size)
   | Plus of (expr * expr)
+  | SatPlus of (expr * expr)
+  | SatMinus of (expr * expr)
   | Times of (expr * expr)
   | Minus of (expr * expr)
   | Mask of (expr * expr)
@@ -43,13 +45,19 @@ type expr =
   | Slice of {hi : int; lo: int; bits: expr}
 
 let mkInt (i,sz) =
-  if i < 0 then failwith @@ Printf.sprintf "Negative integers not representable, tried %d" i else
-  Int (Bigint.of_int_exn i, sz)
+  if i < 0 then
+    failwith @@ Printf.sprintf "Negative integers not representable, tried %d" i
+  else if sz >= 0 && Bigint.(of_int_exn i > max_int sz) then
+    failwith @@ Printf.sprintf "int %d larger than 2^%d-1" i sz
+  else
+    Int (Bigint.of_int_exn i, sz)
 let mkVInt i = Value (mkInt i)
 let mkCast i e = Cast(i,e)
 let mkPlus e e' = Plus(e,e')
 let mkMinus e e' = Minus (e, e')
 let mkTimes e e' = Times (e, e')
+let mkSatPlus e e' = SatPlus(e,e')
+let mkSatMinus e e' = SatMinus (e,e')
 let mkMask e e' = Mask(e,e')
 let mkXor e e' = Xor(e,e')
 let mkBOr e e' = BOr (e,e')
@@ -63,6 +71,8 @@ let ctor_for_binexpr =
   | Plus _ -> mkPlus
   | Times _ -> mkTimes
   | Minus _ -> mkMinus
+  | SatPlus _ -> mkSatPlus
+  | SatMinus _ -> mkSatMinus
   | Mask _ -> mkMask
   | Xor _ -> mkXor
   | BOr _ -> mkBOr
@@ -77,6 +87,8 @@ let rec string_of_expr (e : expr) : string =
   | Hole (x,s) -> "?" ^ x ^ "#" ^ string_of_int s
   | Cast (i,e)    -> Printf.sprintf "((<%d>) %s)" i (string_of_expr e)
   | Plus (e, e')  -> string_binop e "+" e'
+  | SatPlus (e,e') -> string_binop e "|+|" e'
+  | SatMinus(e,e') -> string_binop e "|-|" e'
   | Times (e, e') -> string_binop e "*" e'
   | Minus (e, e') -> string_binop e "-" e'
   | Mask (e,e')   -> string_binop e "&" e'
@@ -89,7 +101,7 @@ let rec string_of_expr (e : expr) : string =
 
 let sexp_string_of_value (v : value) =
   match v with
-  | Int (i,sz) -> Printf.sprintf "Int(%s,%d)" (Bigint.to_string i) sz
+  | Int (i,sz) -> Printf.sprintf "mkInt(%s,%d)" (Bigint.to_string i) sz
                    
 let rec sexp_string_of_expr (e : expr) =
   let string_binop ctor (e1, e2) = Printf.sprintf "%s(%s, %s)" ctor (sexp_string_of_expr e1) (sexp_string_of_expr e2) in
@@ -99,8 +111,10 @@ let rec sexp_string_of_expr (e : expr) =
   | Hole (x, s) -> "Hole(\"" ^ x ^ "\"," ^ string_of_int s ^ ")"  
   | Cast (i,e) -> Printf.sprintf "Cast(%d, %s)" i (string_of_expr e)
   | Plus es -> string_binop "Plus" es
+  | SatPlus es -> string_binop "SatPlus" es
   | Times es -> string_binop "Times" es
   | Minus es -> string_binop "Minus" es
+  | SatMinus es -> string_binop "SatMinus" es
   | Mask es -> string_binop "Mask" es
   | Xor es -> string_binop "Xor" es
   | BOr es     -> string_binop "BOr" es
@@ -123,7 +137,7 @@ let rec size_of_expr (e : expr) : size =
   | Hole (_,s) -> s
   | Cast (i,_) -> i
   | Concat (e,e') -> size_of_expr e + size_of_expr e'
-  | Plus (e, e') | Minus(e,e') | Times (e,e') | Mask(e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') ->
+  | Plus (e, e') | Minus(e,e') | Times (e,e') | Mask(e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') | SatPlus(e,e') | SatMinus (e,e') ->
      let s = size_of_expr e in
      let s' = size_of_expr e' in
      if s = s' then s
@@ -142,7 +156,7 @@ let rec num_nodes_in_expr e =
   match e with
   | Value _ | Var _ | Hole _ -> 1
   | Cast (_,e) | Slice {bits=e;_}-> 1 + num_nodes_in_expr e
-  | Plus (e,e') | Minus(e,e') | Times(e,e') | Mask(e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') | Concat (e,e') ->
+  | Plus (e,e') | Minus(e,e') | Times(e,e') | Mask(e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') | Concat (e,e') | SatPlus(e,e') | SatMinus (e,e') ->
      num_nodes_in_expr e
      + num_nodes_in_expr e'
      + 1
@@ -155,6 +169,15 @@ let add_values (v : value) (v' : value) : value =
   | Int (x, sz), Int(x',sz') ->
      failwith (Printf.sprintf "Type error %s#%d and %s#%d have different bitvec sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 
+let sat_add_values (v : value) (v' : value) : value =
+  match add_values v v' with
+  | Int (v, sz) ->
+     if Bigint.(v > max_int sz) then
+       Int(max_int sz, sz)
+     else
+       Int(v,sz)
+
+
 let multiply_values (v : value) (v' : value) : value =
   match v, v' with
   | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x * x'), sz)
@@ -164,11 +187,18 @@ let multiply_values (v : value) (v' : value) : value =
 let subtract_values (v : value) (v' : value) : value =
   match v, v' with
   | Int (x, sz), Int (x',sz') when sz = sz' ->
-     (* if Bigint.(x-x' < zero)
-      * then Int (Bigint.zero, sz)
-      * else  *)Int (Bigint.(x - x'), sz)
+     Int (Bigint.(x - x'), sz)
   | Int (x, sz), Int (x', sz') ->
      failwith (Printf.sprintf "Type error %s#%d and %s#%d have different bitvec sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
+
+let sat_subtract_values (v : value) (v' : value) : value =
+  match subtract_values v v' with
+  | Int (v,sz) ->
+     if Bigint.(v < zero) then
+       mkInt(0,sz)
+     else
+       Int(v,sz)
+
 
 let mask_values (v : value) (v' : value) : value =
   match v,v' with
@@ -197,7 +227,7 @@ let cast_value w (v : value) : value =
   match v with
   | Int(x,sz) ->
      if w < sz then
-       Int(Bigint.(x land ((pow (one + one) (of_int w)) - one)), sz)
+       Int(Bigint.(x land ((pow (one + one) (of_int w)) - one)), w)
      else if w > sz then
        Int(x,w)
      else
@@ -209,6 +239,7 @@ let slice_value (hi : size) (lo : size) (v : value) : value =
      if hi > sz || lo > sz then failwith "index out of range"
      else
        let sz' = hi - lo in
+       if sz' < 0 then Printf.printf "Trying to slice %s \n%!" (string_of_expr (mkSlice hi lo (Value v)));
        let mask = Bigint.((pow (of_int 2) (of_int sz')) - one) in
        let x' = Bigint.((shift_right x lo) land mask) in
        Int (x', sz')
@@ -298,21 +329,24 @@ let mkEq (e : expr) (e':expr) =
   if not enable_smart_constructors then Eq(e,e') else 
   if e = e' then
     ((*Printf.printf "[=] %s and %s are equal, so True\n" (string_of_expr e) (string_of_expr e');*)
-    True) else
+     True)
+  else
     let ord e = match e with
       | Var _ -> 0
       | Hole _ -> 1
       | Cast _ -> 2
       | Plus _ -> 3
-      | Minus _ -> 4
-      | Times _ -> 5
-      | Value _ -> 7
-      | Mask _ -> 8
-      | Xor _ -> 9
-      | BOr _ -> 10
-      | Shl _ -> 11
-      | Slice _ -> 12
-      | Concat _ -> 13
+      | SatPlus _ -> 4
+      | Minus _ -> 5
+      | SatMinus _ -> 6
+      | Times _ -> 7
+      | Value _ -> 8
+      | Mask _ -> 9
+      | Xor _ -> 10
+      | BOr _ -> 11
+      | Shl _ -> 12
+      | Slice _ -> 13
+      | Concat _ -> 14
     in
     let norm = match e, e' with
     | Value _, Value _
@@ -417,8 +451,8 @@ let rec free_of_expr typ e : (string * size) list =
   | Var _ , `Hole -> []
   | Hole _ , `Var -> []
   | Cast(_,e),_ | Slice {bits=e;_},_ -> free_of_expr typ e
-  | Plus(e,e'),_ | Times (e,e'),_ | Minus(e,e'),_ | Mask (e,e'), _ | Xor (e,e'), _ | BOr (e,e'), _ | Shl (e,e'), _ | Concat (e,e'),_
-    -> free_of_expr typ e @ free_of_expr typ e'
+  | Plus(e,e'),_ | Times (e,e'),_ | Minus(e,e'),_ | Mask (e,e'), _ | Xor (e,e'), _ | BOr (e,e'), _ | Shl (e,e'), _ | Concat (e,e'),_ | SatPlus (e,e'),_  | SatMinus(e,e'), _ ->
+     free_of_expr typ e @ free_of_expr typ e'
 
 let rec free_of_test typ test : (string * size) list =
   begin match test with
@@ -445,6 +479,7 @@ let rec has_hole_expr = function
   | Hole _ -> true
   | Cast (_,e) | Slice {bits=e;_} -> has_hole_expr e
   | Plus (e1,e2) | Minus(e1,e2) | Times (e1,e2) | Mask (e1,e2) | Xor (e1,e2) | BOr (e1,e2) | Shl (e1,e2) | Concat (e1,e2)
+    | SatPlus(e1,e2) | SatMinus (e1,e2)
     -> has_hole_expr e1 || has_hole_expr e2
                                  
 let rec has_hole_test = function
@@ -466,6 +501,7 @@ let rec multi_ints_of_expr e : (Bigint.t * size) list =
   | Var _ | Hole _ -> []
   | Cast (_,e) | Slice {bits=e;_} -> multi_ints_of_expr e
   | Plus (e,e') | Times (e,e') | Minus (e,e')  | Mask (e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') | Concat (e,e')
+    | SatPlus (e,e') | SatMinus(e,e')
     -> multi_ints_of_expr e @ multi_ints_of_expr e'
                   
 let rec multi_ints_of_test test : (Bigint.t * size) list =
@@ -500,13 +536,11 @@ let sexp_string_of_select_typ styp =
 type cmd =
   | Skip
   | Assign of (string * expr)
-  | Assert of test
   | Assume of test
   | Seq of (cmd * cmd)
-  | While of (test * cmd)
   | Select of (select_typ * ((test * cmd) list))
   | Apply of {name:string;
-              keys:(string * size) list;
+              keys:(string * size * value option) list;
               actions:(((string * size) list * cmd) list);
               default: cmd}
 
@@ -514,11 +548,8 @@ let mkSeq first scnd =
   if not enable_smart_constructors then Seq(first, scnd) else
   match first, scnd with
   | Skip, x | x, Skip
-    | Assert True, x | x, Assert True
     | Assume True, x | x, Assume False
     -> x
-  | Assert False, _ | _, Assert False
-    -> Assert False
   | _,_ -> Seq(first, scnd)
 
 
@@ -535,44 +566,61 @@ let mkAssume t =
   if t = True then Skip else Assume t
 
 let clean_selects_list ss = ss
-  (* List.filter ~f:(fun (c,a) -> c <> False) *)
-  (* List.rev ss
-   * |> List.fold ~init:([], [])
-   *   ~f:(fun (acc,seen) (c,a) ->
-   *     if c = False || List.exists seen ~f:((=) c) then
-   *       (acc,seen)
-   *     else
-   *       ((c,a) :: acc, c :: seen)
-   *   )
-   * |> fst *)
 
 let mkPartial ss = 
   if not enable_smart_constructors then Select(Partial, ss) else
-  let selects = clean_selects_list ss in
-  if List.length selects = 0 then
-    Skip
-  else
-    Select (Partial, selects)
+    let selects = clean_selects_list ss in
+    if List.length selects = 0 then
+      Skip
+    else
+      Select (Partial, selects)
 
 let mkTotal ss =
   if not enable_smart_constructors then Select(Total, ss) else
   let selects = clean_selects_list ss in
   if List.length selects = 0 then
-    Assert False
+    mkAssume False
   else
     Select (Total, selects)
 
+let rec assumes_false c =
+  let f = fun (_,c) -> assumes_false c in
+  match c with
+  | Skip | Assign _ -> false
+  | Seq (c1,c2) -> assumes_false c1 || assumes_false  c2
+  | Assume (t) -> t = False
+  | Select (Ordered, cases) ->
+     List.for_all cases ~f
+  | Apply {actions;default;_} ->
+     assumes_false default && List.for_all actions ~f
+  | Select _ -> failwith "deprecated"
+
+
 let mkOrdered ss =
   if not enable_smart_constructors then Select(Ordered, ss) else
-  let selects = clean_selects_list ss
-                |> List.remove_consecutive_duplicates
-                  ~which_to_keep:`First
-                  ~equal:(fun (cond,_) (cond',_) -> cond = cond')
-  in
-  match selects with
-  | [] -> Skip
-  | [(b,c)] -> (mkAssume b) %:% c
-  | _ -> Select (Ordered, selects)
+    (*make these all a single pass *)
+    let selects = clean_selects_list ss
+                  |> List.remove_consecutive_duplicates
+                       ~which_to_keep:`First
+                       ~equal:(fun (cond,_) (cond',_) -> cond = cond')
+                  |> List.filter ~f:(fun (b,c) ->
+                         b <> False && not (assumes_false c)
+                       )
+                  |> List.fold ~init:([],true) ~f:(fun (cases,reachable) (b,c) ->
+                         if reachable then
+                           (cases @ [b,c], b <> True)
+                         else
+                           (cases, reachable)
+                       )
+                  |> fst
+    in
+    if List.for_all selects ~f:(fun (_,c) -> c = Skip) then
+      Skip
+    else
+      match selects with
+      | [] -> Skip
+      | [(b,c)] -> (mkAssume b) %:% c
+      | _ -> Select (Ordered, selects)
 
 let mkSelect styp =
   match styp with
@@ -581,7 +629,8 @@ let mkSelect styp =
   | Ordered -> mkOrdered
 
 
-let mkApply (name,keys,actions,default) = Apply{name;keys;actions;default}
+let mkApply (name,keys,actions,default) =
+  Apply{name;keys = List.map keys ~f:(fun (x,sz) -> (x,sz,None)); actions;default}
 
 
 let combineSelects e e' =
@@ -598,26 +647,14 @@ let combineSelects e e' =
 
 let (%%) = combineSelects
 
-let mkWhile t e = While(t,e)
-       
 let rec repeat c n =  if n = 0 then "" else c ^ repeat c (n-1)
                     
 let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
   match e with
   | Skip ->    repeat "\t" depth ^ "skip"
-  | While (cond, body) ->
-    "\n" ^ repeat "\t" depth ^
-    "while(" ^ string_of_test cond ^ ") {\n"
-      ^ repeat "\t" (depth+1)
-      ^ string_of_cmd ~depth:(depth+1) body
-      ^ "\n" ^ repeat "\t" depth
-      ^ "}\n" ^ repeat "\t" depth
   | Seq (firstdo, thendo) ->
      string_of_cmd ~depth firstdo ^ ";\n "
     ^ string_of_cmd ~depth thendo
-  | Assert t ->
-    repeat "\t" depth ^
-    "assert (" ^ string_of_test t ^ ")"
   | Assume t ->
     repeat "\t" depth ^
     "assume (" ^ string_of_test t ^ ")"
@@ -638,8 +675,9 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
      repeat "\t" depth ^
        "apply (" ^ t.name ^ ",("
       ^ List.fold t.keys ~init:""
-          ~f:(fun str (k,sz) ->
-            str ^ k ^ "#" ^ string_of_int sz ^ ",") ^ ")"
+          ~f:(fun str (k,sz,v_opt) ->
+            let eq = match v_opt with | None -> "" | Some v -> " = " ^ string_of_value v in
+            str ^ k ^ "#" ^ string_of_int sz ^ eq ^ ",") ^ ")"
       ^ ",(" ^ List.foldi t.actions ~init:""
                 ~f:(fun i str a ->
                   str ^ (if i > 0 then " |" else "") ^ " { " ^
@@ -658,11 +696,9 @@ let rec sexp_string_of_cmd e : string =
                         ~c:(fun acc d -> acc ^ ";" ^ d) in
   match e with
   | Skip -> "Skip"
-  | While (cond, body) -> "While("^ sexp_string_of_test cond ^ "," ^ sexp_string_of_cmd body ^")"
   | Seq (p, q) -> "Seq(" ^ sexp_string_of_cmd p ^ "," ^ sexp_string_of_cmd q ^ ")"
-  | Assert t -> "Assert(" ^ sexp_string_of_test t ^ ")"
   | Assume t -> "Assume(" ^ sexp_string_of_test t ^ ")"
-  | Assign (f,e) -> "Assign(" ^ f ^ "," ^ string_of_expr e ^")"
+  | Assign (f,e) -> "Assign(\"" ^ f ^ "\"," ^ sexp_string_of_expr e ^")"
   | Select (styp,es) ->
     let cases_string = match es with
       | [] -> "[]"
@@ -672,7 +708,10 @@ let rec sexp_string_of_cmd e : string =
   | Apply t ->
      "Apply("
      ^ t.name ^ ",["
-     ^ List.fold_left t.keys ~init:"" ~f:(fun str (k,sz) -> str ^ ";\"" ^ k ^ "\"," ^ string_of_int sz ^ "")
+     ^ List.fold_left t.keys ~init:"" ~f:(fun str (k,sz,v) -> str ^ ";\"" ^ k ^ "\"," ^ string_of_int sz ^ "," ^
+                                                                match v with
+                                                                | None -> "None"
+                                                                | Some v -> "Some(" ^ string_of_value v ^ ")")
      ^ "],["
      ^ List.fold_left t.actions ~init:"" ~f:(fun str a -> str ^ ";((SOME ACTION DATA), " ^ sexp_string_of_cmd (snd a) ^")")
      ^ "]," ^ sexp_string_of_cmd t.default
@@ -684,24 +723,77 @@ let get_test_from_assume = function
 
 let rec tables_of_cmd (c:cmd) : string list =
   match c with
-  | Skip | Assign _  | Assume _ | Assert _  -> []
+  | Skip | Assign _  | Assume _   -> []
   | Seq (c,c') -> tables_of_cmd c @ tables_of_cmd c'
   | Select (_, cs) -> concatMap cs ~c:(@) ~init:(Some []) ~f:(fun (_, c) -> tables_of_cmd c)
-  | While (_,c) -> tables_of_cmd c
   | Apply t -> [t.name]
                                                               
 
-    
+let rec num_nodes_in_cmd c =
+  1 +
+  match c with
+  | Skip -> 0
+  | Assign (_, e) -> num_nodes_in_expr e
+  | Seq (c1,c2) -> num_nodes_in_cmd c1 + num_nodes_in_cmd c2
+  | Assume t -> num_nodes_in_test t
+  | Select (_, cases) -> List.fold cases ~init:0 ~f:(fun acc (b, c) -> acc + num_nodes_in_test b + num_nodes_in_cmd c)
+  | Apply {keys;actions;default;_} ->
+     List.length keys + num_nodes_in_cmd default
+     + List.fold actions ~init:0
+         ~f:(fun acc (data, act) ->
+           acc + List.length data + num_nodes_in_cmd act
+         )
+
+let rec get_actions (c : cmd) : (((string * size) list) * cmd) list =
+  match c with
+  | Skip | Assign _ | Assume _ -> []
+  | Seq(c1,c2) -> get_actions c1 @ get_actions c2
+  | Select (_, cases) ->
+     List.bind cases ~f:(fun (_,c) -> get_actions c)
+  | Apply {actions; default; _} ->
+     ([],default)::actions
+
+
+let rec num_table_paths (c : cmd) : Bigint.t =
+  let open Bigint in
+  match c with
+  | Skip | Assign _ | Assume _ -> one
+  | Seq(c1,c2) -> num_table_paths c1 * num_table_paths c2
+  | Select (_, cases) ->
+     List.fold cases ~init:one
+       ~f:(fun acc (_,c) ->
+         let res = num_table_paths c in
+         if res = one then acc else acc + res
+       )
+  | Apply {actions; _} ->
+     of_int (List.length actions) + one (* for the default action*)
+
+let rec num_paths (c : cmd) : Bigint.t =
+  let open Bigint in
+  match c with
+  | Skip | Assign _  | Assume _ -> one
+  | Seq (c1,c2) -> num_paths c1 * num_paths c2
+  | Select (_, cases) ->
+     List.fold cases ~init:one ~f:(fun acc (_,c) -> acc + num_paths c)
+  | Apply _ ->
+     (* Assume apply will execute the default action *)
+     one
+
+
+let free_keys =
+  List.filter_map ~f:(fun (k,sz,v_opt) ->
+      match v_opt with
+      | None -> Some (k,sz)
+      | Some _ -> None
+    )
+
 let rec free_of_cmd typ (c:cmd) : (string * size) list =
   begin match c with
   | Skip -> []
   | Assign (f, e) ->  (f,size_of_expr e) :: free_of_expr typ e
   | Seq (c, c') ->
      free_of_cmd typ c @ free_of_cmd typ c'
-  | While (cond, body) ->
-     free_of_test typ cond
-     @ free_of_cmd typ body
-  | Assert t | Assume t -> free_of_test typ t
+  | Assume t -> free_of_test typ t
   | Select (_,ss) ->
     List.fold ss ~init:[] ~f:(fun fvs (test, action) ->
         free_of_test typ test
@@ -709,7 +801,7 @@ let rec free_of_cmd typ (c:cmd) : (string * size) list =
         @ fvs
       )
   | Apply t ->
-     t.keys
+     free_keys t.keys
      @ List.fold t.actions
          ~init:(free_of_cmd typ t.default)
          ~f:(fun acc (data, a) ->
@@ -736,10 +828,6 @@ let rec multi_ints_of_cmd c : (Bigint.t * size) list =
   | Seq (c, c') ->
     multi_ints_of_cmd c
     @ multi_ints_of_cmd c'
-  | While (cond, body) ->
-     multi_ints_of_test cond
-     @ multi_ints_of_cmd body
-  | Assert t
   | Assume t ->
     multi_ints_of_test t
   | Select (_,ss) ->
@@ -764,8 +852,10 @@ let rec holify_expr ~f holes (e : expr) : expr =
   | Cast (i,e) -> mkCast i @@ holify_expr ~f holes e
   | Slice {hi;lo;bits} -> mkSlice hi lo @@ holify_expr ~f holes bits
   | Plus es
+    | SatPlus es
     | Times es
     | Minus es
+    | SatMinus es
     | Mask es
     | Xor es
     | BOr es
@@ -788,12 +878,9 @@ and holify_cmd ~f holes c : cmd=
   match c with
   | Skip -> c
   | Assign (v, e) -> v %<-% holify_expr ~f holes e
-  | Assert t -> Assert (holify_test ~f holes t)
   | Assume t -> Assume (holify_test ~f holes t)
   | Seq (c, c') ->
      holify_cmd ~f holes c %:% holify_cmd ~f holes c'
-  | While (t, c) ->
-     mkWhile (holify_test ~f holes t) (holify_cmd ~f holes c)
   | Select (styp, cases) ->
      List.map cases ~f:(fun (t, c) -> holify_test ~f holes t, holify_cmd ~f holes c)
      |> mkSelect styp
@@ -813,11 +900,20 @@ let holify ?(f=fun x -> x) holes c =  holify_cmd ~f holes c
         
 let sequence = List.reduce_exn ~f:(%:%)
 
+let rec assigned_vars = function
+  | Skip | Assume _  -> StringSet.empty
+  | Assign (f,_) -> StringSet.singleton f
+  | Seq (c1,c2) -> StringSet.union (assigned_vars c1) (assigned_vars c2)
+  | Select (_,cs) -> List.fold cs ~init:StringSet.empty
+                       ~f:(fun acc (_,c) -> StringSet.union acc (assigned_vars c))
+  | Apply t -> List.fold t.actions ~init:(assigned_vars t.default)
+                 ~f:(fun acc (_,act) -> StringSet.union acc @@ assigned_vars act)
+
+
 let rec get_schema_of_table name phys =
   match phys with
   | Skip 
     | Assume _
-    | Assert _
     | Assign _
     -> None
   | Seq (c1, c2) ->
@@ -828,21 +924,24 @@ let rec get_schema_of_table name phys =
   | Select (_, cs) ->
      List.find_map cs ~f:(fun (_, c) -> get_schema_of_table name c)
   | Apply t
-    -> if name = t.name then Some (t.keys, t.actions,t.default) else None
-  | While (_, c) -> get_schema_of_table name c
-                 
+    -> if name = t.name then Some (t.keys, t.actions, t.default) else None
+
+let rec get_tables_actions = function
+  | Skip | Assume _ | Assign _ -> []
+  | Seq(c1,c2) -> get_tables_actions c1 @ get_tables_actions c2
+  | Select(_,cs) -> List.fold cs ~init:[] ~f:(fun acc (_,c) -> acc @ get_tables_actions c)
+  | Apply t -> [t.name, t.actions]
 
 let rec get_tables_actsizes = function
-  | Skip | Assume _ | Assert _ | Assign _ -> []
+  | Skip | Assume _ | Assign _ -> []
   | Seq (c1,c2) -> get_tables_actsizes c1 @ get_tables_actsizes c2
   | Select(_,cs) ->
      List.fold cs ~init:[] ~f:(fun acc (_,c) -> acc @ get_tables_actsizes c)
   | Apply t -> [t.name, List.length t.actions]
-  | While(_,c) -> get_tables_actsizes c
 
 let table_vars ?keys_only:(keys_only=false) (keys, acts, default) =
   let open List in
-  keys
+  free_keys keys
   @ if keys_only then
       []
     else
@@ -853,12 +952,20 @@ let table_vars ?keys_only:(keys_only=false) (keys, acts, default) =
       @ free_vars_of_cmd default
 
 let rec get_tables_vars ?keys_only:(keys_only=false) = function
-  | Skip | Assume _ | Assert _ | Assign _ -> []
+  | Skip | Assume _ | Assign _ -> []
   | Seq (c1,c2) -> get_tables_vars ~keys_only c1 @ get_tables_vars ~keys_only c2
   | Select(_,cs) ->
      List.fold cs ~init:[] ~f:(fun acc (_,c) -> acc @ get_tables_vars ~keys_only c)
   | Apply t -> [t.name, table_vars ~keys_only (t.keys, t.actions, t.default)]
-  | While(_,c) -> get_tables_vars ~keys_only c
+
+
+let rec get_tables_keys = function
+  | Skip | Assume _ | Assign _ -> []
+  | Seq (c1,c2) -> get_tables_keys c1 @ get_tables_keys c2
+  | Select (_, cs) ->
+     List.bind cs ~f:(fun (_,c) -> get_tables_keys c)
+  | Apply t -> [t.name, t.keys]
+
 
 let string_of_map m =
   StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value v) ^ ") " ^ acc)) m ~init:""
