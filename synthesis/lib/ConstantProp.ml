@@ -124,7 +124,7 @@ let rec propogate_cmd (map : expr StringMap.t) (cmd : cmd) =
   | Apply {name;keys;actions;default} ->
      let facts_acts, actions' =
        List.fold actions ~init:(None,[])
-         ~f:(fun (acc_map,acc_acts) (data, act) ->
+         ~f:(fun (acc_map,acc_acts) (n, data, act) ->
            let map', act' = propogate_cmd (strmap_remove_list map (fsts data)) act in
            let post_action_facts = strmap_remove_list map' (fsts data) in
            let pre_action_facts = strmap_project_list map (fsts data) in
@@ -142,7 +142,7 @@ let rec propogate_cmd (map : expr StringMap.t) (cmd : cmd) =
                  | `Right post -> Some post
                )
            in
-           (Some (meet_opt acc_map facts),acc_acts@[(data, act')])
+           (Some (meet_opt acc_map facts),acc_acts@[(n, data, act')])
          )
      in
      let facts_def, default' = propogate_cmd map default in

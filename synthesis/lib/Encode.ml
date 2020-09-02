@@ -1091,7 +1091,8 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
     let set_action_run = mkAssn (snd name ^ action_run_suffix) (mkVInt(i + 1, action_run_size)) in
     let add_tctx = List.map ad ~f:(update_typ_ctx_from_param type_ctx) in 
     let type_ctx2 = add_tctx @ type_ctx in
-    let out = List.map action_data ~f:(fun ((_, ad), t) -> ad, lookup_type_width_exn type_ctx t)
+    let out = name_string a.name
+            , List.map action_data ~f:(fun ((_, ad), t) -> ad, lookup_type_width_exn type_ctx t)
             , set_action_run %:% encode_action prog ctx type_ctx2 rv body (*~action_data:action_data_names*) in
     (* Printf.printf "Encoded action %s\n%!" (snd a.name); *)
     out
@@ -1137,7 +1138,7 @@ and replace_consts (consts : (string * expr)  list) (prog : cmd) =
   | Select(st, tc) ->
     Select(st,  List.map tc ~f:(fun (t, c) -> replace_consts_test consts t, replace_consts consts c))
   | Apply{name; keys; actions; default} ->
-    let actions' = List.map actions ~f:(fun (s, c) -> (s, replace_consts consts c)) in
+    let actions' = List.map actions ~f:(fun (n, s, c) -> (n, s, replace_consts consts c)) in
     let default' = replace_consts consts default in
     Apply{name; keys; actions = actions'; default = default'}
 
@@ -1251,10 +1252,10 @@ let rec rewrite (m : (string * int) StringMap.t) (c : cmd) : cmd =
                             ~default:(x,sz,v_opt)
                             ~f:(fun (x',sz') -> (x',sz', v_opt)));
             actions = List.map actions
-                        ~f:(fun (data, action) ->
+                        ~f:(fun (n, data, action) ->
                           let m' = List.fold data ~init:m
                                      ~f:(fun acc (x,_) -> StringMap.remove acc x) in
-                          (data, rewrite m' action));
+                          (n, data, rewrite m' action));
             default = rewrite m default}
 
 let make_tfx = List.fold ~init:StringMap.empty ~f:(fun acc (abs_var, phys_var) ->

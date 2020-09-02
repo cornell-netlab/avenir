@@ -406,7 +406,7 @@ let holes_for_table table phys =
             [Hole.match_hole_exact table k;lo;hi;v;m]
             |> List.dedup_and_sort ~compare:String.compare
        )
-     @ List.(acts >>= fun (params,_) ->
+     @ List.(acts >>= fun (_, params,_) ->
              params >>| fst )
 
 let holes_for_other_actions table phys actId =
@@ -414,7 +414,7 @@ let holes_for_other_actions table phys actId =
   | None -> failwith @@ Printf.sprintf "couldnt find schema for %s\n%!" table
   | Some (_, acts, _) ->
      List.foldi acts ~init:[]
-       ~f:(fun i acc (params,_) ->
+       ~f:(fun i acc (_, params,_) ->
          acc @ if i = Bigint.to_int_exn actId then [] else List.map params ~f:fst
        )
 

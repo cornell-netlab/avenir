@@ -123,7 +123,7 @@ let to_model (phys : cmd) (hint : t): value StringMap.t =
     | Some Int(act_id, act_size) ->
        let act_id_int = Bigint.to_int_exn act_id in
        let which_act = Hole.which_act_hole_name hint.table in
-       let act_params, _ = List.nth_exn actions (act_id_int) in
+       let _, act_params, _ = List.nth_exn actions (act_id_int) in
        StringMap.of_alist_exn @@  [
            which_act, Int(act_id, act_size);
            add_hole, mkInt(1,1);

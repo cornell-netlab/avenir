@@ -541,7 +541,7 @@ type cmd =
   | Select of (select_typ * ((test * cmd) list))
   | Apply of {name:string;
               keys:(string * size * value option) list;
-              actions:(((string * size) list * cmd) list);
+              actions:((string * (string * size) list * cmd) list);
               default: cmd}
 
 let mkSeq first scnd =
@@ -592,7 +592,7 @@ let rec assumes_false c =
   | Select (Ordered, cases) ->
      List.for_all cases ~f
   | Apply {actions;default;_} ->
-     assumes_false default && List.for_all actions ~f
+     assumes_false default && List.for_all actions ~f:(fun (_, x, c) -> f(x, c))
   | Select _ -> failwith "deprecated"
 
 
@@ -681,11 +681,11 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
       ^ ",(" ^ List.foldi t.actions ~init:""
                 ~f:(fun i str a ->
                   str ^ (if i > 0 then " |" else "") ^ " { " ^
-                    (if List.length (List.nth_exn t.actions i |> fst) > 0 then "\\ ("^
-                    List.fold (List.nth_exn t.actions i |> fst) ~init:""
+                    (if List.length (List.nth_exn t.actions i |> snd3) > 0 then "\\ ("^
+                    List.fold (List.nth_exn t.actions i |> snd3) ~init:""
                     ~f:(fun acc (x,sz) -> Printf.sprintf "%s%s#%d," acc x sz)
                     ^") -> " else "")
-                    ^ string_of_cmd (snd a) ^ "}")
+                    ^ string_of_cmd (trd3 a) ^ "}")
       ^ "), {" ^ string_of_cmd t.default ^ "})"
                                        
             
@@ -713,7 +713,7 @@ let rec sexp_string_of_cmd e : string =
                                                                 | None -> "None"
                                                                 | Some v -> "Some(" ^ string_of_value v ^ ")")
      ^ "],["
-     ^ List.fold_left t.actions ~init:"" ~f:(fun str a -> str ^ ";((SOME ACTION DATA), " ^ sexp_string_of_cmd (snd a) ^")")
+     ^ List.fold_left t.actions ~init:"" ~f:(fun str a -> str ^ ";((SOME ACTION DATA), " ^ sexp_string_of_cmd (trd3 a) ^")")
      ^ "]," ^ sexp_string_of_cmd t.default
      ^ ")"
 
@@ -740,18 +740,18 @@ let rec num_nodes_in_cmd c =
   | Apply {keys;actions;default;_} ->
      List.length keys + num_nodes_in_cmd default
      + List.fold actions ~init:0
-         ~f:(fun acc (data, act) ->
+         ~f:(fun acc (_, data, act) ->
            acc + List.length data + num_nodes_in_cmd act
          )
 
-let rec get_actions (c : cmd) : (((string * size) list) * cmd) list =
+let rec get_actions (c : cmd) : (string * ((string * size) list) * cmd) list =
   match c with
   | Skip | Assign _ | Assume _ -> []
   | Seq(c1,c2) -> get_actions c1 @ get_actions c2
   | Select (_, cases) ->
      List.bind cases ~f:(fun (_,c) -> get_actions c)
   | Apply {actions; default; _} ->
-     ([],default)::actions
+     ("default", [],default)::actions
 
 
 let rec num_table_paths (c : cmd) : Bigint.t =
@@ -804,7 +804,7 @@ let rec free_of_cmd typ (c:cmd) : (string * size) list =
      free_keys t.keys
      @ List.fold t.actions
          ~init:(free_of_cmd typ t.default)
-         ~f:(fun acc (data, a) ->
+         ~f:(fun acc (_, data, a) ->
            acc @ (free_of_cmd typ a
                 |> List.filter ~f:(fun (x,_) ->
                        List.for_all (List.map data ~f:fst) ~f:((<>) x)
@@ -838,7 +838,7 @@ let rec multi_ints_of_cmd c : (Bigint.t * size) list =
       )
   | Apply t ->
      List.fold t.actions ~init:(multi_ints_of_cmd t.default)
-       ~f:(fun rst act -> rst @ multi_ints_of_cmd (snd act))
+       ~f:(fun rst act -> rst @ multi_ints_of_cmd (trd3 act))
 
 let rec holify_expr ~f holes (e : expr) : expr =
   let binop ctor (e,e') = ctor (holify_expr ~f holes e) (holify_expr ~f holes e') in
@@ -887,11 +887,11 @@ and holify_cmd ~f holes c : cmd=
   | Apply t
     -> Apply {name=t.name;
               keys=t.keys;
-              actions = List.map t.actions ~f:(fun (data, act) ->
+              actions = List.map t.actions ~f:(fun (n, data, act) ->
                             let holes' = List.filter holes ~f:(fun h ->
                                              List.for_all (List.map data ~f:fst) ~f:((<>) h)
                                            ) in
-                            (data, holify_cmd ~f holes' act));
+                            (n, data, holify_cmd ~f holes' act));
              default = holify_cmd ~f holes t.default}
               
     
@@ -907,7 +907,7 @@ let rec assigned_vars = function
   | Select (_,cs) -> List.fold cs ~init:StringSet.empty
                        ~f:(fun acc (_,c) -> StringSet.union acc (assigned_vars c))
   | Apply t -> List.fold t.actions ~init:(assigned_vars t.default)
-                 ~f:(fun acc (_,act) -> StringSet.union acc @@ assigned_vars act)
+                 ~f:(fun acc (_, _,act) -> StringSet.union acc @@ assigned_vars act)
 
 
 let rec get_schema_of_table name phys =
@@ -945,7 +945,7 @@ let table_vars ?keys_only:(keys_only=false) (keys, acts, default) =
   @ if keys_only then
       []
     else
-      (acts >>= fun (ad,c) ->
+      (acts >>= fun (_, ad,c) ->
        free_vars_of_cmd c
        |> filter ~f:(fun (x,_) ->
               for_all ad ~f:(fun (y,_) -> x <> y)))

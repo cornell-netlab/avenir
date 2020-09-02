@@ -38,13 +38,13 @@ let rec eliminate_unused_vars cmd (used : StringSet.t) =
      let default', def_used = eliminate_unused_vars default used in
      let actions', used' =
        List.fold actions ~init:([],def_used)
-         ~f:(fun (acc_acts, acc_used) (data,act) ->
+         ~f:(fun (acc_acts, acc_used) (n, data,act) ->
            let act', used_with_data = eliminate_unused_vars act used in
            let used_sans_data = strset_remove_list used_with_data (fsts data) in
-           (acc_acts @ [data,act'], StringSet.union acc_used used_sans_data)
+           (acc_acts @ [n, data,act'], StringSet.union acc_used used_sans_data)
          )
      in
-     if List.for_all actions' ~f:(fun (_,act) -> act = Skip) && default' = Skip
+     if List.for_all actions' ~f:(fun (_, _,act) -> act = Skip) && default' = Skip
      then (Skip, used)
      else (Apply {name;
                   keys;
