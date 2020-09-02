@@ -247,11 +247,11 @@ let cp_affects_actions_and_keys _ =
         "meta" %<-% var "addr";
         Apply {name = "tbl";
                keys = [("z",32,None); ("meta",32,None)];
-               actions = [ ["port",9], sequence [
+               actions = [ "action", ["port",9], sequence [
                                            "out" %<-% mkPlus (Var("port",9)) (mkCast 9 @@ var "z");
                                            "meta" %<-% mkPlus (var "z") (var "z");
                                          ]
-                         ; ["port",9], sequence [
+                         ; "action", ["port",9], sequence [
                                            "out" %<-% mkVInt (0,9);
                                            "meta" %<-% int (2*99);
                          ] ];
@@ -268,12 +268,13 @@ let cp_affects_actions_and_keys _ =
         "meta" %<-% var "addr";
         Apply {name = "tbl";
                keys = [("z",32,Some (mkInt(99,32))); ("addr",32,None)];
-               actions = [ ["port",9],
+               actions = [ "action",
+                           ["port",9],
                            sequence [
                                "out" %<-% mkPlus (Var("port",9)) (mkVInt(99,9));
                                "meta" %<-% int (198);
                              ]
-                         ; ["port",9], sequence [
+                         ; "action", ["port",9], sequence [
                                            "out" %<-% mkVInt (0,9);
                                            "meta" %<-% int (198);
                          ] ];
@@ -292,11 +293,11 @@ let dc_remove_table _ =
     sequence [
         Apply {name = "tbl";
                keys = [("z",32, None); ("meta",32,None)];
-               actions = [ ["port",9], sequence [
+               actions = [ "action", ["port",9], sequence [
                                            "out" %<-% mkPlus (Var("port",9)) (mkCast 9 @@ var "z");
                                            "meta" %<-% mkPlus (var "z") (var "z");
                                          ]
-                         ; ["port",9], sequence [
+                         ; "action", ["port",9], sequence [
                                            "out" %<-% mkVInt (0,9);
                                            "meta" %<-% int (2*99);
                          ] ];
@@ -819,13 +820,13 @@ let construct_model_query_PA_is_sat_hello_smaller _ =
 
 
 let hints_injects_keys _ =
-  let log = mkApply ("logical", ["x",32; "y", 32; "q", 32], [[], Skip],Skip) in
+  let log = mkApply ("logical", ["x",32; "y", 32; "q", 32], ["action", [], Skip],Skip) in
   let phys =
     sequence [
-        mkApply ("p1", ["x",32;"y",32], [[],Skip], Skip);
+        mkApply ("p1", ["x",32;"y",32], ["action", [],Skip], Skip);
         mkOrdered [
-            Var("x",32) %=% mkVInt(100,32), mkApply ("p2a", ["y", 32; "q",32], [[], Skip], Skip);
-            True, mkApply("p2b", ["x",32; "q",32], [[], Skip], Skip);
+            Var("x",32) %=% mkVInt(100,32), mkApply ("p2a", ["y", 32; "q",32], ["action", [], Skip], Skip);
+            True, mkApply("p2b", ["x",32; "q",32], ["action", [], Skip], Skip);
           ]
       ]
   in
@@ -852,7 +853,7 @@ let packet_diff _ =
 
 
 
-let trace = ActionGenerator.(testable_string string_of_traces equal_trace_lists)
+(* let trace = ActionGenerator.(testable_string string_of_traces equal_trace_lists)
 let same_trace = Alcotest.(check trace) "same trace"
 
 let ag_feasible_traces _ =
@@ -1091,4 +1092,4 @@ let () =
       [test_case "diff computes differing vars" `Quick packet_diff]
 
 
-    ]
+    ]*)
