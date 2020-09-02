@@ -1,6 +1,10 @@
 open Core
 open Ast
 
+open Manip
+
+module StringMap = Map.Make (String)
+(*
 let renameVar (old : string) (nw : string) (vw : string * size) : string * size =
   match vw with
   | (v, w) -> (if v = old then nw else v), w
@@ -49,6 +53,7 @@ let rec rename_cmd (old : string) (nw : string) c =
               ~f:(fun (params, act_c) -> (List.map params ~f:(renameVar old nw), rename_cmd old nw act_c)),
             rename_cmd old nw default)
 
+*)
 let cross xs ys = List.map xs ~f:(fun x -> List.map ys ~f:(fun y -> (x, y)))
 
 let combine_actions (act1 : (string * size) list * cmd) (act2 : (string * size) list * cmd) : (string * size) list * cmd =
@@ -60,14 +65,15 @@ let combine_actions (act1 : (string * size) list * cmd) (act2 : (string * size) 
   let new_p1 = List.map p1 ~f:(uniquify_var "_1") in
   let new_p2 = List.map p2 ~f:(uniquify_var "_2") in
 
-  let new_c1 = List.fold new_p1 ~init:c1 ~f:(fun e (v1, v2, _) -> rename_cmd v1 v2 e) in
-  let new_c2 = List.fold new_p2 ~init:c2 ~f:(fun e (v1, v2,_) -> rename_cmd v1 v2 e) in
+  let remap v1 v2 = StringMap.of_alist_exn [(v1, v2)] in
+  let new_c1 = List.fold new_p1 ~init:c1 ~f:(fun e (v1, v2, w) -> substitute_cmd e (remap v1 (Var (v2, w))) ~holes:false) in
+  let new_c2 = List.fold new_p2 ~init:c2 ~f:(fun e (v1, v2, w) -> substitute_cmd e (remap v1 (Var (v2, w))) ~holes:false) in
 
   let new_p1' = List.map new_p1 ~f:(fun (_, v, w) -> v, w) in
   let new_p2' = List.map new_p2 ~f:(fun (_, v, w) -> v, w) in
   new_p1' @ new_p2', new_c1 %:% new_c2
 
-type only_apply = {keys:(string * size) list;
+type only_apply = {keys:(string * size * value option) list;
                    actions: (((string * size) list * cmd) list);
                    default: cmd}
 
@@ -78,11 +84,11 @@ let rec mk_one_big_table' (tbl : only_apply) c =
     { tbl with
       actions = List.map tbl.actions ~f:(fun (p, act) -> (p, act %:% c));
       default = tbl.default %:% c }
-  | Assert _ | Assume _ -> failwith "Assert/Assume not handled"
+  | Assume _ -> failwith "Assume not handled"
   | Seq(c1, c2) -> mk_one_big_table' (mk_one_big_table' tbl c1) c2
-  | While _ -> failwith "While not handled"
   | Select(_, tcl) ->
-    let free = List.map tcl ~f:(fun (t, _) -> free_vars_of_test t)  |> List.concat in
+    let free = List.map tcl
+                ~f:(fun (t, _) -> List.map (free_vars_of_test t) ~f:(fun(f, s) -> (f, s, None)))  |> List.concat in
     let es = List.map tcl ~f:snd in
     
     let tbl_keys = {tbl with keys = dedup (tbl.keys @ free)} in
