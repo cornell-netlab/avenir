@@ -1142,7 +1142,24 @@ let ntbls_cmd : Command.t =
     NumTbls.spec
     NumTbls.run
 
-module ConvertOneBigTable = struct
+module OBT = struct
+  let spec = Async_command.Spec.(
+      empty
+      +> anon ("program" %: string))
+
+  let run prog_path () =
+    let prog = Benchmark.parse_file prog_path in
+    let obt = OneBigTable.mk_one_big_table prog in
+    Core.printf "%s\n" (Ast.string_of_cmd obt)
+end
+
+let obt : Command.t =
+  Command.basic_spec
+    ~summary:"Convert a program to one big table"
+    OBT.spec
+    OBT.run
+
+module OBTReal = struct
   let spec = Async_command.Spec.(
       empty
       +> anon ("program" %: string)
@@ -1151,14 +1168,14 @@ module ConvertOneBigTable = struct
   let run prog_pth inc () =
     let prog = Encode.encode_from_p4 inc prog_pth false in
     let obt = OneBigTable.mk_one_big_table prog in
-    Core.printf "%s" (Ast.string_of_cmd obt)
+    Core.printf "%s\n" (Ast.string_of_cmd obt)
 end
 
-let one_big_table : Command.t =
+let obt_real : Command.t =
   Command.basic_spec
     ~summary:"Convert a program to one big table"
-    ConvertOneBigTable.spec
-    ConvertOneBigTable.run
+    OBTReal.spec
+    OBTReal.run
 
 module ServerCmd = struct
   let spec = Async_command.Spec.(
@@ -1294,7 +1311,8 @@ let main : Command.t =
     ; ("classbench", classbench_cmd)
     ; ("onf", onf)
     ; ("onf-real", onf_real)
-    ; ("obt", one_big_table)
+    ; ("obt", obt)
+    ; ("obt-real", obt_real)
     ; ("eq", equality)
     ; ("eq-real", equality_real)
     ; ("wp", wp_cmd)]
