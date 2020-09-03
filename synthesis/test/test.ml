@@ -833,7 +833,7 @@ let hints_injects_keys _ =
             mkApply ("p2a", ["y", 32; "q",32], [[], Skip], Skip);
 
             True,
-            mkApply("p2b", ["x",32; "q",32], [[], Skip], Skip);
+            mkApply("p2b", ["x",32; "q",32; "z", 32], [[], Skip], Skip);
           ]
       ]
   in
@@ -841,7 +841,10 @@ let hints_injects_keys _ =
   let model = Hint.(construct phys edit |> list_to_model phys) in
   let expected = Util.StringMap.of_alist_exn
                    [ "?x_p2b", mkInt(5,32);
-                     "?q_p2b", mkInt(55,32) ]
+                     "?q_p2b", mkInt(55,32);
+                     "?z_p2b", mkInt(0,32);
+                     "?z_p2b_mask", mkInt(0,32);
+                   ]
   in
   same_model expected model
 
