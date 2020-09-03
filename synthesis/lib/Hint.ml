@@ -127,8 +127,8 @@ let make edit table =
     Edit.get_matches_exn edit
     |> Match.relevant_matches
   in
-  Printf.printf "for edit %s\n%!" (Edit.to_string edit);
-  Printf.printf "the relevant matches are: %s\n%!" (Match.list_to_string matches);
+  (* Printf.printf "for edit %s\n%!" (Edit.to_string edit);
+   * Printf.printf "the relevant matches are: %s\n%!" (Match.list_to_string matches); *)
   { table;
     match_opt = Some matches;
     act_id_opt = None;

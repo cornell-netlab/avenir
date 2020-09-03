@@ -74,8 +74,8 @@ let print_search_state do_print problem es model =
       if print_model then begin
           Printf.printf "\t ***model***\n";
           Printf.printf "\t%s\n%!" (Ast.string_of_map model)
-        end
-      (* Interactive.pause true; *)
+        end;
+      Interactive.pause true;
     end
 
 

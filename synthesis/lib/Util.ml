@@ -284,6 +284,7 @@ let stringset_add_list s l =
     StringSet.of_list l
 
 let fsts = List.map ~f:fst
+let snds = List.map ~f:snd
 
 let map_snd lst ~f = List.map lst ~f:(fun (a,b) -> (a, f b))
 

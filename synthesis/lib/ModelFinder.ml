@@ -241,17 +241,28 @@ let no_defaults (params : Parameters.t) opts fvs phys =
            acc %&% (Hole(v,sz) %<>% mkVInt(0,sz)))
 
 
-let rec construct_model_query form fvs in_pkt phys out_pkt =
+let rec construct_model_query opts form fvs cexs in_pkt phys out_pkt =
   match form with
   | `Passive ->
-     let sub, passive_phys = passify fvs (Packet.to_assignment in_pkt %:% phys) in
+     let sub, passive_phys = passify fvs ((*Packet.to_assignment in_pkt %:%*) phys) in
      let phys' = CompilerOpts.optimize fvs passive_phys in
      (* let () = Printf.printf "Optimized passive program\n%s\n\n%!" (string_of_cmd phys'); in *)
      let good = good_wp phys'
                 |> Log.print_and_return_test ~pre:"normal executions:\n" ~post:"\n---------------------\n" false
      in
-     hoare_triple_passified sub True good (Packet.to_test ~fvs out_pkt)
+     let testify = Packet.to_test ~fvs in
+     let ensure_cexs = if opts.double then
+                         let in_test = concatMap (fsts cexs) ~f:(testify) ~c:(%+%) in
+                         let out_test = concatMap (snds cexs) ~f:(testify) ~c:(%+%) in
+                         hoare_triple_passified sub in_test good out_test
+                       else
+                         True
+     in
+     ensure_cexs %&%
+       hoare_triple_passified sub (testify in_pkt) good (testify out_pkt)
      |> Log.print_and_return_test ~pre:"Passive optimized query:\n" ~post:"\n---------------------\n" false
+
+
   | `PassiveAggressive ->
      let sub, passive_phys = passify fvs (Packet.to_assignment in_pkt %:% phys |> CompilerOpts.optimize fvs) in
      let phys' = CompilerOpts.optimize fvs passive_phys in
@@ -266,7 +277,7 @@ let rec construct_model_query form fvs in_pkt phys out_pkt =
      then out_test
      else begin
          (* let () = Printf.printf "Manual QE failed, letting Z3 do it" in *)
-         construct_model_query `Passive fvs in_pkt phys out_pkt
+         construct_model_query opts `Passive fvs cexs in_pkt phys out_pkt
        end
      (* Log.check_qe true out_test;
       * out_test *)
@@ -285,7 +296,7 @@ let compute_vc (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   let deletions = compute_deletions in_pkt problem in
   let hints = if opts.hints then
                 let open Problem in
-                Log.print_edits (log_edits problem);
+                (* Log.print_edits (log_edits problem); *)
                 Hint.construct (phys problem) (log_edits problem |> List.hd_exn)
               else [] in
   let hole_protocol = if opts.only_holes
@@ -306,13 +317,7 @@ let compute_vc (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
     else
       (* let (sub, _(\*passive_phys*\), good_N, _) = good_execs fvs phys in *)
       let test =
-        (* hoare_triple_passified sub in_pkt_form good_N out_pkt_form *)
-        construct_model_query `Passive fvs in_pkt phys out_pkt
-        %&% (if opts.double && List.length (Problem.cexs problem) > 1 then
-               let (in_pkt', out_pkt') =  List.nth_exn (Problem.cexs problem) 1 in
-               construct_model_query `Passive fvs in_pkt' phys out_pkt'
-             else
-               True)
+        construct_model_query opts `Passive fvs (Problem.cexs problem) in_pkt phys out_pkt
       in
       Log.check_qe false test;
       (* Printf.printf "--------------%s---------------\n%!" (string_of_test test); *)
