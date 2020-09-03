@@ -142,7 +142,7 @@ let print_hints_map do_print (partial_model : value StringMap.t) =
         ~f:(fun ~key ~data ->
           Printf.printf "\t%s -> %s\n" key (string_of_value data)
         );
-      Printf.printf "}\n%!";
+      Printf.printf "}\n%!"
     end
 
 let print_hints do_print (hints : Hint.t list) =

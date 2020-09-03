@@ -6,6 +6,7 @@ type t
 val exact_ : string -> value -> t
 val between_ : string -> value -> value -> t
 val mask_ : string -> value -> value -> t
+val wildcard : string -> int -> t
 val equal : t -> t -> bool
 val get_key : t -> string
 val to_string : t -> string
@@ -27,4 +28,5 @@ val get_base_value : t -> value
 val exactify : t -> t
 val exactify_list : t list -> t list
 val to_model : string -> t -> value StringMap.t
+val relevant_matches : t list -> t list
 val relevant_keys : t list -> string list

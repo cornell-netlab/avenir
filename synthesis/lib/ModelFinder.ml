@@ -285,7 +285,8 @@ let compute_vc (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   let deletions = compute_deletions in_pkt problem in
   let hints = if opts.hints then
                 let open Problem in
-                Hint.construct (log problem) (phys problem) (log_edits problem |> List.hd_exn)
+                Log.print_edits (log_edits problem);
+                Hint.construct (phys problem) (log_edits problem |> List.hd_exn)
               else [] in
   let hole_protocol = if opts.only_holes
                       then Instance.OnlyHoles hints

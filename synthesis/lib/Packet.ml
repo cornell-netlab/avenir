@@ -16,32 +16,36 @@ let set_field (pkt : t) (field : string) (v : value) : t  =
   (* Printf.printf "Setting %s to %s;\n" (field) (string_of_value v); *)
   StringMap.set pkt ~key:field ~data:v
 
-let get_val (pkt : t) (field : string) : value =
-  match StringMap.find pkt field with
-    | None -> failwith ("UseBeforeDef error " ^ field ^ " packet is " ^ string__packet pkt)
-    | Some v -> v
-
-
 let get_val_opt (pkt : t) (field : string) : value option =
   StringMap.find pkt field
 
-let rec set_field_of_expr (pkt : t) (field : string) (e : expr) : t =
+let get_val (pkt : t) (field : string) : value =
+  match get_val_opt pkt field with
+    | None -> failwith ("UseBeforeDef error " ^ field ^ " packet is " ^ string__packet pkt)
+    | Some v -> v
+
+let rec set_field_of_expr_opt (pkt : t) (field : string) (e : expr) : t option =
+  let open Option in
   if has_hole_expr e then
     failwith @@ Printf.sprintf "[PacketHole] Tried to assign %s <- %s" field (string_of_expr e)
   else
-  let binop op e e'=
-    let eVal = get_val (set_field_of_expr pkt field e) field in
-    let eVal' = get_val (set_field_of_expr pkt field e') field in
-    set_field pkt field (op eVal eVal')
+    let binop op e e'=
+      set_field_of_expr_opt pkt field e >>= fun pkt ->
+      get_val_opt pkt field >>= fun v ->
+      set_field_of_expr_opt pkt field e' >>= fun pkt' ->
+      get_val_opt pkt' field >>| fun v' ->
+      set_field pkt field (op v v')
   in
   match e with
-  | Value v -> set_field pkt field v
-  | Var (x,_) ->
-     get_val pkt x
-     |> set_field pkt field
+  | Value v -> Some (set_field pkt field v)
+  | Var (x,_) ->  get_val_opt pkt x >>| set_field pkt field
   | Hole _ -> failwith "impossible"
-  | Cast (i,e) -> set_field pkt field @@ cast_value i @@ get_val (set_field_of_expr pkt field e) field
-  | Slice {hi;lo;bits} -> set_field pkt field @@ slice_value hi lo @@ get_val (set_field_of_expr pkt field bits) field
+  | Cast (i,e) ->
+     set_field_of_expr_opt pkt field e >>| fun pkt_e ->
+     set_field pkt field @@ cast_value i @@ get_val pkt_e field
+  | Slice {hi;lo;bits} ->
+     set_field_of_expr_opt pkt field bits >>| fun pkt_bits ->
+     set_field pkt field @@ slice_value hi lo @@ get_val pkt_bits field
   | Plus  (e, e') -> binop add_values e e'
   | SatPlus (e,e') -> binop sat_add_values e e'
   | Times (e, e') -> binop multiply_values e e'

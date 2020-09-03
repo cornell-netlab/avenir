@@ -365,18 +365,18 @@ let opt_bcm_example _ =
         mkOrdered [
             bigand [Hole("?Addtbl",1) %=% mkVInt(1,1);
                     Hole("?x",32) %=% Var("x",32);
-                    Hole("?Acttbl",1) %=% mkVInt(0,1)
+                    Hole("?Acttbl",1) %=% mkVInt(0,2)
               ], "meta" %<-% mkVInt(99,32);
             bigand [Hole("?Addtbl",1) %=% mkVInt(1,1);
                     Hole("?x",32) %=% Var("x",32);
-                    Hole("?Acttbl",1) %=% mkVInt(1,1)
+                    Hole("?Acttbl",1) %=% mkVInt(1,2)
               ], sequence [
                      "o" %<-% Hole("?outtie_1_tbl", 9);
                      "meta" %<-% mkVInt(44,32)
                    ];
             bigand [Hole("?Addtbl",1) %=% mkVInt(1,1);
                     Hole("?x",32) %=% Var("x",32);
-                    Hole("?Acttbl",1) %=% mkVInt(2,1)
+                    Hole("?Acttbl",1) %=% mkVInt(2,2)
               ], sequence [
                      "o" %<-% Hole("?outtie_2_tbl", 9);
                      "meta" %<-% mkVInt(44,32)
@@ -401,18 +401,18 @@ let opt_bcm_example _ =
         mkOrdered [
             bigand [Hole("?Addtbl",1) %=% mkVInt(1,1);
                     Hole("?x",32) %=% mkVInt(333,32);
-                    Hole("?Acttbl",1) %=% mkVInt(0,1)
+                    Hole("?Acttbl",1) %=% mkVInt(0,2)
               ], "meta" %<-% mkVInt(99,32);
             bigand [Hole("?Addtbl",1) %=% mkVInt(1,1);
                     Hole("?x",32) %=% mkVInt(333,32);
-                    Hole("?Acttbl",1) %=% mkVInt(1,1)
+                    Hole("?Acttbl",1) %=% mkVInt(1,2)
               ], sequence [
                      "o" %<-% Hole("?outtie_1_tbl", 9);
                      "meta" %<-% mkVInt(44,32)
                    ];
             bigand [Hole("?Addtbl",1) %=% mkVInt(1,1);
                     Hole("?x",32) %=% mkVInt(333,32);
-                    Hole("?Acttbl",1) %=% mkVInt(2,1)
+                    Hole("?Acttbl",1) %=% mkVInt(2,2)
               ], sequence [
                      "o" %<-% Hole("?outtie_2_tbl", 9);
                      "meta" %<-% mkVInt(44,32)
@@ -819,21 +819,26 @@ let construct_model_query_PA_is_sat_hello_smaller _ =
 
 
 let hints_injects_keys _ =
-  let log = mkApply ("logical", ["x",32; "y", 32; "q", 32], [[], Skip],Skip) in
+  let matches =
+    let open Match in
+    [exact_ "x" (mkInt (5,32));
+     wildcard "y" 32;
+     exact_ "q" (mkInt(55,32))]
+    in
   let phys =
     sequence [
         mkApply ("p1", ["x",32;"y",32], [[],Skip], Skip);
         mkOrdered [
-            Var("x",32) %=% mkVInt(100,32), mkApply ("p2a", ["y", 32; "q",32], [[], Skip], Skip);
-            True, mkApply("p2b", ["x",32; "q",32], [[], Skip], Skip);
+            Var("x",32) %=% mkVInt(100,32),
+            mkApply ("p2a", ["y", 32; "q",32], [[], Skip], Skip);
+
+            True,
+            mkApply("p2b", ["x",32; "q",32], [[], Skip], Skip);
           ]
       ]
   in
-  let edit = Tables.Edit.Add ("logical", (Match.([exact_ "x" (mkInt (5,32));
-                                                  mask_ "y" (mkInt(0,32)) (mkInt(0,32));
-                                                  exact_ "q" (mkInt(55,32))])
-                                         , [], 0)) in
-  let model = Hint.(construct log phys edit |> list_to_model phys) in
+  let edit = Tables.Edit.Add ("logical", (matches, [], 0)) in
+  let model = Hint.(construct phys edit |> list_to_model phys) in
   let expected = Util.StringMap.of_alist_exn
                    [ "?x_p2b", mkInt(5,32);
                      "?q_p2b", mkInt(55,32) ]
@@ -1079,13 +1084,13 @@ let () =
       "hints",
       [test_case "injects logical keys into physical table" `Quick hints_injects_keys];
 
-      "action generator",
-      [test_case "computes feasible traces" `Quick ag_feasible_traces;
-       test_case "computes_feasible traces across branches" `Quick ag_feasible_traces_branch;
-       test_case "computes_feasible traces for a metadata assignment table" `Quick ag_feasible_traces_metadata_table;
-       test_case "computes_correct result for bcm's punt table" `Quick  ag_feasible_traces_bcm_punt_table;
-       test_case "says guarded table can be affected by keys" `Quick ag_affected_by_keys;
-      ];
+      (* "action generator",
+       * [test_case "computes feasible traces" `Quick ag_feasible_traces;
+       *  test_case "computes_feasible traces across branches" `Quick ag_feasible_traces_branch;
+       *  test_case "computes_feasible traces for a metadata assignment table" `Quick ag_feasible_traces_metadata_table;
+       *  test_case "computes_correct result for bcm's punt table" `Quick  ag_feasible_traces_bcm_punt_table;
+       *  test_case "says guarded table can be affected by keys" `Quick ag_affected_by_keys;
+       * ]; *)
 
       "packets",
       [test_case "diff computes differing vars" `Quick packet_diff]

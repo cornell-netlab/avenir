@@ -226,13 +226,12 @@ let or_unequal_lengths_to_option =
   | Ok x -> Some x
   | Unequal_lengths -> None
 
-
-
 let oLift2 f a b =
-  match a, b with
-  | Some a', Some b' -> f a' b' |> Some
-  | _,_ -> None
-
+  let open Option in
+  a >>= fun a' ->
+  b >>= fun b' ->
+  f a' b'
+  |> return
 
 
 let rec list_prefix xs i =

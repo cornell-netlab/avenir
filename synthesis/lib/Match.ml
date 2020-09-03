@@ -23,6 +23,8 @@ let mask_ key v m =
   then exact_ key v
   else mk_match key @@ Mask(v,m)
 
+let wildcard key sz = mask_ key (mkInt(0,sz)) (mkInt(0,sz))
+
 let equal_data d d' =
   match d, d' with
   | Exact v, Exact v' -> veq v v'
@@ -117,11 +119,12 @@ let to_valuation_test table hole_typ mtch =
 
 let is_wildcard m =
   match m.data with
-  | Exact _ -> false
-  | Mask (_, m) -> Bigint.(get_int m = zero)
+  | Exact _ ->
+     false
+  | Mask (_, m) ->
+     Bigint.(get_int m = zero)
   | Between(lo,Int(hi_v,sz)) ->
-     Bigint.(get_int lo = zero
-             && (hi_v >= (pow (of_int 2) (of_int sz)) - one))
+     Bigint.(get_int lo <= zero && hi_v >= max_int sz)
 
 let list_to_string : t list -> string =
   let list_el_string m = if is_wildcard m then "" else (to_string m ^ " ") in
@@ -283,5 +286,5 @@ let to_model table (m:t) =
        let hlo, hhi = Hole.match_holes_range table m.key in
        [hlo,lo; hhi,hi]
 
-
-let relevant_keys = List.filter_map ~f:(fun m -> Option.some_if (not @@ is_wildcard m) (m.key))
+let relevant_matches = List.filter ~f:(Fn.non is_wildcard)
+let relevant_keys = Fn.compose (List.map ~f:get_key) relevant_matches

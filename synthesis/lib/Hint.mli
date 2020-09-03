@@ -9,9 +9,9 @@ type t
 val to_string : t -> string
 
 
-(** [construct log phys e] produces makes heuristic guesses about how
-   to accomodate the insertion of e into log in phys **)
-val construct : cmd -> cmd -> Edit.t -> t list
+(** [construct phys e] produces makes heuristic guesses about how
+    phys can accomodate the logical insertion of e **)
+val construct : cmd -> Edit.t -> t list
 
 val to_model : cmd -> t -> value StringMap.t
 

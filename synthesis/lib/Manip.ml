@@ -696,11 +696,24 @@ let rec wp_paths negs c phi : (cmd * test) list =
      (t.default :: List.map ~f:(fun (sc, a) -> holify (List.map sc ~f:fst) a) t.actions) >>= flip (wp_paths negs) phi
 
 let bind_action_data vals (scope, cmd) : cmd =
-  let holes = List.map scope ~f:fst in
-  List.fold2_exn holes vals
-    ~init:StringMap.empty
-    ~f:(fun acc x v -> StringMap.set acc ~key:x ~data:(Value v))
-  |> substitute_cmd cmd
+  let holes = fsts scope in
+  let subst =
+    List.fold2 holes vals
+      ~init:StringMap.empty
+      ~f:(fun acc x v -> StringMap.set acc ~key:x ~data:(Value v))
+  in
+  match subst with
+  | Ok subst -> substitute_cmd cmd subst
+  | Unequal_lengths ->
+     Printf.sprintf
+       "Incorrect number of action arguments: (%s) vs (%s) for %s"
+       (List.map vals ~f:string_of_value
+        |> List.reduce ~f:(Printf.sprintf "%s,%s")
+        |> Option.value ~default:"")
+       (List.reduce holes ~f:(Printf.sprintf "%s,%s")
+        |> Option.value ~default:"")
+       (string_of_cmd cmd)
+     |> failwith
 
 
 let rec fixup_expr (model : value StringMap.t) (e : expr)  : expr =
