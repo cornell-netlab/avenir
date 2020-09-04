@@ -58,7 +58,7 @@ let string_vars vs =
 
 let print_search_state do_print problem es model =
   let print_space = false in
-  let print_model = false in
+  let print_model = true in
   if do_print then begin
       let space = Problem.model_space problem in
       if print_space then
@@ -75,7 +75,7 @@ let print_search_state do_print problem es model =
           Printf.printf "\t ***model***\n";
           Printf.printf "\t%s\n%!" (Ast.string_of_map model)
         end;
-      Interactive.pause true;
+      (* Interactive.pause params.interactive; *)
     end
 
 

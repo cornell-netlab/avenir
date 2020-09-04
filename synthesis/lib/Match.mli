@@ -27,6 +27,6 @@ val get_exact_val : t -> value
 val get_base_value : t -> value
 val exactify : t -> t
 val exactify_list : t list -> t list
-val to_model : string -> t -> value StringMap.t
+val to_model : ?typ:[`Vals | `NoVals] -> string -> t -> value StringMap.t
 val relevant_matches : t list -> t list
 val relevant_keys : t list -> string list

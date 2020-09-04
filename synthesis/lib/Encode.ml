@@ -310,7 +310,7 @@ and header_stack_name (name:Expression.t) (size:Expression.t) =
 let dispatch_name e = string_of_memberlist (dispatch_list e)
 
 let validity_bit_no_removal members =
-  string_of_memberlist members ^ "_valid"
+  string_of_memberlist members ^ ".isValid"
 
 let validity_bit members =
   validity_bit_no_removal (List.take members (List.length members - 1))
@@ -1034,6 +1034,7 @@ and encode_program (Program(top_decls) as prog : program ) =
   match get_ingress_egress_names top_decls with
   | Some (ingress_name, egress_name) ->
      sequence [
+         mkAssume (Var("standard_metadata.egress_spec",9) %=% mkVInt(0,9));
          encode_pipeline type_cxt prog ingress_name;
          "standard_metadata.egress_port" %<-% Var("standard_metadata.egress_spec", 9);
          mkOrdered [

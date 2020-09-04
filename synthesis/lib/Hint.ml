@@ -186,7 +186,7 @@ let to_model (phys : cmd) (hint : t): value StringMap.t =
     match hint.match_opt with
     | None -> StringMap.empty
     | Some ms ->
-       List.map ms ~f:(Match.to_model hint.table)
+       List.map ms ~f:(Match.to_model ~typ:`NoVals hint.table)
        @ List.filter_map keys ~f:(fun (k,sz,v_opt) ->
              if List.exists ms ~f:(Fn.compose ((=) k) Match.get_key)
              then None

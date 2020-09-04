@@ -122,20 +122,16 @@ let well_formed_adds (params : Parameters.t) (problem : Problem.t) encode_tag =
   let phys_inst = Problem.phys_edited_instance params problem in
   let phys = Problem.phys problem in
   tables_of_cmd phys
-  |> List.fold
-       ~init:True
-       ~f:(fun accum t ->
+  |> concatMap ~c:(%&%) ~init:(Some True)
+       ~f:(fun t ->
          let t_rows = Instance.get_rows phys_inst t in
-         mkAnd accum @@
-           (Hole.add_row_hole t %=% mkVInt(1,1)) %=>%
-             List.fold t_rows ~init:True
-               ~f:(fun acc (ms,_,_) ->
-                 acc %&% !%(List.fold ms ~init:False
-                              ~f:(fun acc m ->
-                                acc %+% Match.to_valuation_test t encode_tag m
-                              )
-                           )
-               )
+         (Hole.add_row_hole t %=% mkVInt(1,1)) %=>%
+           concatMap t_rows ~init:(Some True) ~c:(%&%)
+             ~f:(fun (ms,_,_) ->
+               !%(concatMap ms ~init:(Some False) ~c:(%&%)
+                    ~f:(Match.to_valuation_test t encode_tag)
+                 )
+             )
        )
 
 
@@ -293,7 +289,7 @@ let rec construct_model_query opts form fvs cexs in_pkt phys out_pkt =
 let compute_vc (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t)  (opts : opts)  =
   let (in_pkt, out_pkt) = Problem.cexs problem |> List.hd_exn in
   let st = Time.now () in
-  let deletions = compute_deletions in_pkt problem in
+  let deletions = [] (*compute_deletions in_pkt problem*) in
   let hints = if opts.hints then
                 let open Problem in
                 (* Log.print_edits (log_edits problem); *)
@@ -329,7 +325,7 @@ let compute_vc (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
 
 
 let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_list,phys,hints)  =
-  let hole_type = if opts.mask then `Mask else `Exact in
+  (* let hole_type = if opts.mask then `Mask else `Exact in *)
   let fvs = Problem.fvs problem  in
   let tests =
     List.filter_map wp_list
@@ -356,37 +352,47 @@ let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_li
           in
           let query_test = wf_holes %&% pre_condition in
           let query_holes = holes_of_test query_test |> List.dedup_and_sort ~compare:(Stdlib.compare) in
-          let out_test =
-            bigand [
-                query_test
-                |> Log.print_and_return_test params.debug ~pre:"The Query:\n" ~post:"\n--------\n\n";
-
-                adds_are_reachable params problem opts fvs hole_type
-                |> Log.print_and_return_test params.debug ~pre:"Adds_are_reachable:\n" ~post:"\n--------\n\n";
-
-                restrict_mask opts query_holes
-                |> Log.print_and_return_test params.debug ~pre:"Restricting Masks:\n" ~post:"\n--------\n\n";
-
-                no_defaults params opts fvs phys
-                |> Log.print_and_return_test params.debug ~pre:"No Defaults:\n" ~post:"\n--------\n\n";
-
-                single problem opts query_holes
-                |> Log.print_and_return_test params.debug ~pre:"Single:\n" ~post:"\n--------\n\n";
-
-                active_domain_restrict params problem opts query_holes
-                |> Log.print_and_return_test params.debug ~pre:"Active Domain Restriction:\n" ~post:"\n--------\n\n";
-
-                well_formed_adds params problem hole_type
-                |> Log.print_and_return_test params.debug  ~pre:"Well-Formed Additions:\n" ~post:"\n--------\n\n";
-
-                non_empty_adds problem
-                |> Log.print_and_return_test params.debug ~pre:"Non-Empty Additions:\n" ~post:"\n--------\n\n" ]
-          in
           if params.debug then
             Printf.printf "There are %d hints in ModelFinder\n%!" (List.length hints);
           Log.print_hints params.debug hints;
           let partial_model = Hint.list_to_model (Problem.phys problem) hints in
           Log.print_hints_map params.debug partial_model;
+
+          let out_test =
+            bigand [
+                query_test
+                |> fixup_test partial_model
+                |> Log.print_and_return_test params.debug ~pre:"The Query:\n" ~post:"\n--------\n\n";
+
+                (* adds_are_reachable params problem opts fvs hole_type
+                 * |> fixup_test partial_model
+                 * |> Log.print_and_return_test params.debug ~pre:"Adds_are_reachable:\n" ~post:"\n--------\n\n ";*)
+
+                restrict_mask opts query_holes
+                |> fixup_test partial_model
+                |> Log.print_and_return_test params.debug ~pre:"Restricting Masks:\n" ~post:"\n--------\n\n";
+
+                no_defaults params opts fvs phys
+                |> fixup_test partial_model
+                |> Log.print_and_return_test params.debug ~pre:"No Defaults:\n" ~post:"\n--------\n\n";
+
+                single problem opts query_holes
+                |> fixup_test partial_model
+                |> Log.print_and_return_test params.debug ~pre:"Single:\n" ~post:"\n--------\n\n";
+
+                active_domain_restrict params problem opts query_holes
+                |> fixup_test partial_model
+                |> Log.print_and_return_test params.debug ~pre:"Active Domain Restriction:\n" ~post:"\n--------\n\n";
+
+                (* well_formed_adds params problem hole_type
+                 * |> fixup_test partial_model
+                 * |> Log.print_and_return_test params.debug  ~pre:"Well-Formed Additions:\n" ~post:"\n--------\n\n"; *)
+
+                (* non_empty_adds problem
+                 * |> fixup_test partial_model
+                 * |> Log.print_and_return_test params.debug ~pre:"Non-Empty Additions:\n" ~post:"\n--------\n\n" *)
+              ]
+          in
           Some (out_test, partial_model))
   in
   tests
