@@ -233,6 +233,32 @@ let get_new_cex params data problem =
      then failwith "repeated counterexample"
      else add_cex problem counter |> Some
 
+let minimize_edits_for_cexs (_ : Parameters.t) _ _ uncertain =
+  uncertain
+  (* if not params.minimize then uncertain else
+   *   match uncertain with
+   *   | [] -> certain
+   *   | e :: es ->
+   *      let (in_pkt, outpkt) = Problem.cexs problem |> List.hd_exn in
+   *      let temp_problem = Problem.replace_phys_edits problem (Problem.phys_edits problem @ certain @ es) in
+   *      let outpkt' = eval_act (Problem.phys_gcl_program params temp_problem) in_pkt in
+   *      let outpkt'' = eval_act (Problem.replace_phys_edits problem [e] |> Problem.phys_gcl_program params) in_pkt in
+   *      let fvs = Some (Problem.fvs problem) in
+   *      if Packet.equal ~fvs outpkt outpkt'' then
+   *        [e]
+   *      else
+   *        let certain =
+   *          if Packet.equal ~fvs outpkt outpkt' then
+   *            let () = Printf.printf "removing %s\n%!" (Edit.to_string e) in
+   *            certain
+   *          else
+   *            let () = Printf.printf "keeping %s\n\t packets differ in %s\n%!" (Edit.to_string e)
+   *                       (string_of_strset @@ StringSet.of_list @@ Packet.diff_vars outpkt outpkt') in
+   *            certain @ [e]
+   *        in
+   *        minimize_edits_for_cexs params problem certain es *)
+
+
 let rec minimize_edits params data problem certain uncertain =
   match uncertain with
   | [] -> certain
@@ -250,7 +276,6 @@ let minimize_solution (params : Parameters.t) data problem =
     |> Problem.replace_phys_edits problem
   else
     problem
-
 
 
 let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (Edit.t list option) =
@@ -283,6 +308,9 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
          let log_out_pkt = Semantics.eval_act (Problem.log_gcl_program params problem) in_pkt in
          let params = {params with fastcx = false; ecache = false} in
          let problem = Problem.add_cex problem (in_pkt, log_out_pkt) in
+         (* match salvage problem  with
+          * | Some problem' -> cegis_math params data problem'
+          * | None -> *)
          Log.cexs params problem log_out_pkt in_pkt;
          solve_math params.search_width params data problem
 
@@ -325,6 +353,7 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
     ProfData.update_time !data.model_search_time st;
     model_opt >>= fun (model, searcher) ->
     let es = extract_reached_edits params data problem model in
+    let es = minimize_edits_for_cexs params problem [] es in
 
     Log.print_search_state true problem es model;
     Interactive.pause ~prompt:"\n" params.interactive;

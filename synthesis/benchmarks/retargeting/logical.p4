@@ -102,7 +102,6 @@ control MyIngress(inout headers hdr,
         standard_metadata.egress_spec = port;
         hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
         hdr.ethernet.dstAddr = dstAddr;
-        hdr.ipv4.ttl = hdr.ipv4.ttl |-| 1;
     }
     
     table ipv4 {
@@ -111,9 +110,9 @@ control MyIngress(inout headers hdr,
         }
         actions = {
             ipv4_forward;
-            drop;
+            nop;
         }
-        default_action = drop();
+        default_action = nop();
     }
 
     table ethernet {
@@ -145,6 +144,7 @@ control MyIngress(inout headers hdr,
 	ethernet.apply();
 	if (hdr.ipv4.isValid()){
 	    ipv4.apply();
+            hdr.ipv4.ttl = hdr.ipv4.ttl - 1;	    
 	}
 	punt.apply();
     }

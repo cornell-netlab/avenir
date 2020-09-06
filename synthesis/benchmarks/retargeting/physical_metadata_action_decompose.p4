@@ -34,7 +34,7 @@ header ipv4_t {
 }
 
 struct metadata {
-    bit<1> do_drop;
+    bit<32> nexthop;
 }
 
 struct headers {
@@ -88,62 +88,50 @@ control MyIngress(inout headers hdr,
                   inout standard_metadata_t standard_metadata) {
 
     action nop() {}
-
+    
     action drop() {
         mark_to_drop(standard_metadata);
     }
 
-    action eth_fwd(egressSpec_t port) {
+    action set_port(egressSpec_t port) {
 	standard_metadata.egress_spec = port;
-	
+    }
+
+    
+    action eth_fwd(bit<32> nexthop) {
+	meta.nexthop = nexthop;
     }
     
-    action ipv4_forward(macAddr_t dstAddr, egressSpec_t port) {
-        standard_metadata.egress_spec = port;
+    action ipv4_forward(bit<32> nexthop) {
+	meta.nexthop = nexthop;
+    }
+
+    action smac_rewrite(macAddr_t dstAddr) {
         hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
         hdr.ethernet.dstAddr = dstAddr;
-    }
-
-    action malformed () {
-	meta.do_drop = 1w1;
-	drop ();
-    }
-    action ok () { nop (); }
-
-    table ethernet_validate {
-	key = {
-	    hdr.ethernet.etherType : ternary;
-	    hdr.ipv4.isValid() : ternary;	    
-	    hdr.ipv4.ttl : ternary;
-	}
-	actions = {
-	    malformed;
-	    ok;
-	}
-	default_action = ok ();
+        hdr.ipv4.ttl = hdr.ipv4.ttl |-| 1;
     }    
     
-    table ipv4_validate {
-	key = {
-	    hdr.ipv4.version : ternary;
-	    hdr.ipv4.ttl : ternary;
-	}
-	actions = {
-	    malformed;
-	    ok;
-	}
-	default_action = ok ();
-    }    
-    
-    table ipv4 {
+    table ipv4_fib {
         key = {
             hdr.ipv4.dstAddr: ternary;
         }
         actions = {
             ipv4_forward;
-            nop;
+            drop;
         }
-        default_action = nop();
+        default_action = drop();
+    }
+
+    table ipv4_rewrite {
+	key = {
+	    hdr.ipv4.dstAddr : ternary;
+	}
+	actions = {
+	    smac_rewrite;
+	    nop;
+	}
+	default_action = nop();
     }
 
     table ethernet {
@@ -157,29 +145,38 @@ control MyIngress(inout headers hdr,
 	default_action = nop();
     }
 
-    table acl {
+    table punt {
 	key = {
-	    hdr.ethernet.srcAddr : ternary;
-	    hdr.ethernet.dstAddr : ternary;
+	    hdr.ethernet.etherType : ternary;
+	    hdr.ipv4.isValid() : ternary;
+	    hdr.ipv4.version : ternary;
 	    hdr.ipv4.srcAddr : ternary;
-	    hdr.ipv4.dstAddr : ternary;    
+	    hdr.ipv4.dstAddr : ternary;
+	    hdr.ipv4.ttl : ternary;	    
 	}
 	actions = {
 	    drop;
 	}
     }
+    table nexthop {
+	key = {
+	    meta.nexthop : ternary;
+	}
+	actions = {
+	    set_port;
+	    drop;
+	}
+	default_action = drop();
+    }
     
     apply {
-	ethernet_validate.apply();
 	ethernet.apply();
 	if (hdr.ipv4.isValid()){
-	    ipv4.apply();
-            hdr.ipv4.ttl = hdr.ipv4.ttl - 1;	    
+	    ipv4_fib.apply();
+	    ipv4_rewrite.apply();
 	}
-	acl.apply();
-	if (meta.do_drop == 1w1) {
-	    mark_to_drop(standard_metadata);
-	}
+	nexthop.apply();
+	punt.apply();	
     }
 }
 
@@ -190,7 +187,7 @@ control MyIngress(inout headers hdr,
 control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
-    apply {}
+    apply {  }
 }
 
 /*************************************************************************

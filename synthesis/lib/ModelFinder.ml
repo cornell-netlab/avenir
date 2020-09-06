@@ -430,6 +430,7 @@ let holes_for_other_actions table phys actId =
          acc @ if i = Bigint.to_int_exn actId then [] else List.map params ~f:fst
        )
 
+
 let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t) option)=
   match params.timeout with
   | Some (st,dur) when Time.(Span.(diff (now()) st > dur)) -> None
@@ -482,7 +483,7 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
                    (Problem.model_space problem
                     |> fixup_test raw_model
                     |> string_of_test);
-               Some (Hint.join_models partial_model raw_model, t)
+                 Some (Hint.join_models partial_model raw_model, t)
              end
         | _ ->
            (* Printf.printf "No model, keep searching with %d opts and %d paths \n%!" (List.length schedule) (List.length search_space); *)
