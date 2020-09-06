@@ -26,6 +26,15 @@ let same_stringlist = Alcotest.(check stringlist) "same string list"
 let stringset = testable_string (Util.string_of_strset) (Util.StringSet.equal)
 let same_stringset = Alcotest.(check stringset) "same string set"
 
+let edits =
+  let open Tables in
+  testable_string
+    (Edit.list_to_string)
+    (fun es es' -> String.(Edit.list_to_string es =  Edit.list_to_string es'))
+
+let same_edits = Alcotest.(check edits) "same edits"
+
+
 (* Testing equality smart constructor *)
 let eq_test _ =
   let exp = Var ("x",8) %=%  mkVInt(7,8) in
@@ -515,7 +524,7 @@ let construct_model_query_PA_is_sat1 _ =
           ]
       ]
   in
-  let query = ModelFinder.construct_model_query `PassiveAggressive fvs inpkt phys outpkt in
+  let query = ModelFinder.construct_model_query ModelFinder.no_opts `PassiveAggressive fvs [inpkt,outpkt] inpkt phys outpkt in
   let res = Prover.is_sat Parameters.default query in
   Alcotest.(check bool) "is true" true res
 
@@ -711,7 +720,7 @@ let construct_model_query_PA_is_sat_hello _ =
        "standard_metadata.egress_port", Int(Bigint.of_string "0x1",9);
        "standard_metadata.egress_spec", Int(Bigint.of_string "0x1",9)] in
   let query =
-    ModelFinder.construct_model_query `PassiveAggressive fvs inpkt hello_phys outpkt
+    ModelFinder.construct_model_query ModelFinder.no_opts `PassiveAggressive fvs [inpkt,outpkt] inpkt hello_phys outpkt
   in
   let res = Prover.is_sat Parameters.default query in
   Alcotest.(check bool) "is true" true res
@@ -808,7 +817,7 @@ let construct_model_query_PA_is_sat_hello_smaller _ =
        "standard_metadata.egress_port", Int(Bigint.of_string "0x1",9);
        "standard_metadata.egress_spec", Int(Bigint.of_string "0x1",9)] in
   let query form =
-    ModelFinder.construct_model_query form fvs inpkt hello_phys outpkt
+    ModelFinder.construct_model_query ModelFinder.no_opts form fvs [inpkt,outpkt] inpkt hello_phys outpkt
   in
   let exp = Prover.is_sat Parameters.default (query `Passive) in
   let got = Prover.is_sat Parameters.default (query `PassiveAggressive) in
@@ -840,8 +849,8 @@ let hints_injects_keys _ =
   let edit = Tables.Edit.Add ("logical", (matches, [], 0)) in
   let model = Hint.(construct phys edit |> list_to_model phys) in
   let expected = Util.StringMap.of_alist_exn
-                   [ "?x_p2b", mkInt(5,32);
-                     "?q_p2b", mkInt(55,32);
+                   [ "?x_p2b_mask", Int(Util.max_int 32,32);
+                     "?q_p2b_mask", Int(Util.max_int 32,32);
                      "?z_p2b", mkInt(0,32);
                      "?z_p2b_mask", mkInt(0,32);
                    ]
@@ -1035,6 +1044,98 @@ let ag_affected_by_keys _ =
   let _, got = ActionGenerator.tables_affected_by_keys phys (Util.StringSet.of_list ["key1"; "key2"]) in
   same_stringset expected got
 
+(*Edits*)
+let extract_edits_from_model _ =
+  let drop = "standard_metadata.egress_spec" %<-% mkVInt(0,9) in
+  let phys =
+    sequence [
+        mkApply("ethernet",["hdr.ethernet.dstAddr", 48],[["nexthop",32],"meta.nexthop" %<-% Var("nexthop",32);[],drop],drop);
+        mkOrdered [
+            Var("hdr.ipv4.isValid",1) %=% mkVInt(1,1),
+            sequence [
+                mkApply("ipv4_fib", ["hdr.ipv4.dstAddr", 32], [["nexthop",32],"meta.nexthop" %<-% Var("nexthop",32);[],drop], drop);
+                mkApply("ipv4_rewrite",
+                        ["hdr.ipv4.dstAddr", 32],
+                        [["dstAddr",48],
+                         sequence [
+                             "hdr.ethernet.srcAddr" %<-% Var("hdr.ethernet.dstAddr",48);
+                             "hdr.ethernet.dstAddr" %<-% Var("dstAddr",32);
+                             "hdr.ipv4.ttl" %<-%
+                               SatMinus(Var("hdr.ipv4.ttl",16), mkVInt(1,16))
+                           ]
+                        ], Skip)
+              ];
+            True, Skip
+          ];
+        mkApply("nexthop",["meta.nexthop",32],[["port",9], "standard_metadata.egress_spec" %<-% Var("port",9); [],drop],drop);
+        mkApply("punt", ["hdr.ethernet.etherType", 16;
+                         "hdr.ipv4.isValid",1;
+                         "hdr.ipv4.version",4;
+                         "hdr.ipv4.srcAddr",32;
+                         "hdr.ipv4.dstAddr",32;
+                         "hdr.ipv4.ttl", 8;
+                        ],[[],drop], Skip);
+      ]
+  in
+  let model =
+    Util.StringMap.of_alist_exn [
+      "?AddRowToethernet", mkInt(1,1);
+      "?AddRowToipv4_fib", mkInt(0,1);
+      "?AddRowToipv4_rewrite", mkInt(1,1);
+      "?AddRowTonexthop", mkInt(1,1);
+      "?AddRowTopunt", mkInt(0,1);
+      "?ActInethernet", mkInt(0,1);
+      "?ActInipv4_fib", mkInt(1,1);
+      "?ActInipv4_rewrite", mkInt(0,1);
+      "?ActInnexthop", mkInt(0,1);
+      "?ActInpunt", mkInt(0,1);
+      "?hdr.ethernet.dstAddr_ethernet", mkInt(0,48);
+      "?hdr.ethernet.dstAddr_ethernet_mask", mkInt(0,48);
+      "?hdr.ethernet.etherType_punt", mkInt(0,16);
+      "?hdr.ethernet.etherType_punt_mask", mkInt(0,16);
+      "?hdr.ipv4.dstAddr_ipv4_fib" , Int(Util.max_int 32, 32);
+      "?hdr.ipv4.dstAddr_ipv4_fib_mask", Int(Util.max_int 32,32);
+      "?hdr.ipv4.dstAddr_ipv4_rewrite", Int(Bigint.of_string "0xa008",32);
+      "?hdr.ipv4.dstAddr_ipv4_rewrite_mask", Int(Util.max_int 32,32);
+      "?hdr.ipv4.dstAddr_punt", Int(Bigint.of_string "0x200000", 32);
+      "?hdr.ipv4.dstAddr_punt_mask", Int(Util.max_int 32,32);
+      "?hdr.ipv4.isValid_punt", mkInt(0,1);
+      "?hdr.ipv4.isValid_punt_mask", mkInt(0,1);
+      "?hdr.ipv4.srcAddr_punt", mkInt(0,32);
+      "?hdr.ipv4.srcAddr_punt_mask", mkInt(0,32);
+      "?hdr.ipv4.ttl_punt", mkInt(0,8);
+      "?hdr.ipv4.ttl_punt_mask", mkInt(0,8);
+      "?hdr.ipv4.version_punt", mkInt(0,4);
+      "?hdr.ipv4.version_punt_mask", mkInt(0,4);
+      "?meta.nexthop_nexthop", Int(Bigint.of_string "0x226890e0",32);
+      "?meta.nexthop_nexthop_mask", Int(Bigint.of_string "0xffffffff",32);
+      "ethernet_0_nexthop_32", Int(Bigint.of_string "0x226890e0",32);
+      "ipv4_fib_0_nexthop_32", Int(Bigint.of_string "0x6d1a0610",32);
+      "ipv4_fib_action_run", mkInt(3,2);
+      "ipv4_rewrite_0_dstAddr_48", mkInt(8,48);
+      "nexthop_0_port_9", mkInt(8,9);
+      ]
+  in
+  let expected_edits =
+    let open Tables.Edit in
+    [
+      Add("nexthop",
+          ([Match.exact_ "meta.nexthop" (Int(Bigint.of_string "0x226890e0",32))],
+           [mkInt(8,9)],0));
+      Add("ipv4_rewrite",
+          ([Match.exact_ "hdr.ipv4.dstAddr" (Int(Bigint.of_string "0xa008",32))]
+          ,[mkInt(8,48)],0));
+      Add("ethernet",
+          ([Match.wildcard "hdr.ethernet.dstAddr" 32;
+            Match.wildcard "hdr.ethernet.etherType" 16;
+           ],[Int(Bigint.of_string "0x226890e0",32)],0) );
+
+    ]
+  in
+  Tables.Edit.extract phys model
+  |> same_edits expected_edits
+
+
 
   
 let () =
@@ -1096,7 +1197,9 @@ let () =
        * ]; *)
 
       "packets",
-      [test_case "diff computes differing vars" `Quick packet_diff]
+      [test_case "diff computes differing vars" `Quick packet_diff];
 
+      "edits",
+      [test_case "extract from models" `Quick extract_edits_from_model]
 
     ]

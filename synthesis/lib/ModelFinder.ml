@@ -90,7 +90,7 @@ let make_searcher (params : Parameters.t) (_ : ProfData.t ref) (_ : Problem.t) :
                      domain = params.domain;
                      no_defaults = params.no_defaults;
                      double = true;
-                     reachable_adds = true;
+                     reachable_adds = false;
                    } in
   {schedule; search_space = []}
   
@@ -229,8 +229,8 @@ let no_defaults (params : Parameters.t) opts fvs phys =
         List.for_all fvs ~f:(fun (v',_) ->
                 if List.exists [v'; Hole.add_row_prefix; Hole.delete_row_prefix; Hole.which_act_prefix]
                      ~f:(fun substring -> String.is_substring v ~substring)
-                then (if params.debug then Printf.printf "%s \\in %s, so skipped\n%!" v v'; false)
-                else (if params.debug then Printf.printf "%s \\not\\in %s, so kept\n%!" v v'; true)
+                then (if params.debug then Printf.printf "%s matches %s, so skipped\n%!" v v'; false)
+                else (if params.debug then Printf.printf "%s misses  %s, so kept\n%!" v v'; true)
           )
       )
     |> List.fold ~init:True ~f:(fun acc (v,sz) ->
@@ -325,7 +325,7 @@ let compute_vc (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
 
 
 let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_list,phys,hints)  =
-  (* let hole_type = if opts.mask then `Mask else `Exact in *)
+  let hole_type = if opts.mask then `Mask else `Exact in
   let fvs = Problem.fvs problem  in
   let tests =
     List.filter_map wp_list
@@ -364,9 +364,9 @@ let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_li
                 |> fixup_test partial_model
                 |> Log.print_and_return_test params.debug ~pre:"The Query:\n" ~post:"\n--------\n\n";
 
-                (* adds_are_reachable params problem opts fvs hole_type
-                 * |> fixup_test partial_model
-                 * |> Log.print_and_return_test params.debug ~pre:"Adds_are_reachable:\n" ~post:"\n--------\n\n ";*)
+                adds_are_reachable params problem opts fvs hole_type
+                |> fixup_test partial_model
+                |> Log.print_and_return_test params.debug ~pre:"Adds_are_reachable:\n" ~post:"\n--------\n\n ";
 
                 restrict_mask opts query_holes
                 |> fixup_test partial_model

@@ -84,11 +84,13 @@ module Row = struct
                List.fold params ~init:[]
                  ~f:(fun acc (p,sz) ->
                    let v =
-                     match StringMap.find match_model @@
-                             Hole.action_data tbl_name act p sz
-                     with
-                     | None -> Int (Random.int (pow 2 sz) |> Bigint.of_int_exn, sz)
-                     | Some v -> v
+                     let p_hole = Hole.action_data tbl_name act p sz in
+                     match StringMap.find match_model p_hole  with
+                     | None ->
+                        Printf.printf "[WARNING] couldn't find action data %s in %s \n%!" p_hole (string_of_map match_model);
+                        Int (Random.int (pow 2 sz) |> Bigint.of_int_exn, sz)
+                     | Some v ->
+                        v
                    in
                    (* Printf.printf "\t%s -> %s\n" p (string_of_value v); *)
                    acc @ [v]
@@ -175,11 +177,16 @@ module Edit = struct
     | Add (nm, row) -> Printf.sprintf "ADD,%s,%s" nm (Row.to_string row)
     | Del (nm, idx) -> Printf.sprintf "DEL,%s,%d" nm idx
 
+  let list_to_string es =
+    List.fold es ~init:"" ~f:(fun acc e -> Printf.sprintf "%s\n%s" acc (to_string e))
+
   let eq_tests e e' =
     match e, e' with
     | Add(nm,(m,_,_)), Add(nm',(m',_,_)) when nm = nm'
       -> m = m'
     | _ -> false
+
+  let equal e e' = Stdlib.(e = e')
 
   let get_ith_match ~i (e : t) =
     match e with

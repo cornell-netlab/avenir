@@ -72,8 +72,10 @@ let print_search_state do_print problem es model =
       Printf.printf "\t***     ***\n";
 
       if print_model then begin
-          Printf.printf "\t ***model***\n";
-          Printf.printf "\t%s\n%!" (Ast.string_of_map model)
+          Printf.printf "\t***model***\n";
+          Printf.printf "%s\n%!"
+            (StringMap.fold model ~init:"" ~f:(fun ~key ~data acc ->
+                 Printf.sprintf "%s\n\t%s |--> %s" acc key (string_of_value data)))
         end;
       (* Interactive.pause params.interactive; *)
     end
