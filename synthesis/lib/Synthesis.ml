@@ -153,9 +153,11 @@ let remove_missed_edits params data problem es =
          acc @ [e]
       | Some _,_ -> acc)
 
-let extract_reached_edits params data problem model =
+let extract_reached_edits (params : Parameters.t) data problem model =
   Edit.extract (Problem.phys problem) model
-  |> remove_missed_edits params data problem
+  |> if params.reach_filter then
+       remove_missed_edits params data problem
+     else Fn.id
 
 
 
@@ -321,9 +323,9 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
       try_cache params data problem
     else
       List.length(Problem.phys_edits problem) <= params.edits_depth
-          |=> fun _ ->
-              ModelFinder.make_searcher params data problem
-              |> drive_search params.search_width params data problem
+      |=> fun _ ->
+          ModelFinder.make_searcher params data problem
+          |> drive_search params.search_width params data problem
 (* end *)
 (* else begin
        *     Printf.printf "Exhausted the Space\n%!";

@@ -93,8 +93,8 @@ let make_searcher (params : Parameters.t) (_ : ProfData.t ref) (_ : Problem.t) :
                      domain = params.domain;
                      no_defaults = params.no_defaults;
                      no_deletes = params.no_deletes;
-                     double = true;
-                     reachable_adds = false;
+                     double = params.use_all_cexs;
+                     reachable_adds = params.reach_restrict;
                    } in
   {schedule; search_space = []}
   
