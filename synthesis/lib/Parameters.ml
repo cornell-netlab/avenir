@@ -23,6 +23,7 @@ type t =
     monotonic: bool;
     injection: bool;
     hints : bool;
+    hint_type : string;
     only_holes : bool;
     unique_edits : bool;
     domain : bool;
@@ -55,6 +56,7 @@ let default =
     above = false;
     minimize = false;
     hints = false;
+    hint_type = "exact";
     only_holes = false;
     restrict_mask = false;
     no_defaults = false;

@@ -164,7 +164,7 @@ let aggregate_models =
 
 let join_models m1 m2 = aggregate_models [m1;m2]
 
-let to_model (phys : cmd) (hint : t): value StringMap.t =
+let to_model typ (phys : cmd) (hint : t): value StringMap.t =
   let (keys, actions, _) = get_schema_of_table hint.table phys
                         |> Option.value_exn
                              ~message:(Printf.sprintf "couldn't find table %s in %s" hint.table (string_of_cmd phys))
@@ -186,7 +186,7 @@ let to_model (phys : cmd) (hint : t): value StringMap.t =
     match hint.match_opt with
     | None -> StringMap.empty
     | Some ms ->
-       List.map ms ~f:(Match.to_model ~typ:`NoVals hint.table)
+       List.map ms ~f:(Match.to_model ~typ hint.table)
        @ List.filter_map keys ~f:(fun (k,sz,v_opt) ->
              if List.exists ms ~f:(Fn.compose ((=) k) Match.get_key)
              then None
@@ -201,6 +201,6 @@ let to_model (phys : cmd) (hint : t): value StringMap.t =
   in
   aggregate_models [matches;action]
 
-let list_to_model (phys : cmd) (hints : t list) : value StringMap.t =
-  let hints = List.map hints ~f:(to_model phys) in
+let list_to_model typ (phys : cmd) (hints : t list) : value StringMap.t =
+  let hints = List.map hints ~f:(to_model typ phys) in
   aggregate_models hints

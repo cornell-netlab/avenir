@@ -7,6 +7,7 @@ open Prover
 type opts =
   {injection : bool;
    hints : bool;
+   hint_type : [`Vals | `NoVals];
    paths : bool;
    only_holes: bool;
    mask : bool;
@@ -50,6 +51,7 @@ let string_of_opts (opts) : string =
 let no_opts =
   {injection = false;
    hints = false;
+   hint_type = `Vals;
    paths = false;
    only_holes = false;
    mask = false;
@@ -83,6 +85,15 @@ let make_searcher (params : Parameters.t) (_ : ProfData.t ref) (_ : Problem.t) :
   let schedule = make_schedule {
                      injection = params.injection;
                      hints = params.hints;
+                     hint_type = if params.hint_type = "mask" then
+                                   `NoVals
+                                 else if params.hint_type = "exact"
+                                 then
+                                   `Vals
+                                 else
+                                   Printf.sprintf "Unrecognized hint type %s, expected \"mask\" or \"exact\"" (params.hint_type)
+                                   |> failwith;
+
                      paths = params.monotonic;
                      only_holes = params.only_holes;
                      mask = params.widening;
@@ -360,7 +371,7 @@ let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_li
           if params.debug then
             Printf.printf "There are %d hints in ModelFinder\n%!" (List.length hints);
           Log.print_hints params.debug hints;
-          let partial_model = Hint.list_to_model (Problem.phys problem) hints in
+          let partial_model = Hint.list_to_model opts.hint_type (Problem.phys problem) hints in
           Log.print_hints_map params.debug partial_model;
 
           let out_test =

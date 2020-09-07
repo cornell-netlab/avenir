@@ -33,7 +33,7 @@ let opt_flags =
     +> flag "--shortening" no_arg ~doc:"shorten queries"
     +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
     +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
-    +> flag "--hints" no_arg ~doc:"Use syntactic hints"
+    +> flag "--hints" (optional string) ~doc:"Use syntactic hints"
     +> flag "--holes" no_arg ~doc:"Holes only"
     +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
     +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
@@ -124,7 +124,8 @@ module Solver = struct
                               shortening;
                               above;
                               minimize;
-                              hints;
+                              hints = Option.is_some hints;
+                              hint_type = Option.value hints ~default:"exact";
                               only_holes;
                               allow_annotations;
                               nlp;
@@ -268,7 +269,8 @@ module RunTest = struct
                               shortening;
                               above;
                               minimize;
-                              hints;
+                              hints = Option.is_some hints;
+                              hint_type = Option.value hints ~default:"exact";
                               only_holes;
                               allow_annotations;
                               nlp;
@@ -370,7 +372,8 @@ module Bench = struct
           shortening;
           above;
           minimize;
-          hints;
+          hints = Option.is_some hints;
+          hint_type = Option.value hints ~default:"exact";
           only_holes;
           allow_annotations;
           nlp;
@@ -458,7 +461,8 @@ module ONFReal = struct
           shortening;
           above;
           minimize;
-          hints;
+          hints = Option.is_some hints;
+          hint_type = Option.value hints ~default:"exact";
           only_holes;
           allow_annotations;
           nlp;
@@ -742,7 +746,8 @@ module Classbench = struct
                      shortening;
                      above;
                      minimize;
-                     hints;
+                     hints = Option.is_some hints;
+                     hint_type = Option.value hints ~default:"exact";
                      only_holes;
                      allow_annotations;
                      nlp;
@@ -847,7 +852,8 @@ module SqBench = struct
           shortening;
           above;
           minimize;
-          hints;
+          hints = Option.is_some hints;
+          hint_type = Option.value hints ~default:"exact";
           only_holes;
           allow_annotations;
           nlp;
@@ -935,7 +941,8 @@ module NumHdrs = struct
                      shortening;
                      above;
                      minimize;
-                     hints;
+                     hints  = Option.is_some hints;
+                     hint_type = Option.value hints ~default:"exact";
                      only_holes;
                      allow_annotations;
                      nlp;
@@ -1023,7 +1030,8 @@ module MetadataBench = struct
                      shortening;
                      above;
                      minimize;
-                     hints;
+                     hints = Option.is_some hints;
+                     hint_type = Option.value hints ~default:"exact";
                      only_holes;
                      allow_annotations;
                      nlp;
@@ -1113,7 +1121,8 @@ module NumTbls = struct
                      shortening;
                      above;
                      minimize;
-                     hints;
+                     hints = Option.is_some hints;
+                     hint_type = Option.value hints ~default:"exact";
                      only_holes;
                      allow_annotations;
                      nlp;
@@ -1171,7 +1180,7 @@ module ServerCmd = struct
       +> flag "--shortening" no_arg ~doc:"shorten queries"
       +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
       +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
-      +> flag "--hints" no_arg ~doc:"Use syntactic hints"
+      +> flag "--hints" (optional string) ~doc:"Use syntactic hints [exact | mask]"
       +> flag "--holes" no_arg ~doc:"Holes only"
       +> flag "--annot" no_arg ~doc:"Use hard-coded edits"
       +> flag "--nlp" no_arg ~doc:"variable name based domain restrictions"
@@ -1236,7 +1245,8 @@ module ServerCmd = struct
                               shortening;
                               above;
                               minimize;
-                              hints;
+                              hints  = Option.is_some hints;
+                              hint_type = Option.value hints ~default:"exact";
                               only_holes;
                               allow_annotations;
                               nlp;
