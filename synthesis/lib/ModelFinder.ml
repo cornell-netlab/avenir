@@ -16,6 +16,7 @@ type opts =
    single : bool;
    domain : bool;
    no_defaults : bool;
+   no_deletes : bool;
    double : bool;
    reachable_adds : bool
   }
@@ -44,6 +45,7 @@ let string_of_opts (opts) : string =
   |> condcat opts.no_defaults "no_defaults"
   |> condcat opts.double "double"
   |> condcat opts.reachable_adds "reachable_adds "
+  |> condcat opts.no_deletes "no_deletes"
 
 let no_opts =
   {injection = false;
@@ -57,6 +59,7 @@ let no_opts =
    single = false;
    domain = false;
    no_defaults = false;
+   no_deletes = false;
    double = false;
    reachable_adds = false;
   }
@@ -67,7 +70,7 @@ let rec make_schedule opt =
   opt ::
     if opt.double then
       let opt' = {opt with double = false} in
-       make_schedule opt'
+      make_schedule opt'
     else if opt.injection || opt.hints || opt.paths || opt.only_holes || opt.nlp || opt.domain then
       let opt' = {opt with injection=false;hints=false;paths=false;only_holes=false; nlp=false;domain = false} in
       make_schedule opt'
@@ -89,6 +92,7 @@ let make_searcher (params : Parameters.t) (_ : ProfData.t ref) (_ : Problem.t) :
                      single = params.unique_edits;
                      domain = params.domain;
                      no_defaults = params.no_defaults;
+                     no_deletes = params.no_deletes;
                      double = true;
                      reachable_adds = false;
                    } in
@@ -107,16 +111,17 @@ let reindex_for_dels problem tbl i =
           | _ -> cnt
         )
 
-let compute_deletions (_ : value StringMap.t) (problem : Problem.t) =
-  let phys_inst = Problem.phys_inst problem in
-  StringMap.fold phys_inst ~init:[]
-    ~f:(fun ~key:table_name ~data:rows dels ->
-      dels @ List.filter_mapi rows ~f:(fun i _ ->
-                 match reindex_for_dels problem table_name i with
-                 | None -> None
-                 | Some i' -> Some (table_name, i')
-               )
-    )
+let compute_deletions opts (problem : Problem.t) =
+  if opts.no_deletes then
+    []
+  else
+    let phys_inst = Problem.phys_inst problem in
+    StringMap.fold phys_inst ~init:[]
+      ~f:(fun ~key:table_name ~data:rows dels ->
+        dels @ List.filter_mapi rows ~f:(fun i _ ->
+                   match reindex_for_dels problem table_name i with
+                   | None -> None
+                   | Some i' -> Some (table_name, i')))
 
 let well_formed_adds (params : Parameters.t) (problem : Problem.t) encode_tag =
   let phys_inst = Problem.phys_edited_instance params problem in
@@ -289,7 +294,7 @@ let rec construct_model_query opts form fvs cexs in_pkt phys out_pkt =
 let compute_vc (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t)  (opts : opts)  =
   let (in_pkt, out_pkt) = Problem.cexs problem |> List.hd_exn in
   let st = Time.now () in
-  let deletions = [] (*compute_deletions in_pkt problem*) in
+  let deletions = compute_deletions opts problem in
   let hints = if opts.hints then
                 let open Problem in
                 (* Log.print_edits (log_edits problem); *)

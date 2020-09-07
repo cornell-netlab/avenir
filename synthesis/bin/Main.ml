@@ -40,7 +40,8 @@ let opt_flags =
     +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
     +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
     +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
-    +> flag "--no-defaults" no_arg ~doc:"Prefer solutions that don't rely on default actions ")
+    +> flag "--no-defaults" no_arg ~doc:"Prefer solutions that don't rely on default actions"
+    +> flag "--no-deletes" no_arg ~doc:"try with no deletions")
 
 
 
@@ -99,7 +100,8 @@ module Solver = struct
         unique_edits
         domain
         restrict_mask
-        no_defaults () =
+        no_defaults
+        no_deletes () =
     let params = Parameters.({widening;
                               do_slice;
                               edits_depth;
@@ -122,6 +124,7 @@ module Solver = struct
                               domain;
                               restrict_mask;
                               no_defaults;
+                              no_deletes;
                               timeout = None
                  }) in
     let var_mapping = Benchmark.parse_fvs fvs in
@@ -225,7 +228,8 @@ module RunTest = struct
         unique_edits
         domain
         restrict_mask
-        no_defaults () =
+        no_defaults
+        no_deletes () =
     In_channel.read_lines test_file
     |> List.iter
          ~f:(fun line ->
@@ -257,6 +261,7 @@ module RunTest = struct
                               domain;
                               no_defaults;
                               restrict_mask;
+                              no_deletes;
                               timeout = None;
                            }) in
               let problem = Problem.make ~log ~phys ~log_edits
@@ -325,7 +330,8 @@ module Bench = struct
         unique_edits
         domain
         restrict_mask
-        no_defaults () =
+        no_defaults
+        no_deletes () =
     let params =
       Parameters.(
         {
@@ -351,6 +357,7 @@ module Bench = struct
           domain;
           restrict_mask;
           no_defaults;
+          no_deletes;
           timeout = None;
         })
     in
@@ -405,6 +412,7 @@ module ONFReal = struct
         unique_edits
         domain
         restrict_mask
+        no_deletes
         no_defaults
     () =
     let res = Benchmark.basic_onf_ipv4_real
@@ -431,6 +439,7 @@ module ONFReal = struct
           domain;
           restrict_mask;
           no_defaults;
+          no_deletes;
           timeout = None})
               data logical_p4 physical_p4 log_edits phys_edits fvs assume logical_inc physical_inc
     in
@@ -682,6 +691,7 @@ module Classbench = struct
         domain
         restrict_mask
         no_defaults
+        no_deletes
         () =
     let params =
       Parameters.({
@@ -707,6 +717,7 @@ module Classbench = struct
                      domain;
                      restrict_mask;
                      no_defaults;
+                     no_deletes;
                      timeout = Option.(timeout >>= fun s -> Some(Time.now(), (Time.Span.of_sec s)))
       })
     in
@@ -779,6 +790,7 @@ module SqBench = struct
         domain
         restrict_mask
         no_defaults
+        no_deletes
         ()
     =    let params =
       Parameters.(
@@ -805,6 +817,7 @@ module SqBench = struct
           domain;
           restrict_mask;
           no_defaults;
+          no_deletes;
           timeout = Option.(timeout >>= fun s -> Some(Time.now(), (Time.Span.of_sec s)))
         })
     in
@@ -860,6 +873,7 @@ module NumHdrs = struct
         domain
         restrict_mask
         no_defaults
+        no_deletes
         () =
     let params =
       Parameters.({
@@ -885,6 +899,7 @@ module NumHdrs = struct
                      domain;
                      restrict_mask;
                      no_defaults;
+                     no_deletes;
                      timeout = Option.(timeout >>= fun s -> Some(Time.now(), (Time.Span.of_sec s)))
       })
     in
@@ -940,6 +955,7 @@ module MetadataBench = struct
         domain
         restrict_mask
         no_defaults
+        no_deletes
         () =
     let params =
       Parameters.({
@@ -965,6 +981,7 @@ module MetadataBench = struct
                      domain;
                      restrict_mask;
                      no_defaults;
+                     no_deletes;
                      timeout = Option.(timeout >>= fun s -> Some(Time.now(), (Time.Span.of_sec s)))
       })
     in
@@ -1022,6 +1039,7 @@ module NumTbls = struct
         domain
         restrict_mask
         no_defaults
+        no_deletes
         () =
     let params =
       Parameters.({
@@ -1047,6 +1065,7 @@ module NumTbls = struct
                      domain;
                      restrict_mask;
                      no_defaults;
+                     no_deletes;
                      timeout = Option.(timeout >>= fun s -> Some(Time.now(), (Time.Span.of_sec s)))
       })
     in
@@ -1100,7 +1119,8 @@ module ServerCmd = struct
       +> flag "--unique-edits" no_arg ~doc:"Only one edit allowed per table"
       +> flag "--domain-restrict" no_arg ~doc:"Restrict allowed values to those that occur in the programs"
       +> flag "--restrict-masks" no_arg ~doc:"Restrict masks"
-      +> flag "--no-defaults" no_arg ~doc:"Prefer solutions that don't rely on default actions ")
+      +> flag "--no-defaults" no_arg ~doc:"Prefer solutions that don't rely on default actions "
+      +> flag "--no-deletes" no_arg ~doc:"Prefer solutions with no deletions")
 
   let run
         logical
@@ -1134,7 +1154,8 @@ module ServerCmd = struct
         unique_edits
         domain
         restrict_mask
-        no_defaults () =
+        no_defaults
+        no_deletes () =
     let params = Parameters.({widening;
                               do_slice;
                               edits_depth;
@@ -1157,6 +1178,7 @@ module ServerCmd = struct
                               domain;
                               restrict_mask;
                               no_defaults;
+                              no_deletes;
                               timeout = None
                  }) in
     let mapping = Benchmark.parse_fvs fvs in

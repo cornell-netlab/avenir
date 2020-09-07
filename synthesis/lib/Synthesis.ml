@@ -411,21 +411,30 @@ let cegis_math_sequence (params : Parameters.t) data problem =
   let log_edit_sequence = Problem.log_edits problem in
   let problem = Problem.replace_log_edits problem [] in
   match List.fold log_edit_sequence ~init:(Some(problem,[]))
-    ~f:(fun acc ledit ->
-      match acc with
-      | None -> None
-      | Some (problem, pedits) ->
-          let problem = Problem.replace_log_edits problem [ledit] in
-          Printf.printf "\n\n\n%s\n\n\n" (Problem.to_string params problem);
-          match cegis_math params data problem with
-          | None -> None
-          | Some phys_edits ->
-             Some
-               (Problem.replace_phys_edits problem phys_edits
-                |> Problem.commit_edits_log params
-                |> Problem.commit_edits_phys params,
-                pedits @ phys_edits)
-    )
+          ~f:(fun acc ledit ->
+            match acc with
+            | None -> None
+            | Some (problem, pedits) ->
+               let problem = Problem.replace_log_edits problem [ledit] in
+               Printf.printf "\n\n\n%s\n\n\n" (Problem.to_string params problem);
+               let phys_edits = match cegis_math params data problem with
+                 | None ->
+                    if params.no_deletes then
+                      cegis_math {params with no_deletes = false} data problem
+                    else
+                      None
+                 | Some phys_edits ->
+                    Some phys_edits
+               in
+               match phys_edits with
+               | None -> None
+               | Some phys_edits ->
+                  Some (Problem.replace_phys_edits problem phys_edits
+                        |> Problem.commit_edits_log params
+                        |> Problem.commit_edits_phys params,
+                        pedits @ phys_edits)
+
+          )
   with
   | None -> None
   | Some (problem,edits) ->

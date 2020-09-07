@@ -28,6 +28,7 @@ type t =
     domain : bool;
     restrict_mask : bool;
     no_defaults : bool;
+    no_deletes : bool;
 
     (* outddated *)
     allow_annotations : bool;
@@ -54,6 +55,7 @@ let default =
     only_holes = false;
     restrict_mask = false;
     no_defaults = false;
+    no_deletes = false;
 
     allow_annotations = false;
     nlp = false;
@@ -71,6 +73,7 @@ let to_string params =
   let s = s ^ if params.unique_edits then "unique_edits_" else "" in
   let s = s ^ if params.domain then "domain_" else "" in
   let s = s ^ if params.restrict_mask then "restrict_mask" else "" in
+  let s = s ^ if params.no_deletes then "no_delets" else "" in
   s
 
 let all_params params =
