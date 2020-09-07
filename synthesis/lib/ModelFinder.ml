@@ -305,7 +305,7 @@ let compute_vc (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   let fvs = List.(free_vars_of_cmd phys
                   |> filter ~f:(fun x -> exists (Problem.fvs problem) ~f:(Stdlib.(=) x))) in
   (* let fvs = problem.fvs in *)
-  Printf.printf "Constructing Wps \n%!";
+  if params.debug then Printf.printf "Constructing Wps \n%!";
   let wp_list =
     if opts.paths then
       let phys = Packet.to_assignment in_pkt %:% phys |> CompilerOpts.optimize fvs in
@@ -441,8 +441,9 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
         None
      | [], (opts::schedule) ->
         let () =
-          Printf.printf "trying heuristics |%s|\n\n%!"
-            (string_of_opts opts)
+          if params.debug then
+            Printf.printf "trying heuristics |%s|\n\n%!"
+              (string_of_opts opts)
         in
         let search_space = compute_queries params data problem opts in
         (* Printf.printf "search space rebuild, recursing!\n%!"; *)
@@ -466,9 +467,7 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
            if params.debug then Printf.printf "Found a model, done \n%!";
            if Problem.seen_attempt problem raw_model then begin
                Printf.printf "%s\n%!" (Problem.attempts_to_string problem);
-
                Printf.printf "\ncurrent model is %s\n%!" (string_of_map raw_model);
-
                Printf.printf "\nmodel_space is %s \n%!" (string_of_test @@ Problem.model_space problem);
                Printf.printf "\nmodel has already been seen and is allowed? %s"
                  (if Problem.model_space problem |> fixup_test raw_model = True

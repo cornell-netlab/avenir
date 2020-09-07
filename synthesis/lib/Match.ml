@@ -274,14 +274,14 @@ let exactify (m : t) : t =
 let exactify_list = List.map ~f:exactify
 
 
-let to_model ?typ:(typ=`Vals)table (m:t) =
+let to_model ?typ:(typ=`Vals) table (m:t) =
   let encode_msk (v,msk) (hv,hmsk) =
-       let msk_model = [ hmsk, msk] in
+    let model = [ (*Hole.add_row_hole_name table, mkInt(1,1);*) hmsk, msk] in
        begin match typ  with
        | `Vals ->
-          (hv, v) :: msk_model
+          (hv, v) :: model
        | `NoVals ->
-          msk_model
+          model
        end
   in
   StringMap.of_alist_exn @@

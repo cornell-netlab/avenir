@@ -221,17 +221,17 @@ let get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref) (pr
        *    Problem.update_phys problem (Assume !%(hits_phys_edits) %:% Problem.phys problem)
        *    |> implements params data *)
 
-let get_new_cex params data problem =
-  let open Problem in
-  let ctest = List.fold (cexs problem)
-                ~init:True
-                ~f:(fun acc (in_pkt,_) -> acc %&% !%(Packet.to_test  ~fvs:(fvs problem) in_pkt)) in
-  match get_cex params data problem ~neg:ctest with
-  | `Yes -> None
-  | `NoAndCE ((inp,outp) as counter)->
-     if List.exists ~f:(fun (i,o) -> Packet.equal i inp && Packet.equal o outp ) (cexs problem)
-     then failwith "repeated counterexample"
-     else add_cex problem counter |> Some
+(* let get_new_cex params data problem =
+ *   let open Problem in
+ *   let ctest = List.fold (cexs problem)
+ *                 ~init:True
+ *                 ~f:(fun acc (in_pkt,_) -> acc %&% !%(Packet.to_test  ~fvs:(fvs problem) in_pkt)) in
+ *   match get_cex params data problem ~neg:ctest with
+ *   | `Yes -> None
+ *   | `NoAndCE ((inp,outp) as counter)->
+ *      if List.exists ~f:(fun (i,o) -> Packet.equal i inp && Packet.equal o outp ) (cexs problem)
+ *      then failwith "repeated counterexample"
+ *      else add_cex problem counter |> Some *)
 
 let minimize_edits_for_cexs (_ : Parameters.t) _ _ uncertain =
   uncertain
@@ -320,21 +320,19 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
     if params.ecache then
       try_cache params data problem
     else
-      if is_sat params (Problem.model_space problem)
-      then begin
-          List.length(Problem.phys_edits problem) <= params.edits_depth
+      List.length(Problem.phys_edits problem) <= params.edits_depth
           |=> fun _ ->
               ModelFinder.make_searcher params data problem
               |> drive_search params.search_width params data problem
-        end
-      else begin
-          Printf.printf "Exhausted the Space\n%!";
-          match get_new_cex params data problem with
-          | Some p -> solve_math i params data p
-          | None ->
-             Printf.printf "we really have exhausted the space\n";
-             None
-        end
+(* end *)
+(* else begin
+       *     Printf.printf "Exhausted the Space\n%!";
+       *     match get_new_cex params data problem with
+       *     | Some p -> solve_math i params data p
+       *     | None ->
+       *        Printf.printf "we really have exhausted the space\n";
+       *        None
+       *   end *)
 
 and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) searcher =
   Printf.printf "loop\n%!";
@@ -355,7 +353,7 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
     let es = extract_reached_edits params data problem model in
     let es = minimize_edits_for_cexs params problem [] es in
 
-    Log.print_search_state true problem es model;
+    Log.print_search_state params.debug problem es model;
     Interactive.pause ~prompt:"\n" params.interactive;
 
     let problem' = Problem.(append_phys_edits problem es
