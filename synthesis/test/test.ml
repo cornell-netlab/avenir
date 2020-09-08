@@ -847,7 +847,7 @@ let hints_injects_keys _ =
       ]
   in
   let edit = Tables.Edit.Add ("logical", (matches, [], 0)) in
-  let model = Hint.(construct phys edit |> list_to_model phys) in
+  let model = Hint.(construct phys edit |> list_to_model `NoVals phys) in
   let expected = Util.StringMap.of_alist_exn
                    [ "?x_p2b_mask", Int(Util.max_int 32,32);
                      "?q_p2b_mask", Int(Util.max_int 32,32);
