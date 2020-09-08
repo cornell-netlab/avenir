@@ -1044,20 +1044,22 @@ let ag_affected_by_keys _ =
   let expected = Util.StringSet.of_list ["univ_table"] in
   let _, got = ActionGenerator.tables_affected_by_keys phys (Util.StringSet.of_list ["key1"; "key2"]) in
   same_stringset expected got
+ *)
 
 (*Edits*)
 let extract_edits_from_model _ =
   let drop = "standard_metadata.egress_spec" %<-% mkVInt(0,9) in
   let phys =
     sequence [
-        mkApply("ethernet",["hdr.ethernet.dstAddr", 48],[["nexthop",32],"meta.nexthop" %<-% Var("nexthop",32);[],drop],drop);
+        mkApply("ethernet",["hdr.ethernet.dstAddr", 48],["nexthop", ["nexthop",32],"meta.nexthop" %<-% Var("nexthop",32);"drop", [],drop],drop);
         mkOrdered [
             Var("hdr.ipv4.isValid",1) %=% mkVInt(1,1),
             sequence [
-                mkApply("ipv4_fib", ["hdr.ipv4.dstAddr", 32], [["nexthop",32],"meta.nexthop" %<-% Var("nexthop",32);[],drop], drop);
+                mkApply("ipv4_fib", ["hdr.ipv4.dstAddr", 32], ["nexthop", ["nexthop",32],"meta.nexthop" %<-% Var("nexthop",32);"drop",[],drop], drop);
                 mkApply("ipv4_rewrite",
                         ["hdr.ipv4.dstAddr", 32],
-                        [["dstAddr",48],
+                        [ "rewrite",
+                          ["dstAddr",48],
                          sequence [
                              "hdr.ethernet.srcAddr" %<-% Var("hdr.ethernet.dstAddr",48);
                              "hdr.ethernet.dstAddr" %<-% Var("dstAddr",32);
@@ -1068,14 +1070,14 @@ let extract_edits_from_model _ =
               ];
             True, Skip
           ];
-        mkApply("nexthop",["meta.nexthop",32],[["port",9], "standard_metadata.egress_spec" %<-% Var("port",9); [],drop],drop);
+        mkApply("nexthop",["meta.nexthop",32],["fwd", ["port",9], "standard_metadata.egress_spec" %<-% Var("port",9); "drop", [],drop],drop);
         mkApply("punt", ["hdr.ethernet.etherType", 16;
                          "hdr.ipv4.isValid",1;
                          "hdr.ipv4.version",4;
                          "hdr.ipv4.srcAddr",32;
                          "hdr.ipv4.dstAddr",32;
                          "hdr.ipv4.ttl", 8;
-                        ],[[],drop], Skip);
+                        ],["drop", [],drop], Skip);
       ]
   in
   let model =
@@ -1203,4 +1205,4 @@ let () =
       "edits",
       [test_case "extract from models" `Quick extract_edits_from_model]
 
-    ]*)
+    ]
