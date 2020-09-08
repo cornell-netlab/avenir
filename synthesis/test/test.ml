@@ -829,35 +829,26 @@ let construct_model_query_PA_is_sat_hello_smaller _ =
 
 
 let hints_injects_keys _ =
-<<<<<<< HEAD
-  let log = mkApply ("logical", ["x",32; "y", 32; "q", 32], ["action", [], Skip],Skip) in
-=======
   let matches =
     let open Match in
     [exact_ "x" (mkInt (5,32));
      wildcard "y" 32;
      exact_ "q" (mkInt(55,32))]
     in
->>>>>>> master
   let phys =
     sequence [
         mkApply ("p1", ["x",32;"y",32], ["action", [],Skip], Skip);
         mkOrdered [
-<<<<<<< HEAD
-            Var("x",32) %=% mkVInt(100,32), mkApply ("p2a", ["y", 32; "q",32], ["action", [], Skip], Skip);
-            True, mkApply("p2b", ["x",32; "q",32], ["action", [], Skip], Skip);
-=======
             Var("x",32) %=% mkVInt(100,32),
-            mkApply ("p2a", ["y", 32; "q",32], [[], Skip], Skip);
+            mkApply ("p2a", ["y", 32; "q",32], ["action", [], Skip], Skip);
 
             True,
-            mkApply("p2b", ["x",32; "q",32; "z", 32], [[], Skip], Skip);
->>>>>>> master
+            mkApply("p2b", ["x",32; "q",32; "z", 32], ["action", [], Skip], Skip);
           ]
       ]
   in
   let edit = Tables.Edit.Add ("logical", (matches, [], 0)) in
-  let model = Hint.(construct phys edit |> list_to_model phys) in
+  let model = Hint.(construct phys edit |> list_to_model `NoVals phys) in
   let expected = Util.StringMap.of_alist_exn
                    [ "?x_p2b_mask", Int(Util.max_int 32,32);
                      "?q_p2b_mask", Int(Util.max_int 32,32);
