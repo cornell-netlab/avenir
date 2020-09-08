@@ -1,0 +1,3 @@
+ADD,ethernet,0x55#48,0x5#9,0
+ADD,ipv4,10.0.0.8/32#32,0x8#48;8#9,0
+ADD,ethernet_validate,0&0#32;1#1;1#8,,0

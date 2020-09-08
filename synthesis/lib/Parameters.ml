@@ -23,11 +23,16 @@ type t =
     monotonic: bool;
     injection: bool;
     hints : bool;
+    hint_type : string;
     only_holes : bool;
     unique_edits : bool;
     domain : bool;
     restrict_mask : bool;
     no_defaults : bool;
+    no_deletes : bool;
+    use_all_cexs : bool;
+    reach_restrict : bool;
+    reach_filter : bool;
 
     (* outddated *)
     allow_annotations : bool;
@@ -51,9 +56,14 @@ let default =
     above = false;
     minimize = false;
     hints = false;
+    hint_type = "exact";
     only_holes = false;
     restrict_mask = false;
     no_defaults = false;
+    no_deletes = false;
+    use_all_cexs = false;
+    reach_restrict = false;
+    reach_filter = false;
 
     allow_annotations = false;
     nlp = false;
@@ -71,6 +81,8 @@ let to_string params =
   let s = s ^ if params.unique_edits then "unique_edits_" else "" in
   let s = s ^ if params.domain then "domain_" else "" in
   let s = s ^ if params.restrict_mask then "restrict_mask" else "" in
+  let s = s ^ if params.no_deletes then "no_deletes" else "" in
+  let s = s ^ if params.use_all_cexs then "use_all_cexs" else "" in
   s
 
 let all_params params =

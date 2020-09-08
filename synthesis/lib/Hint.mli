@@ -9,14 +9,14 @@ type t
 val to_string : t -> string
 
 
-(** [construct log phys e] produces makes heuristic guesses about how
-   to accomodate the insertion of e into log in phys **)
-val construct : cmd -> cmd -> Edit.t -> t list
+(** [construct phys e] produces makes heuristic guesses about how
+    phys can accomodate the logical insertion of e **)
+val construct : cmd -> Edit.t -> t list
 
-val to_model : cmd -> t -> value StringMap.t
+val to_model : [`Vals | `NoVals] -> cmd -> t -> value StringMap.t
 
 (* union a disjoint sequence of hints. Conflicts throw an assertion error *)
-val list_to_model : cmd -> t list -> value StringMap.t
+val list_to_model : [`Vals | `NoVals] -> cmd -> t list -> value StringMap.t
 
 
 val join_models : value StringMap.t -> value StringMap.t -> value StringMap.t

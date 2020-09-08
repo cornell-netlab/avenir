@@ -3,71 +3,6 @@ open Ast
 open Util
 
 
-
-(* computes the product of two lists of disjuncitons *)
-let multiply orlist orlist' =
-  let foil outer inner =
-    List.fold outer ~init:[] ~f:(fun acc x ->
-        List.map inner ~f:(mkAnd x)
-        @ acc
-      )
-  in
-  foil orlist orlist'
-  @ foil orlist' orlist
-    
-  
-(* Computes the Negation Normal Form of a test*)               
-let rec nnf t : test =
-  match t with
-  | Eq(_, _)
-  | Le(_, _)
-  | True
-  | False
-  | Neg(Eq(_, _))
-  | Neg(Le(_, _))
-  | Neg(True)
-  | Neg(False) -> t
-  | Neg (Neg t) -> nnf t
-  | And (a, b) -> mkAnd (nnf a) (nnf b)
-  | Or (a, b) -> mkOr (nnf a) (nnf b)
-  | Impl (a, b) -> nnf (!%(a) %+% b)
-  | Iff (a, b) -> nnf (mkAnd (Impl(a,b)) (Impl (b,a)))
-  | Neg(And(a, b)) -> mkOr (mkNeg a) (mkNeg b) |> nnf
-  | Neg(Or(a, b)) -> mkAnd (mkNeg a) (mkNeg b) |> nnf
-  | Neg(Impl(a, b)) -> mkAnd a (mkNeg b) |> nnf
-  | Neg(Iff (a, b)) -> mkOr (mkAnd a (mkNeg b)) (mkAnd (mkNeg b) a)
-
-
-
-                         
-
-(* Computes the Disjunctive Normal form of a test *)
-let rec dnf t : test list =
-  let t' = nnf t in
-  match t' with
-  | And(a, b) -> multiply (dnf a) (dnf b)
-  | Or (a, b) -> dnf a @ dnf b
-  | Impl(a, b) -> dnf (nnf (!%(a) %+% b))
-  | Iff(a,b) -> dnf (Impl (a,b) %&% Impl(b,a))
-  | Eq _
-  | Le _ 
-  | Neg _ (* will not be And/Or because NNF*)
-  | True
-  | False  ->  [t']
-
-
-                 
-                 
-(* Unrolls all loops in the program p n times *)
-let rec unroll n p =
-  match p, n with
-  | Seq (firstdo, thendo), _ ->
-    Seq (unroll n firstdo, unroll n thendo)
-  | Select (styp, cmds), _ ->
-    List.map cmds ~f:(fun (cond, action) -> (cond, unroll n action))
-    |> mkSelect styp
-  | _ -> p (* Assign, Test, Assert cannot be unrolled *)
-
 let get_val subsMap str default =
   StringMap.find subsMap str |> Option.value ~default
 
@@ -475,9 +410,6 @@ let rec apply_finals_sub_test t sub =
   | Iff ts -> tbinop mkAnd ts
   | Neg t -> tunop mkNeg t
 
-
-
-
 let zip_eq_exn xs ys =
   List.fold2_exn xs ys ~init:True ~f:(fun acc x y -> acc %&% (Var x %=% Var y) )
 
@@ -696,12 +628,24 @@ let rec wp_paths negs c phi : (cmd * test) list =
      (t.default :: List.map ~f:(fun (_, sc, a) -> holify (List.map sc ~f:fst) a) t.actions) >>= flip (wp_paths negs) phi
 
 let bind_action_data vals (_, scope, cmd) : cmd =
-  let holes = List.map scope ~f:fst in
-  List.fold2_exn holes vals
-    ~init:StringMap.empty
-    ~f:(fun acc x v -> StringMap.set acc ~key:x ~data:(Value v))
-  |> substitute_cmd cmd
-
+  let holes = fsts scope in
+  let subst =
+    List.fold2 holes vals
+      ~init:StringMap.empty
+      ~f:(fun acc x v -> StringMap.set acc ~key:x ~data:(Value v))
+  in
+  match subst with
+  | Ok subst -> substitute_cmd cmd subst
+  | Unequal_lengths ->
+     Printf.sprintf
+       "Incorrect number of action arguments: (%s) vs (%s) for %s"
+       (List.map vals ~f:string_of_value
+        |> List.reduce ~f:(Printf.sprintf "%s,%s")
+        |> Option.value ~default:"")
+       (List.reduce holes ~f:(Printf.sprintf "%s,%s")
+        |> Option.value ~default:"")
+       (string_of_cmd cmd)
+     |> failwith
 
 let rec fixup_expr (model : value StringMap.t) (e : expr)  : expr =
   (* let _ = Printf.printf "FIXUP\n%!" in *)

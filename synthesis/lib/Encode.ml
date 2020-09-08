@@ -310,7 +310,7 @@ and header_stack_name (name:Expression.t) (size:Expression.t) =
 let dispatch_name e = string_of_memberlist (dispatch_list e)
 
 let validity_bit_no_removal members =
-  string_of_memberlist members ^ "_valid"
+  string_of_memberlist members ^ ".isValid"
 
 let validity_bit members =
   validity_bit_no_removal (List.take members (List.length members - 1))
@@ -692,7 +692,7 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t l
   | Conditional {cond; tru; fls} ->
     let fls_case, fls_rb, fls_eb =
       match fls with
-        | None -> [ True, Skip ], false, false
+        | None -> [ !%(encode_expression_to_test type_ctx cond), Skip ], false, false
         | Some fls ->
           let stmt, rb1, eb1 = encode_statement prog ctx type_ctx rv fls in
           [ !%(encode_expression_to_test type_ctx cond), stmt ], rb1, eb1
@@ -1034,6 +1034,7 @@ and encode_program (Program(top_decls) as prog : program ) =
   match get_ingress_egress_names top_decls with
   | Some (ingress_name, egress_name) ->
      sequence [
+         mkAssume (Var("standard_metadata.egress_spec",9) %=% mkVInt(0,9));
          encode_pipeline type_cxt prog ingress_name;
          "standard_metadata.egress_port" %<-% Var("standard_metadata.egress_spec", 9);
          mkOrdered [

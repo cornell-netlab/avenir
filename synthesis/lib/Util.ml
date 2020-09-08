@@ -226,13 +226,12 @@ let or_unequal_lengths_to_option =
   | Ok x -> Some x
   | Unequal_lengths -> None
 
-
-
 let oLift2 f a b =
-  match a, b with
-  | Some a', Some b' -> f a' b' |> Some
-  | _,_ -> None
-
+  let open Option in
+  a >>= fun a' ->
+  b >>= fun b' ->
+  f a' b'
+  |> return
 
 
 let rec list_prefix xs i =
@@ -285,6 +284,7 @@ let stringset_add_list s l =
     StringSet.of_list l
 
 let fsts = List.map ~f:fst
+let snds = List.map ~f:snd
 
 let map_snd lst ~f = List.map lst ~f:(fun (a,b) -> (a, f b))
 

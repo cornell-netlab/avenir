@@ -4,7 +4,7 @@ open Packet
 open Z3
 
 let force_print = false
-let print_debug = false
+let print_debug = true
 
 let debug term =
   if force_print || print_debug then

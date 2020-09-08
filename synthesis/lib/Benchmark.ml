@@ -199,7 +199,7 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
 
   let phys = (assume %:% Encode.encode_from_p4 phys_inc phys_p4 false)
              |> Encode.unify_names var_mapping |> zero_init fvs |> drop_handle fvs
-             |> CompilerOpts.optimize fvs
+             (* |> CompilerOpts.optimize fvs *)
   in
 
   (* let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in *)
@@ -214,7 +214,8 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
       ~phys_inst:Instance.(update_list params empty phys_edits)
       ~log_edits:[] ()
   in
-  measure params None problem (log_edits :: onos_to_edits var_mapping data_file "routing_v6" "hdr.ipv6.dst_addr")
+  assert (implements params (ProfData.zero ()) (problem) = `Yes);
+  measure params None problem (onos_to_edits var_mapping data_file "routing_v6" "hdr.ipv6.dst_addr")
 
 and zero_init fvs cmd =
   let fvs = StringSet.of_list @@ fsts @@ fvs in

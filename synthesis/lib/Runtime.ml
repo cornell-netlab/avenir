@@ -15,58 +15,65 @@ let action_data_of_string (data_str : string) : Row.action_data =
       else Int(Bigint.of_string value_str, int_of_string size_str))
 
 let matches_of_string keys (data_str : string) : Match.t list =
-  String.split data_str ~on:';'
-  |> List.zip_exn keys
-  |> List.map ~f:(fun (key,match_str) ->
-         match String.index match_str '[' with
-         | Some _ ->
-            begin match String.lsplit2 match_str ~on:'#' with
-            | Some (vals, sz) ->
-               let size = int_of_string sz in
-               let range = String.strip
-                             ~drop:(fun c -> c = '[' || c = ']') vals in
-               begin match String.lsplit2 range ~on:':' with
-               | Some (hi, lo) -> Match.between_ key (Int(Bigint.of_string hi, size)) (Int(Bigint.of_string lo, size))
-               | _ -> Printf.sprintf "Couldn't parse match from string %s" range
-                      |> failwith
-               end
-            | _ -> failwith @@ Printf.sprintf "Couldn't parse match from string %s" match_str
-            end
-         | _ ->
-            begin match String.lsplit2 match_str ~on:'&' with
-            | Some (fst, snd) ->
-               begin match String.lsplit2 snd ~on:'#' with
-               | Some (prefix_str, size_str) ->
-                  let size = int_of_string size_str in
-                  let mask = Bigint.of_string prefix_str in
-                  let addr = Bigint.of_string fst in
-                  Match.mask_ key (Int(addr, size)) (Int(mask, size))
-               | _ -> Printf.sprintf "Couldn't parse match from string %s" match_str
-                      |> failwith
-               end
-            | _ ->
-               if String.is_substring match_str ~substring:"."
-               then
-                 (*Parse IPv4*)
-                 begin match String.lsplit2 match_str ~on:'#' with
-                 | Some (match_str, size) when (size = "32")->
-                    Classbenching.parse_ip_mask key match_str
+  let data =  String.split data_str ~on:';' in
+  if List.length data <> List.length keys then begin
+    Printf.printf "data is %s and keys are %s" data_str
+      (List.reduce keys ~f:(Printf.sprintf "%s,%s")
+       |> Option.value ~default:"");
+    failwith @@ Printf.sprintf "%d <> %d" (List.length data) (List.length keys)
+    end
+  else
+    List.zip_exn keys data
+    |> List.map ~f:(fun (key,match_str) ->
+           match String.index match_str '[' with
+           | Some _ ->
+              begin match String.lsplit2 match_str ~on:'#' with
+              | Some (vals, sz) ->
+                 let size = int_of_string sz in
+                 let range = String.strip
+                               ~drop:(fun c -> c = '[' || c = ']') vals in
+                 begin match String.lsplit2 range ~on:':' with
+                 | Some (hi, lo) -> Match.between_ key (Int(Bigint.of_string hi, size)) (Int(Bigint.of_string lo, size))
+                 | _ -> Printf.sprintf "Couldn't parse match from string %s" range
+                        |> failwith
+                 end
+              | _ -> failwith @@ Printf.sprintf "Couldn't parse match from string %s" match_str
+              end
+           | _ ->
+              begin match String.lsplit2 match_str ~on:'&' with
+              | Some (fst, snd) ->
+                 begin match String.lsplit2 snd ~on:'#' with
+                 | Some (prefix_str, size_str) ->
+                    let size = int_of_string size_str in
+                    let mask = Bigint.of_string prefix_str in
+                    let addr = Bigint.of_string fst in
+                    Match.mask_ key (Int(addr, size)) (Int(mask, size))
                  | _ -> Printf.sprintf "Couldn't parse match from string %s" match_str
                         |> failwith
                  end
-               else
-                 (*assume its an integer??*)
-                 begin match String.lsplit2 match_str ~on:'#' with
-                 | Some (value_str, size_str) ->
-                    let size = int_of_string size_str in
-                    let value = Bigint.of_string value_str in
-                    Match.exact_ key (Int(value, size))
-                 | None ->
-                    Printf.sprintf "Couldn't parse match from string %s" match_str
-                    |> failwith
-                 end
-            end
-       )
+              | _ ->
+                 if String.is_substring match_str ~substring:"."
+                 then
+                   (*Parse IPv4*)
+                   begin match String.lsplit2 match_str ~on:'#' with
+                   | Some (match_str, size) when (size = "32")->
+                      Classbenching.parse_ip_mask key match_str
+                   | _ -> Printf.sprintf "Couldn't parse match from string %s" match_str
+                          |> failwith
+                   end
+                 else
+                   (*assume its an integer??*)
+                   begin match String.lsplit2 match_str ~on:'#' with
+                   | Some (value_str, size_str) ->
+                      let size = int_of_string size_str in
+                      let value = Bigint.of_string value_str in
+                      Match.exact_ key (Int(value, size))
+                   | None ->
+                      Printf.sprintf "Couldn't parse match from string %s" match_str
+                      |> failwith
+                   end
+              end
+         )
 
 
 let parse program filename : Edit.t list =

@@ -58,7 +58,7 @@ let string_vars vs =
 
 let print_search_state do_print problem es model =
   let print_space = false in
-  let print_model = false in
+  let print_model = true in
   if do_print then begin
       let space = Problem.model_space problem in
       if print_space then
@@ -72,10 +72,12 @@ let print_search_state do_print problem es model =
       Printf.printf "\t***     ***\n";
 
       if print_model then begin
-          Printf.printf "\t ***model***\n";
-          Printf.printf "\t%s\n%!" (Ast.string_of_map model)
-        end
-      (* Interactive.pause true; *)
+          Printf.printf "\t***model***\n";
+          Printf.printf "%s\n%!"
+            (StringMap.fold model ~init:"" ~f:(fun ~key ~data acc ->
+                 Printf.sprintf "%s\n\t%s |--> %s" acc key (string_of_value data)))
+        end;
+      (* Interactive.pause params.interactive; *)
     end
 
 
@@ -142,7 +144,7 @@ let print_hints_map do_print (partial_model : value StringMap.t) =
         ~f:(fun ~key ~data ->
           Printf.printf "\t%s -> %s\n" key (string_of_value data)
         );
-      Printf.printf "}\n%!";
+      Printf.printf "}\n%!"
     end
 
 let print_hints do_print (hints : Hint.t list) =

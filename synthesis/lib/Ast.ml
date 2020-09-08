@@ -790,7 +790,11 @@ let free_keys =
 let rec free_of_cmd typ (c:cmd) : (string * size) list =
   begin match c with
   | Skip -> []
-  | Assign (f, e) ->  (f,size_of_expr e) :: free_of_expr typ e
+  | Assign (f, e) ->
+     begin match typ with
+     | `Hole -> free_of_expr typ e
+     | `Var -> (f,size_of_expr e) :: free_of_expr typ e
+     end
   | Seq (c, c') ->
      free_of_cmd typ c @ free_of_cmd typ c'
   | Assume t -> free_of_test typ t

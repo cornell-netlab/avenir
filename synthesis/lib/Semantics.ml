@@ -4,22 +4,17 @@ open Util
 open Manip
 open Tables
 
-let rec eval_expr (pkt_loc : Packet.located) ( e : expr ) : value =
+let rec eval_expr (pkt_loc : Packet.located) ( e : expr ) : value option =
+  let open Option in
   let binop op e e' =
     let f = eval_expr pkt_loc in
-    let v = f e in
-    let v' = f e' in
-    (* if size_of_value v <> size_of_expr e then
-     *   failwith
-     *   @@ Printf.sprintf "%s ====> %s, with different sizes!!!!" (sexp_string_of_expr e) (sexp_string_of_value v)
-     * else *)
-    op v v'
+    oLift2 op (f e) (f e')
   in
   match e with
-  | Value v -> v
-  | Var (v,_) -> Packet.get_val (fst pkt_loc) v
-  | Hole (h,_) -> Packet.get_val (fst pkt_loc) h
-  | Cast (i,e) -> cast_value i @@ eval_expr pkt_loc e
+  | Value v -> Some v
+  | Var (v,_) -> Packet.get_val_opt (fst pkt_loc) v
+  | Hole (h,_) -> Packet.get_val_opt (fst pkt_loc) h
+  | Cast (i,e) -> eval_expr pkt_loc e >>| cast_value i
   | Plus  (e1, e2) -> binop add_values e1 e2
   | SatPlus(e1,e2) -> binop sat_add_values e1 e2
   | Times (e1, e2) -> binop multiply_values e1 e2
@@ -30,15 +25,15 @@ let rec eval_expr (pkt_loc : Packet.located) ( e : expr ) : value =
   | BOr (e1,e2) -> binop or_values e1 e2
   | Shl (e1,e2) -> binop shl_values e1 e2
   | Concat (e1,e2) -> binop concat_values e1 e2
-  | Slice {hi;lo;bits} -> slice_value hi lo @@ eval_expr pkt_loc bits
+  | Slice {hi;lo;bits} -> eval_expr pkt_loc bits >>| slice_value hi lo
 
-let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
-  let binopt op a b = op (check_test a pkt_loc) (check_test b pkt_loc) in
-  let binope op e e' = op (eval_expr pkt_loc e) (eval_expr pkt_loc e') in
+let rec check_test (cond : test) (pkt_loc : Packet.located) : bool option =
+  let binopt op a b = oLift2 op (check_test a pkt_loc) (check_test b pkt_loc) in
+  let binope op e e' = oLift2 op (eval_expr pkt_loc e) (eval_expr pkt_loc e') in
   match cond with
-  | True -> true
-  | False -> false
-  | Neg (cond) -> not (check_test cond pkt_loc)
+  | True -> Some true
+  | False -> Some false
+  | Neg (cond) -> Option.(check_test cond pkt_loc >>| not)
   | And (a, b) -> binopt (&&) a b
   | Or (a, b) -> binopt (||) a b
   | Impl(a, b) -> check_test (!%(a) %+% b) pkt_loc
@@ -46,16 +41,25 @@ let rec check_test (cond : test) (pkt_loc : Packet.located) : bool =
   | Eq (e,e') -> binope (veq) e e'
   | Le (e,e') -> binope (vleq) e e'
 
+let ifte_test cond pkt_loc tru fls =
+  match check_test cond pkt_loc with
+  | None ->
+     Printf.printf "[UseBeforeDefError] in test %s" (string_of_test cond);
+     failwith ""
+  | Some t when t ->tru ()
+  | _ -> fls ()
+
+
 
 let rec find_match ?idx:(idx = 0) pkt_loc ss ~default:default =
   match ss with
   | [] -> default ()
   | (cond, action) :: rest ->
-     if check_test cond pkt_loc then
-       (cond, action, idx)
-     else
-       (find_match ~idx:(idx+1) pkt_loc rest ~default)
+     ifte_test cond pkt_loc
+       (fun _ -> cond, action, idx)
+       (fun _ -> find_match ~idx:(idx+1) pkt_loc rest ~default)
 
+  
 (* let rec wide_eval wide (e : expr) = (mkInt(0,-1),mkInt(0,-1)) *)
   (* match e with
    * | Value(x) -> (x,x)
@@ -146,12 +150,9 @@ let action_to_execute pkt wide (rows : Row.t list ) =
       match rst  with
       | (missed, _, None) ->
          let cond = Match.list_to_test matches in
-         if check_test cond pkt
-         then
-           (missed %&% cond, None, Some (data, action))
-         else
-           (* let _ = Printf.printf "%s not in  %s" (Packet.string__packet (fst pkt_loc)) (string_of_test cond)   in *)
-           (missed %&% !%(cond), Some wide, None)
+         ifte_test cond pkt
+           (fun _ -> (missed %&% cond, None, Some (data, action)))
+           (fun _ -> (missed %&% !%(cond), Some wide, None))
       | (_, _, _) -> rst
     )
 
@@ -165,7 +166,14 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
        | Skip ->
           (pkt_loc, wide, cmd, StringMap.empty)
        | Assign (f, e) ->
-          ((Packet.set_field_of_expr pkt f e, loc_opt),
+          let pkt =
+            match Packet.set_field_of_expr_opt pkt f e with
+            | Some pkt -> pkt
+            | None ->
+               Printf.printf "[UseBeforeDefError] on command %s " (string_of_cmd cmd);
+               failwith ""
+          in
+          ((pkt, loc_opt),
            StringMap.empty,
            cmd, StringMap.empty)
        | Assume _ ->
@@ -191,8 +199,9 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
                  (Packet.string__packet pkt);
                (True, Skip, List.length selects)
           in
-          let (_, a, _) = find_match pkt_loc selects ~default in
-          trace_eval_inst ~gas ~wide a inst pkt_loc
+          let (test, a, _) = find_match pkt_loc selects ~default in
+          let (p,w,cmd,trace) = trace_eval_inst ~gas ~wide a inst pkt_loc in
+          (p,w,Assume test %:% cmd,trace)
 
        | Apply t ->
           begin match StringMap.find inst t.name with
@@ -229,21 +238,21 @@ let eval_cmd (cmd : cmd) (inst : Instance.t) (pkt : Packet.t) : Packet.t =
   match trace_eval_inst cmd inst ~wide:StringMap.empty (pkt, None) with
   | ((pkt, _), _ ,_ ,_) -> pkt
 
-
-
-
-
 let rec trace_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : ((string * int) list * Packet.t) list =
   match c with
   | Skip -> [[], pkt]
   | Assume b ->
-     if check_test b (pkt, None)
-     then [[], pkt]
-     else []
+     ifte_test b (pkt,None)
+       (fun _ ->  [[], pkt])
+       (fun _ -> [])
   | Assign (f,e) ->
      [[],
-      eval_expr (pkt, None) e
-      |> Packet.set_field pkt f]
+      match eval_expr (pkt, None) e with
+      | None -> Printf.sprintf "[UseBeforeDefError] in assignment %s" (string_of_cmd c)
+                |> failwith
+      | Some v ->
+         Packet.set_field pkt f v
+     ]
   | Seq (c1,c2) ->
      let nd_hits1 = trace_nd_hits c1 inst pkt in
      List.fold nd_hits1 ~init:[] ~f:(fun acc (hits1, pkt') ->
@@ -258,24 +267,24 @@ let rec trace_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : ((string 
      | Some rules ->
         List.foldi rules ~init:[] ~f:(fun i acc (ms, data, aid) ->
             let cond = Match.list_to_test ms in
-            if check_test cond (pkt,None)
-            then List.map (trace_nd_hits (List.nth_exn t.actions aid |> bind_action_data data) inst pkt)
-                   ~f:(fun (hits, pkt') -> (t.name,i) :: hits, pkt')
-                 @ acc
-            else acc)
+            ifte_test cond (pkt,None)
+              (fun _ -> List.map (trace_nd_hits (List.nth_exn t.actions aid |> bind_action_data data) inst pkt)
+                          ~f:(fun (hits, pkt') -> (t.name,i) :: hits, pkt'))
+              (fun _ -> [])
+            @ acc)
      end
   | Select(Partial, ss) ->
      List.fold ss ~init:[] ~f:(fun acc (b,c) ->
-         if check_test b (pkt,None)
-         then trace_nd_hits c inst pkt
-              @ acc
-         else acc)
+         ifte_test b (pkt,None)
+           (fun _ -> trace_nd_hits c inst pkt)
+           (fun _ -> [])
+         @ acc)
 
   | Select(Ordered, ss) ->
      List.find_map ss ~f:(fun (b,c) ->
-         if check_test b (pkt,None)
-         then Some (trace_nd_hits c inst pkt)
-         else None
+         ifte_test b (pkt,None)
+         (fun _ -> Some (trace_nd_hits c inst pkt))
+         (fun _ -> None)
        )
      |> Option.value ~default:[]
 
