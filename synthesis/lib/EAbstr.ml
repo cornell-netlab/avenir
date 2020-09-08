@@ -51,42 +51,6 @@ let similar (eold : Edit.t) (enew : Edit.t) =
                    StringMap.set acc ~key:om_s ~data:nm |> Some
                 end)
                    |> or_unequal_lengths_to_option |> Option.join
-       (*        match om, nm with
-        *        | Exact ov, Exact nv ->
-        *           let ov_s = string_of_value ov in
-        *           begin
-        *             match StringMap.find acc ov_s with
-        *             | Some nv' ->
-        *                if nv' = nv then
-        *                  Some acc
-        *                else
-        *                  (\* let () = Printf.printf "\t[MTCH] exact differ but %s is already mapped to different value\n%!" ov_s in *\)
-        *                  None
-        *             | None ->
-        *                StringMap.set acc ov_s nv |> Some
-        *           end
-        *        | Mask (ov, om), Mask (nv,nm) ->
-        *           let ov_s = string_of_value ov in
-        *           let om_s = string_of_value om in
-        *           begin match StringMap.find acc ov_s, StringMap.find acc om_s with
-        *           | Some nv', Some nm' ->
-        *              if nv' = nv && nm' = nm
-        *              then Some acc
-        *              else
-        *                (\* let () = Printf.printf "\t[MTCH] Mask differ but %s is already mapped to different value\n%!" ov_s in *\)
-        *                None
-        *           | None, None ->
-        *              StringMap.(set (set acc ov_s nv) om_s nm) |> Some
-        *           | _, _ ->
-        *              (\* let () = Printf.printf "\t[MTCH] Found a value for one but not the other!\n%!" in *\)
-        *              None
-        *           end
-        *        |  _ , _ ->
-        *            (\* Printf.printf "\t[MTCH] unknown match kinds or different match kinds or different table & action    %s   %s\n%!"
-        *             *   (Match.to_string om)
-        *             *   (Match.to_string nm); *\)
-        *            None
-        * )  *)
      in
      begin match matches with
      | None  ->(* Printf.printf "but... values are used differently\n%!";*)
@@ -110,25 +74,6 @@ let sub_consts (adata : value StringMap.t option) (map : Match.t StringMap.t) (e
                        | None -> acc @ [m] |> Some
                        | Some m' -> acc @ [m'] |> Some
                        end
-                      (* match m with
-                       * | Exact v ->
-                       *    let v_str = string_of_value v in
-                       *    begin match StringMap.find map v_str with
-                       *    | None -> acc @ [m] |> Some
-                       *    | Some v' -> acc @ [Exact v'] |> Some
-                       *    end
-                       * | Mask (v, msk) ->
-                       *    let v_str = string_of_value v in
-                       *    let msk_str = string_of_value msk in
-                       *    begin match StringMap.find map v_str, StringMap.find map msk_str with
-                       *    | None,None | None, Some _ ->
-                       *       acc @ [m] |> Some
-                       *    | Some v', None ->
-                       *       acc @ [Mask(v',msk)] |> Some
-                       *    | Some v', Some msk' ->
-                       *       acc @ [Mask (v',msk')] |> Some
-                       *    end
-                       * | _ -> None *)
                  ) in
      match ms' with
      | None -> None
