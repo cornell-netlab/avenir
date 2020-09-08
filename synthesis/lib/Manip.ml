@@ -449,7 +449,7 @@ let rec prepend pfx c =
   | Apply t ->
      Apply {name = prepend_str pfx t.name;
             keys = List.map t.keys ~f:(fun (k,sz,v_opt) -> (prepend_str pfx k, sz,v_opt));
-            actions = List.map t.actions ~f:(fun (scope, act) -> (List.map scope ~f:(fun (x,sz) -> (prepend_str pfx x, sz)), prepend pfx act));
+            actions = List.map t.actions ~f:(fun (n, scope, act) -> (n, List.map scope ~f:(fun (x,sz) -> (prepend_str pfx x, sz)), prepend pfx act));
             default = prepend pfx t.default}
   
                  
@@ -570,7 +570,7 @@ let rec fill_holes (c : cmd) subst =
      rec_select cmds |> mkSelect styp
   | Apply t
     -> Apply { t with
-               actions = List.map t.actions ~f:(fun (scope, a) -> (scope, fill_holes a subst));
+               actions = List.map t.actions ~f:(fun (n, scope, a) -> (n, scope, fill_holes a subst));
                default = fill_holes t.default subst }
 
 let rec wp_paths negs c phi : (cmd * test) list =
@@ -625,9 +625,9 @@ let rec wp_paths negs c phi : (cmd * test) list =
 
   | Apply t ->
      let open List in
-     (t.default :: List.map ~f:(fun (sc, a) -> holify (List.map sc ~f:fst) a) t.actions) >>= flip (wp_paths negs) phi
+     (t.default :: List.map ~f:(fun (_, sc, a) -> holify (List.map sc ~f:fst) a) t.actions) >>= flip (wp_paths negs) phi
 
-let bind_action_data vals (scope, cmd) : cmd =
+let bind_action_data vals (_, scope, cmd) : cmd =
   let holes = fsts scope in
   let subst =
     List.fold2 holes vals
@@ -646,7 +646,6 @@ let bind_action_data vals (scope, cmd) : cmd =
         |> Option.value ~default:"")
        (string_of_cmd cmd)
      |> failwith
-
 
 let rec fixup_expr (model : value StringMap.t) (e : expr)  : expr =
   (* let _ = Printf.printf "FIXUP\n%!" in *)
@@ -708,7 +707,7 @@ and fixup (real:cmd) (model : value StringMap.t) : cmd =
   | Select (styp,cmds) -> fixup_selects model cmds |> mkSelect styp
   | Apply t
     -> Apply {t with
-              actions = List.map t.actions ~f:(fun (data, a) -> (data, fixup a model));
+              actions = List.map t.actions ~f:(fun (n, data, a) -> (n, data, fixup a model));
               default = fixup t.default model}
 
 

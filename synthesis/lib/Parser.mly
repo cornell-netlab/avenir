@@ -55,13 +55,13 @@ params :
   | p = ID; POUND; size = INT; COMMA; ps = params { ((p, int_of_string size)::ps) }
 
 actions :
-  | LBRACE; c = command; RBRACE;  { [([],c)] }
-  | LBRACE; FUNC; LPAREN; ps = params; RPAREN; CASE; c = command; RBRACE;
-    { [(ps,c)] }
-  | LBRACE; c = command; RBRACE; BAR; acts = actions
-    { ([],c)::acts }
-  | LBRACE; FUNC; LPAREN; ps = params; RPAREN; CASE; c = command; RBRACE; BAR; acts = actions
-    { (ps,c)::acts }
+  | n = ID; LBRACE; c = command; RBRACE;  { [(n, [],c)] }
+  | n = ID; LBRACE; FUNC; LPAREN; ps = params; RPAREN; CASE; c = command; RBRACE;
+    { [(n, ps,c)] }
+  | n = ID; LBRACE; c = command; RBRACE; BAR; acts = actions
+    { (n, [],c)::acts }
+  | n = ID; LBRACE; FUNC; LPAREN; ps = params; RPAREN; CASE; c = command; RBRACE; BAR; acts = actions
+    { (n, ps,c)::acts }
                         
 select :
 | t = test; CASE; c = command; BRACKETS { [ t, c ] }

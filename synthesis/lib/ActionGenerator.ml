@@ -62,7 +62,7 @@ let rec flows c (st : t) : (t * (string * int) list) list  =
        (string_of_strset st.target_vars);
      let keys = of_list @@ fsts @@ free_keys t.keys in
      List.filter_mapi t.actions
-       ~f:(fun act_id (params,act) ->
+       ~f:(fun act_id (_, params,act) ->
          let act_vars = assigned_vars act in
          Printf.printf "act vars are %s\n%!" (string_of_strset act_vars);
          Printf.printf "tgt vars are %s\n%!" (string_of_strset st.target_vars);
@@ -112,7 +112,7 @@ let positive_actions (params : Parameters.t) (phys : cmd) (fvs : (string * int) 
     ~f:(fun  (table, acts) ->
       let positives =
         List.filter_mapi acts
-          ~f:(fun act_id (act_params,act) ->
+          ~f:(fun act_id (_, act_params,act) ->
             let act_vars = assigned_vars act in
             let t =  if StringSet.are_disjoint diff_vars act_vars then begin
                          Printf.printf "%s.action[%d] sets vars %s\n%!" table act_id (string_of_strset act_vars);
@@ -196,11 +196,11 @@ let rec tables_affecting_keys phys (keys : StringSet.t) =
             (union acc_ks ks, union acc_ts ts)
           )
   | Apply t ->
-     let some_assigned = List.fold t.actions ~init:(assigned_vars t.default) ~f:(fun acc (_,a) -> union acc (assigned_vars a)) in
+     let some_assigned = List.fold t.actions ~init:(assigned_vars t.default) ~f:(fun acc (_,_,a) -> union acc (assigned_vars a)) in
      if are_disjoint some_assigned keys
      then (keys, empty)
      else
-       let all_assigned = List.fold t.actions ~init:(assigned_vars t.default) ~f:(fun acc (_,a) -> inter acc (assigned_vars a)) in
+       let all_assigned = List.fold t.actions ~init:(assigned_vars t.default) ~f:(fun acc (_,_,a) -> inter acc (assigned_vars a)) in
        let keys' = union (of_list @@ fsts @@ free_keys t.keys) (diff keys all_assigned) in
        (keys', singleton t.name)
 
@@ -225,7 +225,7 @@ let rec tables_affected_by_keys phys keys =
             (union acc_ks ks, union acc_ts ts)
           )
   | Apply t ->
-     let some_assigned = List.fold t.actions ~init:(assigned_vars t.default) ~f:(fun acc (_,a) -> union acc (assigned_vars a)) in
+     let some_assigned = List.fold t.actions ~init:(assigned_vars t.default) ~f:(fun acc (_,_,a) -> union acc (assigned_vars a)) in
      if are_disjoint (of_list @@ fsts @@ free_keys t.keys)  keys
      then (keys, empty)
      else
@@ -258,7 +258,7 @@ let feasible_tables phys fvs matches inpkt outpkt =
               , StringSet.of_list @@ fsts @@ free_keys keys
               , List.fold actions
                   ~init:(assigned_vars default)
-                  ~f:(fun acc (_,act) ->
+                  ~f:(fun acc (_,_,act) ->
                     assigned_vars act
                     |> StringSet.union acc)))
 

@@ -77,7 +77,7 @@ module Row = struct
          | None ->
             match List.nth acts act with
             | None -> []
-            | Some (params, _) ->
+            | Some (_, params, _) ->
                (* Printf.printf "Params for %s.action[%d] :%s\n%!" tbl_name act
                 *   (List.fold params ~init:""
                 *      ~f:(fun acc (p,_) -> Printf.sprintf "%s %s" acc p)); *)
@@ -167,7 +167,7 @@ module Edit = struct
           %&%
             (Match.test_hole_of_lists t ms)
           %&%
-            (Row.test_of_data t i (List.nth_exn actions i |> fst) ds)
+            (Row.test_of_data t i (List.nth_exn actions i |> snd3) ds)
 
   let test_of_list phys es =
     List.(map es ~f:(to_test phys) |> reduce_exn ~f:(%&%))

@@ -76,7 +76,7 @@ let rec mk_pipeline varsize =
   if n = 0 then [] else
     (tbl n
     , [("k_" ^tbl n, varsize)]
-    , [([Printf.sprintf "v%d" n,varsize],("x_"^tbl n) %<-% Var(Printf.sprintf "v%d" n,varsize))]
+    , [("Action", [Printf.sprintf "v%d" n,varsize],("x_"^tbl n) %<-% Var(Printf.sprintf "v%d" n,varsize))]
     , ("x_"^tbl n) %<-% mkVInt (0,varsize)
     ) :: mk_pipeline varsize (n-1)
 
@@ -316,8 +316,8 @@ let mk_ith_table sz num_tables tbl_idx num_xs num_ms =
           else
             mk_normal_keys sz num_xs),
           (if tbl_idx >= num_tables - num_ms - 1 && tbl_idx < num_tables - 1
-           then [[Printf.sprintf "d%i" tbl_idx, sz], mk_ith_meta (tbl_idx - idx_of_min_mtbl) %<-% Var(Printf.sprintf "d%i" tbl_idx, sz)]
-           else [[Printf.sprintf "d%i" tbl_idx, 9], "out" %<-% Var(Printf.sprintf "d%i" tbl_idx, 9)]),
+           then ["action", [Printf.sprintf "d%i" tbl_idx, sz], mk_ith_meta (tbl_idx - idx_of_min_mtbl) %<-% Var(Printf.sprintf "d%i" tbl_idx, sz)]
+           else ["action", [Printf.sprintf "d%i" tbl_idx, 9], "out" %<-% Var(Printf.sprintf "d%i" tbl_idx, 9)]),
           Skip)
 
 
@@ -377,7 +377,7 @@ let square_bench params sz n max_edits =
   let logical_table =
     mkApply("logical",
             mk_normal_keys sz n,
-            [["o", 9], "out" %<-% Var("o", 9)],
+            ["action", ["o", 9], "out" %<-% Var("o", 9)],
             Skip)
   in
   Printf.printf "Logical table: \n %s\n\n" (string_of_cmd logical_table);
@@ -462,7 +462,7 @@ let rep params data nrules =
         "out" %<-% mkVInt(0,9);
         mkApply ("obt",
                  ["ip_src",32;"ip_dst",32],
-                 [["o",9], "out" %<-% Var("o",9)],
+                 ["action", ["o",9], "out" %<-% Var("o",9)],
                  Skip);
         mkOrdered [
             Var("out",9) %=% mkVInt(0,9),
@@ -478,15 +478,15 @@ let rep params data nrules =
         "out" %<-% mkVInt(0,9);
         mkApply("validation",
                 ["ip_src",32],
-                [["ov",9], "out" %<-% Var("ov",9)],
+                ["action", ["ov",9], "out" %<-% Var("ov",9)],
                 Skip) ;
         mkApply("fwd",
                 ["ip_dst",32],
-                [["of",9], "out" %<-% Var("of",9) ],
+                ["action", ["of",9], "out" %<-% Var("of",9) ],
                 Skip);
         mkApply("acl",
                 ["ip_src",32; "ip_dst",32],
-                [["oa",9], "out" %<-% Var("oa", 9)],
+                ["action", ["oa",9], "out" %<-% Var("oa", 9)],
                 Skip);
         mkOrdered [
             Var("out",9) %=% mkVInt(0,9),
@@ -529,7 +529,7 @@ let rep_middle params data nrules =
         "out" %<-% mkVInt(0,9);
         mkApply ("obt",
                  ["ip_src",32;"ip_dst",32; "proto",8; "tcp_sport", 16; "tcp_dport", 16],
-                 [["o",9], "out" %<-% Var("o",9)],
+                 ["action", ["o",9], "out" %<-% Var("o",9)],
                  Skip);
         mkOrdered [
             Var("out",9) %=% mkVInt(0,9),
@@ -553,15 +553,15 @@ let rep_middle params data nrules =
          *   ]; *)
         mkApply("validation",
                 ["ip_src",32],
-                [["ov",9], "out" %<-% Var("ov",9)],
+                ["action", ["ov",9], "out" %<-% Var("ov",9)],
                 Skip) ;
         mkApply("fwd",
                 ["ip_dst",32; "proto",8; "tcp_dport",16],
-                [["of",9], "out" %<-% Var("of",9) ],
+                ["action", ["of",9], "out" %<-% Var("of",9) ],
                 Skip);
         mkApply("acl",
                 ["ip_src",32; "ip_dst",32; "proto",8; "tcp_sport", 16; "tcp_dport", 16],
-                [["oa",9], "out" %<-% Var("oa", 9)],
+                ["action", ["oa",9], "out" %<-% Var("oa", 9)],
                 Skip);
         mkOrdered [
             Var("out",9) %=% mkVInt(0,9),
@@ -612,7 +612,7 @@ let rep_of params exactify data nrules =
         "out" %<-% mkVInt(0,9);
         mkApply ("obt",
                  ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16; "vlan", 12; "pcp", 3],
-                 [["o",9], "out" %<-% Var("o",9)],
+                 ["action", ["o",9], "out" %<-% Var("o",9)],
                  Skip);
         mkOrdered [
             Var("out",9) %=% mkVInt(0,9),
@@ -628,15 +628,15 @@ let rep_of params exactify data nrules =
         "out" %<-% mkVInt(0,9);
         mkApply("validation",
                 ["in_port", 9;"eth_src",48;"eth_typ",16;"ip_src",32],
-                [["ov",9], "out" %<-% Var("ov",9)],
+                ["action", ["ov",9], "out" %<-% Var("ov",9)],
                 Skip) ;
         mkApply("fwd",
                 ["eth_dst",48;"ip_dst",32; "proto",8; "tcp_dport",16],
-                [["of",9], "out" %<-% Var("of",9) ],
+                ["action", ["of",9], "out" %<-% Var("of",9) ],
                 Skip);
         mkApply("acl",
                 ["in_port", 9;"eth_src",48; "eth_dst",48; "eth_typ",16; "ip_src",32; "ip_dst",32; "proto",8; "tcp_sport", 16; "tcp_dport", 16; "vlan", 12; "pcp", 3],
-                [["oa",9], "out" %<-% Var("oa", 9)],
+                ["action", ["oa",9], "out" %<-% Var("oa", 9)],
                 Skip);
         mkOrdered [
             Var("out",9) %=% mkVInt(0,9),
@@ -685,7 +685,7 @@ let rep_par params data nrules =
         "out" %<-% mkVInt(0,9);
         mkApply ("obt",
                  ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16],
-                 [["o",9], "out" %<-% Var("o",9)],
+                 ["action", ["o",9], "out" %<-% Var("o",9)],
                  Skip);
         mkOrdered [
             Var("out",9) %=% mkVInt(0,9),
@@ -701,27 +701,27 @@ let rep_par params data nrules =
         "out" %<-% mkVInt(0,9);
         mkApply("station",
                 ["in_port", 9;"eth_src",48],
-                [["n",9], "next_tbl" %<-% Var("ov",2)],
+                ["action", ["n",9], "next_tbl" %<-% Var("ov",2)],
                 "next_tbl" %<-% mkVInt(0,2)) ;
         mkOrdered [
             Var("next_tbl",2) %=% mkVInt(1,2), mkApply("l3",
                                                        ["ip_dst",32],
-                                                       [["of",9], "out" %<-% Var("of",9) ],
+                                                       ["action", ["of",9], "out" %<-% Var("of",9) ],
                                                        Skip);
             Var("next_tbl",2) %=% mkVInt(2,2), mkApply("l2",
                                                        ["eth_dst",32],
-                                                       [["o2",9], "out" %<-% Var("o2",9) ],
+                                                       ["action", ["o2",9], "out" %<-% Var("o2",9) ],
                                                        Skip);
 
             Var("next_tbl",2) %=% mkVInt(3,2), mkApply("l4",
                                                        ["tcp_dst",32],
-                                                       [["o4",9], "out" %<-% Var("o4",9)],
+                                                       ["action", ["o4",9], "out" %<-% Var("o4",9)],
                                                        Skip);
             True , Skip
           ];
         mkApply("acl",
                 ["in_port", 9;"eth_src",48; "eth_dst",48; "eth_typ",16; "ip_src",32; "ip_dst",32; "proto",8; "tcp_sport", 16; "tcp_dport", 16],
-                [["oa",9], "out" %<-% Var("oa", 9)],
+                ["action", ["oa",9], "out" %<-% Var("oa", 9)],
                 Skip);
         mkOrdered [
             Var("out",9) %=% mkVInt(0,9),
@@ -749,7 +749,7 @@ let headers params sz ntables max_headers max_edits =
         let logical_table =
           mkApply("logical",
                   mk_normal_keys sz ntables,
-                  [["o", 9], "out" %<-% Var("o", 9)],
+                  ["action", ["o", 9], "out" %<-% Var("o", 9)],
                   Skip)
         in
         let phys = create_bench sz ntables num_xs 0 in
@@ -790,7 +790,7 @@ let metadata params sz nmeta nedits =
               "out" %<-% mkVInt(0,9);
               mkApply("logical",
                       ["x", sz],
-                      [["o", 9], "out" %<-% Var("o", 9)],
+                      ["action", ["o", 9], "out" %<-% Var("o", 9)],
                       Skip)
             ]
         in
@@ -802,18 +802,18 @@ let metadata params sz nmeta nedits =
           List.map (range_ex 0 nmeta)
             ~f:(fun table_idx ->
               if table_idx = 0 then
-                mkApply("phys0", ["x",sz], [["d0",sz], "m0" %<-% Var("d0",sz) ], Skip)
+                mkApply("phys0", ["x",sz], ["action", ["d0",sz], "m0" %<-% Var("d0",sz) ], Skip)
               else if table_idx + 1 = nmeta then
                   mkApply(Printf.sprintf "phys%d"  table_idx,
                           [Printf.sprintf "m%d" (table_idx - 1), sz],
-                          [[Printf.sprintf "d%d" table_idx, 9],
+                          ["action", [Printf.sprintf "d%d" table_idx, 9],
                            "out" %<-% Var(Printf.sprintf "d%d" table_idx, 9)
                           ],
                           Skip)
               else
                 mkApply(Printf.sprintf "phys%d"  table_idx,
                         [Printf.sprintf "m%d" (table_idx - 1), sz],
-                        [[Printf.sprintf "d%d" table_idx, sz],
+                        ["action", [Printf.sprintf "d%d" table_idx, sz],
                          Printf.sprintf "m%d" table_idx %<-% Var(Printf.sprintf "d%d" table_idx, sz)
                         ],
                         Skip)
@@ -859,7 +859,7 @@ let tables params sz max_tables nheaders max_edits =
         let logical_table =
           mkApply("logical",
                   mk_normal_keys sz nheaders,
-                  [["o", 9], "out" %<-% Var("o", 9)],
+                  ["action", ["o", 9], "out" %<-% Var("o", 9)],
                   Skip)
         in
         let phys = create_bench sz ntables nheaders 0   in
@@ -896,7 +896,7 @@ let create_par_bench sz num_tables num_xs num_ms =
   sequence [ initialize_ms sz num_ms
            ; mkApply("stage",
                      mk_normal_keys sz num_xs,
-                     [["stg",tblsize], "table_id" %<-% Var("stg",tblsize)],
+                     ["action", ["stg",tblsize], "table_id" %<-% Var("stg",tblsize)],
                      "table_id" %<-% mkVInt(num_tables + 1, tblsize))
            ; mkOrdered @@
                List.map (range_ex 0 num_tables)
@@ -915,7 +915,7 @@ let breadth params sz max_tables nheaders max_edits =
         let logical_table =
           mkApply("logical",
                   mk_normal_keys sz nheaders,
-                  [["o", 9], "out" %<-% Var("o", 9)],
+                  ["action", ["o", 9], "out" %<-% Var("o", 9)],
                   Skip)
         in
         let phys = create_par_bench sz ntables nheaders 0 in

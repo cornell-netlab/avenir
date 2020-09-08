@@ -44,18 +44,18 @@ let rec static_slice_aux (fvs : (string * int) list) (c : cmd) : (string*int) li
   | Apply { name; keys; actions; default;_ } ->
 
      let tfx =
-       List.map actions ~f:(fun (vars,a) ->
+       List.map actions ~f:(fun (n, vars,a) ->
            let (fvs',a') = static_slice_aux fvs a in
-             (a',vars, List.filter fvs' ~f:(fun (s,_) -> not (List.exists vars ~f:(fun (s',_)-> s = s'))))
+             (n, a',vars, List.filter fvs' ~f:(fun (s,_) -> not (List.exists vars ~f:(fun (s',_)-> s = s'))))
          )
      in
      let def_fvs, def' = static_slice_aux fvs default in
-     if List.exists tfx ~f:(fun (c,_,_) -> c <> Skip) || (def' <> Skip) then
-       let fvs = List.fold tfx ~init:[] ~f:(fun acc (_,_,fvs) -> acc @ fvs )
+     if List.exists tfx ~f:(fun (_, c,_,_) -> c <> Skip) || (def' <> Skip) then
+       let fvs = List.fold tfx ~init:[] ~f:(fun acc (_,_,_,fvs) -> acc @ fvs )
                  @ free_keys keys
                  @ def_fvs
                  |> List.dedup_and_sort ~compare:(fun (s,_) (s',_) -> String.compare s s') in
-       let actions' = List.map tfx ~f:(fun (a,vars,_) -> (vars,a)) in
+       let actions' = List.map tfx ~f:(fun (n, a,vars,_) -> (n, vars,a)) in
        (fvs, Apply {name; keys; actions = actions'; default = def'})
      else
        (fvs, Skip)

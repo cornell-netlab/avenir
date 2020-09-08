@@ -37,7 +37,7 @@ let rec compute_cand_for_trace (tag : [`Exact | `Mask]) (line: cmd) (pinst : Ins
         else
           let actSize = max (log2(List.length t.actions)) 1 in
           let cond = Hole.table_hole tag t.keys t.name act_idx actSize in
-          let (params, act) = List.nth_exn t.actions act_idx in
+          let (_, params, act) = List.nth_exn t.actions act_idx in
           let args = List.fold2_exn params data ~init:True
                        ~f:(fun acc param arg ->
                          acc %&% (Hole param %=% Value arg)

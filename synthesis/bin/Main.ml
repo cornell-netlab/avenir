@@ -9,6 +9,7 @@ module Encode = Avenir.Encode
 module Manip = Avenir.Manip
 module Benchmark = Avenir.Benchmark
 module Classbenching = Avenir.Classbenching
+module OneBigTable = Avenir.OneBigTable
 module Parameters = Avenir.Parameters
 module ProfData = Avenir.ProfData
 module Problem = Avenir.Problem
@@ -1147,11 +1148,44 @@ end
 
 let ntbls_cmd : Command.t =
   Command.basic_spec
-    ~summary:"benchmarks generated insertions"
+    ~summary: "benchmarks generated insertions"
     NumTbls.spec
     NumTbls.run
 
+module OBT = struct
+  let spec = Async_command.Spec.(
+      empty
+      +> anon ("program" %: string))
 
+  let run prog_path () =
+    let prog = Benchmark.parse_file prog_path in
+    let obt = OneBigTable.mk_one_big_table prog in
+    Core.printf "%s\n" (Ast.string_of_cmd obt)
+end
+
+let obt : Command.t =
+  Command.basic_spec
+    ~summary:"Convert a program to one big table"
+    OBT.spec
+    OBT.run
+
+module OBTReal = struct
+  let spec = Async_command.Spec.(
+      empty
+      +> anon ("program" %: string)
+      +> flag "-I" (listed string) ~doc:"<dir> add directory to include search path for logical file")
+ 
+  let run prog_pth inc () =
+    let prog = Encode.encode_from_p4 inc prog_pth false in
+    let obt = OneBigTable.mk_one_big_table prog in
+    Core.printf "%s\n" (Ast.string_of_cmd obt)
+end
+
+let obt_real : Command.t =
+  Command.basic_spec
+    ~summary:"Convert a program to one big table"
+    OBTReal.spec
+    OBTReal.run
 
 module ServerCmd = struct
   let spec = Async_command.Spec.(
@@ -1300,6 +1334,8 @@ let main : Command.t =
     ; ("metadata", metadata_cmd)
     ; ("classbench", classbench_cmd)
     ; ("onf-real", onf_real)
+    ; ("obt", obt)
+    ; ("obt-real", obt_real)
     ; ("eq", equality)
     ; ("eq-real", equality_real)
     ; ("wp", wp_cmd)]

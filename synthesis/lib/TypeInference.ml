@@ -88,4 +88,4 @@ let rec infer (p : cmd) : cmd =
      let actions' = List.map t.actions ~f:(infer_action) in
      Apply {t with actions = actions'}
 
-and infer_action (params,c) = (params,infer c)
+and infer_action (n, params,c) = (n, params,infer c)

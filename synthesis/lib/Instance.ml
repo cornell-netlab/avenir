@@ -114,7 +114,7 @@ let rec apply ?no_miss:(no_miss = false)
               else begin
                   let cond = tst %&% !%(prev_tst) in
                   (cond, (List.nth t.actions action
-                          |> Option.value ~default:([], t.default)
+                          |> Option.value ~default:("default", [], t.default)
                           |> bind_action_data data))
                   :: acc
                 end)
@@ -124,7 +124,7 @@ let rec apply ?no_miss:(no_miss = false)
        | NoHoles -> []
        | _ ->
           List.mapi t.actions
-            ~f:(fun i (params, act) ->
+            ~f:(fun i (_, params, act) ->
               (Hole.table_hole encode_tag t.keys t.name i actSize
               , holify ~f:(fun (h,sz) -> (Hole.action_data t.name i h sz, sz)) (List.map params ~f:fst) act))
      in

@@ -256,11 +256,11 @@ let cp_affects_actions_and_keys _ =
         "meta" %<-% var "addr";
         Apply {name = "tbl";
                keys = [("z",32,None); ("meta",32,None)];
-               actions = [ ["port",9], sequence [
+               actions = [ "action", ["port",9], sequence [
                                            "out" %<-% mkPlus (Var("port",9)) (mkCast 9 @@ var "z");
                                            "meta" %<-% mkPlus (var "z") (var "z");
                                          ]
-                         ; ["port",9], sequence [
+                         ; "action", ["port",9], sequence [
                                            "out" %<-% mkVInt (0,9);
                                            "meta" %<-% int (2*99);
                          ] ];
@@ -277,12 +277,13 @@ let cp_affects_actions_and_keys _ =
         "meta" %<-% var "addr";
         Apply {name = "tbl";
                keys = [("z",32,Some (mkInt(99,32))); ("addr",32,None)];
-               actions = [ ["port",9],
+               actions = [ "action",
+                           ["port",9],
                            sequence [
                                "out" %<-% mkPlus (Var("port",9)) (mkVInt(99,9));
                                "meta" %<-% int (198);
                              ]
-                         ; ["port",9], sequence [
+                         ; "action", ["port",9], sequence [
                                            "out" %<-% mkVInt (0,9);
                                            "meta" %<-% int (198);
                          ] ];
@@ -301,11 +302,11 @@ let dc_remove_table _ =
     sequence [
         Apply {name = "tbl";
                keys = [("z",32, None); ("meta",32,None)];
-               actions = [ ["port",9], sequence [
+               actions = [ "action", ["port",9], sequence [
                                            "out" %<-% mkPlus (Var("port",9)) (mkCast 9 @@ var "z");
                                            "meta" %<-% mkPlus (var "z") (var "z");
                                          ]
-                         ; ["port",9], sequence [
+                         ; "action", ["port",9], sequence [
                                            "out" %<-% mkVInt (0,9);
                                            "meta" %<-% int (2*99);
                          ] ];
@@ -836,13 +837,13 @@ let hints_injects_keys _ =
     in
   let phys =
     sequence [
-        mkApply ("p1", ["x",32;"y",32], [[],Skip], Skip);
+        mkApply ("p1", ["x",32;"y",32], ["action", [],Skip], Skip);
         mkOrdered [
             Var("x",32) %=% mkVInt(100,32),
-            mkApply ("p2a", ["y", 32; "q",32], [[], Skip], Skip);
+            mkApply ("p2a", ["y", 32; "q",32], ["action", [], Skip], Skip);
 
             True,
-            mkApply("p2b", ["x",32; "q",32; "z", 32], [[], Skip], Skip);
+            mkApply("p2b", ["x",32; "q",32; "z", 32], ["action", [], Skip], Skip);
           ]
       ]
   in
@@ -869,7 +870,7 @@ let packet_diff _ =
 
 
 
-let trace = ActionGenerator.(testable_string string_of_traces equal_trace_lists)
+(* let trace = ActionGenerator.(testable_string string_of_traces equal_trace_lists)
 let same_trace = Alcotest.(check trace) "same trace"
 
 let ag_feasible_traces _ =
@@ -1043,20 +1044,22 @@ let ag_affected_by_keys _ =
   let expected = Util.StringSet.of_list ["univ_table"] in
   let _, got = ActionGenerator.tables_affected_by_keys phys (Util.StringSet.of_list ["key1"; "key2"]) in
   same_stringset expected got
+ *)
 
 (*Edits*)
 let extract_edits_from_model _ =
   let drop = "standard_metadata.egress_spec" %<-% mkVInt(0,9) in
   let phys =
     sequence [
-        mkApply("ethernet",["hdr.ethernet.dstAddr", 48],[["nexthop",32],"meta.nexthop" %<-% Var("nexthop",32);[],drop],drop);
+        mkApply("ethernet",["hdr.ethernet.dstAddr", 48],["nexthop", ["nexthop",32],"meta.nexthop" %<-% Var("nexthop",32);"drop", [],drop],drop);
         mkOrdered [
             Var("hdr.ipv4.isValid",1) %=% mkVInt(1,1),
             sequence [
-                mkApply("ipv4_fib", ["hdr.ipv4.dstAddr", 32], [["nexthop",32],"meta.nexthop" %<-% Var("nexthop",32);[],drop], drop);
+                mkApply("ipv4_fib", ["hdr.ipv4.dstAddr", 32], ["nexthop", ["nexthop",32],"meta.nexthop" %<-% Var("nexthop",32);"drop",[],drop], drop);
                 mkApply("ipv4_rewrite",
                         ["hdr.ipv4.dstAddr", 32],
-                        [["dstAddr",48],
+                        [ "rewrite",
+                          ["dstAddr",48],
                          sequence [
                              "hdr.ethernet.srcAddr" %<-% Var("hdr.ethernet.dstAddr",48);
                              "hdr.ethernet.dstAddr" %<-% Var("dstAddr",32);
@@ -1067,14 +1070,14 @@ let extract_edits_from_model _ =
               ];
             True, Skip
           ];
-        mkApply("nexthop",["meta.nexthop",32],[["port",9], "standard_metadata.egress_spec" %<-% Var("port",9); [],drop],drop);
+        mkApply("nexthop",["meta.nexthop",32],["fwd", ["port",9], "standard_metadata.egress_spec" %<-% Var("port",9); "drop", [],drop],drop);
         mkApply("punt", ["hdr.ethernet.etherType", 16;
                          "hdr.ipv4.isValid",1;
                          "hdr.ipv4.version",4;
                          "hdr.ipv4.srcAddr",32;
                          "hdr.ipv4.dstAddr",32;
                          "hdr.ipv4.ttl", 8;
-                        ],[[],drop], Skip);
+                        ],["drop", [],drop], Skip);
       ]
   in
   let model =
