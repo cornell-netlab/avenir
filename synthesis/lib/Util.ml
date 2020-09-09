@@ -305,3 +305,18 @@ let string_of_strset s =
 let string_of_intlist (l : int list) : string =
   List.fold l ~init:"" ~f:(Printf.sprintf "%s %d")
   |> Printf.sprintf "[%s ]"
+
+
+
+let find2_exn map1 s1 s2 =
+  match StringMap.find map1 s1 with
+  | None ->
+     Printf.sprintf "Couldn't find %s in outer map" s1
+     |> failwith
+  | Some map2 ->
+     match StringMap.find map2 s2 with
+     | None ->
+        Printf.sprintf "Couldn't find %s in inner map" s2
+        |> failwith
+     | Some v ->
+        v

@@ -17,6 +17,10 @@ let string_of_value (v : value) : string =
   match v with
   | Int (i,x) -> Printf.sprintf "%s#%d" (Bigint.Hex.to_string i) x
 
+let bmv2_string_of_value (v : value) : string =
+  match v with
+  | Int (i,_) -> Bigint.Hex.to_string i
+
 let veq v v' =
   match v,v' with
   | Int (i,sz), Int(i',sz') when sz = sz' ->  Bigint.equal i i'

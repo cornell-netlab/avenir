@@ -6,7 +6,7 @@ open Manip
 module Row = struct
   type action_data = value list
 
-  (* Match expresssions, action data, action index*)
+  (* Match expressions, action data, action index*)
   type t = Match.t list * action_data * int
 
   let action_data_to_string ad =
@@ -176,6 +176,28 @@ module Edit = struct
     match e with
     | Add (nm, row) -> Printf.sprintf "ADD,%s,%s" nm (Row.to_string row)
     | Del (nm, idx) -> Printf.sprintf "DEL,%s,%d" nm idx
+
+  let to_bmv2_string (cmd : cmd) e =
+    match e with
+    | Add (nm, (matches, action_data, action_id)) ->
+       let (_,actions,_) =
+         get_schema_of_table nm cmd
+         |> Option.value_exn ~message:(Printf.sprintf "Couldn't find %s" nm)
+       in
+       let (act_name,_,_) = List.nth_exn actions action_id in
+       let bmv2_matches =
+         List.fold matches ~init:""
+           ~f:(fun acc m -> Printf.sprintf "%s %s" acc (Match.to_bmv2_string m))
+       in
+       let bmv2_data =
+         List.fold action_data ~init:""
+         ~f:(fun acc d -> Printf.sprintf "%s %s" acc (bmv2_string_of_value d))
+       in
+       Printf.sprintf "table_add %s %s%s =>%s" nm act_name bmv2_matches bmv2_data
+
+    | Del (_,_) ->
+       Printf.sprintf "[Unimplemented] We don't support bmv2 deletes."
+       |> failwith
 
   let list_to_string es =
     List.fold es ~init:"" ~f:(fun acc e -> Printf.sprintf "%s\n%s" acc (to_string e))

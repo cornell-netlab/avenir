@@ -44,12 +44,15 @@ let parse_ip_mask ident str =
   in
   let addr =
     String.split addr_str ~on:'.'
-    |> List.fold ~init:"0x" ~f:(fun acc char_s ->
-           Printf.sprintf "%s%s"
-             acc
-             (Bigint.(of_string char_s |> Hex.to_string)
-              |> String.substr_replace_all ~pattern:"0x" ~with_:"")
+    |> List.map ~f:(fun char_s ->
+           let byte = (Bigint.(of_string char_s |> Hex.to_string)
+                       |> String.substr_replace_all ~pattern:"0x" ~with_:"") in
+           if String.length byte < 2 then
+             Printf.sprintf "0%s" byte
+           else
+             byte
          )
+    |> List.fold ~init:"0x" ~f:(Printf.sprintf "%s%s")
     |> Bigint.of_string
   in
   (* let addr = Bigint.of_string

@@ -45,6 +45,14 @@ let to_string (m : t) : string =
   | Mask (v, msk) ->
      Printf.sprintf "%s ~ %s & %s" m.key (string_of_value v) (string_of_value msk)
 
+let to_bmv2_string (m:t) : string =
+  match m.data with
+  | Exact x ->
+     bmv2_string_of_value x
+  | _ ->
+     Printf.sprintf "[Unimplemented] Don't know how to install ternary matches"
+     |> failwith
+
 let get_size (m : t) : size =
   match m.data with
   | Exact (Int(_,sz))

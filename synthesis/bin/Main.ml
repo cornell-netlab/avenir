@@ -440,8 +440,8 @@ module ONFReal = struct
         unique_edits
         domain
         restrict_mask
-        no_deletes
         no_defaults
+        no_deletes
         use_all_cexs
         reach_restrict
         reach_filter
