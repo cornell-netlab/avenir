@@ -493,11 +493,11 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
                failwith ""
              end
            else begin
-               (* if params.debug then *)
-                 Printf.printf "IsNOVEL??? \n    %s \n"
+                 Printf.sprintf "IsNOVEL??? \n    %s \n"
                    (Problem.model_space problem
                     |> fixup_test raw_model
-                    |> string_of_test);
+                    |> string_of_test)
+                 |> Log.log params.debug;
                  Some (Hint.join_models partial_model raw_model, t)
              end
         | _ ->

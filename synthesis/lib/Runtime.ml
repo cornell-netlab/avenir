@@ -22,7 +22,6 @@ let action_data_of_string ?sep:(sep=';') (data_str : string) : Row.action_data =
         Int(Bigint.of_string value_str, int_of_string size_str))
 
 let matches_of_string ?sep:(sep=';') (keys : (string * int) list) (data_str : string) : Match.t list =
-  Printf.printf "getting mtaches of %s\n%!" data_str;
   let data = String.split data_str ~on:sep |> List.filter ~f:(Fn.non String.is_empty) in
   if List.length data <> List.length keys then begin
     Printf.printf "data is %s and keys are [%s]\n%!" data_str
@@ -62,7 +61,7 @@ let matches_of_string ?sep:(sep=';') (keys : (string * int) list) (data_str : st
                       else
                         prefix_str
                     in
-                    Printf.printf "COnverting %s\n to bigint\n%!" mask_hex_str;
+                    (* Printf.printf "COnverting %s\n to bigint\n%!" mask_hex_str; *)
                     let mask = Bigint.of_string mask_hex_str in
                     let addr = Bigint.of_string fst in
                     Match.mask_ key (Int(addr, size)) (Int(mask, size))

@@ -47,8 +47,9 @@ let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref)
      ProfData.incr !data.eq_num_z3_calls;
      let st = Time.now () in
      let pkt_opt = match model_opt with
-       | None  -> if params.debug then Printf.printf "++++++++++valid+++++++++++++\n%!";
-                  `Yes
+       | None  ->
+          if params.debug then Printf.printf "++++++++++valid+++++++++++++\n%!";
+          `Yes
        | Some x ->
           let in_pkt, out_pkt = Packet.extract_inout_ce x in
           let remake = Packet.make ~fvs:(Problem.fvs problem |> Some) in
@@ -174,19 +175,16 @@ let get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref) (pr
       ProfData.update_time !data.fast_cex_time st;
       match cex with
       | `Yes ->
-         if params.debug then
-           Printf.printf "New rule is not reachable\n%!";
+         Log.log params.debug "New rule is not reachable\n%!";
          `Yes
       | `NotFound _ ->
-         (* Printf.printf "\t     but it failed\n%!"; *)
-         if params.debug then
-           Printf.printf "No cex to be found rapidly, check full equivalence\n%!";
+         Log.log params.debug "No cex to be found rapidly, check full equivalence\n%!";
          let st = Time.now () in
          let res = implements ~neg params data problem in
          ProfData.update_time !data.impl_time st;
          res
       | `NoAndCE counter ->
-         Printf.printf "BACKTRACKING\n%!";
+         Log.log params.debug "BACKTRACKING\n%!";
          `NoAndCE counter
     end
   else
@@ -197,7 +195,7 @@ let get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref) (pr
       ProfData.update_time !data.impl_time st;
       match res with
       | `NoAndCE counter ->
-         Printf.printf "BACKTRACKING (SLICED)\n%!";
+         Log.log params.debug "BACKTRACKING (SLICED)\n%!";
          `NoAndCE counter
       | `Yes when slice_conclusive params data problem -> `Yes
       | `Yes -> implements ~neg params data problem
@@ -272,7 +270,7 @@ let rec minimize_edits params data problem certain uncertain =
 
 let minimize_solution (params : Parameters.t) data problem =
   if params.minimize then
-    let () = Printf.printf "\tminimizing\n" in
+    let () = Log.log params.debug "\tminimizing\n" in
     Problem.phys_edits problem
     |> minimize_edits params data problem []
     |> Problem.replace_phys_edits problem
@@ -281,7 +279,7 @@ let minimize_solution (params : Parameters.t) data problem =
 
 
 let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (Edit.t list option) =
-  Printf.printf "cegis_math\n%!";
+  Log.log params.debug "cegis_math\n%!";
   Log.print_problem params problem;
   (* Printf.printf "%s\n%!" (List.hd_exn (Problem.log_edits problem) |> Edit.to_string); *)
   if timed_out params.timeout then None else
@@ -317,7 +315,7 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
          solve_math params.search_width params data problem
 
 and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
-  Printf.printf "solve_math\n%!";
+  Log.log params.debug "solve_math\n%!";
   if timed_out params.timeout || i = 0 then None else
     if params.ecache then
       try_cache params data problem
@@ -337,14 +335,14 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
        *   end *)
 
 and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) searcher =
-  Printf.printf "loop\n%!";
+  Log.log params.debug"loop\n%!";
   let open Option in
   if timed_out params.timeout then begin
       Printf.printf "Timeout\n%!";
       None
     end
   else if i = 0 then begin
-      Printf.printf "Out of gas\n%!";
+      Log.log params.debug "Out of gas\n%!";
       None
     end
   else
@@ -372,9 +370,7 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
     |=> fun _ ->
         try_in_sequence [
             (fun _ -> cegis_math params data problem');
-            (fun _ -> Log.backtracking params;
-                      (* Printf.printf "the model_space is \n %s\n---\n%!"
-                       *   (string_of_test @@ Problem.model_space problem); *)
+            (fun _ -> Log.log params.debug "Those edits were wrong, backtracking \n%!";
                       Interactive.pause params.interactive;
                       drive_search (i - 1) params data problem searcher);
             (fun _ -> ProfData.incr !data.num_backtracks;
@@ -391,7 +387,7 @@ and try_cache params data problem =
        } in
      cegis_math params data problem
   | Some ps ->
-     Log.edit_cache_hit params.debug ps;
+     Log.edit_cache_hit params.debug (Problem.phys problem) ps;
 
      (* fastCX's preconditions may be violated, so make sure its turned off*)
      let params_nofastcx = {params with fastcx = false} in
@@ -415,10 +411,13 @@ let cegis_math_sequence (params : Parameters.t) data problem =
   match List.fold log_edit_sequence ~init:(Some(problem,[]))
           ~f:(fun acc ledit ->
             match acc with
-            | None -> None
+            | None ->
+               Log.log true "Previous rule failed";
+               None
             | Some (problem, pedits) ->
                let problem = Problem.replace_log_edits problem [ledit] in
-               Printf.printf "\n\n\n%s\n\n\n" (Problem.to_string params problem);
+               Printf.sprintf "\n\n\n%s\n\n\n" (Problem.to_string params problem)
+               |> Log.log params.debug;
                let phys_edits = match cegis_math params data problem with
                  | None ->
                     if params.no_deletes then
@@ -429,13 +428,16 @@ let cegis_math_sequence (params : Parameters.t) data problem =
                     Some phys_edits
                in
                match phys_edits with
-               | None -> None
+               | None ->
+                  Printf.printf "Couldn't find solution for:\n%!";
+                  Log.print_edits (Problem.log problem) [ledit];
+                  None
                | Some phys_edits ->
+                  Log.print_edits ~tab:false (Problem.phys problem) phys_edits;
                   Some (Problem.replace_phys_edits problem phys_edits
                         |> Problem.commit_edits_log params
                         |> Problem.commit_edits_phys params,
                         pedits @ phys_edits)
-
           )
   with
   | None -> None

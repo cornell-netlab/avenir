@@ -47,10 +47,12 @@ let to_string (m : t) : string =
 
 let to_bmv2_string (m:t) : string =
   match m.data with
-  | Exact x ->
-     bmv2_string_of_value x
+  | Exact v ->
+     bmv2_string_of_value v
+  | Mask (v,m) ->
+     Printf.sprintf "%s &&& %s" (bmv2_string_of_value v) (bmv2_string_of_value m)
   | _ ->
-     Printf.sprintf "[Unimplemented] Don't know how to install ternary matches"
+     Printf.sprintf "[Unimplemented] Don't know how to install range matches"
      |> failwith
 
 let get_size (m : t) : size =

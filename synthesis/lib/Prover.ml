@@ -4,7 +4,7 @@ open Packet
 open Z3
 
 let force_print = false
-let print_debug = true
+let print_debug = false
 
 let debug term =
   if force_print || print_debug then
@@ -303,10 +303,11 @@ let check_valid_cached (params : Parameters.t) (test : Ast.test) =
   | `AddAbs q ->
      (* Printf.printf "\tChecking abstraction from %d previous tests and %d abstractions!\n%!" (List.length !cache.seen) (List.length !cache.generals); *)
      let dur' = Time.(diff (now()) st) in
-     let (m , dur) = if List.length !cache.seen > 0 then
-                       check_valid {params with debug = true} q
-                     else
-                       check_valid params q in
+     let (m , dur) = (* if List.length !cache.seen > 0 then
+                      *   check_valid {params with debug = true} q
+                      * else *)
+       check_valid params q
+     in
      match m with
      | Some _ ->
         (* Printf.printf "\tAbstraction Failed\n%!"; *)
