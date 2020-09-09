@@ -64,6 +64,7 @@ module Solver = struct
 
       +> flag "-data" (required string) ~doc:"The logical experiment to run"
       +> flag "-DEBUG" no_arg ~doc:"Print Debugging commands"
+      +> flag "--thrift" no_arg ~doc:"parse & write bmv2/thrift commands"
       +> flag "-i" no_arg ~doc:"interactive mode"
       +> flag "-p" no_arg ~doc:"Print synthesized program"
       +> flag "-measure" no_arg ~doc:"Produce a CSV of data to stdout"
@@ -82,6 +83,7 @@ module Solver = struct
         phys_incl
         data
         debug
+        thrift_mode
         interactive
         print_res
         measure
@@ -116,6 +118,7 @@ module Solver = struct
                               edits_depth;
                               search_width;
                               debug;
+                              thrift_mode;
                               monotonic;
                               interactive;
                               injection;
@@ -154,12 +157,14 @@ module Solver = struct
                     |> Benchmark.zero_init fvs
                     |> Benchmark.drop_handle fvs
                else Benchmark.parse_file real in
-    let log_inst = Runtime.parse log logical_edits
+    let parse_runtime = if params.thrift_mode then Runtime.parse_bmv2 else Runtime.parse in
+    let log_inst = parse_runtime log logical_edits
                    |> Instance.(update_list params empty) in
     let log_edits = if onos
                     then Benchmark.(onos_to_edits var_mapping data "ipv6" "hdr.ipv6.dst_addr")
-                    else Runtime.parse log data |> List.(map ~f:return)  in
-    let phys_inst = Runtime.parse phys physical_edits |> Instance.(update_list params empty) in
+                    else parse_runtime log data |> List.(map ~f:return)  in
+    let phys_inst = parse_runtime phys physical_edits |> Instance.(update_list params empty) in
+    let edit_to_string = if thrift_mode then Tables.Edit.to_bmv2_string phys else Tables.Edit.to_string in
     let phys_drop_spec = None in
     if measure then
       let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits:[] ~fvs ~phys_drop_spec () in
@@ -167,7 +172,7 @@ module Solver = struct
       |  None -> Core.Printf.printf "No solution could be found \n%!"
       | Some soln when print_res ->
          Core.Printf.printf "EDITS:\n%!";
-         List.iter soln ~f:(fun e -> Core.Printf.printf "%s\n%!" (Tables.Edit.to_string e))
+         List.iter soln ~f:(fun e -> Core.Printf.printf "%s\n%!" (edit_to_string e))
       | _ -> ()
     else
       let log_edits = List.join log_edits in
@@ -180,7 +185,7 @@ module Solver = struct
          then
            begin
              Core.Printf.printf "Target operations:\n%!";
-             List.iter phys_edits ~f:(fun e -> Core.Printf.printf "%s\n%!" (Tables.Edit.to_string e))
+             List.iter phys_edits ~f:(fun e -> Core.Printf.printf "%s\n%!" (edit_to_string e))
            end
          else ()
 end
@@ -216,11 +221,13 @@ module RunTest = struct
       empty
       +> anon ("test_file" %: string)
       +> flag "-DEBUG" no_arg ~doc:"DEBUG"
+      +> flag "--thrift" no_arg ~doc:"parse & write bmv2/thrift commands"
       +> flag "-i" no_arg ~doc:"Interactive mode"
       ++ opt_flags)
 
   let run test_file
         debug
+        thrift_mode
         interactive
         widening
         do_slice
@@ -254,13 +261,15 @@ module RunTest = struct
            | [log_str;phys_str;edits_str] ->
               let log = Benchmark.parse_file log_str in
               let phys = Benchmark.parse_file phys_str in
-              let log_edits = Runtime.parse log edits_str in
+              let parse_runtime = if thrift_mode then Runtime.parse_bmv2 else Runtime.parse in
+              let log_edits = parse_runtime log edits_str in
               let params = Parameters.({
                               widening;
                               do_slice;
                               edits_depth;
                               search_width;
                               debug;
+                              thrift_mode;
                               monotonic;
                               interactive;
                               injection;
@@ -326,11 +335,13 @@ module Bench = struct
       +> anon ("num_tables" %: int)
       +> anon ("max_inserts" %: int)
       +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
+      +> flag "--thrift" no_arg ~doc:"parse & write bmv2/thrift commands"
       +> flag "-i" no_arg ~doc:"interactive mode"
       ++ opt_flags )
 
   let run varsize num_tables max_inserts
         debug
+        thrift_mode
         interactive
         widening
         do_slice
@@ -364,6 +375,7 @@ module Bench = struct
           edits_depth;
           search_width;
           debug;
+          thrift_mode;
           monotonic;
           interactive;
           injection;
@@ -403,6 +415,7 @@ module ONFReal = struct
   let spec = Command.Spec.(
       empty
       +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
+      +> flag "--thrift" no_arg ~doc:"parse & write bmv2/thrift commands"
       +> flag "-i" no_arg ~doc:"interactive mode"
       +> flag "-data" (required string) ~doc:"the input log"
       +> flag "-p" no_arg ~doc:"show_result_at_end"
@@ -419,7 +432,7 @@ module ONFReal = struct
 
 
 
-  let run debug interactive data print
+  let run debug thrift_mode interactive data print
         logical_p4 physical_p4 log_edits phys_edits fvs assume logical_inc physical_inc
         widening
         do_slice
@@ -453,6 +466,7 @@ module ONFReal = struct
           edits_depth;
           search_width;
           debug;
+          thrift_mode;
           monotonic;
           interactive;
           injection;
@@ -503,17 +517,20 @@ module Equality = struct
       +> anon ("log_edits" %: string)
       +> anon ("phys_edits" %: string)
       +> anon ("fvs" %: string)
-      +> flag "-DEBUG" no_arg ~doc:"Debugging messages" )
+      +> flag "-DEBUG" no_arg ~doc:"Debugging messages"
+      +> flag "--thrift" no_arg ~doc:"parse & write bmv2/thrift commands")
 
 
-  let run log phys log_edits phys_edits fvs_fp debug () =
+  let run log phys log_edits phys_edits fvs_fp debug thrift_mode () =
     let log = Benchmark.parse_file log in
     let phys = Benchmark.parse_file phys in
-    let log_edits = Runtime.parse log log_edits in
-    let phys_edits = Runtime.parse phys phys_edits in
+    let parse_runtime = if thrift_mode then Runtime.parse_bmv2 else Runtime.parse in
+    let log_edits = parse_runtime log log_edits in
+    let phys_edits = parse_runtime phys phys_edits in
     let params = Parameters.(
         { default with
           debug;
+          thrift_mode;
           ecache = true;
           vcache = true}) in
     let data = ProfData.zero () in
@@ -576,10 +593,11 @@ module EqualityReal = struct
       +> anon ("phys_edits" %: string)
       +> anon ("fvs" %: string)
       +> anon ("assume" %: string)
-      +> flag "-DEBUG" no_arg ~doc:"Debugging messages" )
+      +> flag "-DEBUG" no_arg ~doc:"Debugging messages"
+      +> flag "--thrift" no_arg ~doc:"parse & write bmv2/thrift commands")
 
 
-  let run log_p4 phys_p4  log_incs phys_incs log_edits phys_edits fvs_fp assume_fp debug () =
+  let run log_p4 phys_p4  log_incs phys_incs log_edits phys_edits fvs_fp assume_fp debug thrift_mode () =
     let mapping = Benchmark.parse_fvs fvs_fp in
     let fvs = List.map mapping ~f:snd in
     let assume = Benchmark.parse_file assume_fp in
@@ -603,9 +621,11 @@ module EqualityReal = struct
 
     (* let log = Encode.encode_from_p4 log_incs log false in
     let phys = Encode.encode_from_p4 phys_incs phys false in
-    *)
-    let log_edits = Runtime.parse log log_edits in
-    let phys_edits = Runtime.parse phys phys_edits in
+     *)
+
+    let parse_runtime = if thrift_mode then Runtime.parse_bmv2 else Runtime.parse in
+    let log_edits = parse_runtime log log_edits in
+    let phys_edits = parse_runtime phys phys_edits in
     let params = Parameters.(
         { default with
           debug;
@@ -695,6 +715,7 @@ module Classbench = struct
       +> anon ("NRULES" %: int)
       +> flag "-data" (required string) ~doc:"path to classbench data"
       +> flag "-DEBUG" no_arg ~doc:"debug"
+      +> flag "--thrift" no_arg ~doc:"parse & write bmv2/thrift commands"
       +> flag "-i" no_arg ~doc:"interactive mode"
       +> flag "--timeout" (optional float) ~doc:"Optional timeout in seconds"
       ++ opt_flags)
@@ -704,6 +725,7 @@ module Classbench = struct
         nrules
         data
         debug
+        thrift_mode
         interactive
         timeout
         widening
@@ -738,6 +760,7 @@ module Classbench = struct
                      edits_depth;
                      search_width;
                      debug;
+                     thrift_mode;
                      monotonic;
                      interactive;
                      injection;
@@ -802,6 +825,7 @@ module SqBench = struct
       +> anon ("NTABLES" %: int)
       +> anon ("NEDITS" %: int)
       +> flag "-DEBUG" no_arg ~doc:"debug"
+      +> flag "--thrift" no_arg ~doc:"parse & write bmv2/thrift commands"
       +> flag "-i" no_arg ~doc:"interactive mode"
       +> flag "--timeout" (optional float) ~doc:"Optional timeout in seconds"
       ++ opt_flags)
@@ -810,6 +834,7 @@ module SqBench = struct
         ntbls
         nedits
         debug
+        thrift_mode
         interactive
         timeout
         widening
@@ -844,6 +869,7 @@ module SqBench = struct
           edits_depth;
           search_width;
           debug;
+          thrift_mode;
           monotonic;
           interactive;
           injection;
@@ -889,6 +915,7 @@ module NumHdrs = struct
       +> anon ("NHEADERS" %: int)
       +> anon ("NRULES" %: int)
       +> flag "-DEBUG" no_arg ~doc:"debug"
+      +> flag "--thrift" no_arg ~doc:"parse & write bmv2/thrift commands"
       +> flag "-i" no_arg ~doc:"interactive mode"
       +> flag "--timeout" (optional float) ~doc:"Optional timeout in seconds"
       ++ opt_flags)
@@ -899,6 +926,7 @@ module NumHdrs = struct
         nheaders
         nrules
         debug
+        thrift_mode
         interactive
         timeout
         widening
@@ -933,6 +961,7 @@ module NumHdrs = struct
                      edits_depth;
                      search_width;
                      debug;
+                     thrift_mode;
                      monotonic;
                      interactive;
                      injection;
@@ -979,6 +1008,7 @@ module MetadataBench = struct
       +> anon ("NMETA" %: int)
       +> anon ("NRULES" %: int)
       +> flag "-DEBUG" no_arg ~doc:"debug"
+      +> flag "--thrift" no_arg ~doc:"parse & write bmv2/thrift commands"
       +> flag "-i" no_arg ~doc:"interactive mode"
       +> flag "--timeout" (optional float) ~doc:"Optional timeout in seconds"
       ++ opt_flags)
@@ -988,6 +1018,7 @@ module MetadataBench = struct
         nmeta
         nrules
         debug
+        thrift_mode
         interactive
         timeout
         widening
@@ -1022,6 +1053,7 @@ module MetadataBench = struct
                      edits_depth;
                      search_width;
                      debug;
+                     thrift_mode;
                      monotonic;
                      interactive;
                      injection;
@@ -1068,6 +1100,7 @@ module NumTbls = struct
       +> anon ("NRULES" %: int)
       +> flag "-breadth" no_arg ~doc:"Breadth experiment when on, Length when not"
       +> flag "-DEBUG" no_arg ~doc:"debug"
+      +> flag "--thrift" no_arg ~doc:"parse & write bmv2/thrift commands"
       +> flag "-i" no_arg ~doc:"interactive mode"
       +> flag "--timeout" (optional float) ~doc:"Optional timeout in seconds"
       ++ opt_flags)
@@ -1079,6 +1112,7 @@ module NumTbls = struct
         nrules
         breadth
         debug
+        thrift_mode
         interactive
         timeout
         widening
@@ -1113,6 +1147,7 @@ module NumTbls = struct
                      edits_depth;
                      search_width;
                      debug;
+                     thrift_mode;
                      monotonic;
                      interactive;
                      injection;
@@ -1199,6 +1234,7 @@ module ServerCmd = struct
       +> flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
       +> flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file"
       +> flag "-DEBUG" no_arg ~doc:"Print Debugging commands"
+      +> flag "--thrift" no_arg ~doc:"parse & write bmv2/thrift commands"
       +> flag "-p" no_arg ~doc:"Print synthesized program"
       +> flag "-measure" no_arg ~doc:"Produce a CSV of data to stdout"
       +> flag "-onos" no_arg ~doc:"Parse logical edits as onos insertions"
@@ -1237,6 +1273,7 @@ module ServerCmd = struct
         log_incl
         phys_incl
         debug
+        thrift_mode
         _ (*print_res*)
         _ (*measure*)
         _ (*onos*)
@@ -1270,6 +1307,7 @@ module ServerCmd = struct
                               edits_depth;
                               search_width;
                               debug;
+                              thrift_mode;
                               monotonic;
                               interactive = false;
                               injection;
@@ -1306,8 +1344,9 @@ module ServerCmd = struct
                then Encode.encode_from_p4 phys_incl real false
                     |> Benchmark.zero_init fvs |> Benchmark.drop_handle fvs
                else Benchmark.parse_file real in
-    let log_inst = Runtime.parse log logical_edits |> Instance.(update_list params empty) in
-    let phys_inst = Runtime.parse phys physical_edits |> Instance.(update_list params empty) in
+    let parse_runtime = if params.thrift_mode then Runtime.parse_bmv2 else Runtime.parse in
+    let log_inst = parse_runtime log logical_edits |> Instance.(update_list params empty) in
+    let phys_inst = parse_runtime phys physical_edits |> Instance.(update_list params empty) in
     let phys_drop_spec = None in
     let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits:[] ~fvs ~phys_drop_spec () in
     Server.runserver params problem ()

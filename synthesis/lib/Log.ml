@@ -42,11 +42,14 @@ let already_explored_error model_space model =
   let res = Manip.fixup_test model model_space in
   Printf.printf "applied \n\n\n %s\n\n\n" (Ast.string_of_test res)
 
-let print_edits ?tab:(tab=false) phys es =
+let print_edits ?tab:(tab=false) (params : Parameters.t) phys es =
   List.iter es ~f:(fun e ->
       Printf.printf "%s%s\n%!"
         (if tab then "\t" else "")
-        (Edit.to_bmv2_string phys e))
+        (if params.thrift_mode then
+           Edit.to_bmv2_string phys e
+         else
+           Edit.to_string e))
 
 let string_vars vs =
   let first = ref true in
@@ -59,19 +62,19 @@ let string_vars vs =
   |> Printf.sprintf "[%s]"
 
 
-let print_search_state do_print problem es model =
+let print_search_state (params : Parameters.t) problem es model =
   let print_space = false in
   let print_model = true in
-  if do_print then begin
+  if params.debug then begin
       let space = Problem.model_space problem in
       if print_space then
         Printf.printf "\n\t***Space***\n\t%s\n\t***     ***" (Ast.string_of_test space);
 
       Printf.printf "\n\t***Edits*** (%d CEXs)\n%!" (List.length @@ Problem.cexs problem);
-      print_edits (Problem.phys problem) (Problem.phys_edits problem);
+      print_edits params (Problem.phys problem) (Problem.phys_edits problem);
 
       Printf.printf "\t*** New ***\n%!";
-      print_edits (Problem.phys problem) es;
+      print_edits params (Problem.phys problem) es;
       Printf.printf "\t***     ***\n";
 
       if print_model then begin
@@ -98,10 +101,10 @@ let print_and_return_test ?(pre="") ?(post="") debug t =
 let edit_cache_miss d =
   if d then Printf.printf "tried edit_cache, missed\n%!"
 
-let edit_cache_hit d prog es =
-  if d then begin
+let edit_cache_hit (params : Parameters.t) prog es =
+  if params.debug then begin
       Printf.printf "tried edit_cache, hit!\n";
-      print_edits prog es;
+      print_edits params prog es;
       Printf.printf "---\n%!"
     end
 

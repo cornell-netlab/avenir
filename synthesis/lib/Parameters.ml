@@ -6,6 +6,7 @@ type t =
     (* interaction *)
     debug: bool;
     interactive : bool;
+    thrift_mode : bool;
     (*bounded search*)
     edits_depth : int;
     search_width : int;
@@ -17,6 +18,7 @@ type t =
     minimize : bool;
     do_slice : bool;
     shortening : bool;
+
 
     (*Model finding*)
     widening : bool;
@@ -49,6 +51,7 @@ let default =
     edits_depth = 6;
     search_width = 100;
     debug = false;
+    thrift_mode = false;
     monotonic = false;
     injection = false;
     interactive = false;

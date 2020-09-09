@@ -353,7 +353,7 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
     let es = extract_reached_edits params data problem model in
     let es = minimize_edits_for_cexs params problem [] es in
 
-    Log.print_search_state params.debug problem es model;
+    Log.print_search_state params problem es model;
     Interactive.pause ~prompt:"\n" params.interactive;
 
     let problem' = Problem.(append_phys_edits problem es
@@ -387,7 +387,7 @@ and try_cache params data problem =
        } in
      cegis_math params data problem
   | Some ps ->
-     Log.edit_cache_hit params.debug (Problem.phys problem) ps;
+     Log.edit_cache_hit params (Problem.phys problem) ps;
 
      (* fastCX's preconditions may be violated, so make sure its turned off*)
      let params_nofastcx = {params with fastcx = false} in
@@ -430,10 +430,10 @@ let cegis_math_sequence (params : Parameters.t) data problem =
                match phys_edits with
                | None ->
                   Printf.printf "Couldn't find solution for:\n%!";
-                  Log.print_edits (Problem.log problem) [ledit];
+                  Log.print_edits params (Problem.log problem) [ledit];
                   None
                | Some phys_edits ->
-                  Log.print_edits ~tab:false (Problem.phys problem) phys_edits;
+                  Log.print_edits ~tab:false params (Problem.phys problem) phys_edits;
                   Some (Problem.replace_phys_edits problem phys_edits
                         |> Problem.commit_edits_log params
                         |> Problem.commit_edits_phys params,
