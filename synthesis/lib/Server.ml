@@ -85,7 +85,7 @@ let edit_of_op prog op =
      begin match Ast.get_schema_of_table table prog with
      | None -> failwith @@ Printf.sprintf "unrecognized table %s" table
      | Some (keys,_,_) ->
-        let ks = List.map keys ~f:(fun (k,_,_) -> k) in
+        let ks = List.map keys ~f:(fun (k,sz,_) -> (k,sz)) in
         Edit.Add(table,
                  (matches_of_string ks @@ String.concat ~sep:";" matches,
                   action_data_of_string @@ String.concat ~sep:";" actionData,

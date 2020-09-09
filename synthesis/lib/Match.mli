@@ -10,6 +10,7 @@ val wildcard : string -> int -> t
 val equal : t -> t -> bool
 val get_key : t -> string
 val to_string : t -> string
+val to_bmv2_string : t -> string
 val to_test : t -> test
 val to_test_hole : string -> t -> test
 val test_hole_of_lists : string -> t list -> test

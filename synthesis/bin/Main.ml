@@ -172,7 +172,7 @@ module Solver = struct
     else
       let log_edits = List.join log_edits in
       let problem = Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits ~fvs ~phys_drop_spec () in
-      Core.Printf.printf "PROBLEM: %s \n" (Problem.to_string params problem);
+      if params.debug then Core.Printf.printf "PROBLEM: %s \n" (Problem.to_string params problem);
       match Synthesis.cegis_math_sequence params (ProfData.zero ()) problem with
       | None -> failwith "failed"
       | Some (_, phys_edits) ->
@@ -440,8 +440,8 @@ module ONFReal = struct
         unique_edits
         domain
         restrict_mask
-        no_deletes
         no_defaults
+        no_deletes
         use_all_cexs
         reach_restrict
         reach_filter

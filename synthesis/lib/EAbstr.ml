@@ -107,7 +107,7 @@ let infer (cache : t) (e : Edit.t) =
          (* Printf.printf "[EABSTR] New Logical Edit is \n%!"; *)
          (* Log.print_edits [e]; *)
          (* Printf.printf "[EABSTR] Template is:\n%!"; *)
-         print_template subst;
+         (* print_template subst; *)
          (* Printf.printf "[EABSTR] Physical guess is\n%!"; *)
          List.fold phys_edits ~init:(Some [])
            ~f:(fun acc e -> match acc with
@@ -116,7 +116,7 @@ let infer (cache : t) (e : Edit.t) =
                                match sub_consts adata subst e with
                                | None -> None
                                | Some e' ->
-                                  Log.print_edits [e'];
+                                  (* Log.print_edits [e']; *)
                                   acc @ [e'] |> Some))
 
 

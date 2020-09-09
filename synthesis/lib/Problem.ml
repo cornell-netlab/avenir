@@ -49,6 +49,7 @@ let to_string params (p : t) =
     (List.length @@ tables_of_cmd @@ Switch.pipeline p.phys)
 
 
+
 let fvs (p : t) : (string * int) list = p.fvs
 let cexs (p : t) : (Packet.t * Packet.t) list = p.cexs
 let add_cex (p : t) cex = {p with cexs = cex::p.cexs}
@@ -76,9 +77,10 @@ let slice params (p : t) : t =
   let log = Instance.overwrite (Switch.inst p.log) log_inst_slice |> Switch.replace_inst p.log in
   let phys = Instance.overwrite (Switch.inst p.phys) phys_inst_slice |> Switch.replace_inst p.phys in
   if params.debug then
-    Printf.printf "SLICED PROBLEM:\n%s\n===??====\n%s\n%!"
-      (Switch.to_gcl params log |> string_of_cmd)
-      (Switch.to_gcl params phys |> string_of_cmd);
+  Printf.printf "SLICED PROBLEM:\n%s\n===??====\n%s\n%!"
+    (Switch.to_gcl params log |> string_of_cmd)
+    (Switch.to_gcl params phys |> string_of_cmd);
+
   {p with log; phys}
 
 let append_phys_edits (p : t) (es : Edit.t list) : t =
@@ -103,11 +105,11 @@ let set_attempts (p : t) attempts =
   {p with attempts}
 
 let reset_attempts (p : t) : t =
-  Printf.printf "RESETTING ATTEMPTS\n%!";
+  (* Printf.printf "RESETTING ATTEMPTS\n%!"; *)
   set_attempts p []
 
 let add_attempt (p : t) (attempt : value StringMap.t) : t =
-  Printf.printf "ADDING ATTEMPT\n%!";
+  (* Printf.printf "ADDING ATTEMPT\n%!"; *)
   set_attempts p @@ attempt :: p.attempts
 
 let seen_attempt (p : t)  (attempt : value StringMap.t) : bool =
@@ -117,11 +119,11 @@ let set_model_space (p : t) (model_space : test) : t =
   {p with model_space}
 
 let reset_model_space (p : t) : t =
-  Printf.printf "RESETTING THE MODEL SPACE\n%!";
+  (* Printf.printf "RESETTING THE MODEL SPACE\n%!"; *)
   set_model_space p True
 
 let refine_model_space (p : t) (b : test) : t =
-  Printf.printf "REFINING THE MODEL SPACE\n%!";
+  (* Printf.printf "REFINING THE MODEL SPACE\n%!"; *)
   set_model_space p @@ p.model_space %&% b
 
 
