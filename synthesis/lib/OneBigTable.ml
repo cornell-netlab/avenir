@@ -35,7 +35,7 @@ let rec mk_one_big_table' (tbl : only_apply) c =
     { tbl with
       actions = List.map tbl.actions ~f:(fun (n, p, act) -> (n, p, act %:% c));
       default = tbl.default %:% c }
-  | Assume _ -> failwith "Assume not handled"
+  | Assume _ -> tbl (*failwith "Assume not handled" *)
   | Seq(c1, c2) -> mk_one_big_table' (mk_one_big_table' tbl c1) c2
   | Select(_, tcl) ->
     let free = List.map tcl

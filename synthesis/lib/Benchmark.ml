@@ -217,6 +217,36 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
   assert (implements params (ProfData.zero ()) (problem) = `Yes);
   measure params None problem (onos_to_edits var_mapping data_file "routing_v6" "hdr.ipv6.dst_addr")
 
+and to_obt params data_file p4_file edits_file fvs_file _ inc =
+  let var_mapping = parse_fvs fvs_file in
+  let fvs = List.map var_mapping ~f:snd in
+  let assume = Skip (* parse_file assume_file *) in
+
+  (* let print_fvs = printf "fvs = %s" (Sexp.to_string ([%sexp_of: (string * int) list] fvs)) in *)
+
+  let log = (assume %:% Encode.encode_from_p4 inc p4_file false)
+            |> Encode.unify_names var_mapping |> zero_init fvs |> drop_handle fvs in
+
+  let phys = OneBigTable.mk_one_big_table log
+             (* |> CompilerOpts.optimize fvs *)
+  in
+
+  (* let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in *)
+  (* let fvs = parse_fvs fvs in *)
+  let log_edits = Runtime.parse_whippersnapper log edits_file in
+  let phys_edits = [] in
+
+  let problem =
+    Problem.make
+      ~log  ~phys ~fvs
+      ~log_inst:Instance.(update_list params empty log_edits)
+      ~phys_inst:Instance.(update_list params empty phys_edits)
+      ~log_edits:[] ()
+  in
+  assert (implements params (ProfData.zero ()) (problem) = `Yes);
+  measure params None problem (List.map (Runtime.parse_whippersnapper log data_file) ~f:(fun r -> [r]))
+
+
 and zero_init fvs cmd =
   let fvs = StringSet.of_list @@ fsts @@ fvs in
   let vs = free_of_cmd `Var cmd
