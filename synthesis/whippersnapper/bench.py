@@ -22,7 +22,7 @@ def rules_for_obt(fn):
           cmdnd.write(line);
   
 
-  subprocess.run(["./avenir", "to-obt", "output/main16.p4", edits_file, fvs_file, assume_file, "-b", "100", "-data", commands_no_def_file, "-e", "100", "-I", "whippersnapper/p4includes"]);
+  subprocess.run(["./avenir", "to-obt", "output/main16.p4", edits_file, fvs_file, assume_file, "-b", "100", "-data", commands_no_def_file, "-e", "100", "-I", "whippersnapper/p4includes", "--thrift",]);
 
 def run_whippersnapper(mx):
   if not os.path.isdir("whippersnapper/pipelines"):
