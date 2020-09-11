@@ -230,7 +230,6 @@ and to_obt params data_file p4_file edits_file fvs_file _ inc =
   let phys = OneBigTable.mk_one_big_table log
              (* |> CompilerOpts.optimize fvs *)
   in
-
   (* let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in *)
   (* let fvs = parse_fvs fvs in *)
   let log_edits = Runtime.parse_whippersnapper log edits_file in
@@ -243,6 +242,7 @@ and to_obt params data_file p4_file edits_file fvs_file _ inc =
       ~phys_inst:Instance.(update_list params empty phys_edits)
       ~log_edits:[] ()
   in
+  Core.Printf.printf "\n\n------------\n%s\n----------\n" (Problem.to_string params problem);
   assert (implements params (ProfData.zero ()) (problem) = `Yes);
   measure params None problem (List.map (Runtime.parse_whippersnapper log data_file) ~f:(fun r -> [r]))
 

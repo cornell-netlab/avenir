@@ -249,7 +249,7 @@ let rec passify_aux sub c : ((int * int) StringMap.t * cmd) =
      (merged_subst, mkSelect typ ss')
 
   | Apply _ ->
-     failwith "Cannot passify (yet) table applications"
+     failwith ("Cannot passify (yet) table applications "^(string_of_cmd c ~depth:0))
 
 let passify fvs c =
   let init_sub =

@@ -24,9 +24,25 @@ let combine_actions (act1 : string * (string * size) list * cmd) (act2 : string 
   let new_p2' = List.map new_p2 ~f:(fun (_, v, w) -> v, w) in
   n1 ^ "_" ^ n2, new_p1' @ new_p2', new_c1 %:% new_c2
 
+let combine_all_actions actions1 actions2 =
+  List.map
+    (cross actions1 actions2 |> List.concat)
+    ~f:(fun (x, y) -> combine_actions x y)
+
 type only_apply = {keys:(string * size * value option) list;
                    actions: ((string * (string * size) list * cmd) list);
                    default: cmd}
+
+let rec replace_apply_with_def c =
+  match c with
+  | Skip
+  | Assign _
+  | Assume _ -> c
+  | Seq(c1, c2) -> Seq(replace_apply_with_def c1, replace_apply_with_def c2)
+  | Select(st, tc) -> Select(st, List.map tc ~f:(fun (t, c) -> (t, replace_apply_with_def c)))
+  | Apply a -> a.default
+
+let empty_only_apply = {keys = []; actions = []; default = Skip}
 
 let rec mk_one_big_table' (tbl : only_apply) c =
   match c with
@@ -40,13 +56,22 @@ let rec mk_one_big_table' (tbl : only_apply) c =
   | Select(_, tcl) ->
     let free = List.map tcl
                 ~f:(fun (t, _) -> List.map (free_vars_of_test t) ~f:(fun(f, s) -> (f, s, None)))  |> List.concat in
-    let es = List.map tcl ~f:snd in
+    let es_tbl = List.map tcl ~f:snd |> List.map ~f:(mk_one_big_table' empty_only_apply) in
     
     let tbl_keys = {tbl with keys = dedup (tbl.keys @ free)} in
-    let acts = tbl_keys.actions in
-    let new_acts = List.concat_map acts ~f:(fun (n, k, a) -> List.map es ~f:(fun e -> (n, k, a %:% e))) in
+    let acts = ("DEFAULT", [], tbl_keys.default) :: tbl_keys.actions in
+    let es_tbl_acts = (List.map es_tbl ~f:(fun t -> "DEFAULT", [], t.default))
+                        @ List.concat_map es_tbl ~f:(fun est -> est.actions) in
+    let new_acts = combine_all_actions acts es_tbl_acts in
+    (*let new_acts = List.concat_map acts
+                                ~f:(fun (n1, p1, a1) ->
+                                        List.concat_map es_tbl
+                                          ~f:(fun et -> List.map et.actions
+                                                ~f:(fun (n1, p2, a2) -> 
+                                                        let p' = dedup (p @ p') in
+                                                        (n1^n2, p', a1 %:% a2)) )) in*)
     { tbl_keys with actions = new_acts;
-                    default = tbl_keys.default %:% c }
+                    default = tbl_keys.default %:% replace_apply_with_def c }
     (* List.fold es ~init:tbl_keys ~f:mk_one_big_table' *)
   | Apply app_t ->
     let cross_actions = List.map
