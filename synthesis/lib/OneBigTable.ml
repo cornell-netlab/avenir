@@ -31,11 +31,11 @@ type only_apply = {keys:(string * size * value option) list;
 let rec mk_one_big_table' (tbl : only_apply) c =
   match c with
   | Skip -> tbl
-  | Assign _ ->
+  | Assign _
+  | Assume _ ->
     { tbl with
       actions = List.map tbl.actions ~f:(fun (n, p, act) -> (n, p, act %:% c));
       default = tbl.default %:% c }
-  | Assume _ -> tbl (*failwith "Assume not handled" *)
   | Seq(c1, c2) -> mk_one_big_table' (mk_one_big_table' tbl c1) c2
   | Select(_, tcl) ->
     let free = List.map tcl
@@ -43,7 +43,11 @@ let rec mk_one_big_table' (tbl : only_apply) c =
     let es = List.map tcl ~f:snd in
     
     let tbl_keys = {tbl with keys = dedup (tbl.keys @ free)} in
-    List.fold es ~init:tbl_keys ~f:mk_one_big_table'
+    let acts = tbl_keys.actions in
+    let new_acts = List.concat_map acts ~f:(fun (n, k, a) -> List.map es ~f:(fun e -> (n, k, a %:% e))) in
+    { tbl_keys with actions = new_acts;
+                    default = tbl_keys.default %:% c }
+    (* List.fold es ~init:tbl_keys ~f:mk_one_big_table' *)
   | Apply app_t ->
     let cross_actions = List.map
                           (cross tbl.actions app_t.actions |> List.concat)

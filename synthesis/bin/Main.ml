@@ -587,6 +587,7 @@ let run debug thrift_mode interactive data print
     match res with
     | None -> Core.Printf.printf "no example could be found\n"
     | Some r when print ->
+       Core.Printf.printf "Edits\n";
        List.iter r ~f:(fun edit ->
            Tables.Edit.to_string edit
            |> Core.Printf.printf "%s\n%!"
