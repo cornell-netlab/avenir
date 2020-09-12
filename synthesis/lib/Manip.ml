@@ -460,9 +460,9 @@ let equivalent ?neg:(neg = True) (data : ProfData.t ref) eq_fvs l p =
   let p' = prepend phys_prefix p in
   let st = Time.now () in
   let fvs =
-    free_of_cmd `Hole l
-    @ free_of_cmd `Var l
-    @ free_of_cmd `Hole p
+    (* free_of_cmd `Hole l
+     * @ *) free_of_cmd `Var l
+    (* @ free_of_cmd `Hole p *)
     @ free_of_cmd `Var p
   in
   ProfData.update_time !data.prefixing_time st;

@@ -25,15 +25,17 @@ let symb_wp ?fvs:(fvs=[]) cmd =
 let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t)
     : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
   let params = {params with no_defaults = false} in
+  let st = Time.now () in
   Log.log params.debug "slicing logical\n";
   let log = Problem.log_gcl_program params problem in
-  Log.log params.debug @@ Printf.sprintf "\t it has %d nodes\n" (num_nodes_in_cmd log);
-  Log.log params.debug @@ Printf.sprintf "%s\n%!" (string_of_cmd log);
+  (* Log.log params.debug @@ Printf.sprintf "\t it has %d nodes\n" (num_nodes_in_cmd log);
+   * Log.log params.debug @@ Printf.sprintf "%s\n%!" (string_of_cmd log); *)
   Log.log params.debug "slicing physical\n";
   let phys = Problem.phys_gcl_program params problem in
-  Log.log params.debug @@ Printf.sprintf "\t it has %d nodes\n" (num_nodes_in_cmd phys);
-  Log.log params.debug @@ Printf.sprintf "%s\n%!" (string_of_cmd phys);
+  (* Log.log params.debug @@ Printf.sprintf "\t it has %d nodes\n" (num_nodes_in_cmd phys);
+   * Log.log params.debug @@ Printf.sprintf "%s\n%!" (string_of_cmd phys); *)
   (* assert (fails_on_some_example log (Problem.fvs problem) (Problem.cexs problem) |> Option.is_none); *)
+  ProfData.update_time !data.slicing_time st;
 
   match fails_on_some_example phys (Problem.fvs problem) (Problem.cexs problem) with
   | Some (in_pkt, out_pkt) -> `NoAndCE (in_pkt,out_pkt)

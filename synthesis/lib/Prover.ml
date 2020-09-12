@@ -284,20 +284,25 @@ let is_valid params test =
 
 let cache = ref @@ QAbstr.make ()
 
-let rec restriction_cegis ~gas params restriction query quantified_vars : test option  =
+let rec restriction_cegis ~gas (params : Parameters.t) (restriction : test option) (query : test) quantified_vars : test option option =
   if gas <= 0 then
     None
   else
-    match check_valid params (restriction %=>% query) with
+    let restr_test = Option.value restriction ~default:True in
+    if params.debug then Printf.printf "RESTRICTION: %s\n%!" (string_of_test restr_test);
+    match check_valid params (restr_test %=>% query) with
     | None, _ -> Some (restriction)
     | Some m, _ ->
-       let restriction' =
-         List.fold quantified_vars ~init:restriction
+       let restr_test' =
+         List.fold quantified_vars ~init:restr_test
            ~f:(fun acc var ->
-             match StringMap.find m var with
-             | None -> acc
-             | Some v -> Var(var, size_of_value v) %<>% Value v) in
-       restriction_cegis ~gas:(gas - 1) params restriction' query quantified_vars
+             acc %&%
+               match StringMap.find m var with
+               | None ->
+                  if params.debug then Printf.printf "Couldn't find %s in model\n%!" var;
+                  True
+               | Some v -> Var(var, size_of_value v) %<>% Value v) in
+       restriction_cegis ~gas:(gas - 1) params (Some restr_test') query quantified_vars
 
 
 let check_valid_cached (params : Parameters.t) (test : Ast.test) =
@@ -324,8 +329,8 @@ let check_valid_cached (params : Parameters.t) (test : Ast.test) =
      (m, Time.Span.(dur + dur'))
   | `AddAbs (qvars,query) ->
      if params.debug then Printf.printf "\tChecking abstraction from %d previous tests and %d abstractions!\n%!" (List.length !cache.seen) (List.length !cache.generals);
-     if params.debug then Printf.printf "ABSTRACTION: %s\n" (string_of_test query);
-     let m = restriction_cegis ~gas:2 params query True qvars  in
+     (* if params.debug then Printf.printf "ABSTRACTION: %s\n" (string_of_test query); *)
+     let m = restriction_cegis ~gas:2 params None query qvars  in
      let dur' = Time.(diff (now()) st) in
      match m with
      | None ->
@@ -336,10 +341,10 @@ let check_valid_cached (params : Parameters.t) (test : Ast.test) =
         let (m , _) = check_valid params test in
         let dur' = Time.(diff (now()) st) in
         (m, dur')
-     | Some r -> (*FOund a restriction to make it valid*)
+     | Some restriction -> (*FOund a restriction to make it valid*)
         if params.debug then Printf.printf "\tAbstraction successful\n%!";
         Interactive.pause params.interactive;
-        cache := QAbstr.add_abs query r test !cache;
+        cache := QAbstr.add_abs ~query ~restriction test !cache;
         (None, dur')
 
 

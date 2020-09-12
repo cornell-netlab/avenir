@@ -2,8 +2,10 @@ open Core
 open Ast
 open Util
 
+type gen = {query : test; restriction : test option}
+
 type t = {seen : test list;
-          generals: (test * test) list;
+          generals: gen list;
          }
 
 let disable = false
@@ -12,7 +14,7 @@ let make () = {seen = []; generals = []}
 
 let gen = NameGen.make ()
 
-let rec abstract_expr (m : string StringMap.t) (e1 : expr) (e2 : expr) : (string StringMap.t * expr) option =
+let rec abstract_expr (m : string StringMap.t) (e1 : expr) (e2 : expr) : (string StringMap.t  * expr) option =
   let erecurse f m e11 e12 e21 e22 =
     match abstract_expr m e11 e21 with
     | None -> None
@@ -31,7 +33,8 @@ let rec abstract_expr (m : string StringMap.t) (e1 : expr) (e2 : expr) : (string
        let v1_str = string_of_value v1 in
        let v2_str = string_of_value v2 in
        match StringMap.find m v1_str, StringMap.find m v2_str with
-       | Some abstr1, Some abstr2 when abstr1 = abstr2 -> Some(m, Var(abstr1,size_of_value v1))
+       | Some abstr1, Some abstr2 when abstr1 = abstr2 ->
+          Some(m, Var(abstr1,size_of_value v1))
        | None, None ->
           let x = NameGen.get_fresh_name gen () in
           let m' = StringMap.set m ~key:v1_str ~data:x
@@ -149,37 +152,44 @@ let string_of_map (m : string StringMap.t) =
 
 
 let exists_matching_abstraction test generals =
-  List.exists generals ~f:(fun (restr, phi) ->
-      match abstracted test phi StringMap.empty with
-      | Some m ->  Manip.substV restr m = True
+  List.exists generals ~f:(fun {query;restriction} ->
+      match abstracted test query StringMap.empty, restriction with
+      | Some _, None -> true
+      | Some m, Some r ->
+         Manip.substV r m = True
       |  _ -> false)
 
-let cache_check _ ({seen;generals} : t) test =
+let cache_check (params : Parameters.t) ({seen;generals} : t) test =
   if disable then ({seen=[];generals=[]}, `Miss test) else
+
   let f phi =
-    (* if false then Printf.printf "\ncomparing to %s\n%!" (sexp_string_of_test phi); *)
+    (* if params.debug then Printf.printf "\ncomparing to %s\n%!" (sexp_string_of_test phi); *)
     abstract StringMap.empty test phi
   in
-  (* if false then Printf.printf "Searching for %s\n%!" (sexp_string_of_test test); *)
+  (* if params.debug then Printf.printf "Searching for %s\n%!" (sexp_string_of_test test); *)
   match List.find_map seen ~f with
   | None ->
-     if false then Printf.printf "No match\n%!";
+     if params.debug then Printf.printf "No match\n%!";
      ({seen = seen; generals}, `Miss test)
   | Some (_,q) when q = test ->
-     if false then Printf.printf "Queries were identical\n%!";
+     if params.debug then Printf.printf "Queries were identical\n%!";
      ({seen; generals}, `Hit test)
   | Some (m,q) ->
-     if false then Printf.printf "Found a match\n%!";
+     if params.debug then Printf.printf "Found a match\n%!";
      if exists_matching_abstraction test generals then
-       let () = if false then Printf.printf "Found an existing generalization\n%!" in
+       let () = if params.debug then Printf.printf "Found an existing generalization\n%!" in
        ({seen; generals}, `HitAbs)
      else
-       (* if false then Printf.printf "%s\n%!" (string_of_map m); *)
-       let () = if false then Printf.printf "No Existing generalization --- generalizing!\n%!" in
-       ({seen; generals}, `AddAbs (StringMap.keys m, q))
+       let () = if params.debug then Printf.printf "No Existing generalization --- generalizing!\n%!" in
+       let qvars =
+         StringMap.data m
+         |>  List.dedup_and_sort ~compare:String.compare
+       in
+       ({seen; generals}, `AddAbs (qvars, q))
 
 
-let add_abs g r tst (c : t) = {seen = tst::c.seen;
-                               generals = (r,g)::c.generals}
+let add_abs ~query ~restriction tst (c : t) =
+  {seen = tst::c.seen;
+   generals = {query; restriction}::c.generals}
 
 let add_test test (c : t) = {c with seen = test::c.seen}
