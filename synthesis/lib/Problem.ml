@@ -72,16 +72,16 @@ let phys_gcl_holes params (p : t) dels tag : cmd = Switch.to_gcl_holes params p.
 let phys_drop_spec (p : t) : test option = Switch.drop_spec p.phys
 
 let slice params (p : t) : t =
-  let log_inst_slice = Instance.update_list params Instance.empty (Switch.edits p.log) in
-  let phys_inst_slice = Instance.update_list params Instance.empty (Switch.edits p.phys) in
-  let log = Instance.overwrite (Switch.inst p.log) log_inst_slice |> Switch.replace_inst p.log in
-  let phys = Instance.overwrite (Switch.inst p.phys) phys_inst_slice |> Switch.replace_inst p.phys in
-  if params.debug then
-  Printf.printf "SLICED PROBLEM:\n%s\n===??====\n%s\n%!"
-    (Switch.to_gcl params log |> string_of_cmd)
-    (Switch.to_gcl params phys |> string_of_cmd);
+  (* let log_inst_slice = Instance.update_list params Instance.empty (Switch.edits p.log) in
+   * let phys_inst_slice = Instance.update_list params Instance.empty (Switch.edits p.phys) in
+   * let log = Instance.overwrite (Switch.inst p.log) log_inst_slice |> Switch.replace_inst p.log in
+   * let phys = Instance.overwrite (Switch.inst p.phys) phys_inst_slice |> Switch.replace_inst p.phys in
+   * (\* if params.debug then *\)
+   *   Printf.printf "SLICED PROBLEM:\n%s\n===??====\n%s\n%!"
+   *     (Switch.to_gcl params log |> string_of_cmd)
+   *     (Switch.to_gcl params phys |> string_of_cmd); *)
 
-  {p with log; phys}
+  {p with log = Switch.slice params p.log; phys = Switch.slice params p.phys}
 
 let append_phys_edits (p : t) (es : Edit.t list) : t =
   {p with phys = Switch.append_edits p.phys es}

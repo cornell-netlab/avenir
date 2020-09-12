@@ -373,6 +373,7 @@ let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_li
           Log.print_hints params.debug hints;
           let partial_model = Hint.list_to_model opts.hint_type (Problem.phys problem) hints in
           Log.print_hints_map params.debug partial_model;
+          Interactive.pause params.interactive;
 
           let out_test =
             bigand [
@@ -404,9 +405,9 @@ let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_li
                  * |> fixup_test partial_model
                  * |> Log.print_and_return_test params.debug  ~pre:"Well-Formed Additions:\n" ~post:"\n--------\n\n"; *)
 
-                (* non_empty_adds problem
-                 * |> fixup_test partial_model
-                 * |> Log.print_and_return_test params.debug ~pre:"Non-Empty Additions:\n" ~post:"\n--------\n\n" *)
+                non_empty_adds problem
+                |> fixup_test partial_model
+                |> Log.print_and_return_test params.debug ~pre:"Non-Empty Additions:\n" ~post:"\n--------\n\n"
               ]
           in
           Some (out_test, partial_model))

@@ -129,6 +129,10 @@ let rec sexp_string_of_expr (e : expr) =
 let get_int (v : value) : Bigint.t =
   match v with
   | Int (x, _) -> x
+
+let get_int_exn (v : value) : int =
+  match v with
+  | Int (x,_) -> Bigint.to_int_exn x
                   
 let size_of_value (v : value) : size =
   match v with
@@ -253,6 +257,29 @@ let concat_values (l : value) (r : value) : value =
   | Int (lx,lsz), Int(rx, rsz) ->
      Int(Bigint.(shift_left lx rsz + rx)
        , lsz + rsz)
+
+let sem_for_binexpr =
+  function
+  | Hole _ | Value _ | Var _ | Cast _ | Slice _ -> failwith "[bin_ctor_for_expr] received hole, value, var, cast, or slice"
+  | Plus _ -> add_values
+  | Times _ -> multiply_values
+  | Minus _ -> subtract_values
+  | SatPlus _ -> sat_add_values
+  | SatMinus _ -> sat_subtract_values
+  | Mask _ -> mask_values
+  | Xor _ -> xor_values
+  | BOr _ -> or_values
+  | Shl _ -> shl_values
+  | Concat _ -> concat_values
+
+let sem_for_unexpr =
+  function
+  | Cast (s,_) -> cast_value s
+  | Slice {hi;lo;_} -> slice_value hi lo
+  | e ->
+     Printf.sprintf "Expected slice or cast, recieved %s" (string_of_expr e)
+     |> failwith
+
 
 type test =
   | True | False
@@ -548,13 +575,15 @@ type cmd =
               actions:((string * (string * size) list * cmd) list);
               default: cmd}
 
-let mkSeq first scnd =
+let rec mkSeq first scnd =
   if not enable_smart_constructors then Seq(first, scnd) else
   match first, scnd with
-  | Skip, x | x, Skip
-    | Assume True, x | x, Assume False
-    -> x
-  | _,_ -> Seq(first, scnd)
+  | Skip, x | x, Skip | Assume True, x | x, Assume False ->
+     x
+  | first, Seq(scnd1,scnd2) ->
+     mkSeq (Seq(first,scnd1)) scnd2
+  | _,_ ->
+     Seq(first, scnd)
 
 
 let (%:%) = mkSeq

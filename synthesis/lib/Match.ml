@@ -97,10 +97,29 @@ let to_test_hole tbl m =
      let (vh, mh) = Hole.match_holes_mask tbl m.key in
      (Hole(vh,vsz) %=% Value vint) %&% (Hole(mh,msz) %=% Value mask)
 
+let to_model_alist tbl m =
+  match m.data with
+  | Exact v ->
+     [Hole.match_hole_exact tbl m.key, v]
+  | Between((Int(_,lsz) as l), (Int(_,hsz) as h)) ->
+     assert (lsz = hsz);
+     let (loh, hih) = Hole.match_holes_range tbl m.key in
+     [loh, l; hih, h]
+  | Mask ((Int(_,vsz) as vint), (Int(_,msz) as mask)) ->
+     assert (vsz = msz);
+     let (vh, mh) = Hole.match_holes_mask tbl m.key in
+     [vh, vint; mh, mask]
+
 let test_hole_of_lists tbl ms =
   List.fold ms ~init:True
     ~f:(fun acc m ->
       acc %&% to_test_hole tbl m)
+
+let list_to_model_alist tbl ms = List.bind ms ~f:(to_model_alist tbl)
+
+let list_to_model tbl ms =
+  list_to_model_alist tbl ms
+  |> StringMap.of_alist_exn
 
 
 let to_valuation_test table hole_typ mtch =
@@ -310,3 +329,13 @@ let to_model ?typ:(typ=`Vals) table (m:t) =
 
 let relevant_matches = List.filter ~f:(Fn.non is_wildcard)
 let relevant_keys = Fn.compose (List.map ~f:get_key) relevant_matches
+
+
+let hits mtch v =
+  match mtch.data with
+  | Exact v' ->
+     veq v v'
+  | Mask (v',msk) ->
+     veq v (mask_values v' msk)
+  | Between (lo,hi) ->
+     vleq lo v && vleq v hi

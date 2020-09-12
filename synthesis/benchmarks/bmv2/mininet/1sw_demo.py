@@ -37,6 +37,8 @@ parser.add_argument('--json', help='Path to JSON config file',
                     type=str, action="store", required=True)
 parser.add_argument('--pcap-dump', help='Dump packets on interfaces to pcap files',
                     type=str, action="store", required=False, default=False)
+parser.add_argument('--rules', help='Dump simple_router rules for all paths connectivity',
+                    type=str,action="store",required=False)
 
 args = parser.parse_args()
 
@@ -52,12 +54,25 @@ class SingleSwitchTopo(Topo):
                                 json_path = json_path,
                                 thrift_port = thrift_port,
                                 pcap_dump = pcap_dump)
-
+        rules = []
         for h in xrange(n):
-            host = self.addHost('h%d' % (h + 1),
-                                ip = "10.0.%d.10/24" % h,
-                                mac = '00:04:00:00:00:%02x' %h)
+            hid = h + 1
+            ip = "10.0.%d.10" % h
+            mac = '00:04:00:00:00:%02x' %h
+            host = self.addHost('h%d' % hid,
+                                ip = "{}/24".format(ip),
+                                mac = mac)
             self.addLink(host, switch)
+            rules.extend([
+                "table_add send_frame rewrite_mac {} => {}".format(str(hid),mac),
+                "table_add forward set_dmac {} => {}".format(ip,mac),
+                "table_add ipv4_lpm set_nhop {0}/32 => {0} {1}".format(ip,str(hid))
+                ])
+
+        if args.rules:
+            with open(args.rules,'w') as f:
+                for r in rules:
+                    f.write("%s\n" % r)
 
 def main():
     num_hosts = args.num_hosts

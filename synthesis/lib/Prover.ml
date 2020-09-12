@@ -284,41 +284,63 @@ let is_valid params test =
 
 let cache = ref @@ QAbstr.make ()
 
+let rec restriction_cegis ~gas params restriction query quantified_vars : test option  =
+  if gas <= 0 then
+    None
+  else
+    match check_valid params (restriction %=>% query) with
+    | None, _ -> Some (restriction)
+    | Some m, _ ->
+       let restriction' =
+         List.fold quantified_vars ~init:restriction
+           ~f:(fun acc var ->
+             match StringMap.find m var with
+             | None -> acc
+             | Some v -> Var(var, size_of_value v) %<>% Value v) in
+       restriction_cegis ~gas:(gas - 1) params restriction' query quantified_vars
+
+
 let check_valid_cached (params : Parameters.t) (test : Ast.test) =
   let st = Time.now () in
   let (cache', res) = QAbstr.cache_check params !cache test in
   cache := cache';
   match res with
   | `HitAbs ->
-     (* Printf.printf "\tCache_hit after %fms!\n%!" *)
-       (* (Time.(diff (now()) st |> Span.to_ms)); *)
+     Printf.printf "\tCache_hit after %fms!\n%!"
+       (Time.(diff (now()) st |> Span.to_ms));
      (None, Time.(diff (now ()) st))
   | `Miss test | `Hit test ->
-     (* Printf.printf "\tCouldn't abstract a thing from %d previous tests!\n" (List.length !cache.seen); *)
+     Printf.printf "\tCouldn't abstract from %d previous tests : %d nodes!\n%!" (List.length !cache.seen) (num_nodes_in_test test);
      let dur' = Time.(diff (now()) st) in
+     Printf.printf "Querying\n%!";
      let (m , dur) = check_valid params test in
+     Printf.printf "Queried\n%!";
      if Option.is_none m then
+       let () = Printf.printf "successfully!\n%!" in
        cache := QAbstr.add_test test !cache;
+     else
+       Printf.printf "Unsuccessfully\n%!";
+
      (m, Time.Span.(dur + dur'))
-  | `AddAbs q ->
-     (* Printf.printf "\tChecking abstraction from %d previous tests and %d abstractions!\n%!" (List.length !cache.seen) (List.length !cache.generals); *)
+  | `AddAbs (qvars,query) ->
+     Printf.printf "\tChecking abstraction from %d previous tests and %d abstractions!\n%!" (List.length !cache.seen) (List.length !cache.generals);
+     Printf.printf "ABSTRACTION: %s\n" (string_of_test query);
+     let m = restriction_cegis ~gas:2 params query True qvars  in
      let dur' = Time.(diff (now()) st) in
-     let (m , dur) = (* if List.length !cache.seen > 0 then
-                      *   check_valid {params with debug = true} q
-                      * else *)
-       check_valid params q
-     in
      match m with
-     | Some _ ->
-        (* Printf.printf "\tAbstraction Failed\n%!"; *)
-        (* Printf.printf "\t%s\n%!" (string_of_test q); *)
-        let dur' = Time.(diff (now()) st) in
-        let (m , dur) = check_valid params test in
-        (m, Time.Span.(dur + dur'))
      | None ->
-        (* Printf.printf "\tAbstraction successful\n%!"; *)
-        cache := QAbstr.add_abs q test !cache;
-        (m, Time.Span.(dur + dur'))
+        (*Couldn't find a restriction to make it valid *)
+        Printf.printf "\tAbstraction Failed\n%!";
+        Interactive.pause true;
+        (* Printf.printf "\t%s\n%!" (string_of_test q); *)
+        let (m , _) = check_valid params test in
+        let dur' = Time.(diff (now()) st) in
+        (m, dur')
+     | Some r -> (*FOund a restriction to make it valid*)
+        Printf.printf "\tAbstraction successful\n%!";
+        Interactive.pause params.interactive;
+        cache := QAbstr.add_abs query r test !cache;
+        (None, dur')
 
 
 let check_min (params : Parameters.t) (test : Ast.test) =

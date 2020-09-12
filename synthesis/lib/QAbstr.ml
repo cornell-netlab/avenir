@@ -3,7 +3,7 @@ open Ast
 open Util
 
 type t = {seen : test list;
-          generals: test list;
+          generals: (test * test) list;
          }
 
 let disable = false
@@ -46,13 +46,13 @@ let rec abstract_expr (m : string StringMap.t) (e1 : expr) (e2 : expr) : (string
   | Minus (e11, e12), Minus (e21, e22) -> erecurse mkMinus m e11 e12 e21 e22
   | Mask  (e11, e12), Mask  (e21, e22) -> erecurse mkMask  m e11 e12 e21 e22
   | _, _ ->
-     (* Printf.printf "\n%s\n doesn't match \n%s\n%!" (sexp_string_of_expr e1) (sexp_string_of_expr e2); *)
+     if false then Printf.printf "\n%s\n doesn't match \n%s\n%!" (sexp_string_of_expr e1) (sexp_string_of_expr e2);
      None
 
 
 
 let rec abstract (m : string StringMap.t) (q1 : test) (q2 : test) : (string StringMap.t * test) option =
-  (* Printf.printf "QUERY: %d   CACHED TEST: %d\n" (num_nodes_in_test q1) (num_nodes_in_test q2); *)
+  (* if false then Printf.printf "QUERY SIZE: %d   CACHED TEST SIZE: %d\n" (num_nodes_in_test q1) (num_nodes_in_test q2); *)
   let trecurse f m t11 t12 t21 t22 =
     match abstract m t11 t21 with
     | None -> None
@@ -83,7 +83,7 @@ let rec abstract (m : string StringMap.t) (q1 : test) (q2 : test) : (string Stri
   | Impl(t11,t12), Impl(t21,t22) -> trecurse (fun e e' -> Impl(e,e')) m t11 t12 t21 t22
   | Iff (t11,t12), Iff (t21,t22) -> trecurse (fun e e' -> Iff(e,e'))  m t11 t12 t21 t22
   | _, _ ->
-     (* Printf.printf "\n%s\n doesn't match \n%s\n%!" (sexp_string_of_test q1) (sexp_string_of_test q2); *)
+     if false then Printf.printf "\n%s\n doesn't match \n%s\n%!" (sexp_string_of_test q1) (sexp_string_of_test q2);
      None
 
 
@@ -95,7 +95,7 @@ let rec abstracted_expr (e1 : expr) (e2 : expr) (valuation : value StringMap.t) 
   match e1, e2 with
   | Value(Int(v1,sz1)), Value(Int(v2,sz2)) when sz1 = sz2 && v2 = v1 -> Some valuation
   | Value _, Value _ ->
-     (* Printf.printf "Int values are different %s  <> %s" (sexp_string_of_expr e1) (sexp_string_of_expr e2); *)
+     (* if false then Printf.printf "Int values are different %s  <> %s" (sexp_string_of_expr e1) (sexp_string_of_expr e2); *)
      None
   | Value v, Var (x,_) ->
      let open StringMap in
@@ -115,12 +115,12 @@ let rec abstracted_expr (e1 : expr) (e2 : expr) (valuation : value StringMap.t) 
   | Minus (e11, e12), Minus (e21, e22) -> recurse e11 e12 e21 e22
   | Mask  (e11, e12), Mask  (e21, e22) -> recurse e11 e12 e21 e22
   | _, _ ->
-     (* Printf.printf "\n%s\n doesn't match \n%s\n%!" (sexp_string_of_expr e1) (sexp_string_of_expr e2); *)
+     (* if false then Printf.printf "\n%s\n doesn't match \n%s\n%!" (sexp_string_of_expr e1) (sexp_string_of_expr e2); *)
      None
 
 
 let rec abstracted (q1 : test) (q2 : test) (valuation : value StringMap.t) : value StringMap.t option =
-  (* Printf.printf "ABSTRACTED size %d  =?= size %d\n%!" (num_nodes_in_test q1) (num_nodes_in_test q2); *)
+  (* if false then Printf.printf "ABSTRACTED size %d  =?= size %d\n%!" (num_nodes_in_test q1) (num_nodes_in_test q2); *)
   let open Option in
   let trecurse t11 t12 t21 t22 = abstracted t11 t21 valuation >>= abstracted t12 t22 in
   let erecurse e11 e12 e21 e22 = abstracted_expr e11 e21 valuation >>= abstracted_expr e12 e22 in
@@ -134,7 +134,7 @@ let rec abstracted (q1 : test) (q2 : test) (valuation : value StringMap.t) : val
   | Impl(t11,t12), Impl(t21,t22) -> trecurse t11 t12 t21 t22
   | Iff (t11,t12), Iff (t21,t22) -> trecurse t11 t12 t21 t22
   | _, _ ->
-     (* Printf.printf "\n\n%s\ndisagrees with\n%s\n\n" (sexp_string_of_test q1) (sexp_string_of_test q2); *)
+     if false then Printf.printf "\n\n%s\ndisagrees with\n%s\n\n" (sexp_string_of_test q1) (sexp_string_of_test q2);
      None
 
 let string_of_map (m : string StringMap.t) =
@@ -147,36 +147,39 @@ let string_of_map (m : string StringMap.t) =
         data
     )
 
+
+let exists_matching_abstraction test generals =
+  List.exists generals ~f:(fun (restr, phi) ->
+      match abstracted test phi StringMap.empty with
+      | Some m ->  Manip.substV restr m = True
+      |  _ -> false)
+
 let cache_check _ ({seen;generals} : t) test =
   if disable then ({seen=[];generals=[]}, `Miss test) else
   let f phi =
-    (* Printf.printf "\ncomparing to %s\n%!" (sexp_string_of_test phi); *)
+    (* if false then Printf.printf "\ncomparing to %s\n%!" (sexp_string_of_test phi); *)
     abstract StringMap.empty test phi
   in
-  (* Printf.printf "Searching for %s\n%!" (sexp_string_of_test test); *)
+  (* if true then Printf.printf "Searching for %s\n%!" (sexp_string_of_test test); *)
   match List.find_map seen ~f with
   | None ->
-     (* Printf.printf "No match\n%!"; *)
+     if true then Printf.printf "No match\n%!";
      ({seen = seen; generals}, `Miss test)
   | Some (_,q) when q = test ->
-     (* Printf.printf "Queries were identical\n%!"; *)
+     if true then Printf.printf "Queries were identical\n%!";
      ({seen; generals}, `Hit test)
-  | Some (_,q) ->
-     (* Printf.printf "Found a match\n%!"; *)
-     match List.find generals ~f:(fun phi ->
-               (* Printf.printf "Checking whether\n\n %s\n\n is an instance of \n\n %s\n%!" *)
-                 (* (sexp_string_of_test test) (sexp_string_of_test phi); *)
-               Option.is_some (abstracted test phi StringMap.empty)) with
-     | Some _ ->
-        (* Printf.printf "Found an existing generalization\n%!"; *)
-        ({seen; generals}, `HitAbs)
-     | None ->
-        (* Printf.printf "%s\n%!" (string_of_map m);
-         * Printf.printf "No Existing generalization --- generalizing!\n%!"; *)
-        ({seen; generals}, `AddAbs q)
+  | Some (m,q) ->
+     if true then Printf.printf "Found a match\n%!";
+     if exists_matching_abstraction test generals then
+       let () = if true then Printf.printf "Found an existing generalization\n%!" in
+       ({seen; generals}, `HitAbs)
+     else
+       (* if true then Printf.printf "%s\n%!" (string_of_map m); *)
+       let () = if true then Printf.printf "No Existing generalization --- generalizing!\n%!" in
+       ({seen; generals}, `AddAbs (StringMap.keys m, q))
 
 
-let add_abs g tst (c : t) = {seen = tst::c.seen;
-                             generals = g::c.generals}
+let add_abs g r tst (c : t) = {seen = tst::c.seen;
+                               generals = (r,g)::c.generals}
 
 let add_test test (c : t) = {c with seen = test::c.seen}

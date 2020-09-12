@@ -2,6 +2,8 @@ open Core
 open Ast
 open Tables
 
+let new_slicing = true
+
 type t =
   {
     pipeline : cmd ref;         (* switch program *)
@@ -13,6 +15,7 @@ type t =
     dels : Instance.interp option ref;   (* ??? *)
     tag : [`Mask | `Exact] option ref;   (* flag determining whether holes can be masked *)
     edited_inst : Instance.t option ref; (* inst with edits applied *)
+    do_slice : bool;
     drop_spec : test option;             (* dead code? *)
   }
 
@@ -25,6 +28,7 @@ let make ?drop_spec:(drop_spec = None) pipeline inst edits : t =
    dels = ref None;
    tag = ref None;
    edited_inst = ref None;
+   do_slice = false;
    drop_spec;
   }
 
@@ -41,13 +45,23 @@ let edited_instance params (p : t) =
      i
   | Some i -> i
 
-let to_gcl params (p : t) =
-  match !(p.gcl) with
-  | None ->
-     let i = Instance.apply params NoHoles `Exact (edited_instance params p) !(p.pipeline) in
-     p.gcl := Some i;
-     i
-  | Some i -> i
+let to_gcl (params : Parameters.t) (p : t) =
+  if p.do_slice then
+    (* let () = Printf.printf "Doing the slice\n%!" in
+     * let t = Time.now () in *)
+    let s = StaticSlicing.edit_slice params (inst p) (edits p) (pipeline p) in
+    (* let () =
+     *   Printf.printf "---------------------------___DONE SLICING___%f_____-------------\n%!"
+     *   (Time.(Span.(Time.diff (now()) t |> to_ms)))
+     * in *)
+    s
+  else
+    match !(p.gcl) with
+    | None ->
+       let i = Instance.apply params NoHoles `Exact (edited_instance params p) !(p.pipeline) in
+       p.gcl := Some i;
+       i
+    | Some i -> i
 
 
 let to_gcl_holes params (p : t) dels tag =
@@ -83,6 +97,20 @@ let update_inst params (p : t) (edits : Edit.t list) =
 let replace_inst (p : t) (i : Instance.t) =
   {p with inst = ref i}
   |> clear_cache
+
+let slice_old params p =
+  let inst_slice = Instance.update_list params Instance.empty p.edits in
+  Instance.overwrite (inst p) inst_slice
+  |> replace_inst p
+
+let slice_new p =
+  {p with do_slice = true}
+
+let slice params =
+  if new_slicing then
+    slice_new
+  else
+    slice_old params
 
 
 let replace_pipeline (p : t) (c : cmd) =

@@ -284,6 +284,7 @@ let stringset_add_list s l =
     StringSet.of_list l
 
 let fsts = List.map ~f:fst
+let fsts3 = List.map ~f:fst3
 let snds = List.map ~f:snd
 
 let map_snd lst ~f = List.map lst ~f:(fun (a,b) -> (a, f b))
@@ -320,3 +321,22 @@ let find2_exn map1 s1 s2 =
         |> failwith
      | Some v ->
         v
+
+
+let (%.) = Fn.compose
+
+
+
+let multimap_union (l : ('a list) StringMap.t) (r : ('a list) StringMap.t) =
+  StringMap.merge l r
+    ~f:(fun ~key:_ -> function
+      | `Left l -> Some l
+      | `Right r -> Some r
+      | `Both (r,l) -> Some (r @ l |> List.dedup_and_sort ~compare:Stdlib.compare))
+
+
+let lossless_append xs_opt ys_opt =
+  let open Option in
+  value xs_opt ~default:[]
+  @ value ys_opt ~default:[]
+  |> return
