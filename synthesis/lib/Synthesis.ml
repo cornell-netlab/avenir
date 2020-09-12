@@ -27,12 +27,12 @@ let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref)
   let params = {params with no_defaults = false} in
   Log.log params.debug "slicing logical\n";
   let log = Problem.log_gcl_program params problem in
-  Printf.printf "\t it has %d nodes\n" (num_nodes_in_cmd log);
-  Printf.printf "%s\n%!" (string_of_cmd log);
+  Log.log params.debug @@ Printf.sprintf "\t it has %d nodes\n" (num_nodes_in_cmd log);
+  Log.log params.debug @@ Printf.sprintf "%s\n%!" (string_of_cmd log);
   Log.log params.debug "slicing physical\n";
   let phys = Problem.phys_gcl_program params problem in
-  Printf.printf "\t it has %d nodes\n" (num_nodes_in_cmd phys);
-  Printf.printf "%s\n%!" (string_of_cmd phys);
+  Log.log params.debug @@ Printf.sprintf "\t it has %d nodes\n" (num_nodes_in_cmd phys);
+  Log.log params.debug @@ Printf.sprintf "%s\n%!" (string_of_cmd phys);
   (* assert (fails_on_some_example log (Problem.fvs problem) (Problem.cexs problem) |> Option.is_none); *)
 
   match fails_on_some_example phys (Problem.fvs problem) (Problem.cexs problem) with
@@ -124,7 +124,7 @@ let slice_conclusive (params : Parameters.t) (data : ProfData.t ref) (problem : 
             || exists_in_table params (Problem.phys problem) (Problem.phys_inst problem) (Problem.phys_edits problem) e
           )
     then
-      let () = Printf.printf "\nquick sliceable check succeeded in %fms!\n%!" Time.(Span.(diff(now()) st |> to_ms))  in
+      let () = Log.log params.debug @@ Printf.sprintf "\nquick sliceable check succeeded in %fms!\n%!" Time.(Span.(diff(now()) st |> to_ms))  in
       true
     else
       let () = Printf.printf "\nquick sliceable check FAILED!\n%!" in
@@ -310,7 +310,7 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
     model_opt >>= fun (model, searcher) ->
     let es = extract_reached_edits params data problem model in
 
-    Log.print_search_state {params with debug = true} problem es model;
+    Log.print_search_state params problem es model;
     Interactive.pause ~prompt:"\n" params.interactive;
 
     let problem' = Problem.(append_phys_edits problem es
@@ -344,7 +344,7 @@ and try_cache params data problem =
        } in
      cegis_math params data problem
   | Some ps ->
-     Log.edit_cache_hit {params with debug = true} (Problem.phys problem) ps;
+     Log.edit_cache_hit params (Problem.phys problem) ps;
      (* fastCX's preconditions may be violated, so make sure its turned off*)
      let params_nofastcx_with_slicing = {params with fastcx = false; do_slice = true} in
 
@@ -352,7 +352,7 @@ and try_cache params data problem =
      let problem_with_cache_guess = Problem.replace_phys_edits problem ps in
 
      (* try and get a CX to see if the problem works *)
-     Printf.printf "trying to slice\n%!";
+     Log.log params.debug "trying to slice\n";
      let did_cache_work = get_cex params_nofastcx_with_slicing data problem_with_cache_guess in
 
      match did_cache_work with
@@ -373,7 +373,7 @@ let cegis_math_sequence (params : Parameters.t) data problem =
     ~f:(fun acc ledit ->
       match acc with
       | None ->
-         Log.log true "Previous rule failed";
+         Log.log true "Rule failed";
          None
       | Some (problem, pedits) ->
          let problem = Problem.replace_log_edits problem [ledit] in

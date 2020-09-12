@@ -306,38 +306,38 @@ let check_valid_cached (params : Parameters.t) (test : Ast.test) =
   cache := cache';
   match res with
   | `HitAbs ->
-     Printf.printf "\tCache_hit after %fms!\n%!"
+     if params.debug then Printf.printf "\tCache_hit after %fms!\n%!"
        (Time.(diff (now()) st |> Span.to_ms));
      (None, Time.(diff (now ()) st))
   | `Miss test | `Hit test ->
-     Printf.printf "\tCouldn't abstract from %d previous tests : %d nodes!\n%!" (List.length !cache.seen) (num_nodes_in_test test);
+     if params.debug then Printf.printf "\tCouldn't abstract from %d previous tests : %d nodes!\n%!" (List.length !cache.seen) (num_nodes_in_test test);
      let dur' = Time.(diff (now()) st) in
-     Printf.printf "Querying\n%!";
+     if params.debug then Printf.printf "Querying\n%!";
      let (m , dur) = check_valid params test in
-     Printf.printf "Queried\n%!";
+     if params.debug then Printf.printf "Queried\n%!";
      if Option.is_none m then
-       let () = Printf.printf "successfully!\n%!" in
+       let () = if params.debug then Printf.printf "successfully!\n%!" in
        cache := QAbstr.add_test test !cache;
      else
-       Printf.printf "Unsuccessfully\n%!";
+       if params.debug then Printf.printf "Unsuccessfully\n%!";
 
      (m, Time.Span.(dur + dur'))
   | `AddAbs (qvars,query) ->
-     Printf.printf "\tChecking abstraction from %d previous tests and %d abstractions!\n%!" (List.length !cache.seen) (List.length !cache.generals);
-     Printf.printf "ABSTRACTION: %s\n" (string_of_test query);
+     if params.debug then Printf.printf "\tChecking abstraction from %d previous tests and %d abstractions!\n%!" (List.length !cache.seen) (List.length !cache.generals);
+     if params.debug then Printf.printf "ABSTRACTION: %s\n" (string_of_test query);
      let m = restriction_cegis ~gas:2 params query True qvars  in
      let dur' = Time.(diff (now()) st) in
      match m with
      | None ->
         (*Couldn't find a restriction to make it valid *)
-        Printf.printf "\tAbstraction Failed\n%!";
-        Interactive.pause true;
-        (* Printf.printf "\t%s\n%!" (string_of_test q); *)
+        if params.debug then Printf.printf "\tAbstraction Failed\n%!";
+        Interactive.pause params.interactive;
+        (* if params.debug then Printf.printf "\t%s\n%!" (string_of_test q); *)
         let (m , _) = check_valid params test in
         let dur' = Time.(diff (now()) st) in
         (m, dur')
      | Some r -> (*FOund a restriction to make it valid*)
-        Printf.printf "\tAbstraction successful\n%!";
+        if params.debug then Printf.printf "\tAbstraction successful\n%!";
         Interactive.pause params.interactive;
         cache := QAbstr.add_abs query r test !cache;
         (None, dur')

@@ -44,7 +44,6 @@ let rec substitute ?holes:(holes = false) ex subsMap =
 
 let substV ?holes:(holes = false) ex substMap =
   StringMap.fold substMap ~init:StringMap.empty ~f:(fun ~key ~data acc ->
-      Printf.printf "  [%s -> %s ]\n" key (string_of_value data);
       StringMap.set acc ~key ~data:(Value data))
   |> substitute ~holes ex
 

@@ -160,22 +160,22 @@ let cache_check _ ({seen;generals} : t) test =
     (* if false then Printf.printf "\ncomparing to %s\n%!" (sexp_string_of_test phi); *)
     abstract StringMap.empty test phi
   in
-  (* if true then Printf.printf "Searching for %s\n%!" (sexp_string_of_test test); *)
+  (* if false then Printf.printf "Searching for %s\n%!" (sexp_string_of_test test); *)
   match List.find_map seen ~f with
   | None ->
-     if true then Printf.printf "No match\n%!";
+     if false then Printf.printf "No match\n%!";
      ({seen = seen; generals}, `Miss test)
   | Some (_,q) when q = test ->
-     if true then Printf.printf "Queries were identical\n%!";
+     if false then Printf.printf "Queries were identical\n%!";
      ({seen; generals}, `Hit test)
   | Some (m,q) ->
-     if true then Printf.printf "Found a match\n%!";
+     if false then Printf.printf "Found a match\n%!";
      if exists_matching_abstraction test generals then
-       let () = if true then Printf.printf "Found an existing generalization\n%!" in
+       let () = if false then Printf.printf "Found an existing generalization\n%!" in
        ({seen; generals}, `HitAbs)
      else
-       (* if true then Printf.printf "%s\n%!" (string_of_map m); *)
-       let () = if true then Printf.printf "No Existing generalization --- generalizing!\n%!" in
+       (* if false then Printf.printf "%s\n%!" (string_of_map m); *)
+       let () = if false then Printf.printf "No Existing generalization --- generalizing!\n%!" in
        ({seen; generals}, `AddAbs (StringMap.keys m, q))
 
 

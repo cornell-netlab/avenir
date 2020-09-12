@@ -83,17 +83,17 @@ let size_of_facts =
     )
 
 
-let edit_slice_table params (name,keys,actions,default) (facts : value list StringMap.t) (inst : Instance.t) (edits : Edit.t list) =
+let edit_slice_table (params : Parameters.t) (name,keys,actions,default) (facts : value list StringMap.t) (inst : Instance.t) (edits : Edit.t list) =
   let eliminable = List.find (fsts3 keys)
                      ~f:(fun k -> StringMap.find facts k
                                   |> Option.value_map ~f:(Fn.non List.is_empty) ~default:false) in
   let edits_to_add = List.filter edits ~f:((=) name %. Edit.table) in
   let sliced_inst =
     if Option.is_none eliminable then
-      let () = Printf.printf "We can eliminate extant rows in table %s\n%!" name in
+      let () = if params.debug then Printf.printf "We can eliminate extant rows in table %s\n%!" name in
       Instance.of_edits params edits_to_add
     else
-      let () = Printf.printf "we know about %s, so we can't eliminate extant rows in %s\n%!" (Option.value_exn eliminable) (name) in
+      let () = if params.debug then Printf.printf "we know about %s, so we can't eliminate extant rows in %s\n%!" (Option.value_exn eliminable) (name) in
       let extant_rows = Instance.get_rows (Instance.update_list params inst edits) name in
       let relevant_extant_rows = List.filter extant_rows ~f:(could_hit facts)  in
       let relevant_extant_inst = StringMap.(set empty ~key:name ~data:relevant_extant_rows) in

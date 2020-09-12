@@ -158,17 +158,17 @@ let infer_fresh phys (curr_edits : Edit.t list) substs (old_edits : Edit.t list 
     ~f:(fun old_model ->
       if StringMap.equal Stdlib.(=) curr_edit_model old_model then None else
       let diff_map = diff curr_edit_model old_model in
-      let () =
-        List.iter (StringMap.keys curr_edit_model) ~f:(fun key ->
-            let l_opt = StringMap.find curr_edit_model key in
-            let r_opt = StringMap.find old_model key in
-            let string_of_opt_value = Option.value_map ~f:string_of_value ~default:"??" in
-            Printf.printf "%s |-->  %s <> %s\n%!" key
-              (string_of_opt_value l_opt) (string_of_opt_value r_opt)
-          )
-      in
+      (* let () =
+       *   List.iter (StringMap.keys curr_edit_model) ~f:(fun key ->
+       *       let l_opt = StringMap.find curr_edit_model key in
+       *       let r_opt = StringMap.find old_model key in
+       *       let string_of_opt_value = Option.value_map ~f:string_of_value ~default:"??" in
+       *       Printf.printf "%s |-->  %s <> %s\n%!" key
+       *         (string_of_opt_value l_opt) (string_of_opt_value r_opt)
+       *     )
+       * in *)
       let eqs = equivalences diff_map |> List.filter ~f:(fun s -> StringSet.length s > 1) in
-      if List.is_empty eqs then Printf.printf "Couldn't conclude any equivalences\n%!";
+      (* if List.is_empty eqs then Printf.printf "Couldn't conclude any equivalences\n%!"; *)
       Option.some_if (not (List.is_empty eqs)) eqs
     )
   |> Option.map ~f:(fun eqs ->
@@ -191,7 +191,7 @@ let infer_fresh phys (curr_edits : Edit.t list) substs (old_edits : Edit.t list 
                mkInt(random_x, size_of_value (List.hd_exn x))
              )
          in
-         Printf.printf "generating free vars : %s\n%!" (string_of_map valuation);
+         (* Printf.printf "generating free vars : %s\n%!" (string_of_map valuation); *)
          let expanded_valuation =
            StringMap.fold valuation ~init:StringMap.empty
              ~f:(fun ~key ~data acc ->
@@ -230,10 +230,10 @@ let infer (cache : t) (phys : cmd) (e : Edit.t) =
       if true then
         match infer_fresh phys phys_edits' (adata, subst) matching_cached_edits with
         | Some _ as edits ->
-           Printf.printf "fresh inference succeeded\n%!";
+           (* Printf.printf "fresh inference succeeded\n%!"; *)
            edits
         | None ->
-           Printf.printf "fresh inference failed\n%!";
+           (* Printf.printf "fresh inference failed\n%!"; *)
            return phys_edits'
       else
         return phys_edits'
