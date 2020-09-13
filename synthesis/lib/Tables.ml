@@ -231,9 +231,8 @@ module Edit = struct
        in
        Printf.sprintf "table_add %s %s%s =>%s" nm act_name bmv2_matches bmv2_data
 
-    | Del (_,_) ->
-       Printf.sprintf "[Unimplemented] We don't support bmv2 deletes."
-       |> failwith
+    | Del (t,i) ->
+       Printf.sprintf "table_delete %s %d" t i
 
   let list_to_string es =
     List.fold es ~init:"" ~f:(fun acc e -> Printf.sprintf "%s\n%s" acc (to_string e))
