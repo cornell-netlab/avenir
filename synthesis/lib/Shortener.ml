@@ -4,7 +4,7 @@ open Util
 
 let namegen = NameGen.make ()
 
-let disable = true
+let disable = false
 
 let rec shorten_expr (bht : Bishtbl.t) (e : expr) : expr =
   if disable  then e else
