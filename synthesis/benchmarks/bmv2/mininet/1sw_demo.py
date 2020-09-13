@@ -19,6 +19,8 @@ from mininet.net import Mininet
 from mininet.topo import Topo
 from mininet.log import setLogLevel, info
 from mininet.cli import CLI
+import subprocess
+import re
 
 from p4_mininet import P4Switch, P4Host
 
@@ -73,6 +75,48 @@ class SingleSwitchTopo(Topo):
                 for r in rules:
                     f.write("%s\n" % r)
 
+def filename(src_idx, tgt_idx):
+    return "h{src}_ping_h{tgt}.txt".format(src = str(src_idx + 1), tgt = str(tgt_idx + 1))
+
+
+def start_ping(net, src_idx, tgt_idx):
+    src_name = "h%d" % (src_idx + 1)
+    tgt_name = "h%d" % (tgt_idx + 1)
+    assert src_name != tgt_name
+    hsrc = net.get(src_name)
+    htgt = net.get(tgt_name)
+    return hsrc.cmd("ping {ip} -c 1 -w 10000 > {fn} & ".format(ip = htgt.IP()
+                                                               , fn = filename(src_idx, tgt_idx)))
+
+
+def run_measurement(net, src_idx, tgt_idx):
+    return start_ping(net, src_idx, tgt_idx)
+
+
+def get_time(f):
+    cts = ""
+    with open(f,'r') as fp:
+        cts = fp.read()
+
+    res = re.findall(r", time (\d+)ms", cts)
+    print "trying",f,"got", res
+    return res[-1]
+
+def collect_data(num_hosts):
+    data = [get_time(filename(src,tgt))
+            for src in xrange(num_hosts)
+            for tgt in xrange(num_hosts)
+            if src != tgt]
+    data.sort(key=int)
+    return data
+
+def print_data(data):
+    print "time,num"
+    for i,t in enumerate(data):
+        print "{0},{1}".format(t,float(i+1)/float(len(data)))
+
+
+
 def main():
     num_hosts = args.num_hosts
     mode = args.mode
@@ -108,11 +152,19 @@ def main():
     sleep(1)
 
     print "Ready !"
-    for i in xrange(100):
-        print net.ping(hosts= [net.get(h) for h in ["h1","h2","h3"] ], timeout = "0.1")
+    for src in xrange(num_hosts):
+        for tgt in xrange(num_hosts):
+            if src == tgt :
+                continue
+            else:
+                print run_measurement(net, src, tgt)
 
     CLI( net )
     net.stop()
+
+    data = collect_data(num_hosts)
+    print_data(data)
+
 
 if __name__ == '__main__':
     setLogLevel( 'info' )
