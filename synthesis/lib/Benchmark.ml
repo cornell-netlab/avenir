@@ -217,7 +217,7 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
   assert (implements params (ProfData.zero ()) (problem) = `Yes);
   measure params None problem (onos_to_edits var_mapping data_file "routing_v6" "hdr.ipv6.dst_addr")
 
-and to_obt params data_file p4_file edits_file fvs_file _ inc =
+and to_obt params data_file p4_file log_edits_file phys_edits_file fvs_file _ inc =
   let var_mapping = parse_fvs fvs_file in
   let fvs = List.map var_mapping ~f:snd in
   let assume = Skip (* parse_file assume_file *) in
@@ -232,8 +232,8 @@ and to_obt params data_file p4_file edits_file fvs_file _ inc =
   in
   (* let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in *)
   (* let fvs = parse_fvs fvs in *)
-  let log_edits = Runtime.parse_whippersnapper log edits_file in
-  let phys_edits = [] in
+  let log_edits = Runtime.parse_whippersnapper log log_edits_file in
+  let phys_edits = Runtime.parse phys phys_edits_file in
 
   let problem =
     Problem.make

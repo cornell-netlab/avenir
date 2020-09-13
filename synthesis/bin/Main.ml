@@ -518,14 +518,15 @@ module ToOBT = struct
       +> flag "-data" (required string) ~doc:"the input log"
       +> flag "-p" no_arg ~doc:"show_result_at_end"
       +> anon ("p4file" %: string)
-      +> anon ("edits" %: string)
+      +> anon ("log-edits" %: string)
+      +> anon ("phys-edits" %: string)
       +> anon ("fvs" %: string)
       +> anon ("assume" %: string)
       +> flag "-I" (listed string) ~doc:"<dir> add directory to include search path for file"
       ++ opt_flags)
 
 let run debug thrift_mode interactive data print
-        p4file edits fvs assume inc
+        p4file log_edits phys_edits fvs assume inc
         widening
         do_slice
         edits_depth
@@ -582,7 +583,7 @@ let run debug thrift_mode interactive data print
           reach_restrict;
           reach_filter;
           timeout = None})
-              data p4file edits fvs assume inc
+              data p4file log_edits phys_edits fvs assume inc
     in
     match res with
     | None -> Core.Printf.printf "no example could be found\n"
