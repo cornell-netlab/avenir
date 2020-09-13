@@ -227,9 +227,8 @@ and to_obt params data_file p4_file log_edits_file phys_edits_file fvs_file _ in
   let log = (assume %:% Encode.encode_from_p4 inc p4_file false)
             |> Encode.unify_names var_mapping |> zero_init fvs |> drop_handle fvs in
 
-  let phys = OneBigTable.mk_one_big_table log
+  let phys = OneBigTable.mk_one_big_table log |> zero_init fvs |> drop_handle fvs in
              (* |> CompilerOpts.optimize fvs *)
-  in
   (* let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in *)
   (* let fvs = parse_fvs fvs in *)
   let log_edits = Runtime.parse_whippersnapper log log_edits_file in
