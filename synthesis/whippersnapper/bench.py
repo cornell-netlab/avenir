@@ -77,7 +77,13 @@ def run_avenir():
     mx += 1;
   
   for i in list(range(1, int(mx))):
-    print(str(i));
+    output = "whippersnapper/pipelines/output_" + str(i) +"/";
+    commands_file = output + "obt_commands.txt";
+    edits_file = "whippersnapper/empty_edits.txt";
+    assume_file = "whippersnapper/empty_assume.txt";
+    fvs_file = output + "fvs.txt";
+    res = subprocess.run(["./avenir", "from-obt", output + "main16.p4", edits_file, edits_file, fvs_file, assume_file, "-b", "100", "-data", commands_file, "-e", "100", "-p", "-I", "whippersnapper/p4includes"], stdout = subprocess.PIPE);
+    print(res);
 
 cmd = sys.argv[1];
 
