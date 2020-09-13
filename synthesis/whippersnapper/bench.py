@@ -5,6 +5,29 @@ import shutil
 import subprocess
 import sys
 
+# generate the OBT, and the corresponding rules
+def rewrite_cmd(cmd):
+  try:
+    pieces = cmd.split(",");
+    params = pieces[2];
+    fparams = params.split(" ")[2::3];
+    fparams = ";".join(fparams);
+    pieces[2] = fparams;
+    #pieces = list(map(lambda s : s[s.find("0x"):] if s.find("0x") != -1 else s, pieces));
+    print("pieces" + str(pieces));
+    fcmd = ",".join(pieces);
+    print(fcmd)
+    return fcmd;
+  except:
+    return cmd;
+
+def rewrite_cmds(cmds):
+  print("cmds\n" + cmds + "\n");
+  fcmds = list(map(rewrite_cmd, cmds.split("\n")));
+  fmcds = "\n".join(fcmds);
+  print("fcmds = " + str(fcmds));
+  return fmcds;
+
 def rules_for_obt(fn):
   edits_file = "whippersnapper/empty_edits.txt";
   fvs_file = "output/fvs.txt";
@@ -23,16 +46,16 @@ def rules_for_obt(fn):
           cmdnd.write(line);
   
 
-  res = subprocess.run(["./avenir", "to-obt", "output/main16.p4", edits_file, fvs_file, assume_file, "-b", "100", "-data", commands_no_def_file, "-e", "100", "-p", "-I", "whippersnapper/p4includes"], stdout = subprocess.PIPE);
+  res = subprocess.run(["./avenir", "to-obt", "output/main16.p4", edits_file, edits_file, fvs_file, assume_file, "-b", "100", "-data", commands_no_def_file, "-e", "100", "-p", "-I", "whippersnapper/p4includes"], stdout = subprocess.PIPE);
 
   obt_commands = "output/obt_commands.txt";
-  try:
-    cmds = res.stdout.decode('utf-8');
-    cmds = cmds.split("Edits\n")[1];
-    with open(obt_commands, 'w') as f:
-      f.write(cmds);
-  except:
-    print("no commands written");
+
+  cmds = res.stdout.decode('utf-8');
+  cmds = cmds.split("Edits\n")[1]; 
+  with open(obt_commands, 'w') as f:
+    f.write(rewrite_cmds(cmds));
+  #except:
+  #  print("no commands written");
 
 def run_whippersnapper(mx):
   if not os.path.isdir("whippersnapper/pipelines"):
@@ -45,6 +68,8 @@ def run_whippersnapper(mx):
     rules_for_obt("output");
     
     shutil.move("output", "whippersnapper/pipelines/output_" + str(i));
+
+# run the actual evaluation, using OBT as the logical program
 
 def run_avenir():
   mx = 1;
