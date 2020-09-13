@@ -126,7 +126,7 @@ let slice_conclusive (params : Parameters.t) (data : ProfData.t ref) (problem : 
             || exists_in_table params (Problem.phys problem) (Problem.phys_inst problem) (Problem.phys_edits problem) e
           )
     then
-      let () = Log.log params.debug @@ Printf.sprintf "\nquick sliceable check succeeded in %fms!\n%!" Time.(Span.(diff(now()) st |> to_ms))  in
+      (* let () = Log.log params.debug @@ Printf.sprintf "\nquick sliceable check succeeded in %fms!\n%!" Time.(Span.(diff(now()) st |> to_ms))  in *)
       true
     else
       let () = Printf.printf "\nquick sliceable check FAILED!\n%!" in
@@ -348,7 +348,7 @@ and try_cache params data problem =
   | Some ps ->
      Log.edit_cache_hit params (Problem.phys problem) ps;
      (* fastCX's preconditions may be violated, so make sure its turned off*)
-     let params_nofastcx_with_slicing = {params with fastcx = false; do_slice = true} in
+     let params_nofastcx_with_slicing = {params with fastcx = false} in
 
      (* add guessed edits to problem*)
      let problem_with_cache_guess = Problem.replace_phys_edits problem ps in

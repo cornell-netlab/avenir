@@ -72,7 +72,6 @@ control egress(inout headers hdr, inout metadata meta, inout standard_metadata_t
             standard_metadata.egress_port: exact;
         }
         size = 256;
-	default_action = _drop();
     }
     apply {
         send_frame.apply();
@@ -99,7 +98,6 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
         key = {
             meta.routing_metadata.nhop_ipv4: exact;
         }
-	default_action = _drop();
         size = 512;
     }
     @name(".ipv4_lpm") table ipv4_lpm {
@@ -110,7 +108,6 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
         key = {
             hdr.ipv4.dstAddr: lpm;
         }
-	default_action = _drop();
         size = 1024;
     }
     apply {

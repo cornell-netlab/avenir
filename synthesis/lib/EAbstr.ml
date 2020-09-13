@@ -215,29 +215,36 @@ let infer_fresh phys (curr_edits : Edit.t list) substs (old_edits : Edit.t list 
 
 
 let infer (cache : t) (phys : cmd) (e : Edit.t) =
-  (* Printf.printf "Log edits\n\t%s\n%!" (Edit.to_string e); *)
-  List.find_map cache
-    ~f:(fun (log_edit, phys_edits) ->
-      let open Option in
-      similar log_edit e >>= fun (adata,subst) ->
-      sub_edit_list phys_edits (adata,subst)  >>= fun phys_edits' ->
-      let matching_cached_edits =
-        List.filter_map cache
-          ~f:(fun (loge, phys_edits) ->
-            similar loge e >>| const phys_edits
-          )
-      in
-      if true then
-        match infer_fresh phys phys_edits' (adata, subst) matching_cached_edits with
-        | Some _ as edits ->
-           (* Printf.printf "fresh inference succeeded\n%!"; *)
-           edits
-        | None ->
-           (* Printf.printf "fresh inference failed\n%!"; *)
-           return phys_edits'
-      else
-        return phys_edits'
-    )
+  let open Option in
+  let matching_cached_edits =
+    List.filter_map cache
+      ~f:(fun (loge, phys_edits) ->
+        similar loge e >>| const phys_edits
+      )
+  in
+  if List.length matching_cached_edits < 3 then
+    None
+  else
+    (* let () = Printf.printf "Log edits\n\t%s\n%!" (Edit.to_string e) in *)
+    List.find_map cache
+      ~f:(fun (log_edit, phys_edits) ->
+        let open Option in
+        similar log_edit e >>= fun (adata,subst) ->
+        sub_edit_list phys_edits (adata,subst)  >>= fun phys_edits' ->
+
+        if true then
+          match infer_fresh phys phys_edits' (adata, subst) matching_cached_edits with
+          | Some edits ->
+             (* Printf.printf "fresh inference succeeded\n%!"; *)
+             (* Log.print_edits ~tab:true {Parameters.default with debug = true; thrift_mode = true} phys edits; *)
+             return edits
+          | None ->
+             (* Printf.printf "fresh inference failed\n%!"; *)
+             (* Log.print_edits ~tab:true {Parameters.default with debug = true; thrift_mode = true} phys phys_edits'; *)
+             return phys_edits'
+        else
+          return phys_edits'
+      )
 
 let update (cache : t) (log : Edit.t) (physs : Edit.t list) : t =
   (* Printf.printf "Caching %s\n%!" (Edit.to_string log); *)

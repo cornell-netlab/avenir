@@ -65,8 +65,7 @@ class SingleSwitchTopo(Topo):
             self.addLink(host, switch)
             rules.extend([
                 "table_add send_frame rewrite_mac {} => {}".format(str(hid),mac),
-                "table_add forward set_dmac {} => {}".format(ip,mac),
-                "table_add ipv4_lpm set_nhop {0}/32 => {0} {1}".format(ip,str(hid))
+                "table_add ipv4_forward set_nhop {0}/32 => {1} {2}".format(ip,mac,str(hid))
                 ])
 
         if args.rules:
@@ -109,6 +108,8 @@ def main():
     sleep(1)
 
     print "Ready !"
+    for i in xrange(100):
+        print net.ping(hosts= [net.get(h) for h in ["h1","h2","h3"] ], timeout = "0.1")
 
     CLI( net )
     net.stop()
