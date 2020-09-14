@@ -1,1 +1,1 @@
-assume (true)
+assume (hdr.ipv4.ttl#8 > 0#8)
