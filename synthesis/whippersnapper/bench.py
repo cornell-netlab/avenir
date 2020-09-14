@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 
 # fvs gen
 
@@ -88,14 +89,22 @@ def run_avenir(ws_cmd):
   while os.path.isdir("whippersnapper/" + ws_cmd + "/output_" + str(mx)):
     mx += 1;
   
+  res = ""
   for i in list(range(1, int(mx))):
     output = "whippersnapper/" + ws_cmd + "/output_" + str(i) +"/";
     commands_file = output + "obt_commands.txt";
     edits_file = "whippersnapper/empty_edits.txt";
     assume_file = "whippersnapper/empty_assume.txt";
     fvs_file = output + "fvs.txt";
-    res = subprocess.run(["./avenir", "from-obt", output + "main16.p4", edits_file, edits_file, fvs_file, assume_file, "-b", "100", "-data", commands_file, "-e", "100", "-p", "-I", "whippersnapper/p4includes"], stdout = subprocess.PIPE);
-    print(res);
+    
+    st_time = time.perf_counter();
+    subprocess.run(["./avenir", "from-obt", output + "main16.p4", edits_file, edits_file, fvs_file, assume_file, "-b", "100", "-data", commands_file, "-e", "100", "-p", "-I", "whippersnapper/p4includes"], stdout = subprocess.PIPE);
+    end_time = time.perf_counter();
+    elapsed = end_time - st_time;
+    res += str(i) + "," + str(elapsed) + "\n"
+  
+  with open("whippersnapper/" + ws_cmd + "_res.csv", "w") as res_file:
+    res_file.write(res);
 
 cmd = sys.argv[1];
 ws_cmd = sys.argv[2];
