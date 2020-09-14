@@ -1,0 +1,8 @@
+table_add table_1 forward1 0C:C4:7A:A3:25:34 => 1
+table_add table_1 forward1 0C:C4:7A:A3:25:35 => 2
+table_add table_2 forward2 0C:C4:7A:A3:25:34 => 1
+table_add table_2 forward2 0C:C4:7A:A3:25:35 => 2
+table_add table_3 forward3 0C:C4:7A:A3:25:34 => 1
+table_add table_3 forward3 0C:C4:7A:A3:25:35 => 2
+table_add forward_table forward 0C:C4:7A:A3:25:34 => 1
+table_add forward_table forward 0C:C4:7A:A3:25:35 => 2

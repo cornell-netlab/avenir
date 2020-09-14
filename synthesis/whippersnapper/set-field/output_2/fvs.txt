@@ -1,0 +1,3 @@
+hdr.ptp.reserved2,hdr.ptp.reserved2,8
+hdr.header_0.field_0,hdr.header_0.field_0,16
+hdr.header_0.field_1,hdr.header_0.field_1,16
