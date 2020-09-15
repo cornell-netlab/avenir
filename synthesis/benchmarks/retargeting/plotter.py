@@ -92,34 +92,34 @@ def read_data():
 
   return (data0, data1)
 
-def plot_series(data0, data1=None, data2=None, data3=None, name = "plot", xlabel = "LABELME", ylabel = "LABELME"):
+def plot_series(data0, name0="", data1=None, name1 = "", data2=None, name2="", data3=None, name3="", name = "plot", xlabel = "LABELME", ylabel = "LABELME"):
   print "adding data0"
   fig = plt.figure(figsize=(3.7,1.0)) # Override fig size based on trial
   xs = sorted(data0.keys())
   ys = [data0[x] for x in xs]
-  plt.plot(xs, ys, c='#DB4437', label='self', ls='-', zorder=2)
+  plt.plot(xs, ys, c='#DB4437', label=name0, ls='-', zorder=2)
   # plt.axhline(y=5, c='#4285F4', ls=':', label='y=5', zorder=1)
 
   if data1:
     print "adding data1"
     xs = sorted(data1.keys())
     ys = [data1[x] for x in xs]
-    plt.plot(xs, ys, label='AD', ls='-', zorder=3)
-    plt.text(75, 1, "text", size="smaller")
+    plt.plot(xs, ys, label=name1, ls='-', zorder=3)
+    # plt.text(75, 1, "text", size="smaller")
 
   if data2:
     print "adding data2"
     xs = sorted(data2.keys())
     ys = [data2[x] for x in xs]
-    plt.plot(xs, ys, label='M', ls='-', zorder=3)
-    plt.text(75, 1, "text", size="smaller")
+    plt.plot(xs, ys, label=name2, ls='-', zorder=3)
+    # plt.text(75, 1, "text", size="smaller")
 
   if data3:
     print "adding data3"
     xs = sorted(data3.keys())
     ys = [data3[x] for x in xs]
-    plt.plot(xs, ys, label='E', ls='-', zorder=3)
-    plt.text(75, 1, "text", size="smaller")
+    plt.plot(xs, ys, label=name3, ls='-', zorder=3)
+    # plt.text(75, 1, "text", size="smaller")
 
   # plt.annotate("annotation", xy=(25, 2.5), xytext=(40, 1), arrowprops=dict(arrowstyle="->"))
 
@@ -128,7 +128,7 @@ def plot_series(data0, data1=None, data2=None, data3=None, name = "plot", xlabel
   print "labelling"
   plt.xlabel(xlabel, labelpad=0)
   plt.ylabel(ylabel)
-  plt.legend(loc='upper left', ncol=2, bbox_to_anchor=(0,1.1))
+  plt.legend(loc='lower right', ncol=1)
   # plt.xticks(np.arange(0, 101, 25))
   # plt.yticks(np.arange(0, 11, 2))
   print "saving"

@@ -7,6 +7,7 @@ type t =
     debug: bool;
     interactive : bool;
     thrift_mode : bool;
+    hot_start : bool;
     (*bounded search*)
     edits_depth : int;
     search_width : int;
@@ -46,6 +47,7 @@ type t =
 let default =
   { widening = false;
     do_slice = false;
+    hot_start = false;
     semantic_slicing = false;
     vcache = false;
     ecache = None;

@@ -47,22 +47,30 @@ let rec run_experiment iter seq (phys_seq : Edit.t list) (params : Parameters.t)
         !data.time := Time.(diff (now()) st);
         !data.log_inst_size :=  Problem.log_inst problem |> Instance.size ;
         !data.phys_inst_size := Problem.phys_inst problem |> Instance.size;
-        Printf.printf "%s\n%!" (ProfData.to_string !data);
-        (* if iter > 531 then None else *)
+        if params.hot_start then
+          Printf.eprintf "\t%s\n%!" (ProfData.to_string !data)
+        else
+          Printf.printf "%s\n%!" (ProfData.to_string !data);
         run_experiment (iter + 1)
           edits
           (phys_seq @ pedits)
-          (if false then {params with debug = true} else params )
+          (params)
           hints
           Problem.(problem
                    |> flip (apply_edits_to_log params) edit
                    |> flip (apply_edits_to_phys params) pedits
                    |> delete_phys_edits)
                         
-let measure params hints problem insertions =
-  Printf.printf "%s\n%!" ProfData.header_string;
-  run_experiment 0 insertions [] params hints problem
-
+let rec measure (params : Parameters.t) hints problem insertions =
+  if params.hot_start then begin
+      Printf.eprintf "\t%s\n%!" ProfData.header_string;
+      ignore(run_experiment 0 insertions [] params hints (problem ()) : Edit.t list option);
+      measure {params with hot_start = false} hints problem insertions
+    end
+  else begin
+      Printf.printf "%s\n%!" ProfData.header_string;
+      run_experiment 0 insertions [] params hints (problem ())
+    end
                                             
 let permute l =
   List.map l ~f:(inj_r (Random.int (List.length l)))
@@ -149,7 +157,7 @@ let reorder_benchmark varsize length max_inserts params =
                  ])
             |> List.join
   in
-  let problem = Problem.make ~log ~phys ~fvs ~log_inst ~phys_inst ~log_edits:[] () in
+  let problem = Problem.make ~log ~phys ~fvs ~log_inst ~phys_inst ~log_edits:[] in
   measure params (Some (List.return)) problem insertion_sequence
 
 
@@ -212,9 +220,9 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
       ~log  ~phys ~fvs
       ~log_inst:Instance.(update_list params empty log_edits)
       ~phys_inst:Instance.(update_list params empty phys_edits)
-      ~log_edits:[] ()
+      ~log_edits:[]
   in
-  assert (implements params (ProfData.zero ()) (problem) = `Yes);
+  assert (implements params (ProfData.zero ()) (problem ()) = `Yes);
   measure params None problem (onos_to_edits var_mapping data_file "routing_v6" "hdr.ipv6.dst_addr")
 
 and zero_init fvs cmd =
@@ -393,7 +401,7 @@ let square_bench params sz n max_edits =
   let log_edits =
     create_log_edits_easier 32 0 max_edits n |> List.map ~f:(List.return)
   in
-  let problem phys = Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
+  let problem phys = Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty in
   List.fold physical_tables ~init:"numxs,num_ms,time"
     ~f:(fun acc ((xs,ms),phys) ->
       Printf.printf "\n------%d,%d-----\n" xs ms;
@@ -497,7 +505,7 @@ let rep params data nrules =
           ]
       ]
   in
-  let problem = Problem.make ~log:log ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
+  let problem = Problem.make ~log:log ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty in
   measure (restart_timer params (Time.now())) None problem (List.(gen_data >>| return))
 
 
@@ -572,7 +580,7 @@ let rep_middle params data nrules =
           ]
       ]
   in
-  let problem = Problem.make ~log:log ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
+  let problem = Problem.make ~log:log ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty in
   measure (restart_timer params (Time.now())) None problem (List.(gen_data >>| return))
 
 let rep_of params exactify data nrules =
@@ -647,7 +655,7 @@ let rep_of params exactify data nrules =
           ]
       ]
   in
-  let problem = Problem.make ~log:log ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
+  let problem = Problem.make ~log:log ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty in
   measure (restart_timer params (Time.now())) None problem (List.(gen_data >>| return))
 
 
@@ -732,7 +740,7 @@ let rep_par params data nrules =
           ]
       ]
   in
-  let problem = Problem.make ~log:log ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
+  let problem = Problem.make ~log:log ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty in
   measure (restart_timer params (Time.now())) None problem (List.(gen_data >>| return))
 
 
@@ -756,7 +764,7 @@ let headers params sz ntables max_headers max_edits =
         let log_edits =
           create_log_edits 32 0 max_edits ntables |> List.map ~f:(List.return)
         in
-        let problem = Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
+        let problem = Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty in
         acc @ [num_xs,problem,log_edits ])
   in
   List.fold physical_tables ~init:"numxs,num_ms,time"
@@ -828,7 +836,7 @@ let metadata params sz nmeta nedits =
         in
         Printf.printf "Log:\n%s\n%!" (string_of_cmd logical_table);
         Printf.printf "Phys:\n%s\n%!" (string_of_cmd phys);
-        let problem = Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
+        let problem = Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty in
         acc @ [ num_ms, problem, log_edits ])
   in
   List.fold problems ~init:"num_ms,time"
@@ -867,7 +875,7 @@ let tables params sz max_tables nheaders max_edits =
         let log_edits =
           create_log_edits 32 0 max_edits nheaders |> List.map ~f:(List.return)
         in
-        let problem = Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
+        let problem = Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty in
         acc @ [ntables,problem,log_edits ])
   in
   List.fold physical_tables ~init:"ntables,time"
@@ -923,7 +931,7 @@ let breadth params sz max_tables nheaders max_edits =
         let log_edits =
           create_log_edits 32 0 max_edits nheaders |> List.map ~f:(List.return)
         in
-        let problem = Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty () in
+        let problem = Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty in
         acc @ [ntables,problem,log_edits ])
   in
   List.fold physical_tables ~init:"ntables,time"
