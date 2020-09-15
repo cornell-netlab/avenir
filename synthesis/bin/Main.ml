@@ -29,8 +29,8 @@ let opt_flags =
     +> flag "-m" no_arg ~doc:"Prune rows with no holes"
     +> flag "--inj" no_arg ~doc:"Try injection optimization"
     +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
-    +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
-    +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
+    +> flag "--cache-queries" no_arg ~doc:"Enable query caching"
+    +> flag "--cache-edits" (optional int) ~doc:"N Enable edit caching when there are at least N previous successes"
     +> flag "--shortening" no_arg ~doc:"shorten queries"
     +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
     +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"
@@ -531,7 +531,7 @@ module Equality = struct
         { default with
           debug;
           thrift_mode;
-          ecache = true;
+          ecache = Some 0;
           vcache = true}) in
     let data = ProfData.zero () in
     let log_inst = Instance.empty in
@@ -629,7 +629,7 @@ module EqualityReal = struct
     let params = Parameters.(
         { default with
           debug;
-          ecache = true;
+          ecache = Some 0;
           vcache = true}) in
     let data = ProfData.zero () in
     let log_inst = Instance.empty in
@@ -1245,8 +1245,8 @@ module ServerCmd = struct
       +> flag "-m" no_arg ~doc:"Prune rows with no holes"
       +> flag "--inj" no_arg ~doc:"Try injection optimization"
       +> flag "--fastcx" no_arg ~doc:"Generate counterexample quickly"
-      +> flag "--cache-queries" no_arg ~doc:"Disable query and edit caching"
-      +> flag "--cache-edits" no_arg ~doc:"Disable query and edit caching"
+      +> flag "--cache-queries" no_arg ~doc:"Enable query caching"
+      +> flag "--cache-edits" (optional int) ~doc:"N Enable edit caching when there are at least N previous successes"
       +> flag "--shortening" no_arg ~doc:"shorten queries"
       +> flag "--above" no_arg ~doc:"synthesize new edits above existing instance, not below"
       +> flag "--min" no_arg ~doc:"try and eliminate each edit in turn"

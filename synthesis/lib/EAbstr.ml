@@ -205,7 +205,7 @@ let infer_fresh phys (curr_edits : Edit.t list) substs (old_edits : Edit.t list 
 
 
 
-let infer (cache : t) (phys : cmd) (e : Edit.t) =
+let infer (params : Parameters.t) (cache : t) (phys : cmd) (e : Edit.t) =
   let open Option in
   let matching_cached_edits =
     List.filter_map cache
@@ -213,10 +213,9 @@ let infer (cache : t) (phys : cmd) (e : Edit.t) =
         similar loge e >>| const phys_edits
       )
   in
-  if List.length matching_cached_edits < 3 then
+  if List.length matching_cached_edits < Option.value_exn params.ecache then
     None
   else
-    (* let () = Printf.printf "Log edits\n\t%s\n%!" (Edit.to_string e) in *)
     List.find_map cache
       ~f:(fun (log_edit, phys_edits) ->
         let open Option in

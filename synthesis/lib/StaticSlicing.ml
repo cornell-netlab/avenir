@@ -222,6 +222,8 @@ let rec restrict ~dir params inst reads cmd : (StringSet.t * int list StringMap.
          StringSet.(union (of_list (fsts (free_of_test `Var b))) reads), inters
        )
   | Apply t ->
+     (* let printall = true in
+      * if printall then Printf.printf "%s (%s) are %s\n%!" (if dir = `Bck then "Reads" else "Writes")  t.name (string_of_strset reads); *)
      let (rows, reads) =
        List.foldi
          (Instance.get_rows inst t.name)
@@ -289,15 +291,15 @@ let restrict_inst_for_edit params cmd inst e  =
     |> restrict ~dir:`Bck params inst gets
     |> snd
   in
-  Printf.printf "%s backwards requires\n%!" (Edit.table e);
-  print_slice bck_slice inst;
+  (* Printf.printf "%s backwards requires\n%!" (Edit.table e);
+   * print_slice bck_slice inst; *)
   let fwd_slice =
     truncate ~dir:`Fwd cmd (Edit.table e)
     |> restrict ~dir:`Fwd params inst sets
     |> snd
   in
-  Printf.printf "%s forwards requires \n%!" (Edit.table e);
-  print_slice fwd_slice inst;
+  (* Printf.printf "%s forwards requires \n%!" (Edit.table e);
+   * print_slice fwd_slice inst; *)
   let rows =
     Instance.get_rows inst (Edit.table e)
     |> get_indices_matching ~f:(Row.equals (Edit.get_row_exn e))
@@ -323,6 +325,6 @@ let rule_slice (params : Parameters.t) inst edits cmd =
   (* Printf.printf "slicing w.r.t. \n%s%!" @@ Edit.list_to_string edits; *)
   let slice = concatMap edits ~c:(multimap_union)
                 ~f:(restrict_inst_for_edit params cmd inst) in
-  Printf.printf "edits: %s\n" (Edit.list_to_string edits);
-  print_slice slice inst;
+  (* Printf.printf "edits: %s\n" (Edit.list_to_string edits);
+   * print_slice slice inst; *)
   apply_slice slice inst

@@ -67,10 +67,13 @@ let to_gcl (params : Parameters.t) (_ : (string * int) list) (p : t) =
      *   |> StaticSlicing.ghost_static_slice ghost_edits
      *   |> ConstantProp.propogate in *)
     (* let propd_line = ConstantProp.propogate (pipeline p) in *)
-    let slice = StaticSlicing.rule_slice (params) (edited_instance params p) (edits p) (pipeline p) in
-    let c = Instance.apply params ~no_miss:true NoHoles `Exact (slice) (pipeline p) in
+    if true then
+      StaticSlicing.edit_slice params (inst p) (edits p) (pipeline p)
+    else
+      let slice = StaticSlicing.rule_slice (params) (edited_instance params p) (edits p) (pipeline p) in
+      let c = Instance.apply params ~no_miss:true NoHoles `Exact (slice) (pipeline p) in
     (* let () = Printf.printf "Sliced program %s\n%!" (string_of_cmd c) in *)
-    c
+      c
   else
     match !(p.gcl) with
     | None ->

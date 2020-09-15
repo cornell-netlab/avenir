@@ -250,8 +250,8 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
   Log.print_problem params problem;
   (* Printf.printf "%s\n%!" (List.hd_exn (Problem.log_edits problem) |> Edit.to_string); *)
   if timed_out params.timeout then None else
-    if params.ecache then
-      (* let () = Printf.printf "\ttrying cache \n%!"in *)
+    if Option.is_some params.ecache then
+      let () = Log.log params.debug "\ttrying cache \n%!"in
       solve_math 1 params data problem
     else
       match get_cex params data problem with
@@ -260,7 +260,7 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
          let problem = minimize_solution params data problem in
 
          (* if we didn't use the edit cache in the solution, update it *)
-         if not params.ecache then
+         if Option.is_none params.ecache then
            edit_cache := EAbstr.update !edit_cache
                            (Problem.log_edits problem |> List.hd_exn)
                            (Problem.phys_edits problem);
@@ -272,7 +272,7 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
 
       | `NoAndCE (in_pkt, _) ->
          let log_out_pkt = Semantics.eval_act (Problem.log_gcl_program params problem) in_pkt in
-         let params = {params with fastcx = false; ecache = false} in
+         let params = {params with fastcx = false; ecache = None} in
          let problem = Problem.add_cex problem (in_pkt, log_out_pkt) in
          Log.cexs params problem log_out_pkt in_pkt;
          solve_math params.search_width params data problem
@@ -280,7 +280,7 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
 and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
   Log.log params.debug "solve_math\n%!";
   if timed_out params.timeout || i = 0 then None else
-    if params.ecache then
+    if Option.is_some params.ecache then
       try_cache params data problem
     else
       List.length(Problem.phys_edits problem) <= params.edits_depth
@@ -340,11 +340,11 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
           ]
 
 and try_cache params data problem =
-  match EAbstr.infer !edit_cache (Problem.phys problem) (Problem.log_edits problem |> List.hd_exn) with
+  match EAbstr.infer params !edit_cache (Problem.phys problem) (Problem.log_edits problem |> List.hd_exn) with
   | None ->
-     Log.edit_cache_miss true;
+     Log.edit_cache_miss params.debug;
      let params =
-       {params with ecache = false;   (* caching failed so disable it *)
+       {params with ecache = None;   (* caching failed so disable it *)
                     do_slice = false  (* dont slice.. I don't remember why not *)
        } in
      cegis_math params data problem
@@ -362,12 +362,12 @@ and try_cache params data problem =
 
      match did_cache_work with
      | `Yes ->
-        Interactive.pause false ~prompt:"Caching succeeded";
+        Interactive.pause params.interactive ~prompt:"Caching succeeded";
         Some ps
      | `NoAndCE (in_pkt,out_pkt) ->
         Log.cexs params problem in_pkt out_pkt;
-        Interactive.pause false ~prompt:"Caching failed";
-        let params = {params with ecache = false} in (* caching failed so disable it *)
+        Interactive.pause params.interactive ~prompt:"Caching failed";
+        let params = {params with ecache = None} in (* caching failed so disable it *)
         cegis_math params data problem
 
 

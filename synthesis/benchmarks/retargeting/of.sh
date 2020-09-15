@@ -1,0 +1,1 @@
+../../avenir synth logical.p4 physical_of.p4 logical_initial_edits.csv logical_initial_edits.csv fvs.csv -b 100 -e 5 -data logical_inserts_1.csv -I1 ../real/p4includes/ -I2 ../real/p4includes/ -P4 -measure -w --restrict-masks --hints mask --reach-restrict --no-deletes -s # --min --cache-edits --cache-queries -s --reach-restrict --no-deletes

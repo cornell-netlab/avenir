@@ -200,7 +200,7 @@ def cleanup():
 def main():
     cd = "cd /home/ericthewry/research/hybrid/synthesis"
     runtime = "benchmarks/bmv2/simple_router/runtime_CLI.py"
-    run_avenir = "./avenir synth benchmarks/bmv2/simple_router_logical.p4 benchmarks/bmv2/simple_router_16.p4 benchmarks/bmv2/no_edits.csv benchmarks/bmv2/no_edits.csv benchmarks/bmv2/fvs -data benchmarks/bmv2/mininet/{0} --thrift -b 100 -e 3 -P4 -I1 benchmarks/real/p4includes/ -I2 benchmarks/real/p4includes/ --no-defaults --min --hints exact --no-deletes --cache-edits -s".format(args.rules)
+    run_avenir = "./avenir synth benchmarks/bmv2/simple_router_logical.p4 benchmarks/bmv2/simple_router_16.p4 benchmarks/bmv2/no_edits.csv benchmarks/bmv2/no_edits.csv benchmarks/bmv2/fvs -data benchmarks/bmv2/mininet/{0} --thrift -b 100 -e 3 -P4 -I1 benchmarks/real/p4includes/ -I2 benchmarks/real/p4includes/ --no-defaults --min --hints exact --no-deletes --cache-edits 3 -s".format(args.rules)
     baseline = "cat benchmarks/bmv2/mininet/{0}_solution.txt".format(args.rules)
     experiment_cmd = lambda exp: "{0} && {1} | {2}".format(cd, exp, runtime)
     data0 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir))
