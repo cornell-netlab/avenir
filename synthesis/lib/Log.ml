@@ -161,4 +161,4 @@ let print_hints do_print (hints : Hint.t list) =
 
 let log do_log str =
   if do_log then
-    Printf.printf "%s" str
+    Printf.printf "%s%!" str

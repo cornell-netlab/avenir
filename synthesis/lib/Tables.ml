@@ -9,6 +9,11 @@ module Row = struct
   (* Match expressions, action data, action index*)
   type t = Match.t list * action_data * int
 
+  let equals (ms, ad, i) (ms', ad', i') =
+    List.equal Match.equal ms ms'
+    && List.equal Stdlib.(=) ad ad'
+    && i = i'
+
   let action_data_to_string ad =
       (List.map ad ~f:(string_of_value)
        |> List.reduce ~f:(Printf.sprintf "%s;%s")
@@ -20,6 +25,11 @@ module Row = struct
       (action_data_to_string ad)
       actid
 
+  let list_to_string ?tab:(tab="") rs : string =
+    List.fold rs ~init:"" ~f:(fun acc r ->
+        Printf.sprintf "%s\n%s%s" acc tab (to_string r)
+      )
+
   let test_of_data (tbl : string) (act_id : int) (vars : (string * size) list) (vals : action_data) =
     List.fold2_exn vars vals ~init:True
       ~f:(fun acc (x,sz) v ->
@@ -27,6 +37,15 @@ module Row = struct
         mkAnd acc @@
           (Hole.action_data_hole tbl act_id x sz %=% Value v)
       )
+
+  let model_alist_of_data (tbl : string) (act_id : int) (vars : (string * size) list) (vals : action_data) =
+    List.fold2_exn vars vals ~init:[]
+      ~f:(fun acc (x,sz) v ->
+        assert (sz = size_of_value v);
+        acc @
+          [Hole.action_data tbl act_id x sz, v]
+      )
+
 
   let intersects (m1s, _,_ : t) (m2s, _, _ : t) : bool =
     List.fold2_exn m1s m2s ~init:true
@@ -152,6 +171,9 @@ module Edit = struct
     | Add (_, (matches,_,_)) -> matches
     | Del _ -> failwith "[Edit.get_matches] tried to get matches of a deletion"
 
+  let get_row_exn = function
+    | Add (_, r) -> r
+    | Del _ -> failwith "[Edit.get_row_exn] tried to get row of a deletion"
 
   let to_test phys e =
     match e with
@@ -169,8 +191,30 @@ module Edit = struct
           %&%
             (Row.test_of_data t i (List.nth_exn actions i |> snd3) ds)
 
+  let to_model_alist phys e =
+    match e with
+    | Del(t,i) ->
+       [Hole.delete_row_hole_name i t, mkInt(1,1)]
+    | Add(t,(ms,ds,i)) ->
+       match get_schema_of_table t phys with
+       | None -> failwith @@ Printf.sprintf "Couldn't find table %s" t
+       | Some (_,actions,_) ->
+          let actSize = max (log2 (List.length actions)) 1 in
+          [Hole.add_row_hole_name t, mkInt(1,1);
+           Hole.which_act_hole_name t, mkInt(i,actSize)]
+          @ Match.list_to_model_alist t ms
+          @ Row.model_alist_of_data t i (List.nth_exn actions i |> snd3) ds
+
+  let to_model phys e =
+    to_model_alist phys e
+    |> StringMap.of_alist_exn
+
   let test_of_list phys es =
     List.(map es ~f:(to_test phys) |> reduce_exn ~f:(%&%))
+
+  let list_to_model phys es =
+    List.bind es ~f:(to_model_alist phys)
+    |> StringMap.of_alist_exn
 
   let to_string e =
     match e with
@@ -195,9 +239,8 @@ module Edit = struct
        in
        Printf.sprintf "table_add %s %s%s =>%s" nm act_name bmv2_matches bmv2_data
 
-    | Del (_,_) ->
-       Printf.sprintf "[Unimplemented] We don't support bmv2 deletes."
-       |> failwith
+    | Del (t,i) ->
+       Printf.sprintf "table_delete %s %d" t i
 
   let list_to_string es =
     List.fold es ~init:"" ~f:(fun acc e -> Printf.sprintf "%s\n%s" acc (to_string e))
@@ -214,6 +257,31 @@ module Edit = struct
     match e with
     | Add (_, row) -> Row.get_ith_match i row
     | Del (_, _) -> None
+
+  let read_vars cmd = function
+    | Del _ -> failwith "[read_vars] undefined for del"
+    | Add (table, (ms, _, aid)) ->
+       match get_schema_of_table table cmd with
+       | None ->
+          failwith @@ Printf.sprintf "Couldn't find %s" table
+       | Some (keys, actions, _) ->
+          let reads = List.nth_exn actions aid |> action_reads in
+          Match.relevant_keys ms
+          |> StringSet.of_list
+          |> StringSet.union reads
+          |> StringSet.(union @@ of_list @@ fsts3 keys)
+
+  let write_vars cmd = function
+    | Del _ -> failwith "[write_vars] undefined for del"
+    | Add (table, (_, _, aid)) ->
+       match get_schema_of_table table cmd with
+       | None ->
+          failwith @@ Printf.sprintf "Couldn't find %s" table
+       | Some (_, actions,_) ->
+          List.nth_exn actions aid
+          |> trd3
+          |> assigned_vars
+
 
   let extract phys (m : value StringMap.t)  : t list =
     let dels, adds =

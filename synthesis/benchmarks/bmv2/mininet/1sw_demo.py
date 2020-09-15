@@ -19,6 +19,10 @@ from mininet.net import Mininet
 from mininet.topo import Topo
 from mininet.log import setLogLevel, info
 from mininet.cli import CLI
+import subprocess
+import re
+import plotter
+import os
 
 from p4_mininet import P4Switch, P4Host
 
@@ -37,6 +41,8 @@ parser.add_argument('--json', help='Path to JSON config file',
                     type=str, action="store", required=True)
 parser.add_argument('--pcap-dump', help='Dump packets on interfaces to pcap files',
                     type=str, action="store", required=False, default=False)
+parser.add_argument('--rules', help='Dump simple_router rules for all paths connectivity',
+                    type=str,action="store",required=False)
 
 args = parser.parse_args()
 
@@ -52,14 +58,90 @@ class SingleSwitchTopo(Topo):
                                 json_path = json_path,
                                 thrift_port = thrift_port,
                                 pcap_dump = pcap_dump)
-
+        log_rules = []
+        phys_rules = []
         for h in xrange(n):
-            host = self.addHost('h%d' % (h + 1),
-                                ip = "10.0.%d.10/24" % h,
-                                mac = '00:04:00:00:00:%02x' %h)
+            hid = h + 1
+            ip = "10.0.%d.10" % h
+            mac = '00:04:00:00:00:%02x' %h
+            host = self.addHost('h%d' % hid,
+                                ip = "{}/24".format(ip),
+                                mac = mac)
             self.addLink(host, switch)
+            log_rules.extend([
+                # "table_add send_frame rewrite_mac {} => {}".format(str(hid),mac),
+                "table_add ipv4_forward set_nhop {0}/32 => {1} {2}".format(ip,mac,str(hid))
+                ])
+            phys_rules.extend([
+                # "table_add send_frame rewrite_mac {} => {}".format(str(hid),mac),
+                "table_add forward set_dmac {} => {}".format(ip,mac),
+                "table_add ipv4_lpm set_nhop {0}/32 => {0} {1}".format(ip,str(hid))
+                ])
 
-def main():
+        if args.rules:
+            with open(args.rules,'w') as f:
+                for r in log_rules:
+                    f.write("%s\n" % r)
+            with open(args.rules + "_solution.txt", 'w') as f:
+                for r in phys_rules:
+                    f.write("%s\n" % r)
+
+
+def filename(src_idx, tgt_idx):
+    return "h{src}_ping_h{tgt}.txt".format(src = str(src_idx + 1), tgt = str(tgt_idx + 1))
+
+
+def start_ping(net, src_idx, tgt_idx):
+    src_name = "h%d" % (src_idx + 1)
+    tgt_name = "h%d" % (tgt_idx + 1)
+    assert src_name != tgt_name
+    hsrc = net.get(src_name)
+    htgt = net.get(tgt_name)
+    return hsrc.cmd("ping {ip} -c 1 -w 10000 > {fn} & ".format(ip = htgt.IP()
+                                                               , fn = filename(src_idx, tgt_idx)))
+
+
+def run_measurement(net, src_idx, tgt_idx):
+    return start_ping(net, src_idx, tgt_idx)
+
+
+def get_time(f):
+    cts = ""
+    with open(f,'r') as fp:
+        cts = fp.read()
+
+    res = re.findall(r", time (\d+)ms", cts)
+    print "trying",f,"got", res
+    if res:
+        return res[-1]
+    else:
+        return -1
+
+
+def collect_data(num_hosts):
+    data = sorted([get_time(filename(src,tgt))
+                   for src in xrange(num_hosts)
+                   for tgt in xrange(num_hosts)
+                   if src != tgt], key=int)
+    return data
+
+def process_data(data):
+    print "time,num"
+    data_dict = {}
+    for i,t in enumerate(data):
+        print t
+        if t:
+            data_dict[float(t)/1000.0] = 100 * float(i)/float(len(data))
+    return data_dict
+
+
+def plot(data0,data1):
+    plotter.plot_series(data0,data1)
+
+
+
+
+def experiment(num_hosts, mode, experiment):
     num_hosts = args.num_hosts
     mode = args.mode
 
@@ -94,9 +176,39 @@ def main():
     sleep(1)
 
     print "Ready !"
+    for src in xrange(num_hosts):
+        for tgt in xrange(num_hosts):
+            if src == tgt :
+                continue
+            else:
+                print run_measurement(net, src, tgt)
 
-    CLI( net )
+    os.system(experiment)
+
+    sleep(5)
+
     net.stop()
+
+    data = collect_data(num_hosts)
+    return process_data(data)
+
+
+def cleanup():
+    os.system("rm h*_ping_h*.txt")
+
+
+def main():
+    cd = "cd /home/ericthewry/research/hybrid/synthesis"
+    runtime = "benchmarks/bmv2/simple_router/runtime_CLI.py"
+    run_avenir = "./avenir synth benchmarks/bmv2/simple_router_logical.p4 benchmarks/bmv2/simple_router_16.p4 benchmarks/bmv2/no_edits.csv benchmarks/bmv2/no_edits.csv benchmarks/bmv2/fvs -data benchmarks/bmv2/mininet/{0} --thrift -b 100 -e 3 -P4 -I1 benchmarks/real/p4includes/ -I2 benchmarks/real/p4includes/ --no-defaults --min --hints exact --no-deletes --cache-edits 3 -s -S".format(args.rules)
+    baseline = "cat benchmarks/bmv2/mininet/{0}_solution.txt".format(args.rules)
+    experiment_cmd = lambda exp: "{0} && {1} | {2}".format(cd, exp, runtime)
+    data0 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir))
+    cleanup()
+    data1 = experiment(args.num_hosts, args.mode, experiment_cmd(baseline))
+    cleanup()
+    plot(data0, data1)
+
 
 if __name__ == '__main__':
     setLogLevel( 'info' )

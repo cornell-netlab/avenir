@@ -249,7 +249,7 @@ let check_valid (params : Parameters.t) (longtest : Ast.test)  =
   (* Printf.printf "Checking validity for test of size %d\n%!" (num_nodes_in_test test); *)
   let test = Shortener.shorten shortener longtest in
   if params.debug then assert (longtest = Shortener.unshorten shortener test);
-  (* Printf.printf "Test:  %s\n %!" (string_of_test test ); *)
+  (* printf.printf "Test:  %s\n %!" (string_of_test test ); *)
   let vars = free_vars_of_test test
              |> List.dedup_and_sort
                   ~compare:(fun (idx, _) (idy, _) -> Stdlib.compare idx idy) in
@@ -284,41 +284,70 @@ let is_valid params test =
 
 let cache = ref @@ QAbstr.make ()
 
+let rec restriction_cegis ~gas (params : Parameters.t) (restriction : test option) (query : test) quantified_vars : test option option =
+  if gas <= 0 then
+    None
+  else
+    let restr_test = Option.value restriction ~default:True in
+    if params.debug then Printf.printf "RESTRICTION: %s\n%!" (string_of_test restr_test);
+    match check_valid params (restr_test %=>% query) with
+    | None, _ -> Some (restriction)
+    | Some m, _ ->
+       let restr_test' =
+         List.fold quantified_vars ~init:restr_test
+           ~f:(fun acc var ->
+             acc %&%
+               match StringMap.find m var with
+               | None ->
+                  if params.debug then Printf.printf "Couldn't find %s in model\n%!" var;
+                  True
+               | Some v -> Var(var, size_of_value v) %<>% Value v) in
+       restriction_cegis ~gas:(gas - 1) params (Some restr_test') query quantified_vars
+
+
 let check_valid_cached (params : Parameters.t) (test : Ast.test) =
+  (* let params = {params with debug = true} in *)
   let st = Time.now () in
   let (cache', res) = QAbstr.cache_check params !cache test in
   cache := cache';
   match res with
   | `HitAbs ->
-     (* Printf.printf "\tCache_hit after %fms!\n%!" *)
-       (* (Time.(diff (now()) st |> Span.to_ms)); *)
+     if params.debug then Printf.printf "\tCache_hit after %fms!\n%!"
+       (Time.(diff (now()) st |> Span.to_ms));
      (None, Time.(diff (now ()) st))
-  | `Miss test | `Hit test ->
-     (* Printf.printf "\tCouldn't abstract a thing from %d previous tests!\n" (List.length !cache.seen); *)
+  | `Hit _ -> (None, (Time.(diff (now ()) st)))
+  | `Miss test ->
+     if params.debug then Printf.printf "\tCouldn't abstract from %d previous tests : %d nodes!\n%!" (List.length !cache.seen) (num_nodes_in_test test);
      let dur' = Time.(diff (now()) st) in
+     if params.debug then Printf.printf "Querying\n%!";
      let (m , dur) = check_valid params test in
+     if params.debug then Printf.printf "Queried\n%!";
      if Option.is_none m then
+       let () = if params.debug then Printf.printf "successfully!\n%!" in
        cache := QAbstr.add_test test !cache;
+     else
+       if params.debug then Printf.printf "Unsuccessfully\n%!";
+
      (m, Time.Span.(dur + dur'))
-  | `AddAbs q ->
-     (* Printf.printf "\tChecking abstraction from %d previous tests and %d abstractions!\n%!" (List.length !cache.seen) (List.length !cache.generals); *)
+  | `AddAbs (qvars,query) ->
+     if params.debug then Printf.printf "\tChecking abstraction from %d previous tests and %d abstractions!\n%!" (List.length !cache.seen) (List.length !cache.generals);
+     (* if params.debug then Printf.printf "ABSTRACTION: %s\n" (string_of_test query); *)
+     let m = restriction_cegis ~gas:2 params None query qvars  in
      let dur' = Time.(diff (now()) st) in
-     let (m , dur) = (* if List.length !cache.seen > 0 then
-                      *   check_valid {params with debug = true} q
-                      * else *)
-       check_valid params q
-     in
      match m with
-     | Some _ ->
-        (* Printf.printf "\tAbstraction Failed\n%!"; *)
-        (* Printf.printf "\t%s\n%!" (string_of_test q); *)
-        let dur' = Time.(diff (now()) st) in
-        let (m , dur) = check_valid params test in
-        (m, Time.Span.(dur + dur'))
      | None ->
-        (* Printf.printf "\tAbstraction successful\n%!"; *)
-        cache := QAbstr.add_abs q test !cache;
-        (m, Time.Span.(dur + dur'))
+        (*Couldn't find a restriction to make it valid *)
+        if params.debug then Printf.printf "\tAbstraction Failed\n%!";
+        Interactive.pause params.interactive;
+        (* if params.debug then Printf.printf "\t%s\n%!" (string_of_test q); *)
+        let (m , _) = check_valid params test in
+        let dur' = Time.(diff (now()) st) in
+        (m, dur')
+     | Some restriction -> (*FOund a restriction to make it valid*)
+        if params.debug then Printf.printf "\tAbstraction successful\n%!";
+        Interactive.pause params.interactive;
+        cache := QAbstr.add_abs ~query ~restriction test !cache;
+        (None, dur')
 
 
 let check_min (params : Parameters.t) (test : Ast.test) =

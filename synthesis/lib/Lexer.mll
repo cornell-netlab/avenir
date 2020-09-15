@@ -12,6 +12,7 @@ let id = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_' '.']*
 rule tokens = parse
 | [' ' '\t' '\n'] { tokens lexbuf }
 | ['0'-'9']+ as i { INT i }
+| "0x"['0'-'9'] + as i {INT i}
 | "partial"       { PARTIAL }
 | "ordered"       { ORDERED }
 | "assume"        { ASSUME }

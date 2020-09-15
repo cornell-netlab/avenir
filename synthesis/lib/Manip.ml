@@ -44,7 +44,6 @@ let rec substitute ?holes:(holes = false) ex subsMap =
 
 let substV ?holes:(holes = false) ex substMap =
   StringMap.fold substMap ~init:StringMap.empty ~f:(fun ~key ~data acc ->
-      Printf.printf "  [%s -> %s ]\n" key (string_of_value data);
       StringMap.set acc ~key ~data:(Value data))
   |> substitute ~holes ex
 
@@ -711,3 +710,43 @@ and fixup (real:cmd) (model : value StringMap.t) : cmd =
               default = fixup t.default model}
 
 
+
+
+
+let rec action_reads (nm, data, cmd) =
+  let to_set = StringSet.of_list %. fsts in
+  let data_s = to_set data in
+  match cmd with
+  | Skip -> StringSet.empty
+  | Assume b -> StringSet.diff
+                  (to_set @@ free_of_test `Var b)
+                  (data_s)
+  | Assign (_,e) ->
+     StringSet.diff
+       (StringSet.of_list @@ fsts @@ free_of_expr `Var e)
+       (data_s)
+  | Seq (c1,c2) ->
+     action_reads (nm, data, c1)
+     |> StringSet.union @@ action_reads (nm, data,c2)
+  | Select(_,cs) ->
+     concatMap cs ~c:StringSet.union
+       ~f:(fun (b,c) ->
+         to_set (free_of_test `Var b)
+         |> StringSet.union @@ action_reads (nm,data,c)
+       )
+  | Apply t ->
+     Printf.sprintf "table %s not appeard in action %s" t.name nm
+     |> failwith
+
+
+let is_zero = function
+  | Value (Int(i,_)) -> Bigint.(i = zero)
+  | _ -> false
+
+
+let rec is_a_sequence_of_zero_assignments = function
+  | Skip | Assume _ -> true
+  | Assign (_, e) -> is_zero e
+  | Seq(c1,c2) -> is_a_sequence_of_zero_assignments c1
+                  && is_a_sequence_of_zero_assignments c2
+  | _ -> false

@@ -12,6 +12,11 @@ type interp =
   | WithHoles of (string * int) list * Hint.t list
 
 
+let to_string (inst:t) : string =
+  StringMap.fold inst ~init:"" ~f:(fun ~key:table_name ~data:rows acc ->
+      Printf.sprintf "%s\n%s\n%s" acc table_name (Row.list_to_string ~tab:"\t" rows)
+    )
+
 let empty = StringMap.empty
 
 let update (params : Parameters.t) (inst : t) (e : Edit.t) =
@@ -20,8 +25,12 @@ let update (params : Parameters.t) (inst : t) (e : Edit.t) =
      StringMap.update inst tbl
        ~f:(fun rows_opt ->
          match rows_opt with
-         | None -> [row]
-         | Some rows -> if params.above then rows @ [row] else row :: rows)
+         | None ->
+            [row]
+         | Some rows when params.above ->
+            rows @ [row]
+         | Some rows ->
+            row :: rows)
   | Del (tbl, i) ->
      StringMap.change inst tbl
        ~f:(function
@@ -32,6 +41,9 @@ let rec update_list params (inst : t) (edits : Edit.t list) =
   match edits with
   | [] -> inst
   | (e::es) -> update_list params (update params inst e) es
+
+
+let of_edits (params : Parameters.t) (edits : Edit.t list) = update_list params empty edits
 
 
 let get_rows inst table : Row.t list = StringMap.find inst table |> Option.value ~default:[]
@@ -69,6 +81,7 @@ let size : t -> int =
 
 
 let rec apply ?no_miss:(no_miss = false)
+          ?ghost_edits:(ghost_edits = StringMap.empty)
           (params : Parameters.t)
           (tag : interp) encode_tag
           (inst : t)
@@ -79,28 +92,37 @@ let rec apply ?no_miss:(no_miss = false)
     | Assign _
     | Assume _ -> prog
   | Seq (c1,c2) ->
-     let c1' = apply ~no_miss params tag encode_tag inst c1 in
-     let c2' = apply ~no_miss params tag encode_tag inst c2 in
+     let c1' = apply ~no_miss ~ghost_edits params tag encode_tag inst c1 in
+     let c2' = apply ~no_miss ~ghost_edits params tag encode_tag inst c2 in
      c1' %:% c2'
   | Select (typ, ss) ->
      let ss =
        List.fold ss ~init:[]
          ~f:(fun acc (t, c) ->
-           let c' = apply params ~no_miss tag encode_tag inst c in
+           let c' = apply params ~no_miss ~ghost_edits tag encode_tag inst c in
            acc @ [(t,c')]
          ) in
      mkSelect typ ss
   | Apply t ->
      let actSize = max (log2(List.length t.actions)) 1 in
      let rows = StringMap.find_multi inst t.name in
+     let ghosts = StringMap.find ghost_edits t.name |> Option.value ~default:[] in
      let selects =
        match tag with
        | OnlyHoles _ -> []
        | _ ->
+          (* Printf.printf "adding %d rows to %s\n%!" (List.length rows) t.name; *)
           List.foldi rows ~init:[]
             ~f:(fun i acc (matches, data, action) ->
-              let prev_tst = False in
-              let tst =
+              let instrument action =
+                if List.exists ghosts ~f:((=) i) then
+                  let ghost = Printf.sprintf "%s_hits_row_%d" t.name i in
+                  sequence
+                    [ ghost %<-% mkVInt(1,1);
+                      mkOrdered [Var(ghost,1) %=% mkVInt(1,1), action; True, Skip]]
+                else
+                  action in
+              let cond =
                 Match.list_to_test matches
                 %&% match tag with
                     | WithHoles (ds,_) ->
@@ -112,11 +134,11 @@ let rec apply ?no_miss:(no_miss = false)
               if action >= List.length t.actions then
                 acc
               else begin
-                  let cond = tst %&% !%(prev_tst) in
-                  (cond, (List.nth t.actions action
-                          |> Option.value ~default:("default", [], t.default)
-                          |> bind_action_data data))
-                  :: acc
+                  let action =
+                    List.nth_exn t.actions action
+                    |> bind_action_data data
+                  in
+                  (cond, instrument action) :: acc
                 end)
      in
      let holes =
@@ -128,11 +150,10 @@ let rec apply ?no_miss:(no_miss = false)
               (Hole.table_hole encode_tag t.keys t.name i actSize
               , holify ~f:(fun (h,sz) -> (Hole.action_data t.name i h sz, sz)) (List.map params ~f:fst) act))
      in
-     let dflt_row = [(True, t.default)] in
+     let dflt_row = if no_miss then [] else [(True, t.default)] in
      let tbl_select = (if params.above then holes @ selects else selects @ holes)
                       @ dflt_row
                       |> mkOrdered in
-     (* Printf.printf "TABLE %s: \n %s\n%!" tbl (string_of_cmd tbl_select); *)
      tbl_select
 
 
@@ -228,3 +249,9 @@ let fixup_edit checker (params : Parameters.t) (data : ProfData.t ref) match_mod
      in
      ProfData.update_time !data.fixup_time st;
      out
+
+
+
+let verify_apply ?no_miss:(no_miss=false) params inst cmd =
+  (*TODO the `Exact tag is unused, should fold into the tag type*)
+  apply ~no_miss params NoHoles `Exact inst cmd

@@ -7,6 +7,7 @@ type t = {
     time : Time.Span.t ref;
     fast_cex_time : Time.Span.t ref;
     impl_time : Time.Span.t ref;
+    slicing_time : Time.Span.t ref;
     check_valid_time : Time.Span.t ref;
     eq_time : Time.Span.t ref;
     make_vc_time: Time.Span.t ref;
@@ -36,6 +37,7 @@ let headers =
    "time";
    "fast_cex_time";
    "impl_time";
+   "slicing_time";
    "check_valid_time";
    "normalize_packet_time";
    "eq_time";
@@ -76,12 +78,13 @@ let min_tree_size data = List.fold !(data.tree_sizes) ~init:(max_tree_size data)
 
 
 let to_string (data : t) =
-  Printf.sprintf "%d,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%d,%f,%f,%f,%f,%f,%d,%d"
+  Printf.sprintf "%d,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%d,%f,%f,%f,%f,%f,%d,%d"
     !(data.log_inst_size)
     (* data.phys_inst_size *)
     (!(data.time) |> Time.Span.to_ms)
     (!(data.fast_cex_time) |> Time.Span.to_ms)
     (!(data.impl_time) |> Time.Span.to_ms)
+    (!(data.slicing_time) |> Time.Span.to_ms)
     (!(data.check_valid_time) |> Time.Span.to_ms)
     (!(data.normalize_packet_time) |> Time.Span.to_ms)
     (!(data.eq_time) |> Time.Span.to_ms)
@@ -120,6 +123,7 @@ let zero _ : t ref =
         time = ref Time.Span.zero;
         fast_cex_time = ref Time.Span.zero;
         impl_time = ref Time.Span.zero;
+        slicing_time = ref Time.Span.zero;
         check_valid_time = ref Time.Span.zero;
         eq_time = ref Time.Span.zero;
         normalize_packet_time = ref Time.Span.zero;

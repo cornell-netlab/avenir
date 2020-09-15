@@ -171,14 +171,15 @@ control MyIngress(inout headers hdr,
     
     apply {
 	ethernet_validate.apply();
-	ethernet.apply();
-	if (hdr.ipv4.isValid()){
-	    ipv4.apply();
-            hdr.ipv4.ttl = hdr.ipv4.ttl - 1;	    
-	}
-	acl.apply();
 	if (meta.do_drop == 1w1) {
 	    mark_to_drop(standard_metadata);
+	} else {
+	    ethernet.apply();
+	    if (hdr.ipv4.isValid()){
+		ipv4.apply();
+		hdr.ipv4.ttl = hdr.ipv4.ttl - 1;	    
+		}
+	    acl.apply();
 	}
     }
 }

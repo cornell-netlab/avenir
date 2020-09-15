@@ -12,6 +12,10 @@ val get_key : t -> string
 val to_string : t -> string
 val to_bmv2_string : t -> string
 val to_test : t -> test
+val to_model_alist : string -> t -> (string * value) list
+val list_to_model_alist : string -> t list -> (string * value) list
+val list_to_model : string -> t list -> value StringMap.t
+
 val to_test_hole : string -> t -> test
 val test_hole_of_lists : string -> t list -> test
 val to_valuation_test :  string ->  [`Mask | `Exact] -> t -> test
@@ -31,3 +35,4 @@ val exactify_list : t list -> t list
 val to_model : ?typ:[`Vals | `NoVals] -> string -> t -> value StringMap.t
 val relevant_matches : t list -> t list
 val relevant_keys : t list -> string list
+val hits : t -> value -> bool

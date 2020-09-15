@@ -272,3 +272,51 @@ let passive_propogate_fix map cmd =
       StringMap.equal (Stdlib.(=)) map map'
       && Stdlib.(cmd = cmd'))
   |> snd
+
+
+let rec eval_expr_choices facts (e : expr) : value list option =
+  let open Option in
+  let map_over_product f (e1, e2) =
+    let v1s = eval_expr_choices facts e1
+              >>| List.dedup_and_sort ~compare:Stdlib.compare in
+     let v2s = eval_expr_choices facts e2
+               >>| List.dedup_and_sort ~compare:Stdlib.compare in
+     liftO2 List.cartesian_product v1s v2s
+     >>| List.map ~f:(uncurry f)
+  in
+  let map f e = (eval_expr_choices facts e) >>| List.map  ~f in
+  match e with
+  | Value v -> Some [v]
+  | Var (x,_) -> StringMap.find facts x
+  | Hole _ -> failwith "cannot evaluate holes"
+  | Plus es
+    | SatPlus es
+    | SatMinus es
+    | Times es
+    | Minus es
+    | Mask es
+    | Xor es
+    | BOr es
+    | Shl es
+    | Concat es ->
+     map_over_product (sem_for_binexpr e) es
+  | Cast (_, bits)
+    | Slice {bits;_} ->
+     map (sem_for_unexpr e) bits
+
+let rec propogate_choices (facts : value list StringMap.t) = function
+  | Skip -> facts
+  | Assign (f,e) ->
+     if false then Printf.printf "Propogating assignment \n%!";
+     let vs = eval_expr_choices facts e in
+     StringMap.change facts f ~f:(lossless_append vs)
+  | Seq (c1,c2) ->
+     propogate_choices (propogate_choices facts c1) c2
+  | Select (_,cs) ->
+     snds cs
+     |> List.map ~f:(propogate_choices facts)
+     |> List.fold ~init:StringMap.empty ~f:(multimap_union)
+  | Assume _ ->
+     facts
+  | Apply _ ->
+     failwith "[Unimplemented] don't want to touch apply"

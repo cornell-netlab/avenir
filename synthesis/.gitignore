@@ -22,4 +22,4 @@ query.smt
 **/*.cmx
 **/*.cmi
 avenir
-
+benchmarks/bmv2/mininet/*_ping_*.txt
