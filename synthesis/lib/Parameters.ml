@@ -17,6 +17,7 @@ type t =
     ecache : int option;
     minimize : bool;
     do_slice : bool;
+    semantic_slicing : bool;
     shortening : bool;
 
 
@@ -45,6 +46,7 @@ type t =
 let default =
   { widening = false;
     do_slice = false;
+    semantic_slicing = false;
     vcache = false;
     ecache = None;
     shortening = false;

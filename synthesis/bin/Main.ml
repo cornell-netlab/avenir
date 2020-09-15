@@ -24,6 +24,7 @@ let opt_flags =
     empty
     +> flag "-w" no_arg ~doc:"Do widening"
     +> flag "-s" no_arg ~doc:"Do slicing optimization"
+    +> flag "-S" no_arg ~doc:"Do semantic slicing, -s required"
     +> flag "-e" (required int) ~doc:"E maximum number of physical edits"
     +> flag "-b" (required int) ~doc:"B maximum number of attempts per CE"
     +> flag "-m" no_arg ~doc:"Prune rows with no holes"
@@ -90,6 +91,7 @@ module Solver = struct
         onos
         widening
         do_slice
+        semantic_slicing
         edits_depth
         search_width
         monotonic
@@ -115,6 +117,7 @@ module Solver = struct
         () =
     let params = Parameters.({widening;
                               do_slice;
+                              semantic_slicing;
                               edits_depth;
                               search_width;
                               debug;
@@ -231,6 +234,7 @@ module RunTest = struct
         interactive
         widening
         do_slice
+        semantic_slicing
         edits_depth
         search_width
         monotonic
@@ -266,6 +270,7 @@ module RunTest = struct
               let params = Parameters.({
                               widening;
                               do_slice;
+                              semantic_slicing;
                               edits_depth;
                               search_width;
                               debug;
@@ -345,6 +350,7 @@ module Bench = struct
         interactive
         widening
         do_slice
+        semantic_slicing
         edits_depth
         search_width
         monotonic
@@ -372,6 +378,7 @@ module Bench = struct
       Parameters.(
         { widening;
           do_slice;
+          semantic_slicing;
           edits_depth;
           search_width;
           debug;
@@ -436,6 +443,7 @@ module ONFReal = struct
         logical_p4 physical_p4 log_edits phys_edits fvs assume logical_inc physical_inc
         widening
         do_slice
+        semantic_slicing
         edits_depth
         search_width
         monotonic
@@ -463,6 +471,7 @@ module ONFReal = struct
               Parameters.({
           widening;
           do_slice;
+          semantic_slicing;
           edits_depth;
           search_width;
           debug;
@@ -730,6 +739,7 @@ module Classbench = struct
         timeout
         widening
         do_slice
+        semantic_slicing
         edits_depth
         search_width
         monotonic
@@ -757,6 +767,7 @@ module Classbench = struct
       Parameters.({
                      widening;
                      do_slice;
+                     semantic_slicing;
                      edits_depth;
                      search_width;
                      debug;
@@ -839,6 +850,7 @@ module SqBench = struct
         timeout
         widening
         do_slice
+        semantic_slicing
         edits_depth
         search_width
         monotonic
@@ -866,6 +878,7 @@ module SqBench = struct
       Parameters.(
         { widening;
           do_slice;
+          semantic_slicing;
           edits_depth;
           search_width;
           debug;
@@ -931,6 +944,7 @@ module NumHdrs = struct
         timeout
         widening
         do_slice
+        semantic_slicing
         edits_depth
         search_width
         monotonic
@@ -958,6 +972,7 @@ module NumHdrs = struct
       Parameters.({
                      widening;
                      do_slice;
+                     semantic_slicing;
                      edits_depth;
                      search_width;
                      debug;
@@ -1023,6 +1038,7 @@ module MetadataBench = struct
         timeout
         widening
         do_slice
+        semantic_slicing
         edits_depth
         search_width
         monotonic
@@ -1050,6 +1066,7 @@ module MetadataBench = struct
       Parameters.({
                      widening;
                      do_slice;
+                     semantic_slicing;
                      edits_depth;
                      search_width;
                      debug;
@@ -1117,6 +1134,7 @@ module NumTbls = struct
         timeout
         widening
         do_slice
+        semantic_slicing
         edits_depth
         search_width
         monotonic
@@ -1144,6 +1162,7 @@ module NumTbls = struct
       Parameters.({
                      widening;
                      do_slice;
+                     semantic_slicing;
                      edits_depth;
                      search_width;
                      debug;
@@ -1240,6 +1259,7 @@ module ServerCmd = struct
       +> flag "-onos" no_arg ~doc:"Parse logical edits as onos insertions"
       +> flag "-w" no_arg ~doc:"Do widening"
       +> flag "-s" no_arg ~doc:"Do slicing optimization"
+      +> flag "-S" no_arg ~doc:"Do semantic slicing, -s required"
       +> flag "-e" (required int) ~doc:"maximum number of physical edits"
       +> flag "-b" (required int) ~doc:"maximum number of attempts per CE"
       +> flag "-m" no_arg ~doc:"Prune rows with no holes"
@@ -1279,6 +1299,7 @@ module ServerCmd = struct
         _ (*onos*)
         widening
         do_slice
+        semantic_slicing
         edits_depth
         search_width
         monotonic
@@ -1304,6 +1325,7 @@ module ServerCmd = struct
         () =
     let params = Parameters.({widening;
                               do_slice;
+                              semantic_slicing;
                               edits_depth;
                               search_width;
                               debug;
