@@ -62,12 +62,29 @@ def set_field_fvs(ind):
     return fvs;
 
 def set_field_rules(ind):
-  return [];
+  return [ ["table_add forward_table forward ", 48, " => ", 9]
+         , ["table_add test_tbl mod_headers ", 8, " =>"]];
 
+
+def add_header_fvs(ind):
+  return set_field_fvs(ind);
+
+def add_header_rules(ind):
+  return [ ["table_add forward_table forward ", 48, " => ", 9]
+         , ["table_add test_tbl add_headers ", 8, " =>"]];
+
+
+def rm_header_fvs(ind):
+  return "";
+
+def rm_header_rules(ind):
+  return [];
 
 # whippersnapper commands
 def whippersnapper_cmds():
   return { "set-field" : (["--operations"], [], set_field_fvs, set_field_rules)
+         , "add-header" : (["--headers"], [], add_header_fvs, add_header_rules)
+         , "rm-header" : (["--headers"], [], rm_header_fvs, rm_header_rules)
          , "pipeline" : (["--tables"], ["--table-size", "16"], pipeline_fvs, pipeline_rules) }
 
 # generate the OBT, and the corresponding rules
@@ -94,6 +111,9 @@ def rewrite_cmds(cmds):
   fmcds = "\n".join(fcmds);
   return fmcds;
 
+def avenir_flags():
+  return ["--cache-edits", "--cache-queries", "--reach-filter"]
+
 def rules_for_obt(fn, num, rule_temps, fvs):
   edits_file = "whippersnapper/empty_edits.txt";
   fvs_file = "output/fvs.txt";
@@ -116,7 +136,9 @@ def rules_for_obt(fn, num, rule_temps, fvs):
   #        cmdnd.write(line);
   
 
-  res = subprocess.run(["./avenir", "to-obt", "output/main16.p4", edits_file, edits_file, fvs_file, assume_file, "-b", "100", "-data", commands_no_def_file, "-e", "100", "-p", "-I", "whippersnapper/p4includes"], stdout = subprocess.PIPE);
+  res = subprocess.run(["./avenir", "to-obt", "output/main16.p4", edits_file
+                       , edits_file, fvs_file, assume_file, "-b", "100", "-data"
+                       , commands_no_def_file, "-e", "100", "-p"] + avenir_flags() + ["-I", "whippersnapper/p4includes"], stdout = subprocess.PIPE, stderr = subprocess.PIPE);
 
   obt_commands = "output/obt_commands.txt";
 
@@ -127,7 +149,7 @@ def rules_for_obt(fn, num, rule_temps, fvs):
   #except:
   #  print("no commands written");
 
-def run_whippersnapper(ws_cmd, mx):
+def run_whippersnapper(ws_cmd, rule_num, mx):
   if not os.path.isdir("whippersnapper/" + ws_cmd):
     os.mkdir("whippersnapper/" + ws_cmd)
 
@@ -136,7 +158,7 @@ def run_whippersnapper(ws_cmd, mx):
     (cmd_line1, cmd_line2, fvs, get_rule_temps) = whippersnapper_cmds()[ws_cmd];
     subprocess.run(["p4benchmark", "--feature", ws_cmd] + cmd_line1 + [str(i)] + cmd_line2);
     subprocess.run(["p4test", "--p4v", "14", "--pp", "output/main16.p4", "output/main.p4"]);
-    rules_for_obt("output", 10, get_rule_temps(i), fvs(i));
+    rules_for_obt("output", rule_num, get_rule_temps(i), fvs(i));
     
     shutil.move("output", "whippersnapper/" + ws_cmd + "/output_" + str(i));
 
@@ -156,7 +178,7 @@ def run_avenir(ws_cmd):
     fvs_file = output + "fvs.txt";
     
     st_time = time.perf_counter();
-    subprocess.run(["./avenir", "from-obt", output + "main16.p4", edits_file, edits_file, fvs_file, assume_file, "-b", "100", "-data", commands_file, "-e", "100", "-p", "-I", "whippersnapper/p4includes"], stdout = subprocess.PIPE);
+    subprocess.run(["./avenir", "from-obt", output + "main16.p4", edits_file, edits_file, fvs_file, assume_file, "-b", "100", "-data", commands_file, "-e", "100", "-p", "-I", "whippersnapper/p4includes"], stdout = subprocess.PIPE, stderr = subprocess.PIPE);
     end_time = time.perf_counter();
     elapsed = end_time - st_time;
     res += str(i) + "," + str(elapsed) + "\n"
@@ -168,7 +190,8 @@ cmd = sys.argv[1];
 ws_cmd = sys.argv[2];
 
 if cmd == "generate":
-  mx = sys.argv[3];
-  run_whippersnapper(ws_cmd, mx);
+  rule_num = int(sys.argv[3]);  
+  mx = sys.argv[4];
+  run_whippersnapper(ws_cmd, rule_num, mx);
 elif cmd == "eval":
   run_avenir(ws_cmd);

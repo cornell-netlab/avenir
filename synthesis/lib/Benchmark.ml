@@ -227,7 +227,7 @@ and to_obt params data_file p4_file log_edits_file phys_edits_file fvs_file _ in
   let log = (assume %:% Encode.encode_from_p4 inc p4_file false)
             |> Encode.unify_names var_mapping |> zero_init fvs |> drop_handle fvs in
 
-  let phys = OneBigTable.mk_one_big_table log |> zero_init fvs |> drop_handle fvs in
+  let phys = OneBigTable.mk_one_big_table (ConstantProp.propogate log) |> zero_init fvs |> drop_handle fvs in
              (* |> CompilerOpts.optimize fvs *)
   (* let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in *)
   (* let fvs = parse_fvs fvs in *)
@@ -255,7 +255,7 @@ and from_obt params data_file p4_file log_edits_file phys_edits_file fvs_file _ 
   let phys = (assume %:% Encode.encode_from_p4 inc p4_file false)
             |> Encode.unify_names var_mapping |> zero_init fvs |> drop_handle fvs in
 
-  let log = OneBigTable.mk_one_big_table phys |> zero_init fvs |> drop_handle fvs in
+  let log = OneBigTable.mk_one_big_table (ConstantProp.propogate phys) |> zero_init fvs |> drop_handle fvs in
              (* |> CompilerOpts.optimize fvs *)
   (* let maxN n = Bigint.(of_int_exn n ** of_int_exn 2 - one) in *)
   (* let fvs = parse_fvs fvs in *)
