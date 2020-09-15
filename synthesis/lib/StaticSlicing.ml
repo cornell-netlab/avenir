@@ -3,24 +3,23 @@ open Ast
 open Util
 open Tables
 
+let fvs_to_set = StringSet.of_list %. fsts
 
-let rec static_slice_aux (fvs : (string * int) list) (c : cmd) : (string*int) list * cmd  =
+let rec static_slice_aux (fvs : StringSet.t) (c : cmd) : StringSet.t * cmd  =
   match c with
   | Skip -> (fvs, Skip)
   | Assign (f,e) ->
-     begin match List.find fvs ~f:(fun (s,_) -> f = s) with
-     | None -> (fvs,Skip)
-     | Some (s,_) ->
-        List.filter fvs ~f:(fun (s',_) -> s <> s')
-        @ free_of_expr `Var e @ free_of_expr `Hole e
-        |> List.dedup_and_sort ~compare:(fun (s,_) (s',_) -> String.compare s s')
-       , c
-     end
+     if StringSet.mem fvs f then
+       (StringSet.remove fvs f
+        |> StringSet.(union (fvs_to_set (free_of_expr `Var e)))
+        |> StringSet.(union (fvs_to_set (free_of_expr `Hole e)))
+       , c)
+     else
+       (fvs,Skip)
   | Assume t ->
      fvs
-     @ free_of_test `Var t
-     @ free_of_test `Hole t
-     |> List.dedup_and_sort ~compare:(fun (s,_) (s',_) -> String.compare s s')
+     |> StringSet.union (fvs_to_set @@ free_of_test `Var t)
+     |> StringSet.union (fvs_to_set @@ free_of_test `Hole t)
     , c
   | Seq (c1, c2) ->
      let (fvs2', c2') = static_slice_aux fvs c2 in
@@ -33,13 +32,14 @@ let rec static_slice_aux (fvs : (string * int) list) (c : cmd) : (string*int) li
              (b,c',fvs')
          ) in
      if List.exists tfx ~f:(fun (_,c,_) -> c <> Skip) then
-       let (fvs', ss') = List.fold tfx ~init:([],[])
+       let (fvs', ss') = List.fold tfx ~init:(StringSet.empty,[])
          ~f:(fun (fvs_acc,ss_acc) (b,c, fvs) ->
-           (fvs_acc @ fvs @ free_of_test `Var b @ free_of_test `Hole b,
-            ss_acc @ [(b,c)])
+           (StringSet.union fvs_acc fvs
+            |> StringSet.union (fvs_to_set @@ free_of_test `Var b)
+            |> StringSet.union (fvs_to_set @@ free_of_test `Hole b)
+           , ss_acc @ [(b,c)])
          ) in
-       (List.dedup_and_sort fvs' ~compare:(fun (s,_) (s',_) -> String.compare s s')
-       , mkSelect styp ss')
+       (fvs', mkSelect styp ss')
      else
        (fvs, Skip)
   | Apply { name; keys; actions; default;_ } ->
@@ -47,22 +47,66 @@ let rec static_slice_aux (fvs : (string * int) list) (c : cmd) : (string*int) li
      let tfx =
        List.map actions ~f:(fun (n, vars,a) ->
            let (fvs',a') = static_slice_aux fvs a in
-             (n, a',vars, List.filter fvs' ~f:(fun (s,_) -> not (List.exists vars ~f:(fun (s',_)-> s = s'))))
+             (n, a',vars, StringSet.filter fvs' ~f:(fun s -> not (List.exists vars ~f:(fun (s',_)-> s = s'))))
          )
      in
      let def_fvs, def' = static_slice_aux fvs default in
      if List.exists tfx ~f:(fun (_, c,_,_) -> c <> Skip) || (def' <> Skip) then
-       let fvs = List.fold tfx ~init:[] ~f:(fun acc (_,_,_,fvs) -> acc @ fvs )
-                 @ free_keys keys
-                 @ def_fvs
-                 |> List.dedup_and_sort ~compare:(fun (s,_) (s',_) -> String.compare s s') in
+       let fvs =
+         List.fold tfx ~init:StringSet.empty ~f:(fun acc (_,_,_,fvs) -> StringSet.union acc fvs )
+         |> StringSet.(union (of_list @@ fsts3 keys))
+         |> StringSet.union def_fvs
+       in
        let actions' = List.map tfx ~f:(fun (n, a,vars,_) -> (n, vars,a)) in
        (fvs, Apply {name; keys; actions = actions'; default = def'})
      else
        (fvs, Skip)
 
 
+
 let static_slice fvs cmd = snd @@ static_slice_aux fvs cmd
+
+
+
+let rec flows_to (vs : StringSet.t) cmd : StringSet.t=
+  let in_vs v = StringSet.mem vs v in
+  match cmd with
+  | Skip -> vs
+  | Assign (f,e) ->
+     let e_vs = fsts @@ free_of_expr `Var e in
+     if List.exists e_vs ~f:in_vs  then
+       (* let () = Printf.printf "tainting %s from %s via %s\n%!" f (string_of_expr e) (string_of_strset vs) in *)
+       StringSet.add vs f
+     else
+       StringSet.remove vs f
+  | Assume b ->(* TODO:: This might be wrong? *)
+     (* Printf.printf "\tassuming %s\n%!" (string_of_test b); *)
+     StringSet.of_list @@ fsts @@ free_of_test `Var b
+     |> StringSet.union vs
+  | Seq (c1,c2) ->
+     flows_to (flows_to vs c1) c2
+  | Select(_, cs) ->
+     concatMap cs ~c:(StringSet.union) ~f:(fun (b, c) ->
+         if List.exists (fsts @@ free_of_test `Var b) ~f:in_vs
+            && not (b = (Var("standard_metadata.egress_spec",9) %=% mkVInt(0,9))
+                    && Manip.is_a_sequence_of_zero_assignments c)
+         then
+           (* let () = Printf.printf "adding lvars of %s to taint analysis\n%!" (string_of_cmd c) in *)
+           assigned_vars c
+         else
+           flows_to vs c
+       )
+  | Apply _ -> failwith "tables are for chumps"
+
+
+let ghost_static_slice (ghosts : int list StringMap.t) cmd =
+  let ghost_vars =
+    StringMap.fold ghosts ~init:StringSet.empty ~f:(fun ~key ~data acc ->
+        List.fold data ~init:acc ~f:(fun acc i ->
+            (StringSet.add acc @@ Printf.sprintf "%s_hits_row_%d" key i))) in
+  let spooked_vars = flows_to ghost_vars cmd in
+  Printf.printf "spooked vars %s\n%!" (string_of_strset spooked_vars);
+  static_slice spooked_vars cmd
 
 
 
@@ -149,3 +193,136 @@ let rec edit_slice_aux (params : Parameters.t) facts inst edits cmd =
 let edit_slice params inst edits cmd =
   edit_slice_aux params StringMap.empty inst edits cmd
   |> fst
+
+
+let rec restrict ~dir params inst reads cmd : (StringSet.t * int list StringMap.t) =
+  match cmd with
+  | Skip -> reads, StringMap.empty
+  | Assume t ->
+     let tvars = free_of_test `Var t |> fvs_to_set in
+     tvars |> StringSet.union reads, StringMap.empty
+  | Assign (f,e) ->
+     free_of_expr `Var e
+     |> fvs_to_set
+     |> StringSet.union @@ StringSet.remove reads f
+    , StringMap.empty
+  | Seq (c1,c2) ->
+     let proc_fst,proc_snd =
+       match dir with
+       | `Bck -> c2,c1
+       | `Fwd -> c1,c2
+     in
+     let inters, slice_f = restrict ~dir params inst reads proc_fst in
+     let reads', slice_s = restrict ~dir params inst inters proc_snd in
+     reads', disjoint_union slice_f slice_s
+  | Select (_, cs) ->
+     concatMap cs ~c:(fun (r, i) (r', i') -> StringSet.union r r', disjoint_union i i')
+       ~f:(fun (b,c) ->
+         let reads, inters = restrict ~dir params inst reads c in
+         StringSet.(union (of_list (fsts (free_of_test `Var b))) reads), inters
+       )
+  | Apply t ->
+     let (rows, reads) =
+       List.foldi
+         (Instance.get_rows inst t.name)
+         ~init:([], StringSet.empty)
+         ~f:(fun i (rowidxs, reads_acc) (ms, _, aid) ->
+           let keys = StringSet.of_list @@ Match.relevant_keys ms in
+           let lvars = List.nth_exn t.actions aid |> trd3 |> assigned_vars in
+           let pre, post =
+             match dir with
+             | `Bck -> lvars,keys
+             | `Fwd -> keys,lvars
+           in
+           if StringSet.(are_disjoint reads pre) then
+             (rowidxs, reads_acc)
+           else
+             (rowidxs @ [i], StringSet.(union (diff reads_acc pre)  post))
+         )
+     in
+     let (def_reads, def_inst) = restrict ~dir params inst reads t.default in
+     StringSet.union def_reads reads , StringMap.(set def_inst ~key:t.name ~data:rows)
+
+
+
+let rec truncate_opt ?dir:(dir=`Bck) cmd table : cmd option  =
+  let open Option in
+  match cmd with
+  | Apply t ->
+     if t.name = table then
+       Some Skip
+     else
+       None
+  | Seq (c1,c2) ->
+     begin match truncate_opt ~dir c1 table, truncate_opt ~dir c2 table, dir with
+     | Some c, None  , `Bck -> Some c
+     | Some c, None  , `Fwd -> Some (c %:% c2)
+     | None  , Some c, `Bck -> Some (c1 %:% c)
+     | None  , Some c, `Fwd -> Some c
+     | None  , None  ,_ -> None
+     | Some _, Some _, _ -> failwith "Found %s multiply"
+     end
+  | Select (typ, cs) ->
+     List.find_map cs ~f:(fun (b,c) ->
+         truncate_opt ~dir c table >>| mkPair b)
+     >>| mkSelect typ %. List.return
+  | Skip | Assign _ | Assume _ -> None
+
+let truncate ?dir:(dir = `Bck) cmd table : cmd =
+  truncate_opt ~dir cmd table
+  |> Option.value_exn ~message:(Printf.sprintf "[StaticSlicing.truncate] Couldn't find table %s in command" table)
+
+
+let print_slice slice inst =
+  StringMap.fold slice ~init:""
+    ~f:(fun ~key ~data acc ->
+      Printf.sprintf "%s\n%s -> %s of %d" acc key (string_of_intlist data) (Instance.get_rows inst key |> List.length))
+    |> Printf.printf "keep %s\n"
+
+
+
+let restrict_inst_for_edit params cmd inst e  =
+  let gets = Edit.read_vars  cmd e in
+  let sets = Edit.write_vars cmd e in
+  let bck_slice =
+    truncate ~dir:`Bck cmd (Edit.table e)
+    |> restrict ~dir:`Bck params inst gets
+    |> snd
+  in
+  Printf.printf "%s backwards requires\n%!" (Edit.table e);
+  print_slice bck_slice inst;
+  let fwd_slice =
+    truncate ~dir:`Fwd cmd (Edit.table e)
+    |> restrict ~dir:`Fwd params inst sets
+    |> snd
+  in
+  Printf.printf "%s forwards requires \n%!" (Edit.table e);
+  print_slice fwd_slice inst;
+  let rows =
+    Instance.get_rows inst (Edit.table e)
+    |> get_indices_matching ~f:(Row.equals (Edit.get_row_exn e))
+  in
+  multimap_union bck_slice fwd_slice
+  |> multimap_union (StringMap.of_alist_exn [(Edit.table e, rows)])
+
+
+
+let apply_slice slice inst =
+  StringMap.merge slice inst
+    ~f:(fun ~key -> function
+      | `Left [] -> None
+      | `Left _ ->
+         Printf.sprintf "have slice for table, %s its' not in the instance" key |> failwith
+      | `Right _ -> Some []
+      | `Both (slice,rows) ->
+         List.fold slice ~init:[]
+           ~f:(fun acc n -> acc @ [List.nth_exn rows n])
+         |> Some)
+
+let rule_slice (params : Parameters.t) inst edits cmd =
+  (* Printf.printf "slicing w.r.t. \n%s%!" @@ Edit.list_to_string edits; *)
+  let slice = concatMap edits ~c:(multimap_union)
+                ~f:(restrict_inst_for_edit params cmd inst) in
+  Printf.printf "edits: %s\n" (Edit.list_to_string edits);
+  print_slice slice inst;
+  apply_slice slice inst

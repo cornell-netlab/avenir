@@ -6,6 +6,7 @@ open Prover
 open Parameters
 open Semantics
 open Packet
+open VCGen
 
 
 let rec one_some (table: string) (lst : ((test * cmd) list)) : Ast.cmd option =

@@ -9,6 +9,11 @@ module Row = struct
   (* Match expressions, action data, action index*)
   type t = Match.t list * action_data * int
 
+  let equals (ms, ad, i) (ms', ad', i') =
+    List.equal Match.equal ms ms'
+    && List.equal Stdlib.(=) ad ad'
+    && i = i'
+
   let action_data_to_string ad =
       (List.map ad ~f:(string_of_value)
        |> List.reduce ~f:(Printf.sprintf "%s;%s")
@@ -166,6 +171,9 @@ module Edit = struct
     | Add (_, (matches,_,_)) -> matches
     | Del _ -> failwith "[Edit.get_matches] tried to get matches of a deletion"
 
+  let get_row_exn = function
+    | Add (_, r) -> r
+    | Del _ -> failwith "[Edit.get_row_exn] tried to get row of a deletion"
 
   let to_test phys e =
     match e with
@@ -249,6 +257,31 @@ module Edit = struct
     match e with
     | Add (_, row) -> Row.get_ith_match i row
     | Del (_, _) -> None
+
+  let read_vars cmd = function
+    | Del _ -> failwith "[read_vars] undefined for del"
+    | Add (table, (ms, _, aid)) ->
+       match get_schema_of_table table cmd with
+       | None ->
+          failwith @@ Printf.sprintf "Couldn't find %s" table
+       | Some (keys, actions, _) ->
+          let reads = List.nth_exn actions aid |> action_reads in
+          Match.relevant_keys ms
+          |> StringSet.of_list
+          |> StringSet.union reads
+          |> StringSet.(union @@ of_list @@ fsts3 keys)
+
+  let write_vars cmd = function
+    | Del _ -> failwith "[write_vars] undefined for del"
+    | Add (table, (_, _, aid)) ->
+       match get_schema_of_table table cmd with
+       | None ->
+          failwith @@ Printf.sprintf "Couldn't find %s" table
+       | Some (_, actions,_) ->
+          List.nth_exn actions aid
+          |> trd3
+          |> assigned_vars
+
 
   let extract phys (m : value StringMap.t)  : t list =
     let dels, adds =

@@ -249,7 +249,7 @@ let check_valid (params : Parameters.t) (longtest : Ast.test)  =
   (* Printf.printf "Checking validity for test of size %d\n%!" (num_nodes_in_test test); *)
   let test = Shortener.shorten shortener longtest in
   if params.debug then assert (longtest = Shortener.unshorten shortener test);
-  (* Printf.printf "Test:  %s\n %!" (string_of_test test ); *)
+  (* printf.printf "Test:  %s\n %!" (string_of_test test ); *)
   let vars = free_vars_of_test test
              |> List.dedup_and_sort
                   ~compare:(fun (idx, _) (idy, _) -> Stdlib.compare idx idy) in
@@ -306,6 +306,7 @@ let rec restriction_cegis ~gas (params : Parameters.t) (restriction : test optio
 
 
 let check_valid_cached (params : Parameters.t) (test : Ast.test) =
+  (* let params = {params with debug = true} in *)
   let st = Time.now () in
   let (cache', res) = QAbstr.cache_check params !cache test in
   cache := cache';
@@ -314,7 +315,8 @@ let check_valid_cached (params : Parameters.t) (test : Ast.test) =
      if params.debug then Printf.printf "\tCache_hit after %fms!\n%!"
        (Time.(diff (now()) st |> Span.to_ms));
      (None, Time.(diff (now ()) st))
-  | `Miss test | `Hit test ->
+  | `Hit _ -> (None, (Time.(diff (now ()) st)))
+  | `Miss test ->
      if params.debug then Printf.printf "\tCouldn't abstract from %d previous tests : %d nodes!\n%!" (List.length !cache.seen) (num_nodes_in_test test);
      let dur' = Time.(diff (now()) st) in
      if params.debug then Printf.printf "Querying\n%!";

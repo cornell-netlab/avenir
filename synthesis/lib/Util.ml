@@ -327,6 +327,14 @@ let (%.) = Fn.compose
 
 
 
+let disjoint_union m m' =
+  StringMap.merge m m'
+    ~f:(fun ~key:_ -> function
+      | `Left l -> Some l
+      | `Right r -> Some r
+      | `Both (l,r) when Stdlib.(l = r) ->  Some l
+      | `Both _ -> failwith "disjoint map union not disjoint")
+
 let multimap_union (l : ('a list) StringMap.t) (r : ('a list) StringMap.t) =
   StringMap.merge l r
     ~f:(fun ~key:_ -> function
@@ -340,3 +348,10 @@ let lossless_append xs_opt ys_opt =
   value xs_opt ~default:[]
   @ value ys_opt ~default:[]
   |> return
+
+
+let get_indices_matching ~f lst =
+  List.foldi lst ~init:[]
+    ~f:(fun i acc el ->
+      acc @ if f el then [i] else []
+    )

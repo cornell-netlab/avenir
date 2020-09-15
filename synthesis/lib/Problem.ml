@@ -60,13 +60,13 @@ let log (p : t) : cmd = Switch.pipeline p.log
 let log_inst (p : t) : Instance.t = Switch.inst p.log
 let log_edits (p : t) : Edit.t list = Switch.edits p.log
 let log_edited_instance params (p : t) : Instance.t = Switch.edited_instance params p.log
-let log_gcl_program params (p : t) : cmd = Switch.to_gcl params p.log
+let log_gcl_program params (p : t) : cmd = Switch.to_gcl params (fvs p) p.log
 
 let phys (p : t) : cmd = Switch.pipeline p.phys
 let phys_inst (p : t) : Instance.t = Switch.inst p.phys
 let phys_edits (p : t) : Edit.t list = Switch.edits p.phys
 let phys_edited_instance params (p : t) : Instance.t = Switch.edited_instance params p.phys
-let phys_gcl_program params (p : t) : cmd = Switch.to_gcl params p.phys
+let phys_gcl_program params (p : t) : cmd = Switch.to_gcl params (fvs p) p.phys
 
 let phys_gcl_holes params (p : t) dels tag : cmd = Switch.to_gcl_holes params p.phys dels tag
 let phys_drop_spec (p : t) : test option = Switch.drop_spec p.phys
@@ -80,8 +80,12 @@ let slice params (p : t) : t =
    *   Printf.printf "SLICED PROBLEM:\n%s\n===??====\n%s\n%!"
    *     (Switch.to_gcl params log |> string_of_cmd)
    *     (Switch.to_gcl params phys |> string_of_cmd); *)
-
-  {p with log = Switch.slice params p.log; phys = Switch.slice params p.phys}
+  if Edit.has_delete (log_edits p @ phys_edits p) then
+    (* let () = Printf.printf "delete detected, slicing inapplicable\n%!" in *)
+    p
+  else
+    (* let () = Printf.printf "slicing away!" in *)
+    {p with log = Switch.slice params p.log; phys = Switch.slice params p.phys}
 
 let append_phys_edits (p : t) (es : Edit.t list) : t =
   {p with phys = Switch.append_edits p.phys es}

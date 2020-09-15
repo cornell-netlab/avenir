@@ -1,6 +1,7 @@
 open Core
 open Ast
 open Manip
+open VCGen
 open Util
 open Prover
 

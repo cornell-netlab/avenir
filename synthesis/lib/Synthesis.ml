@@ -5,6 +5,7 @@ open Semantics
 open Prover
 open Manip
 open Util
+open VCGen
 open Tables
 
 let symbolic_pkt fvs =
@@ -28,12 +29,13 @@ let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref)
   let st = Time.now () in
   Log.log params.debug "slicing logical\n";
   let log = Problem.log_gcl_program params problem in
-  (* Log.log params.debug @@ Printf.sprintf "\t it has %d nodes\n" (num_nodes_in_cmd log);
-   * Log.log params.debug @@ Printf.sprintf "%s\n%!" (string_of_cmd log); *)
+  Log.log params.debug @@ Printf.sprintf "\t it has %d nodes\n" (num_nodes_in_cmd log);
+  Log.log params.debug @@ Printf.sprintf "%s\n%!" (string_of_cmd log);
   Log.log params.debug "slicing physical\n";
   let phys = Problem.phys_gcl_program params problem in
-  (* Log.log params.debug @@ Printf.sprintf "\t it has %d nodes\n" (num_nodes_in_cmd phys);
-   * Log.log params.debug @@ Printf.sprintf "%s\n%!" (string_of_cmd phys); *)
+  Log.log params.debug @@ Printf.sprintf "\t it has %d nodes\n" (num_nodes_in_cmd phys);
+  Log.log params.debug @@ Printf.sprintf "%s\n%!" (string_of_cmd phys);
+  Interactive.pause params.interactive;
   (* assert (fails_on_some_example log (Problem.fvs problem) (Problem.cexs problem) |> Option.is_none); *)
   ProfData.update_time !data.slicing_time st;
 
@@ -86,25 +88,24 @@ let unique_in_table params (_ (*prog*) : cmd) inst edits e =
      let earlier_edits = List.filteri edits ~f:(fun i _ -> i < index_of_e) in
      let inst' = Instance.update_list params inst earlier_edits in
      let earlier_rows = Instance.get_rows inst' tbl in
-     if List.for_all earlier_rows ~f:(fun (ms', _, _) ->
-            not (Match.has_inter_l ms ms')
-          ) then
-       true
-     else
-       false
+     List.for_all earlier_rows ~f:(fun (ms', _, _) ->
+         not (Match.has_inter_l ms ms')
+       )
 
 
 let exists_in_table params (_ (*prog*) : cmd) inst edits e =
   let open Edit in
   match e with
   | Del _ -> false
-  | Add (tbl, (ms, _, _)) ->
+  | Add (tbl, (ms, ad, aid)) ->
      let index_of_e = List.findi edits ~f:(fun _ e' -> e = e') |> Option.value_exn |> fst in
      let earlier_edits = List.filteri edits ~f:(fun i _ -> i < index_of_e) in
      let inst' = Instance.update_list params inst earlier_edits in
      let earlier_rows = Instance.get_rows inst' tbl in
-     List.exists earlier_rows ~f:(fun (ms', _, _) ->
+     List.exists earlier_rows ~f:(fun (ms', ad', aid') ->
          List.equal (fun m m' -> Match.equal m m') ms ms'
+         && aid = aid'
+         && List.equal (fun v v' -> Stdlib.(v = v')) ad ad'
        )
 
 
@@ -118,26 +119,27 @@ let slice_conclusive (params : Parameters.t) (data : ProfData.t ref) (problem : 
   let log_edit = Problem.log_edits problem |> List.hd_exn in
   let res =
     let open Problem in
-    if
-      unique_in_table params (Problem.log problem) (Problem.log_inst problem) (Problem.log_edits problem) log_edit
+      unique_in_table params (log problem) (log_inst problem) (log_edits problem) log_edit
       &&
-        List.for_all (Problem.phys_edits problem) ~f:(fun e ->
-            unique_in_table params (Problem.phys problem) (Problem.phys_inst problem) (Problem.phys_edits problem) e
-            || exists_in_table params (Problem.phys problem) (Problem.phys_inst problem) (Problem.phys_edits problem) e
+        List.for_all (phys_edits problem) ~f:(fun e ->
+            unique_in_table params (phys problem) (phys_inst problem) (phys_edits problem) e
+            || exists_in_table params (phys problem) (phys_inst problem) (phys_edits problem) e
           )
-    then
-      (* let () = Log.log params.debug @@ Printf.sprintf "\nquick sliceable check succeeded in %fms!\n%!" Time.(Span.(diff(now()) st |> to_ms))  in *)
-      true
-    else
-      let () = Printf.printf "\nquick sliceable check FAILED!\n%!" in
-      let log_eqs  = FastCX.hits_list_pred params data (log problem) (log_inst problem) (log_edits problem) in
-      let phys_eqs = FastCX.hits_list_pred params data (phys problem) (phys_inst problem) (phys_edits problem) in
-      if log_eqs = phys_eqs
-      then true
-      else
-        check_valid params (List.reduce_exn ~f:mkOr log_eqs %<=>% List.reduce_exn ~f:mkOr phys_eqs)
-        |> fst
-        |> Option.is_none
+    (* then
+     *   (\* let () = Log.log params.debug @@ Printf.sprintf "\nquick sliceable check succeeded in %fms!\n%!" Time.(Span.(diff(now()) st |> to_ms))  in *\)
+     *   true
+     * else
+     *   false
+     *   (\* let () = Printf.printf "\nquick sliceable check FAILED!\n%!" in
+     *    * let log_eqs  = FastCX.hits_list_pred params data (log problem) (log_inst problem) (log_edits problem) in
+     *    * let phys_eqs = FastCX.hits_list_pred params data (phys problem) (phys_inst problem) (phys_edits problem) in
+     *    * if log_eqs = phys_eqs
+     *    * then
+     *    *   true
+     *    * else
+     *    *   check_valid params (List.reduce_exn ~f:mkOr log_eqs %<=>% List.reduce_exn ~f:mkOr phys_eqs)
+     *    *   |> fst
+     *    *   |> Option.is_none *\) *)
   in
   ProfData.update_time !data.check_sliceable_time st;
   (* Printf.printf "\tSlice is %s\n%!" (if res then "conclusive" else "inconclusive"); *)
@@ -178,7 +180,8 @@ let extract_reached_edits (params : Parameters.t) data problem model =
 let edit_cache = ref @@ EAbstr.make ()
 
 let get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref) (problem : Problem.t)
-        : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
+    : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
+  if params.do_slice then Interactive.pause params.interactive ~prompt:"slicing begins!";
   if params.fastcx then begin
       let st = Time.now () in
       let cex = FastCX.get_cex ~neg params data problem in
@@ -263,7 +266,7 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
                            (Problem.phys_edits problem);
 
          (*Pause execution and wait for operator's ok to continue*)
-         Interactive.pause params.interactive  ~prompt:("correct!");
+         Interactive.pause params.interactive ~prompt:("correct!");
 
          Some (Problem.phys_edits problem)
 
@@ -339,7 +342,7 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
 and try_cache params data problem =
   match EAbstr.infer !edit_cache (Problem.phys problem) (Problem.log_edits problem |> List.hd_exn) with
   | None ->
-     Log.edit_cache_miss params.debug;
+     Log.edit_cache_miss true;
      let params =
        {params with ecache = false;   (* caching failed so disable it *)
                     do_slice = false  (* dont slice.. I don't remember why not *)
@@ -359,11 +362,11 @@ and try_cache params data problem =
 
      match did_cache_work with
      | `Yes ->
-        Interactive.pause params.interactive ~prompt:"Caching succeeded";
+        Interactive.pause false ~prompt:"Caching succeeded";
         Some ps
      | `NoAndCE (in_pkt,out_pkt) ->
         Log.cexs params problem in_pkt out_pkt;
-        Interactive.pause params.interactive ~prompt:"Caching failed";
+        Interactive.pause false ~prompt:"Caching failed";
         let params = {params with ecache = false} in (* caching failed so disable it *)
         cegis_math params data problem
 

@@ -103,15 +103,6 @@ let sub_edit_list edits (adata,subst) =
       sub_consts adata subst e >>| fun e' ->
       acc @ [e'])
 
-let disjoint_union m m' =
-  StringMap.merge m m'
-    ~f:(fun ~key:_ -> function
-      | `Left l -> Some l
-      | `Right r -> Some r
-      | `Both (l,r) when Stdlib.(l = r) ->  Some l
-      | `Both _ -> failwith "disjoint map union not disjoint")
-
-
 let similar_edit_list edits edits' =
   List.fold2_exn edits edits' ~init:(Some(Some StringMap.empty, StringMap.empty))
     ~f:(fun acc_opt e e' ->

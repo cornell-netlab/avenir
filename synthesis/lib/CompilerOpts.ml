@@ -16,7 +16,7 @@ let optimize fvs cmd =
       ~prompt:(Printf.sprintf "After Dead Code\n %s \n+++%d iters, size is %s+++\n%!"(string_of_cmd cmd'') (!i) (Bigint.to_string @@ num_paths cmd''));
     i := !i +1;
 
-    StaticSlicing.static_slice fvs cmd''
+    StaticSlicing.static_slice (Util.(StringSet.of_list @@ fsts fvs)) cmd''
   in
   let rec fix cmd_old cmd =
     if Stdlib.(cmd_old = cmd) then

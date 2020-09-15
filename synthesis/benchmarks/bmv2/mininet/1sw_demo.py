@@ -69,11 +69,11 @@ class SingleSwitchTopo(Topo):
                                 mac = mac)
             self.addLink(host, switch)
             log_rules.extend([
-                "table_add send_frame rewrite_mac {} => {}".format(str(hid),mac),
+                # "table_add send_frame rewrite_mac {} => {}".format(str(hid),mac),
                 "table_add ipv4_forward set_nhop {0}/32 => {1} {2}".format(ip,mac,str(hid))
                 ])
             phys_rules.extend([
-                "table_add send_frame rewrite_mac {} => {}".format(str(hid),mac),
+                # "table_add send_frame rewrite_mac {} => {}".format(str(hid),mac),
                 "table_add forward set_dmac {} => {}".format(ip,mac),
                 "table_add ipv4_lpm set_nhop {0}/32 => {0} {1}".format(ip,str(hid))
                 ])
@@ -112,7 +112,11 @@ def get_time(f):
 
     res = re.findall(r", time (\d+)ms", cts)
     print "trying",f,"got", res
-    return res[-1]
+    if res:
+        return res[-1]
+    else:
+        return -1
+
 
 def collect_data(num_hosts):
     data = sorted([get_time(filename(src,tgt))
@@ -126,7 +130,8 @@ def process_data(data):
     data_dict = {}
     for i,t in enumerate(data):
         print t
-        data_dict[int(t)] = 100 * float(i)/float(len(data))
+        if t:
+            data_dict[float(t)/1000.0] = 100 * float(i)/float(len(data))
     return data_dict
 
 
@@ -180,7 +185,7 @@ def experiment(num_hosts, mode, experiment):
 
     os.system(experiment)
 
-    sleep(4)
+    sleep(5)
 
     net.stop()
 
@@ -195,7 +200,7 @@ def cleanup():
 def main():
     cd = "cd /home/ericthewry/research/hybrid/synthesis"
     runtime = "benchmarks/bmv2/simple_router/runtime_CLI.py"
-    run_avenir = "./avenir synth benchmarks/bmv2/simple_router_logical.p4 benchmarks/bmv2/simple_router_16.p4 benchmarks/bmv2/no_edits.csv benchmarks/bmv2/no_edits.csv benchmarks/bmv2/fvs -data benchmarks/bmv2/mininet/{0} --thrift -b 100 -e 3 -P4 -I1 benchmarks/real/p4includes/ -I2 benchmarks/real/p4includes/ --no-defaults --min --hints exact --no-deletes --cache-edits".format(args.rules)
+    run_avenir = "./avenir synth benchmarks/bmv2/simple_router_logical.p4 benchmarks/bmv2/simple_router_16.p4 benchmarks/bmv2/no_edits.csv benchmarks/bmv2/no_edits.csv benchmarks/bmv2/fvs -data benchmarks/bmv2/mininet/{0} --thrift -b 100 -e 3 -P4 -I1 benchmarks/real/p4includes/ -I2 benchmarks/real/p4includes/ --no-defaults --min --hints exact --no-deletes --cache-edits -s".format(args.rules)
     baseline = "cat benchmarks/bmv2/mininet/{0}_solution.txt".format(args.rules)
     experiment_cmd = lambda exp: "{0} && {1} | {2}".format(cd, exp, runtime)
     data0 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir))

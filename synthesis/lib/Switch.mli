@@ -13,7 +13,7 @@ val drop_spec : t -> test option
 val slice : Parameters.t -> t -> t
 
 val edited_instance : Parameters.t -> t -> Instance.t
-val to_gcl : Parameters.t -> t -> cmd
+val to_gcl : Parameters.t -> (string * int) list -> t -> cmd
 val to_gcl_holes : Parameters.t -> t -> Instance.interp -> [ `Exact | `Mask] -> cmd
 
 val to_string : Parameters.t -> t -> string

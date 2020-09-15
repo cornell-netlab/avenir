@@ -57,25 +57,7 @@ parser ParserImpl(packet_in packet, out headers hdr, inout metadata meta, inout 
 }
 
 control egress(inout headers hdr, inout metadata meta, inout standard_metadata_t standard_metadata) {
-    @name(".rewrite_mac") action rewrite_mac(bit<48> smac) {
-        hdr.ethernet.srcAddr = smac;
-    }
-    @name("._drop") action _drop() {
-        mark_to_drop(standard_metadata);
-    }
-    @name(".send_frame") table send_frame {
-        actions = {
-            rewrite_mac;
-            _drop;
-        }
-        key = {
-            standard_metadata.egress_port: exact;
-        }
-        size = 256;
-    }
-    apply {
-        send_frame.apply();
-    }
+	apply {}
 }
 
 control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_t standard_metadata) {
@@ -98,9 +80,26 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
         }
         size = 1024;
     }
+    @name(".rewrite_mac") action rewrite_mac(bit<48> smac) {
+        hdr.ethernet.srcAddr = smac;
+    }
+    @name("._drop") action _drop() {
+        mark_to_drop(standard_metadata);
+    }
+    @name(".send_frame") table send_frame {
+        actions = {
+            rewrite_mac;
+            _drop;
+        }
+        key = {
+            standard_metadata.egress_spec: exact;
+        }
+        size = 256;
+    }    
     apply {
         if (hdr.ipv4.isValid() && hdr.ipv4.ttl > 8w0) {
             ipv4_forward.apply();
+	    send_frame.apply();
         }
     }
 }

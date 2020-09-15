@@ -81,6 +81,7 @@ let size : t -> int =
 
 
 let rec apply ?no_miss:(no_miss = false)
+          ?ghost_edits:(ghost_edits = StringMap.empty)
           (params : Parameters.t)
           (tag : interp) encode_tag
           (inst : t)
@@ -91,20 +92,21 @@ let rec apply ?no_miss:(no_miss = false)
     | Assign _
     | Assume _ -> prog
   | Seq (c1,c2) ->
-     let c1' = apply ~no_miss params tag encode_tag inst c1 in
-     let c2' = apply ~no_miss params tag encode_tag inst c2 in
+     let c1' = apply ~no_miss ~ghost_edits params tag encode_tag inst c1 in
+     let c2' = apply ~no_miss ~ghost_edits params tag encode_tag inst c2 in
      c1' %:% c2'
   | Select (typ, ss) ->
      let ss =
        List.fold ss ~init:[]
          ~f:(fun acc (t, c) ->
-           let c' = apply params ~no_miss tag encode_tag inst c in
+           let c' = apply params ~no_miss ~ghost_edits tag encode_tag inst c in
            acc @ [(t,c')]
          ) in
      mkSelect typ ss
   | Apply t ->
      let actSize = max (log2(List.length t.actions)) 1 in
      let rows = StringMap.find_multi inst t.name in
+     let ghosts = StringMap.find ghost_edits t.name |> Option.value ~default:[] in
      let selects =
        match tag with
        | OnlyHoles _ -> []
@@ -112,6 +114,14 @@ let rec apply ?no_miss:(no_miss = false)
           (* Printf.printf "adding %d rows to %s\n%!" (List.length rows) t.name; *)
           List.foldi rows ~init:[]
             ~f:(fun i acc (matches, data, action) ->
+              let instrument action =
+                if List.exists ghosts ~f:((=) i) then
+                  let ghost = Printf.sprintf "%s_hits_row_%d" t.name i in
+                  sequence
+                    [ ghost %<-% mkVInt(1,1);
+                      mkOrdered [Var(ghost,1) %=% mkVInt(1,1), action; True, Skip]]
+                else
+                  action in
               let cond =
                 Match.list_to_test matches
                 %&% match tag with
@@ -128,7 +138,7 @@ let rec apply ?no_miss:(no_miss = false)
                     List.nth_exn t.actions action
                     |> bind_action_data data
                   in
-                  (cond, action) :: acc
+                  (cond, instrument action) :: acc
                 end)
      in
      let holes =
