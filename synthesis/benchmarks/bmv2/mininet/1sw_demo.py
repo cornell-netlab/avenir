@@ -111,7 +111,7 @@ def get_time(f):
         cts = fp.read()
 
     res = re.findall(r", time (\d+)ms", cts)
-    print "trying",f,"got", res
+    # print "trying",f,"got", res
     if res:
         return res[-1]
     else:
@@ -129,15 +129,10 @@ def process_data(data):
     print "time,num"
     data_dict = {}
     for i,t in enumerate(data):
-        print t
+        # print t
         if t:
             data_dict[float(t)/1000.0] = 100 * float(i)/float(len(data))
     return data_dict
-
-
-def plot(data0,data1):
-    plotter.plot_series(data0,data1)
-
 
 
 
@@ -181,7 +176,7 @@ def experiment(num_hosts, mode, experiment):
             if src == tgt :
                 continue
             else:
-                print run_measurement(net, src, tgt)
+                run_measurement(net, src, tgt)
 
     os.system(experiment)
 
@@ -193,6 +188,16 @@ def experiment(num_hosts, mode, experiment):
     return process_data(data)
 
 
+def normalize(data,hotstartfile):
+    tms = 0.0
+    with open(hotstartfile,'r') as fp:
+        cts = fp.read()
+        print hotstartfile, cts
+        tms += float(re.findall(r"(\d+.\d+)",cts)[-1])
+    ts = tms / 1000.0
+
+    return {k - ts : v for (k,v) in data.iteritems()}
+
 def cleanup():
     os.system("rm h*_ping_h*.txt")
 
@@ -200,14 +205,17 @@ def cleanup():
 def main():
     cd = "cd /home/ericthewry/research/hybrid/synthesis"
     runtime = "benchmarks/bmv2/simple_router/runtime_CLI.py"
-    run_avenir = "./avenir synth benchmarks/bmv2/simple_router_logical.p4 benchmarks/bmv2/simple_router_16.p4 benchmarks/bmv2/no_edits.csv benchmarks/bmv2/no_edits.csv benchmarks/bmv2/fvs -data benchmarks/bmv2/mininet/{0} --thrift -b 100 -e 3 -P4 -I1 benchmarks/real/p4includes/ -I2 benchmarks/real/p4includes/ --no-defaults --min --hints exact --no-deletes --cache-edits 3 -s -S".format(args.rules)
+    run_avenir = lambda f: "./avenir synth benchmarks/bmv2/simple_router_logical.p4 benchmarks/bmv2/simple_router_16.p4 benchmarks/bmv2/no_edits.csv benchmarks/bmv2/no_edits.csv benchmarks/bmv2/fvs -data benchmarks/bmv2/mininet/{0} --thrift -b 100 -e 3 -P4 -I1 benchmarks/real/p4includes/ -I2 benchmarks/real/p4includes/ --no-defaults --min --hints exact --no-deletes --cache-edits 3 -s -S {1}".format(args.rules, f)
     baseline = "cat benchmarks/bmv2/mininet/{0}_solution.txt".format(args.rules)
-    experiment_cmd = lambda exp: "{0} && {1} | {2}".format(cd, exp, runtime)
-    data0 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir))
+    experiment_cmd = lambda exp,label: "{0} && (({1} | {2}) 2> /tmp/cache_build_time_{3})".format(cd, exp, runtime, label)
+    data0 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir(""), "cold"))
     cleanup()
-    data1 = experiment(args.num_hosts, args.mode, experiment_cmd(baseline))
+    data1 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir("--hot-start"), "hot"))
+    data1 = normalize(data1,"/tmp/cache_build_time_hot")
     cleanup()
-    plot(data0, data1)
+    data2 = experiment(args.num_hosts, args.mode, experiment_cmd(baseline, "base"))
+    cleanup()
+    plotter.plot_series(data1, data0, data2)
 
 
 if __name__ == '__main__':
