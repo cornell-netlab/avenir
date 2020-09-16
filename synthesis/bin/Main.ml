@@ -570,6 +570,7 @@ let run debug thrift_mode interactive data print
         use_all_cexs
         reach_restrict
         reach_filter
+        hot_start
     () =
     let res = Benchmark.to_obt
               Parameters.({
@@ -602,7 +603,8 @@ let run debug thrift_mode interactive data print
           use_all_cexs;
           reach_restrict;
           reach_filter;
-          timeout = None})
+          timeout = None;
+          hot_start})
               data p4file log_edits phys_edits fvs assume inc
     in
     match res with
@@ -666,6 +668,7 @@ let run debug thrift_mode interactive data print
         use_all_cexs
         reach_restrict
         reach_filter
+        hot_start
     () =
     let res = Benchmark.from_obt
               Parameters.({
@@ -698,7 +701,8 @@ let run debug thrift_mode interactive data print
           use_all_cexs;
           reach_restrict;
           reach_filter;
-          timeout = None})
+          timeout = None;
+          hot_start})
               data p4file log_edits phys_edits fvs assume inc
     in
     match res with

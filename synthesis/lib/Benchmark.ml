@@ -247,10 +247,10 @@ and to_obt params data_file p4_file log_edits_file phys_edits_file fvs_file _ in
       ~log  ~phys ~fvs
       ~log_inst:Instance.(update_list params empty log_edits)
       ~phys_inst:Instance.(update_list params empty phys_edits)
-      ~log_edits:[] ()
+      ~log_edits:[]
   in
-  Core.Printf.printf "\n\n------------\n%s\n----------\n" (Problem.to_string params problem);
-  assert (implements params (ProfData.zero ()) (problem) = `Yes);
+  (* Core.Printf.printf "\n\n------------\n%s\n----------\n" (Problem.to_string params problem); *)
+  assert (implements params (ProfData.zero ()) (problem ()) = `Yes);
   measure params None problem (List.map (Runtime.parse_whippersnapper log data_file) ~f:(fun r -> [r]))
 
 and from_obt params data_file p4_file log_edits_file phys_edits_file fvs_file _ inc =
@@ -275,10 +275,10 @@ and from_obt params data_file p4_file log_edits_file phys_edits_file fvs_file _ 
       ~log  ~phys ~fvs
       ~log_inst:Instance.(update_list params empty log_edits)
       ~phys_inst:Instance.(update_list params empty phys_edits)
-      ~log_edits:[] ()
+      ~log_edits:[]
   in
-  Core.Printf.printf "\n\n------------\n%s\n----------\n" (Problem.to_string params problem);
-  assert (implements params (ProfData.zero ()) (problem) = `Yes);
+  (* Core.Printf.printf "\n\n------------\n%s\n----------\n" (Problem.to_string params problem); *)
+  assert (implements params (ProfData.zero ()) (problem ()) = `Yes);
   measure params None problem (List.map (Runtime.parse log data_file) ~f:(fun r -> [r]))
 
 

@@ -126,6 +126,11 @@ def avenir_flags():
   x.extend(non_cache_flags());
   return x;
 
+def hot_start_flags():
+  x = ["--hot-start"];
+  x.extend(avenir_flags());
+  return x;
+
 def rules_for_obt(ws_cmd, fldr, i, fn, num, rule_temps, fvs, flags = avenir_flags()):
   edits_file = "whippersnapper/empty_edits.txt";
   fvs_file = "output/fvs.txt";
@@ -211,6 +216,12 @@ def run_avenir(ws_cmd):
 
 # plot
 
+def read_data(fn):
+  data_str = ""
+  with open(fn) as f:
+    data_str = f.read();
+  return data_str;
+
 def string_to_data(data_str):
   data = {};
   for line in data_str.split("\n"):
@@ -220,19 +231,22 @@ def string_to_data(data_str):
 
   return data
 
-def plot(ws_cmd, xlbl):
-  cache_data_str = ""
-  with open("whippersnapper/cache/" + ws_cmd + "_orig_to_obt_res.csv") as f:
-    cache_data_str = f.read();
-  
-  no_cache_data_str = ""
-  with open("whippersnapper/no_cache/" + ws_cmd + "_orig_to_obt_res.csv") as f:
-    no_cache_data_str = f.read()
-  
-  cache_data = string_to_data(cache_data_str);
-  no_cache_data = string_to_data(no_cache_data_str);
+def get_data(f):
+  s = read_data(f);
+  return string_to_data(s);
 
-  pl.plot_series(cache_data, no_cache_data, name = "whippersnapper/" + ws_cmd, xlabel = xlbl, ylabel = "synthesis time (s)");
+def adjust_hot(hot, cold):
+  for k in hot:
+    hot[k] = hot[k] - cold[k];
+
+def plot(rn, ws_cmd, xlbl):
+  cache_data = get_data("whippersnapper/cache_" + str(rn) + "/" + ws_cmd + "_orig_to_obt_res.csv")
+  hot_data = get_data("whippersnapper/hot_cache_" + str(rn) + "/" + ws_cmd + "_orig_to_obt_res.csv")
+  no_cache_data = get_data ("whippersnapper/no_cache_" + str(rn) + "/" + ws_cmd + "_orig_to_obt_res.csv")
+  
+  adjust_hot(hot_data, cache_data)
+
+  pl.plot_series(cache_data, hot_data, no_cache_data, name = "whippersnapper/" + ws_cmd, xlabel = xlbl, ylabel = "synthesis time (s)");
 
 cmd = sys.argv[1];
 ws_cmd = sys.argv[2] if len(sys.argv) > 2 else None;
@@ -242,14 +256,20 @@ if cmd == "generate" and os.path.exists("whippersnapper/" + ws_cmd + "_orig_to_o
   sys.exit();
 
 if cmd == "gen-all":
-  run_whippersnapper("pipeline", "cache", 20, 9, avenir_flags());
-  run_whippersnapper("pipeline", "no_cache", 20, 9, non_cache_flags());
+  rule_num = int(sys.argv[2]);
+  max_pl = int(sys.argv[3]);
+  max_sf = int(sys.argv[4]);
 
-  run_whippersnapper("set-field", "cache", 20, 100, avenir_flags());
-  run_whippersnapper("set-field", "no_cache", 20, 100, non_cache_flags());
+  run_whippersnapper("pipeline", "cache_" + str(rule_num) , rule_num, max_pl, avenir_flags());
+  run_whippersnapper("pipeline", "hot_cache_" + str(rule_num), rule_num, max_pl, hot_start_flags());
+  run_whippersnapper("pipeline", "no_cache_" + str(rule_num), rule_num, max_pl, non_cache_flags());
 
-  plot("pipeline", "# of tables");
-  plot("set-field", "# of fields");
+  run_whippersnapper("set-field", "cache_" + str(rule_num), rule_num, max_sf, avenir_flags());
+  run_whippersnapper("set-field", "hot_cache_" + str(rule_num), rule_num, max_sf, hot_start_flags());
+  run_whippersnapper("set-field", "no_cache_" + str(rule_num), rule_num, max_sf, non_cache_flags());
+
+  plot(rule_num, "pipeline", "# of tables");
+  plot(rule_num, "set-field", "# of fields");
 
 elif cmd == "generate":
   rule_num = int(sys.argv[3]);  

@@ -97,22 +97,22 @@ def plot_series(data0, data1=None, data2=None, data3=None, name = "plot", xlabel
   fig = plt.figure(figsize=(3.7,1.0)) # Override fig size based on trial
   xs = sorted(data0.keys())
   ys = [data0[x] for x in xs]
-  plt.plot(xs, ys, c='#DB4437', label='Cache', ls='-', zorder=2)
+  plt.plot(xs, ys, c='#DB4437', label='Cold cache', ls='-', zorder=2)
   # plt.axhline(y=5, c='#4285F4', ls=':', label='y=5', zorder=1)
 
   if data1:
     print("adding data1")
     xs = sorted(data1.keys())
     ys = [data1[x] for x in xs]
-    plt.plot(xs, ys, label='No cache', ls='-', zorder=3)
+    plt.plot(xs, ys, label='Hot cache', ls='-', zorder=3)
     # plt.text(75, 1, "text", size="smaller")
 
   if data2:
     print("adding data2")
     xs = sorted(data2.keys())
     ys = [data2[x] for x in xs]
-    plt.plot(xs, ys, label='M', ls='-', zorder=3)
-    plt.text(75, 1, "text", size="smaller")
+    plt.plot(xs, ys, label='No cache', ls='-', zorder=3)
+    # plt.text(75, 1, "text", size="smaller")
 
   if data3:
     print("adding data3")
