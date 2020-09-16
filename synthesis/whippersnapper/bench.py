@@ -131,6 +131,9 @@ def hot_start_flags():
   x.extend(avenir_flags());
   return x;
 
+def orig_to_obt(ws_cmd, fldr):
+  return ("whippersnapper/" + fldr + "/" + ws_cmd + "_orig_to_obt_res.csv");
+
 def rules_for_obt(ws_cmd, fldr, i, fn, num, rule_temps, fvs, flags = avenir_flags()):
   edits_file = "whippersnapper/empty_edits.txt";
   fvs_file = "output/fvs.txt";
@@ -169,7 +172,7 @@ def rules_for_obt(ws_cmd, fldr, i, fn, num, rule_temps, fvs, flags = avenir_flag
   #except:
   #  print("no commands written");
 
-  with open("whippersnapper/" + fldr + "/" + ws_cmd + "_orig_to_obt_res.csv", "a") as res_file:
+  with open(orig_to_obt(ws_cmd, fldr), "a") as res_file:
     res_file.write(str(i) + "," + str(elapsed) + "\n")
 
 def run_whippersnapper(ws_cmd, fldr,  rule_num, mx, flags = avenir_flags()):
@@ -179,8 +182,15 @@ def run_whippersnapper(ws_cmd, fldr,  rule_num, mx, flags = avenir_flags()):
   if not os.path.isdir("whippersnapper/"+ fldr + "/" + ws_cmd):
       os.mkdir("whippersnapper/" + fldr + "/" + ws_cmd)
 
+  mn = 1;
+  if os.path.exists(orig_to_obt(ws_cmd, fldr)):
+    with open(orig_to_obt(ws_cmd, fldr), 'r') as res_file:
+      res = res_file.read();
+      for lne in res.split("\n"):
+        if ',' in lne:
+          mn += 1;
 
-  for i in list(range(1, int(mx))):
+  for i in list(range(mn, int(mx))):
     print(str(i));
     (cmd_line1, cmd_line2, fvs, get_rule_temps) = whippersnapper_cmds()[ws_cmd];
     subprocess.run(["p4benchmark", "--feature", ws_cmd] + cmd_line1 + [str(i)] + cmd_line2);
