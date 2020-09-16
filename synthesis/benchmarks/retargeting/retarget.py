@@ -12,11 +12,11 @@ args = parser.parse_args()
 
 
 def parse_data(f):
-    data = []
+    data = [(0.0,0.0)]
     with open("%s.csv" % f,'r') as csvfile:
         csvrows = csv.DictReader(csvfile)
         for row in csvrows:
-            data.append((float(row["time"]), (int(row["log_inst_size"]) * 100.0) / 1000.0))
+            data.append((float(row["time"]) / 1000.0, (int(row["log_inst_size"]) * 100.0) / 1000.0))
     time_so_far = 0.0
     acc_data = []
     for (time,percent) in data:
@@ -33,24 +33,23 @@ def main ():
         for exp in experiments:
             print exp
             os.system("sh {0}.sh | tee {0}.csv".format(exp))
+            os.system("sh {0}_hot.sh | tee {0}_hot.csv".format(exp))
 
     for exp in experiments:
         print "plotting", exp, "data"
-        plotter.plot_series(parse_data(exp), name = exp, xlabel="time", ylabel="completion %")
-
-    # print "plotting action decomp data"
-    # plotter.plot_series(parse_data("action_decomp.csv"), name = "action_decomp)
-    # print "collecting metadata data"
-    # plotter.plot_series(parse_data("metadata.csv"))
-    # print "collecting early validation data"
-    # plotter.plot_series(parse_data("early_validate.csv"))
+        plotter.plot_series(data0 = parse_data(exp), name0 = "cold start",
+                            data1 = parse_data(exp + "_hot"), name1 = "hot start",
+                            name = exp,
+                            xlabel=(exp + " time (s)"),
+                            ylabel="% completed")
 
     print "generating graphs"
-    plotter.plot_series(data0 = parse_data("self"),
-                        data1 = parse_data("action_decomp"),
-                        data2 = parse_data("metadata"),
-                        data3 = parse_data("early_validate"),
-                        xlabel = "time (ms)", ylabel = "completion %",
+    plotter.plot_series(data0 = parse_data("self"), name0 = "self",
+                        data1 = parse_data("action_decomp"), name1 = "ActDec",
+                        data2 = parse_data("metadata"), name2 = "Meta",
+                        data3 = parse_data("early_validate"), name3 = "Valid",
+                        xlabel = "time (s)",
+                        ylabel = "completion %",
                         name = "retargeting")
 
 

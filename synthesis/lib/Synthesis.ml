@@ -371,9 +371,11 @@ and try_cache params data problem =
         cegis_math params data problem
 
 
-let cegis_math_sequence (params : Parameters.t) data problem =
-  let log_edit_sequence = Problem.log_edits problem in
-  let problem = Problem.replace_log_edits problem [] in
+let rec cegis_math_sequence (params : Parameters.t) data get_problem =
+  let t = Time.now() in
+  let initial_problem = get_problem () in
+  let log_edit_sequence = Problem.log_edits initial_problem in
+  let problem = Problem.replace_log_edits initial_problem [] in
   List.fold log_edit_sequence ~init:(Some(problem,[]))
     ~f:(fun acc ledit ->
       match acc with
@@ -405,3 +407,10 @@ let cegis_math_sequence (params : Parameters.t) data problem =
                   |> Problem.commit_edits_phys params,
                   pedits @ phys_edits)
     )
+  |> Option.bind ~f:(fun p ->
+         if params.hot_start then
+           let () = Printf.eprintf "%f\n%!" Time.(now () |> Fn.flip diff t |> Span.to_ms) in
+           cegis_math_sequence {params with hot_start = false} data get_problem
+         else
+           Some p
+       )

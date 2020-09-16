@@ -43,13 +43,14 @@ let already_explored_error model_space model =
   Printf.printf "applied \n\n\n %s\n\n\n" (Ast.string_of_test res)
 
 let print_edits ?tab:(tab=false) (params : Parameters.t) phys es =
-  List.iter es ~f:(fun e ->
-      Printf.printf "%s%s\n%!"
-        (if tab then "\t" else "")
-        (if params.thrift_mode then
-           Edit.to_bmv2_string phys e
-         else
-           Edit.to_string e))
+  if not params.hot_start then
+    List.iter es ~f:(fun e ->
+        Printf.printf "%s%s\n%!"
+          (if tab then "\t" else "")
+          (if params.thrift_mode then
+             Edit.to_bmv2_string phys e
+           else
+             Edit.to_string e))
 
 let string_vars vs =
   let first = ref true in

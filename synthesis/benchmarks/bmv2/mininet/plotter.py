@@ -92,23 +92,30 @@ def read_data():
 
   return (data0, data1)
 
-def plot_series(data0, data1 = None):
+def plot_series(data0, data1 = None, data2 = None):
   fig = plt.figure(figsize=(3.7,1.0)) # Override fig size based on trial
   xs = sorted(data0.keys())
   ys = [data0[x] for x in xs]
-  plt.plot(xs, ys, c='#DB4437', label='NoDef,Min,Exact,NoDel', ls='-', zorder=2)
+  plt.plot(xs, ys, c='#DB4437', label='hot start', ls='-', zorder=2)
   # plt.axhline(y=5, c='#4285F4', ls=':', label='y=5', zorder=1)
 
   if data1:
     xs = sorted(data1.keys())
     ys = [data1[x] for x in xs]
     print (sorted(data1.items()))
-    plt.plot(xs, ys, label='baseline', ls='-', zorder=3)
+    plt.plot(xs, ys, label='cold start', ls='-', zorder=3)
     # plt.text(75, 1, "text", size="smaller")
     # plt.annotate("annotation", xy=(25, 2.5), xytext=(40, 1), arrowprops=dict(arrowstyle="->"))
 
-  plt.xlim(left=0)
-  plt.ylim(bottom=0,top=101)
+  if data1:
+    xs = sorted(data2.keys())
+    ys = [data2[x] for x in xs]
+    print (sorted(data1.items()))
+    plt.plot(xs, ys, label='baseline', ls='-', zorder=3)
+
+
+  # plt.xlim(left=0)
+  # plt.ylim(bottom=0,top=101)
   plt.xlabel("time (s)", labelpad=0)
   plt.ylabel("\% reachability")
   plt.legend(loc='lower right', ncol=1)#, bbox_to_anchor=(0,1.1))

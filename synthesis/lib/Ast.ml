@@ -173,7 +173,7 @@ let rec num_nodes_in_expr e =
                    
 let add_values (v : value) (v' : value) : value =
   match v, v' with
-  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x + x'),sz)
+  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x + x' % max_int sz),sz)
   | Int (x, sz), Int(x',sz') ->
      failwith (Printf.sprintf "Type error %s#%d and %s#%d have different bitvec sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 
@@ -188,14 +188,14 @@ let sat_add_values (v : value) (v' : value) : value =
 
 let multiply_values (v : value) (v' : value) : value =
   match v, v' with
-  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x * x'), sz)
+  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x * x' % max_int sz), sz)
   | Int (x,sz), Int (x',sz') -> failwith (Printf.sprintf "Type error %s#%d and %s#%d have different bitvec sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 
 
 let subtract_values (v : value) (v' : value) : value =
   match v, v' with
   | Int (x, sz), Int (x',sz') when sz = sz' ->
-     Int (Bigint.(x - x'), sz)
+     Int (Bigint.(x - x' % max_int sz), sz)
   | Int (x, sz), Int (x', sz') ->
      failwith (Printf.sprintf "Type error %s#%d and %s#%d have different bitvec sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
 

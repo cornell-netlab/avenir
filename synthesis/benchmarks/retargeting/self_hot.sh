@@ -1,0 +1,1 @@
+../../avenir synth logical.p4 logical.p4 logical_initial_edits.csv logical_initial_edits.csv fvs.csv -b 10 -e 1 -data logical_inserts_1001.csv -I1 ../real/p4includes/ -I2 ../real/p4includes/ -P4 --hints exact --no-deletes -w --restrict-masks -s --cache-edits 0 --cache-queries -measure --hot-start # works!!

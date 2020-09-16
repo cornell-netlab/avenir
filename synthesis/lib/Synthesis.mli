@@ -15,7 +15,7 @@ val cegis_math :
 val cegis_math_sequence:
       Parameters.t ->
       ProfData.t ref -> 
-      Problem.t -> 
+      (unit -> Problem.t) ->
       (Problem.t * Tables.Edit.t list) option
 
 val symb_wp : ?fvs:(string * int) list -> Ast.cmd -> Ast.test

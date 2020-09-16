@@ -30,6 +30,7 @@ let quantify expr etyp styp =
 let rec expr_to_term_help expr styp : Smtlib.term =
   match expr with
   | Value (Int (num, sz)) ->
+     let num = if Bigint.(num < zero) then Bigint.(Util.max_int sz - num) else num in
      Smtlib.bbv (num) sz
   | Var (v, _) -> quantify v `Var styp
   | Hole (h, _) -> quantify h `Hole styp
