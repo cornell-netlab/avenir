@@ -105,7 +105,7 @@ def plot_series(data0, data1=None, data2=None, data3=None, name = "plot", xlabel
     xs = sorted(data1.keys())
     ys = [data1[x] for x in xs]
     plt.plot(xs, ys, label='No cache', ls='-', zorder=3)
-    plt.text(75, 1, "text", size="smaller")
+    # plt.text(75, 1, "text", size="smaller")
 
   if data2:
     print("adding data2")
