@@ -1,1 +1,0 @@
-hdr.ethernet.dstAddr,hdr.ethernet.dstAddr,48

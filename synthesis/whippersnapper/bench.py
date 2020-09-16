@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 
+import plotter as pl
 
 # generate a rule, generic functions
 
@@ -67,7 +68,8 @@ def set_field_rules(ind):
 
 
 def add_header_fvs(ind):
-    fvs = "hdr.ptp.reserved2,hdr.ptp.reserved2,8\n";
+    fvs = "hdr.ptp.reserved2,hdr.ptp.reserved2,8\nstandard_metadata.egress_spec,standard_metadata.egress_spec,9\n";
+    fvs += "hdr.ethernet.dstAddr,hdr.ethernet.dstAddr,48\n";
     for i in list(range(0, ind)):
       fvs += "hdr.header_" + str(i) + ".field_0,hdr.header_" + str(i) + ".field_0,16\n"
     return fvs;
@@ -116,10 +118,15 @@ def rewrite_cmds(cmds):
   fmcds = "\n".join(fcmds);
   return fmcds;
 
-def avenir_flags():
-  return ["--cache-edits", "1", "--cache-queries", "--reach-filter"]
+def non_cache_flags():
+  return ["--reach-filter"];
 
-def rules_for_obt(ws_cmd, i, fn, num, rule_temps, fvs):
+def avenir_flags():
+  x = ["--cache-edits", "1", "--cache-queries"]
+  x.extend(non_cache_flags());
+  return x;
+
+def rules_for_obt(ws_cmd, fldr, i, fn, num, rule_temps, fvs, flags = avenir_flags()):
   edits_file = "whippersnapper/empty_edits.txt";
   fvs_file = "output/fvs.txt";
   assume_file = "whippersnapper/empty_assume.txt";
@@ -144,7 +151,7 @@ def rules_for_obt(ws_cmd, i, fn, num, rule_temps, fvs):
   st_time = time.perf_counter();
   res = subprocess.run(["./avenir", "to-obt", "output/main16.p4", edits_file
                        , edits_file, fvs_file, assume_file, "-b", "100", "-data"
-                       , commands_no_def_file, "-e", "100", "-p"] + avenir_flags() + ["-I", "whippersnapper/p4includes"], stdout = subprocess.PIPE, stderr = subprocess.PIPE);
+                       , commands_no_def_file, "-e", "100", "-p"] + flags + ["-I", "whippersnapper/p4includes"], stdout = subprocess.PIPE, stderr = subprocess.PIPE);
   end_time = time.perf_counter();
   elapsed = end_time - st_time;
 
@@ -157,12 +164,15 @@ def rules_for_obt(ws_cmd, i, fn, num, rule_temps, fvs):
   #except:
   #  print("no commands written");
 
-  with open("whippersnapper/" + ws_cmd + "_orig_to_obt_res.csv", "a") as res_file:
+  with open("whippersnapper/" + fldr + "/" + ws_cmd + "_orig_to_obt_res.csv", "a") as res_file:
     res_file.write(str(i) + "," + str(elapsed) + "\n")
 
-def run_whippersnapper(ws_cmd, rule_num, mx):
-  if not os.path.isdir("whippersnapper/" + ws_cmd):
-    os.mkdir("whippersnapper/" + ws_cmd)
+def run_whippersnapper(ws_cmd, fldr,  rule_num, mx, flags = avenir_flags()):
+  if not os.path.isdir("whippersnapper/" + fldr):
+      os.mkdir("whippersnapper/" + fldr)
+
+  if not os.path.isdir("whippersnapper/"+ fldr + "/" + ws_cmd):
+      os.mkdir("whippersnapper/" + fldr + "/" + ws_cmd)
 
 
   for i in list(range(1, int(mx))):
@@ -170,9 +180,9 @@ def run_whippersnapper(ws_cmd, rule_num, mx):
     (cmd_line1, cmd_line2, fvs, get_rule_temps) = whippersnapper_cmds()[ws_cmd];
     subprocess.run(["p4benchmark", "--feature", ws_cmd] + cmd_line1 + [str(i)] + cmd_line2);
     subprocess.run(["p4test", "--p4v", "14", "--pp", "output/main16.p4", "output/main.p4"]);
-    rules_for_obt(ws_cmd, i, "output", rule_num, get_rule_temps(i), fvs(i));
+    rules_for_obt(ws_cmd, fldr, i, "output", rule_num, get_rule_temps(i), fvs(i), flags);
     
-    shutil.move("output", "whippersnapper/" + ws_cmd + "/output_" + str(i));
+    shutil.move("output", "whippersnapper/" + fldr + "/"+ ws_cmd + "/output_" + str(i));
 
 
 # run the actual evaluation, using OBT as the logical program
@@ -199,16 +209,59 @@ def run_avenir(ws_cmd):
   with open("whippersnapper/" + ws_cmd + "_obt_to_orig_res.csv", "w") as res_file:
     res_file.write(res);
 
-cmd = sys.argv[1];
-ws_cmd = sys.argv[2];
+# plot
 
-if os.path.exists("whippersnapper/" + ws_cmd + "_orig_to_obt_res.csv"):
+def string_to_data(data_str):
+  data = {};
+  for line in data_str.split("\n"):
+    if "," in line:
+      pieces = line.split(",");
+      data[int(pieces[0])] = float(pieces[1]);
+
+  return data
+
+def plot(ws_cmd, xlbl):
+  cache_data_str = ""
+  with open("whippersnapper/cache/" + ws_cmd + "_orig_to_obt_res.csv") as f:
+    cache_data_str = f.read();
+  
+  no_cache_data_str = ""
+  with open("whippersnapper/no_cache/" + ws_cmd + "_orig_to_obt_res.csv") as f:
+    no_cache_data_str = f.read()
+  
+  cache_data = string_to_data(cache_data_str);
+  no_cache_data = string_to_data(no_cache_data_str);
+
+  pl.plot_series(cache_data, no_cache_data, name = "whippersnapper/" + ws_cmd, xlabel = xlbl, ylabel = "synthesis time (s)");
+
+cmd = sys.argv[1];
+ws_cmd = sys.argv[2] if len(sys.argv) > 2 else None;
+
+if cmd == "generate" and os.path.exists("whippersnapper/" + ws_cmd + "_orig_to_obt_res.csv"):
   print("output file already exists");
   sys.exit();
 
-if cmd == "generate":
+if cmd == "gen-all":
+  run_whippersnapper("pipeline", "cache", 20, 9, avenir_flags());
+  run_whippersnapper("pipeline", "no_cache", 20, 9, non_cache_flags());
+
+  run_whippersnapper("set-field", "cache", 20, 100, avenir_flags());
+  run_whippersnapper("set-field", "no_cache", 20, 100, non_cache_flags());
+
+  plot("pipeline", "# of tables");
+  plot("set-field", "# of fields");
+
+elif cmd == "generate":
   rule_num = int(sys.argv[3]);  
   mx = sys.argv[4];
-  run_whippersnapper(ws_cmd, rule_num, mx);
+  flags = non_cache_flags() if "--no-cache" in sys.argv else avenir_flags();
+  fldr = "no_cache" if "--no-cache" in sys.argv else "cache";
+  run_whippersnapper(ws_cmd, fldr, rule_num, mx, flags);
 elif cmd == "eval":
   run_avenir(ws_cmd);
+elif cmd == "plot":
+  if ws_cmd == "pipeline":
+    xlbl = "# of tables"
+  else:
+    xlbl = "# of fields"
+  plot(ws_cmd, xlbl);

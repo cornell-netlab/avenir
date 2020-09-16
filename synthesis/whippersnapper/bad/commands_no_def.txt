@@ -1,1 +1,0 @@
-table_add forward_table forward 0C:C4:7A:A3:25:35 =>
