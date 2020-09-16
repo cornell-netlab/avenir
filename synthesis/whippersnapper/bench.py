@@ -241,18 +241,20 @@ def string_to_data(data_str):
 
   return data
 
-def get_data(f):
+def get_data(mx, f):
   s = read_data(f);
-  return string_to_data(s);
+  data = string_to_data(s);
+  data = { k: data[k] for k in data.keys() if k < mx };
+  return data;
 
 def adjust_hot(hot, cold):
   for k in hot:
     hot[k] = hot[k] - cold[k];
 
-def plot(rn, ws_cmd, xlbl):
-  cache_data = get_data("whippersnapper/cache_" + str(rn) + "/" + ws_cmd + "_orig_to_obt_res.csv")
-  hot_data = get_data("whippersnapper/hot_cache_" + str(rn) + "/" + ws_cmd + "_orig_to_obt_res.csv")
-  no_cache_data = get_data ("whippersnapper/no_cache_" + str(rn) + "/" + ws_cmd + "_orig_to_obt_res.csv")
+def plot(rn, mx, ws_cmd, xlbl):
+  cache_data = get_data(mx, "whippersnapper/cache_" + str(rn) + "/" + ws_cmd + "_orig_to_obt_res.csv")
+  hot_data = get_data(mx, "whippersnapper/hot_cache_" + str(rn) + "/" + ws_cmd + "_orig_to_obt_res.csv")
+  no_cache_data = get_data (mx, "whippersnapper/no_cache_" + str(rn) + "/" + ws_cmd + "_orig_to_obt_res.csv")
   
   adjust_hot(hot_data, cache_data)
 
@@ -278,8 +280,8 @@ if cmd == "gen-all":
   run_whippersnapper("set-field", "hot_cache_" + str(rule_num), rule_num, max_sf, hot_start_flags());
   run_whippersnapper("set-field", "no_cache_" + str(rule_num), rule_num, max_sf, non_cache_flags());
 
-  plot(rule_num, "pipeline", "# of tables");
-  plot(rule_num, "set-field", "# of fields");
+  plot(rule_num, max_pl, "pipeline", "# of tables");
+  plot(rule_num, max_sf, "set-field", "# of fields");
 
 elif cmd == "generate":
   rule_num = int(sys.argv[3]);  
