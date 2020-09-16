@@ -527,6 +527,202 @@ let onf_real : Command.t =
     ONFReal.spec
     ONFReal.run
 
+module ToOBT = struct
+  let spec = Command.Spec.(
+      empty
+      +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
+      +> flag "--thrift" no_arg ~doc:"parse & write bmv2/thrift commands"
+      +> flag "-i" no_arg ~doc:"interactive mode"
+      +> flag "-data" (required string) ~doc:"the input log"
+      +> flag "-p" no_arg ~doc:"show_result_at_end"
+      +> anon ("p4file" %: string)
+      +> anon ("log-edits" %: string)
+      +> anon ("phys-edits" %: string)
+      +> anon ("fvs" %: string)
+      +> anon ("assume" %: string)
+      +> flag "-I" (listed string) ~doc:"<dir> add directory to include search path for file"
+      ++ opt_flags)
+
+let run debug thrift_mode interactive data print
+        p4file log_edits phys_edits fvs assume inc
+        widening
+        do_slice
+        semantic_slicing
+        edits_depth
+        search_width
+        monotonic
+        injection
+        fastcx
+        vcache
+        ecache
+        shortening
+        above
+        minimize
+        hints
+        only_holes
+        allow_annotations
+        nlp
+        unique_edits
+        domain
+        restrict_mask
+        no_defaults
+        no_deletes
+        use_all_cexs
+        reach_restrict
+        reach_filter
+        hot_start
+    () =
+    let res = Benchmark.to_obt
+              Parameters.({
+          widening;
+          do_slice;
+          semantic_slicing;
+          edits_depth;
+          search_width;
+          debug;
+          thrift_mode;
+          monotonic;
+          interactive;
+          injection;
+          fastcx;
+          vcache;
+          ecache;
+          shortening;
+          above;
+          minimize;
+          hints = Option.is_some hints;
+          hint_type = Option.value hints ~default:"exact";
+          only_holes;
+          allow_annotations;
+          nlp;
+          unique_edits;
+          domain;
+          restrict_mask;
+          no_defaults;
+          no_deletes;
+          use_all_cexs;
+          reach_restrict;
+          reach_filter;
+          timeout = None;
+          hot_start})
+              data p4file log_edits phys_edits fvs assume inc
+    in
+    match res with
+    | None -> Core.Printf.printf "no example could be found\n"
+    | Some r when print ->
+       Core.Printf.printf "Edits\n";
+       List.iter r ~f:(fun edit ->
+           Tables.Edit.to_string edit
+           |> Core.Printf.printf "%s\n%!"
+         )
+    | Some _ -> ()
+
+end
+
+let to_obt : Command.t =
+  Command.basic_spec
+    ~summary: "Run the onf benchmark on the real p4 programs"
+    ToOBT.spec
+    ToOBT.run
+
+module FromOBT = struct
+  let spec = Command.Spec.(
+      empty
+      +> flag "-DEBUG" no_arg ~doc:"print debugging statements"
+      +> flag "--thrift" no_arg ~doc:"parse & write bmv2/thrift commands"
+      +> flag "-i" no_arg ~doc:"interactive mode"
+      +> flag "-data" (required string) ~doc:"the input log"
+      +> flag "-p" no_arg ~doc:"show_result_at_end"
+      +> anon ("p4file" %: string)
+      +> anon ("log-edits" %: string)
+      +> anon ("phys-edits" %: string)
+      +> anon ("fvs" %: string)
+      +> anon ("assume" %: string)
+      +> flag "-I" (listed string) ~doc:"<dir> add directory to include search path for file"
+      ++ opt_flags)
+
+let run debug thrift_mode interactive data print
+        p4file log_edits phys_edits fvs assume inc
+        widening
+        do_slice
+        semantic_slicing
+        edits_depth
+        search_width
+        monotonic
+        injection
+        fastcx
+        vcache
+        ecache
+        shortening
+        above
+        minimize
+        hints
+        only_holes
+        allow_annotations
+        nlp
+        unique_edits
+        domain
+        restrict_mask
+        no_defaults
+        no_deletes
+        use_all_cexs
+        reach_restrict
+        reach_filter
+        hot_start
+    () =
+    let res = Benchmark.from_obt
+              Parameters.({
+          widening;
+          do_slice;
+          semantic_slicing;
+          edits_depth;
+          search_width;
+          debug;
+          thrift_mode;
+          monotonic;
+          interactive;
+          injection;
+          fastcx;
+          vcache;
+          ecache;
+          shortening;
+          above;
+          minimize;
+          hints = Option.is_some hints;
+          hint_type = Option.value hints ~default:"exact";
+          only_holes;
+          allow_annotations;
+          nlp;
+          unique_edits;
+          domain;
+          restrict_mask;
+          no_defaults;
+          no_deletes;
+          use_all_cexs;
+          reach_restrict;
+          reach_filter;
+          timeout = None;
+          hot_start})
+              data p4file log_edits phys_edits fvs assume inc
+    in
+    match res with
+    | None -> Core.Printf.printf "no example could be found\n"
+    | Some r when print ->
+       Core.Printf.printf "Edits\n";
+       List.iter r ~f:(fun edit ->
+           Tables.Edit.to_string edit
+           |> Core.Printf.printf "%s\n%!"
+         )
+    | Some _ -> ()
+
+end
+
+let from_obt : Command.t =
+  Command.basic_spec
+    ~summary: "Run the onf benchmark on the real p4 programs"
+    FromOBT.spec
+    FromOBT.run
+
 module Equality = struct
   let spec = Command.Spec.(
       empty
@@ -1417,6 +1613,8 @@ let main : Command.t =
     ; ("onf-real", onf_real)
     ; ("obt", obt)
     ; ("obt-real", obt_real)
+    ; ("to-obt", to_obt)
+    ; ("from-obt", from_obt)
     ; ("eq", equality)
     ; ("eq-real", equality_real)
     ; ("wp", wp_cmd)]

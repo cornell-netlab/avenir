@@ -87,8 +87,13 @@ let matches_of_string ?sep:(sep=';') (keys : (string * int) list) (data_str : st
                      String.lsplit2 match_str ~on:'#'
                      |> Option.value ~default:(match_str, Printf.sprintf "%d" sz)
                    in
+                   let value_str' = if String.contains value_str ':'
+                                        then value_str
+                                             |> String.substr_replace_all ~pattern:":" ~with_:""
+                                             |> Printf.sprintf "0x%s"
+                                        else value_str in
                    let size = int_of_string size_str in
-                   let value = Bigint.of_string value_str in
+                   let value = Bigint.of_string value_str' in
                    Match.exact_ key (Int(value, size))
               end
          )
@@ -121,7 +126,6 @@ let parse program filename : Edit.t list =
         |> make_edit
       ) in
   edits
-
 
 
 let parse_bmv2_entry cmd string : Edit.t =
@@ -166,3 +170,5 @@ let parse_bmv2_entry cmd string : Edit.t =
 let parse_bmv2 cmd filename : Edit.t list =
   In_channel.read_lines filename
   |> List.map ~f:(parse_bmv2_entry cmd)
+
+let parse_whippersnapper = parse_bmv2
