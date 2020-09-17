@@ -105,7 +105,7 @@ let parse program filename : Edit.t list =
     match data with
     | ["ADD"; tbl_nm; matches; action_data; action] ->
        begin match get_schema_of_table tbl_nm program with
-       | None -> failwith @@ Printf.sprintf "unrecognized table %s" tbl_nm
+       | None -> failwith @@ Printf.sprintf "unrecognized table %s in row %s" tbl_nm (List.reduce_exn data ~f:(^))
        | Some (keys, _,_) ->
           let keys = List.map keys ~f:(fun (k,sz,_) -> (k,sz)) in
           Add (tbl_nm,

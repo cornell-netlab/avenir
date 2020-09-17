@@ -57,7 +57,8 @@ def pipeline_rules(ind):
   return res;
 
 def set_field_fvs(ind):
-    fvs = "hdr.ptp.reserved2,hdr.ptp.reserved2,8\n";
+    fvs = pipeline_fvs(ind);
+    fvs += "\nhdr.ptp.reserved2,hdr.ptp.reserved2,8\n";
     for i in list(range(0, ind)):
       fvs += "hdr.header_0.field_" + str(i) + ",hdr.header_0.field_" + str(i) + ",16\n"
     return fvs;
@@ -202,26 +203,29 @@ def run_whippersnapper(ws_cmd, fldr,  rule_num, mx, flags = avenir_flags()):
 
 # run the actual evaluation, using OBT as the logical program
 
-def run_avenir(ws_cmd):
+def run_avenir(ws_cmd, fldr, rn, ceil_mx, flags):
   mx = 1;
-  while os.path.isdir("whippersnapper/" + ws_cmd + "/output_" + str(mx)):
+  while os.path.isdir("whippersnapper/" + fldr + "/" + ws_cmd + "/output_" + str(mx)):
     mx += 1;
-  
+
+  mx = min(mx, ceil_mx);
+
   res = ""
   for i in list(range(1, int(mx))):
-    output = "whippersnapper/" + ws_cmd + "/output_" + str(i) +"/";
-    commands_file = output + "obt_commands.txt";
+    print(ws_cmd + " " + str(i));
+    output = "whippersnapper/" + fldr + "/" + ws_cmd + "/output_" + str(i) +"/";
+    commands_file = "whippersnapper/cache_" + str(rn) + "/" + ws_cmd + "/output_" + str(i)  + "/obt_commands.txt";
     edits_file = "whippersnapper/empty_edits.txt";
     assume_file = "whippersnapper/empty_assume.txt";
     fvs_file = output + "fvs.txt";
     
     st_time = time.perf_counter();
-    subprocess.run(["./avenir", "from-obt", output + "main16.p4", edits_file, edits_file, fvs_file, assume_file, "-b", "100", "-data", commands_file, "-e", "100", "-p", "-I", "whippersnapper/p4includes"], stdout = subprocess.PIPE, stderr = subprocess.PIPE);
+    subprocess.run(["./avenir", "from-obt", output + "main16.p4", edits_file, edits_file, fvs_file, assume_file, "-b", "100", "-data", commands_file, "-e", "100", "-p"] + flags + ["-I", "whippersnapper/p4includes"], stdout = subprocess.PIPE, stderr = subprocess.PIPE);
     end_time = time.perf_counter();
     elapsed = end_time - st_time;
     res += str(i) + "," + str(elapsed) + "\n"
   
-  with open("whippersnapper/" + ws_cmd + "_obt_to_orig_res.csv", "w") as res_file:
+  with open("whippersnapper/" + fldr + "/" + ws_cmd + "_obt_to_orig_res.csv", "w") as res_file:
     res_file.write(res);
 
 # plot
@@ -251,14 +255,14 @@ def adjust_hot(hot, cold):
   for k in hot:
     hot[k] = hot[k] - cold[k];
 
-def plot(rn, mx, ws_cmd, xlbl):
-  cache_data = get_data(mx, "whippersnapper/cache_" + str(rn) + "/" + ws_cmd + "_orig_to_obt_res.csv")
-  hot_data = get_data(mx, "whippersnapper/hot_cache_" + str(rn) + "/" + ws_cmd + "_orig_to_obt_res.csv")
-  no_cache_data = get_data (mx, "whippersnapper/no_cache_" + str(rn) + "/" + ws_cmd + "_orig_to_obt_res.csv")
+def plot(rn, mx, ws_cmd, direction, xlbl):
+  cache_data = get_data(mx, "whippersnapper/cache_" + str(rn) + "/" + ws_cmd + "_" + direction + "_res.csv")
+  hot_data = get_data(mx, "whippersnapper/hot_cache_" + str(rn) + "/" + ws_cmd + "_" + direction + "_res.csv")
+  no_cache_data = get_data (mx, "whippersnapper/no_cache_" + str(rn) + "/" + ws_cmd + "_" + direction + "_res.csv")
   
   adjust_hot(hot_data, cache_data)
 
-  pl.plot_series(cache_data, hot_data, no_cache_data, name = "whippersnapper/" + ws_cmd, xlabel = xlbl, ylabel = "synthesis time (s)");
+  pl.plot_series(cache_data, hot_data, no_cache_data, name = "whippersnapper/" + ws_cmd + "_" + direction, xlabel = xlbl, ylabel = "synthesis time (s)");
 
 cmd = sys.argv[1];
 ws_cmd = sys.argv[2] if len(sys.argv) > 2 else None;
@@ -280,8 +284,24 @@ if cmd == "gen-all":
   run_whippersnapper("set-field", "hot_cache_" + str(rule_num), rule_num, max_sf, hot_start_flags());
   run_whippersnapper("set-field", "no_cache_" + str(rule_num), rule_num, max_sf, non_cache_flags());
 
-  plot(rule_num, max_pl, "pipeline", "# of tables");
-  plot(rule_num, max_sf, "set-field", "# of fields");
+  plot(rule_num, max_pl, "pipeline", "orig_to_obt", "# of tables");
+  plot(rule_num, max_sf, "set-field", "orig_to_obt", "# of fields");
+elif cmd == "gen-all-rev":
+  rule_num = int(sys.argv[2]);
+  max_pl = int(sys.argv[3]);
+  max_sf = int(sys.argv[4]);
+
+  run_avenir("pipeline", "cache_" + str(rule_num) , rule_num, max_pl, avenir_flags());
+  run_avenir("pipeline", "hot_cache_" + str(rule_num), rule_num, max_pl, hot_start_flags());
+  run_avenir("pipeline", "no_cache_" + str(rule_num), rule_num, max_pl, non_cache_flags());
+
+  run_avenir("set-field", "cache_" + str(rule_num), rule_num, max_sf, avenir_flags());
+  run_avenir("set-field", "hot_cache_" + str(rule_num), rule_num, max_sf, hot_start_flags());
+  run_avenir("set-field", "no_cache_" + str(rule_num), rule_num, max_sf, non_cache_flags());
+
+  plot(rule_num, max_pl, "pipeline", "obt_to_orig", "# of tables");
+  plot(rule_num, max_sf, "set-field", "obt_to_orig", "# of fields");
+
 
 elif cmd == "generate":
   rule_num = int(sys.argv[3]);  

@@ -41,8 +41,8 @@ let is_reachable encode_tag params problem fvs in_pkt tbl_name keys =
   passive_hoare_triple ~fvs
     (Packet.to_test in_pkt ~fvs)
     trunc
-    (Hole.match_holes_table encode_tag tbl_name keys
-     %&% Instance.negate_rows phys_inst tbl_name)
+    (Hole.match_holes_table encode_tag tbl_name keys)
+     (* %&% Instance.negate_rows phys_inst tbl_name) *)
 
 
 let hits_pred params (_: ProfData.t ref) prog inst edits e : test =
