@@ -148,7 +148,7 @@ def hot_start_flags_set_field():
 def orig_to_obt(ws_cmd, fldr):
   return ("whippersnapper/" + fldr + "/" + ws_cmd + "_res.csv");
 
-def avenir(ws_cmd, fldr, i, fn, num, rule_temps, fvs, flags):
+def avenir(ws_cmd, fldr, i, fn, num, timeout, rule_temps, fvs, flags):
   edits_file = "whippersnapper/empty_edits.txt";
   fvs_file = "output/fvs.txt";
   assume_file = "whippersnapper/empty_assume.txt";
@@ -171,29 +171,32 @@ def avenir(ws_cmd, fldr, i, fn, num, rule_temps, fvs, flags):
   
   
   st_time = time.perf_counter();
-  res = subprocess.run(["./avenir", "synth", "output/main16.p4", "output/main16.p4", edits_file
-                       , edits_file, fvs_file, "-b", "100", "-data"
-                       , commands_no_def_file, "-e", "25", "-p"] + flags
-                       + ["-I1", "whippersnapper/p4includes"]
-                       + ["-I2", "whippersnapper/p4includes"]
-                       + ["-P4", "--thrift"]
-                       , stdout = subprocess.PIPE, stderr = subprocess.PIPE);
-  end_time = time.perf_counter();
-  elapsed = end_time - st_time;
+  try:
+    res = subprocess.run(["./avenir", "synth", "output/main16.p4", "output/main16.p4", edits_file
+                         , edits_file, fvs_file, "-b", "100", "-data"
+                         , commands_no_def_file, "-e", "25", "-p"] + flags
+                         + ["-I1", "whippersnapper/p4includes"]
+                         + ["-I2", "whippersnapper/p4includes"]
+                         + ["-P4", "--thrift"]
+                         , stdout = subprocess.PIPE, stderr = subprocess.PIPE, timeout = timeout);
+    end_time = time.perf_counter();
+    elapsed = end_time - st_time;
 
-  obt_commands = "output/obt_commands.txt";
+    obt_commands = "output/obt_commands.txt";
 
-  cmds = res.stdout.decode('utf-8');
-  cmds = cmds.split("Target operations:\n")[1]; 
-  with open(obt_commands, 'w') as f:
-    f.write(cmds);
-  #except:
-  #  print("no commands written");
+    cmds = res.stdout.decode('utf-8');
+    cmds = cmds.split("Target operations:\n")[1]; 
+    with open(obt_commands, 'w') as f:
+      f.write(cmds); 
+    #except:
+    #  print("no commands written");
 
-  with open(orig_to_obt(ws_cmd, fldr), "a") as res_file:
-    res_file.write(str(i) + "," + str(elapsed) + "\n")
+    with open(orig_to_obt(ws_cmd, fldr), "a") as res_file:
+      res_file.write(str(i) + "," + str(elapsed) + "\n")
+  except subprocess.TimeoutExpired:
+    return;
 
-def run_whippersnapper(ws_cmd, fldr,  rule_num, mx, flags):
+def run_whippersnapper(ws_cmd, fldr, timeout, rule_num, mx, flags):
   if not os.path.isdir("whippersnapper/" + fldr):
       os.mkdir("whippersnapper/" + fldr)
 
@@ -213,7 +216,7 @@ def run_whippersnapper(ws_cmd, fldr,  rule_num, mx, flags):
     (cmd_line1, cmd_line2, fvs, get_rule_temps) = whippersnapper_cmds()[ws_cmd];
     subprocess.run(["p4benchmark", "--feature", ws_cmd] + cmd_line1 + [str(i)] + cmd_line2);
     subprocess.run(["p4test", "--p4v", "14", "--pp", "output/main16.p4", "output/main.p4"]);
-    avenir(ws_cmd, fldr, i, "output", rule_num, get_rule_temps(i), fvs(i), flags);
+    avenir(ws_cmd, fldr, i, "output", rule_num, timeout, get_rule_temps(i), fvs(i), flags);
     
     shutil.move("output", "whippersnapper/" + fldr + "/"+ ws_cmd + "/output_" + str(i));
 
@@ -265,16 +268,17 @@ if cmd == "generate" and os.path.exists("whippersnapper/" + ws_cmd + "_orig_to_o
 
 if cmd == "gen-all":
   rule_num = int(sys.argv[2]);
-  max_pl = int(sys.argv[3]);
-  max_sf = int(sys.argv[4]);
+  timeout = int(sys.argv[3]);
+  max_pl = int(sys.argv[4]);
+  max_sf = int(sys.argv[5]);
 
-  run_whippersnapper("pipeline", "id_cache_" + str(rule_num) , rule_num, max_pl, avenir_flags_pipeline());
-  run_whippersnapper("pipeline", "id_hot_cache_" + str(rule_num), rule_num, max_pl, hot_start_flags_pipeline());
-  run_whippersnapper("pipeline", "id_no_cache_" + str(rule_num), rule_num, max_pl, non_cache_flags_pipeline());
+  run_whippersnapper("pipeline", "id_cache_" + str(rule_num), timeout, rule_num, max_pl, avenir_flags_pipeline());
+  run_whippersnapper("pipeline", "id_hot_cache_" + str(rule_num), timeout, rule_num, max_pl, hot_start_flags_pipeline());
+  run_whippersnapper("pipeline", "id_no_cache_" + str(rule_num), timeout, rule_num, max_pl, non_cache_flags_pipeline());
 
-  run_whippersnapper("set-field", "id_cache_" + str(rule_num), rule_num, max_sf, avenir_flags_set_field());
-  run_whippersnapper("set-field", "id_hot_cache_" + str(rule_num), rule_num, max_sf, hot_start_flags_set_field());
-  run_whippersnapper("set-field", "id_no_cache_" + str(rule_num), rule_num, max_sf, non_cache_flags_set_field());
+  run_whippersnapper("set-field", "id_cache_" + str(rule_num), timeout, rule_num, max_sf, avenir_flags_set_field());
+  run_whippersnapper("set-field", "id_hot_cache_" + str(rule_num), timeout, rule_num, max_sf, hot_start_flags_set_field());
+  run_whippersnapper("set-field", "id_no_cache_" + str(rule_num), timeout, rule_num, max_sf, non_cache_flags_set_field());
 
   plot(rule_num, max_pl, "pipeline", "# of tables");
   plot(rule_num, max_sf, "set-field", "# of fields");
