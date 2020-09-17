@@ -120,7 +120,7 @@ def rewrite_cmds(cmds):
   return fmcds;
 
 def non_cache_flags_pipeline():
-    return ["--reach-filter"]
+    return ["--reach-filter", "--hints", "exact"]
 
 def non_cache_flags_set_field():
     return ["-w", "--restrict-mask"]; #hints
@@ -173,7 +173,7 @@ def rules_for_obt(ws_cmd, fldr, i, fn, num, rule_temps, fvs, flags):
   st_time = time.perf_counter();
   res = subprocess.run(["./avenir", "to-obt", "output/main16.p4", edits_file
                        , edits_file, fvs_file, assume_file, "-b", "100", "-data"
-                       , commands_no_def_file, "-e", "100", "-p"] + flags + ["-I", "whippersnapper/p4includes"], stdout = subprocess.PIPE, stderr = subprocess.PIPE);
+                       , commands_no_def_file, "-e", "25", "-p"] + flags + ["-I", "whippersnapper/p4includes"], stdout = subprocess.PIPE, stderr = subprocess.PIPE);
   end_time = time.perf_counter();
   elapsed = end_time - st_time;
 
@@ -233,7 +233,7 @@ def run_avenir(ws_cmd, fldr, rn, ceil_mx, flags):
     fvs_file = output + "fvs.txt";
     
     st_time = time.perf_counter();
-    subprocess.run(["./avenir", "from-obt", output + "main16.p4", edits_file, edits_file, fvs_file, assume_file, "-b", "100", "-data", commands_file, "-e", "100", "-p"] + flags + ["-I", "whippersnapper/p4includes"], stdout = subprocess.PIPE, stderr = subprocess.PIPE);
+    subprocess.run(["./avenir", "from-obt", output + "main16.p4", edits_file, edits_file, fvs_file, assume_file, "-b", "100", "-data", commands_file, "-e", "25", "-p"] + flags + ["-I", "whippersnapper/p4includes"], stdout = subprocess.PIPE, stderr = subprocess.PIPE);
     end_time = time.perf_counter();
     elapsed = end_time - st_time;
     res += str(i) + "," + str(elapsed) + "\n"
