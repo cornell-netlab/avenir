@@ -119,23 +119,36 @@ def rewrite_cmds(cmds):
   fmcds = "\n".join(fcmds);
   return fmcds;
 
-def non_cache_flags():
-  return ["--reach-filter"];
+def non_cache_flags_pipeline():
+    return ["--reach-filter"]
 
-def avenir_flags():
+def non_cache_flags_set_field():
+    return ["-w", "--restrict-mask"]; #hints
+
+def avenir_flags_pipeline():
   x = ["--cache-edits", "1", "--cache-queries"]
-  x.extend(non_cache_flags());
+  x.extend(non_cache_flags_pipeline());
   return x;
 
-def hot_start_flags():
+def avenir_flags_set_field():
+  x = ["--cache-edits", "1", "--cache-queries"]
+  x.extend(non_cache_flags_set_field());
+  return x;
+
+def hot_start_flags_pipeline():
   x = ["--hot-start"];
-  x.extend(avenir_flags());
+  x.extend(avenir_flags_pipeline());
+  return x;
+
+def hot_start_flags_set_field():
+  x = ["--hot-start"];
+  x.extend(avenir_flags_set_field());
   return x;
 
 def orig_to_obt(ws_cmd, fldr):
   return ("whippersnapper/" + fldr + "/" + ws_cmd + "_orig_to_obt_res.csv");
 
-def rules_for_obt(ws_cmd, fldr, i, fn, num, rule_temps, fvs, flags = avenir_flags()):
+def rules_for_obt(ws_cmd, fldr, i, fn, num, rule_temps, fvs, flags):
   edits_file = "whippersnapper/empty_edits.txt";
   fvs_file = "output/fvs.txt";
   assume_file = "whippersnapper/empty_assume.txt";
@@ -176,7 +189,7 @@ def rules_for_obt(ws_cmd, fldr, i, fn, num, rule_temps, fvs, flags = avenir_flag
   with open(orig_to_obt(ws_cmd, fldr), "a") as res_file:
     res_file.write(str(i) + "," + str(elapsed) + "\n")
 
-def run_whippersnapper(ws_cmd, fldr,  rule_num, mx, flags = avenir_flags()):
+def run_whippersnapper(ws_cmd, fldr,  rule_num, mx, flags):
   if not os.path.isdir("whippersnapper/" + fldr):
       os.mkdir("whippersnapper/" + fldr)
 
@@ -276,13 +289,13 @@ if cmd == "gen-all":
   max_pl = int(sys.argv[3]);
   max_sf = int(sys.argv[4]);
 
-  run_whippersnapper("pipeline", "cache_" + str(rule_num) , rule_num, max_pl, avenir_flags());
-  run_whippersnapper("pipeline", "hot_cache_" + str(rule_num), rule_num, max_pl, hot_start_flags());
-  run_whippersnapper("pipeline", "no_cache_" + str(rule_num), rule_num, max_pl, non_cache_flags());
+  run_whippersnapper("pipeline", "cache_" + str(rule_num) , rule_num, max_pl, avenir_flags_pipeline());
+  run_whippersnapper("pipeline", "hot_cache_" + str(rule_num), rule_num, max_pl, hot_start_flags_pipeline());
+  run_whippersnapper("pipeline", "no_cache_" + str(rule_num), rule_num, max_pl, non_cache_flags_pipeline());
 
-  run_whippersnapper("set-field", "cache_" + str(rule_num), rule_num, max_sf, avenir_flags());
-  run_whippersnapper("set-field", "hot_cache_" + str(rule_num), rule_num, max_sf, hot_start_flags());
-  run_whippersnapper("set-field", "no_cache_" + str(rule_num), rule_num, max_sf, non_cache_flags());
+  run_whippersnapper("set-field", "cache_" + str(rule_num), rule_num, max_sf, avenir_flags_set_field());
+  run_whippersnapper("set-field", "hot_cache_" + str(rule_num), rule_num, max_sf, hot_start_flags_set_field());
+  run_whippersnapper("set-field", "no_cache_" + str(rule_num), rule_num, max_sf, non_cache_flags_set_field());
 
   plot(rule_num, max_pl, "pipeline", "orig_to_obt", "# of tables");
   plot(rule_num, max_sf, "set-field", "orig_to_obt", "# of fields");
@@ -291,13 +304,13 @@ elif cmd == "gen-all-rev":
   max_pl = int(sys.argv[3]);
   max_sf = int(sys.argv[4]);
 
-  run_avenir("pipeline", "cache_" + str(rule_num) , rule_num, max_pl, avenir_flags());
-  run_avenir("pipeline", "hot_cache_" + str(rule_num), rule_num, max_pl, hot_start_flags());
-  run_avenir("pipeline", "no_cache_" + str(rule_num), rule_num, max_pl, non_cache_flags());
+  run_avenir("pipeline", "cache_" + str(rule_num) , rule_num, max_pl, avenir_flags_pipeline());
+  run_avenir("pipeline", "hot_cache_" + str(rule_num), rule_num, max_pl, hot_start_flags_pipeline());
+  run_avenir("pipeline", "no_cache_" + str(rule_num), rule_num, max_pl, non_cache_flags_pipeline());
 
-  run_avenir("set-field", "cache_" + str(rule_num), rule_num, max_sf, avenir_flags());
-  run_avenir("set-field", "hot_cache_" + str(rule_num), rule_num, max_sf, hot_start_flags());
-  run_avenir("set-field", "no_cache_" + str(rule_num), rule_num, max_sf, non_cache_flags());
+  run_avenir("set-field", "cache_" + str(rule_num), rule_num, max_sf, avenir_flags_set_field());
+  run_avenir("set-field", "hot_cache_" + str(rule_num), rule_num, max_sf, hot_start_flags_set_field());
+  run_avenir("set-field", "no_cache_" + str(rule_num), rule_num, max_sf, non_cache_flags_set_field());
 
   plot(rule_num, max_pl, "pipeline", "obt_to_orig", "# of tables");
   plot(rule_num, max_sf, "set-field", "obt_to_orig", "# of fields");
