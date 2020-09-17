@@ -111,7 +111,7 @@ def plot_series(data0, data1 = None, data2 = None):
     xs = sorted(data2.keys())
     ys = [data2[x] for x in xs]
     print (sorted(data1.items()))
-    plt.plot(xs, ys, label='baseline', ls='-', zorder=3)
+    plt.plot(xs, ys, label='baseline', ls='--', zorder=3,c='#CC79A7')
 
 
   # plt.xlim(left=0)
