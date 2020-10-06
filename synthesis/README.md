@@ -1,14 +1,8 @@
 # Getting Started
 
-## Install OPAM version 2.0.4
-The installation instruction are for `Ubuntu 18.04.2 LTS`.
-```bash
-add-apt-repository ppa:avsm/ppa
-apt update
-apt install opam
-```
++ First, [install](https://opam.ocaml.org/doc/Install.html) OPAM version >2.0.4. If you already have OPAM >2.0.4 installed you can skip this step. If you have an earlier version of OPAM, upgrade it. 
 
-+ First make sure you have `opam` installed. Then in the `synthesis` directory, run
++ In the `synthesis` directory, run
 
 ```
 opam switch create . ocaml-base-compiler.4.09.0
@@ -24,14 +18,20 @@ opam install merlin dune utop core
 opam user-setup install
 ```
 
++ Install Menhir
+
+```bash
+apt install bubblewrap
+opam install menhir
+```
+
 + Install a binary of the [Z3 SMT
   solver](https://github.com/Z3Prover/z3) to `/usr/bin/z3`. This is the default if you run `sudo apt install z3`.
   
 + Pin our custom fork of PLASMA's Z3 serialization library that interfaces with the previously-installed binary:
 
 ```bash
-opam install menhir
-opam pin add z3 https://github.com/priyasrikumar/ocaml-z3.git#no-successes
+opam pin add z3 https://github.com/priyasrikumar/ocaml-z3.git
 ```
 
 + Install [petr4](https://github.com/cornell-netlab/petr4) using the following instructions. First
