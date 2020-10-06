@@ -117,7 +117,8 @@ def get_time(f):
     if res:
         return res[-1]
     else:
-        return -1
+        print "no data for", f
+        raise ValueError
 
 
 def collect_data(num_hosts):
@@ -184,11 +185,12 @@ def experiment(num_hosts, mode, experiment):
 
     os.system(experiment)
 
-    sleep(5)
+    sleep(10)
 
     net.stop()
 
     data = collect_data(num_hosts)
+    print data
     return process_data(data)
 
 
@@ -203,7 +205,9 @@ def normalize(data,hotstartfile):
     return {max(k - ts,0) : v for (k,v) in data.iteritems()}
 
 def cleanup():
-    os.system("rm h*_ping_h*.txt")
+    for filename in os.listdir('.'):
+        if filename.endswith(".txt"):
+            os.remove(filename)
 
 
 def main():
