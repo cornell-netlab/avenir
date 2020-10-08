@@ -6,6 +6,12 @@ open Packet
  * Interface to Z3
  *)
 
+(*
+ * Initialize provers using the binary location indicated by the string
+ *)
+val make_provers : string -> unit
+
+
 (* Checks whether a formula is satisfiable; returns an optional model
    and timing data if it is *)
 val check_sat : Parameters.t  -> test -> ((value StringMap.t) option * Time.Span.t)

@@ -6,6 +6,17 @@ open Z3
 let force_print = false
 let print_debug = false
 
+let valid_prover = ref None
+let sat_prover = ref None
+let shortener = Bishtbl.make ()
+
+let get r = Option.value_exn !r ~message:"Prover not initialized!!!"
+
+let make_provers loc =
+  Printf.printf "Intializing prover with path %s\n%!" loc;
+  sat_prover := Some (Smtlib.make_solver loc);
+  valid_prover := !sat_prover
+
 let debug term =
   if force_print || print_debug then
     let res = Smtlib.term_to_sexp term |> Smtlib.sexp_to_string in
@@ -199,9 +210,6 @@ let vars_to_term vars d =
     end
   else List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i))
 
-let sat_prover = Smtlib.make_solver "/usr/bin/z3"
-let valid_prover = sat_prover
-let shortener = Bishtbl.make ()
 
 let check_sat (params : Parameters.t) (longtest : Ast.test) =
   let open Smtlib in
@@ -219,28 +227,30 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
              ~f:(fun (id, i) ->
                if force_print || params.debug && print_debug then
                     Printf.eprintf "(declare-const %s (_ BitVec %d))\n%!" id i;
-               declare_const sat_prover (Id id) (BitVecSort i)) in
+               declare_const (get sat_prover) (Id id) (BitVecSort i)) in
   let term = forall_ vars (test_to_term test `Sat params.debug) in
   let response =
     if force_print || params.debug && print_debug then debug term;
-    assert_ sat_prover term;
+    assert_ (get sat_prover) term;
     if force_print || params.debug && print_debug then Printf.printf " Asserted % dnodes!\n%!" (num_nodes_in_test test);
-    check_sat(* _using (ParOr (UFBV, SMT)) *) sat_prover in
+    check_sat(* _using (ParOr (UFBV, SMT)) *) (get sat_prover) in
   let dur = Time.(diff (now()) st) in
   if params.debug && print_debug then Printf.printf "Got a Result\n%!";
   let model =
     if response = Sat then
       (* let () = Printf.printf "Sat\n%!" in *)
-      let model = get_model sat_prover
-                  |> model_to_packet
-                  |> Shortener.unshorten_model shortener in
+      let model =
+        get sat_prover
+        |> get_model
+        |> model_to_packet
+        |> Shortener.unshorten_model shortener in
       if params.debug && print_debug then
         Printf.printf "MODEL: %s\n%!" (Packet.string__packet model);
       Some model
       else if response = Unknown then
         failwith "UNKNOWN"
       else None
-  in reset sat_prover; (model, dur)
+  in reset (get sat_prover); (model, dur)
 
 let is_sat params test =
   check_sat params test |> fst |> Option.is_some
@@ -259,24 +269,25 @@ let check_valid (params : Parameters.t) (longtest : Ast.test)  =
       ~f:(fun (id, i) ->
         if force_print || params.debug && print_debug then
           Printf.printf "(declare-const %s (_ BitVec %d))\n%!" id i;
-        declare_const valid_prover (Id id) (BitVecSort i)) in
+        declare_const (get valid_prover) (Id id) (BitVecSort i)) in
   let st = Time.now() in
   let term = not_ (test_to_term test `Valid params.debug) in
   let response =
     if force_print || params.debug && print_debug then debug term;
-    assert_ valid_prover term;
-    check_sat_using QFBV valid_prover in
+    assert_ (get valid_prover) term;
+    check_sat_using QFBV (get valid_prover) in
   let dur = Time.(diff (now()) st) in
   let model =
     match response with
-    | Sat -> get_model valid_prover
+    | Sat -> get valid_prover
+             |> get_model
              |> model_to_packet
              |> Shortener.unshorten_model shortener
              |> Some
     | Unsat ->  None
     | Unknown -> failwith "response unknown"
   in
-  reset valid_prover;
+  reset (get valid_prover);
   (model, dur)
 
 
@@ -387,17 +398,17 @@ let check_min (params : Parameters.t) (test : Ast.test) =
   let ranges = List.map constraints
       ~f:(fun e -> expr_to_term e `Sat params.debug) in
   let () = List.iter holes
-      ~f:(fun (id, i) -> declare_const sat_prover (Id id) (BitVecSort i)) in
+      ~f:(fun (id, i) -> declare_const (get sat_prover) (Id id) (BitVecSort i)) in
   let term = (test_to_term test `Sat params.debug) in
-  let response = assert_ sat_prover (forall_ vars term);
-    List.iter ranges ~f:(fun t -> minimize sat_prover t);
-    check_sat_using (UFBV : tactic) sat_prover in
+  let response = assert_ (get sat_prover) (forall_ vars term);
+    List.iter ranges ~f:(fun t -> minimize (get sat_prover) t);
+    check_sat_using (UFBV : tactic) (get sat_prover) in
   let dur = Time.(diff (now()) st) in
   let model =
     if response = Sat then
-      Some (model_to_packet (get_model sat_prover))
+      Some (model_to_packet (get_model (get sat_prover)))
     else None
-  in reset sat_prover; (model, dur)
+  in reset (get sat_prover); (model, dur)
 
 
 let is_valid_cached params test =

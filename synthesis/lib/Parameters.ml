@@ -52,8 +52,8 @@ let default =
     vcache = false;
     ecache = None;
     shortening = false;
-    edits_depth = 6;
-    search_width = 100;
+    edits_depth = -1;
+    search_width = -1;
     debug = false;
     thrift_mode = false;
     monotonic = false;
@@ -63,7 +63,7 @@ let default =
     above = false;
     minimize = false;
     hints = false;
-    hint_type = "exact";
+    hint_type = "";
     only_holes = false;
     restrict_mask = false;
     no_defaults = false;
@@ -77,6 +77,69 @@ let default =
     unique_edits = false;
     domain = false;
     timeout = None;
+  }
+
+let ecache_union ec1 ec2 =
+  match ec1, ec2 with
+  | None, None -> None
+  | Some i1, Some i2 -> Some (max i1 i2)
+  | None, Some i | Some i , None -> Some i
+
+let hint_type_union ht1 ht2 =
+  if String.(ht1 = ht2) then
+    ht1
+  else if String.(ht1 = "") then
+    ht2
+  else if String.(ht2 = "") then
+    ht1
+  else
+    Printf.sprintf "Incompatible %s and %s" ht1 ht2
+    |> failwith
+
+let timeout_union t1 t2 =
+  match t1, t2 with
+  | None, None ->
+     None
+  | Some t, None | None, Some t ->
+     Some t
+  | Some (st1,dur1), Some (st2,dur2) ->
+     Some(Time.min st1 st2, Time.Span.max dur1 dur2)
+
+
+let union p1 p2 =
+  { widening = p1.widening || p2.widening;
+    do_slice = p1.do_slice || p2.do_slice;
+    hot_start = p1.hot_start || p2.hot_start;
+    semantic_slicing = p1.semantic_slicing || p2.semantic_slicing;
+    vcache = p1.vcache || p2.vcache;
+    ecache = ecache_union p1.ecache p2.ecache ;
+    shortening = p1.shortening || p2.shortening;
+    edits_depth = max p1.edits_depth p2.edits_depth;
+    search_width = max p1.search_width p2.search_width;
+    debug = p1.debug || p2.debug;
+    thrift_mode = p1.thrift_mode || p2.thrift_mode;
+    monotonic = p1.monotonic || p2.monotonic;
+    injection = p1.injection || p2.injection;
+    interactive = p1.interactive || p2.interactive;
+    fastcx = p1.fastcx || p2.fastcx;
+    above = p1.above || p2.above ;
+    minimize = p1.minimize || p2.minimize;
+    hints = p1.hints || p2.hints;
+    hint_type = hint_type_union p1.hint_type p2.hint_type;
+    only_holes = p1.only_holes || p2.only_holes;
+    restrict_mask = p1.restrict_mask || p2.restrict_mask;
+    no_defaults = p1.no_defaults || p2.no_defaults;
+    no_deletes = p1.no_deletes || p2.no_deletes;
+    use_all_cexs = p1.use_all_cexs || p1.use_all_cexs;
+    reach_restrict = p1.reach_restrict || p2.reach_restrict;
+    reach_filter = p1.reach_filter || p2.reach_filter;
+
+    allow_annotations = p1.allow_annotations || p2.allow_annotations;
+    nlp = p1.nlp || p2.nlp;
+    unique_edits = p1.unique_edits || p2.unique_edits;
+    domain = p1.domain || p2.domain;
+    timeout = timeout_union p1.timeout p2.timeout;
+
   }
 
 let to_string params =
