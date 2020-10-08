@@ -40,9 +40,11 @@ parser.add_argument('--mode', choices=['l2', 'l3'], type=str, default='l3')
 parser.add_argument('--json', help='Path to JSON config file',
                     type=str, action="store", required=True)
 parser.add_argument('--pcap-dump', help='Dump packets on interfaces to pcap files',
-                    type=str, action="store", required=False, default=False)
+                    type=str, action="store", required=False)
 parser.add_argument('--rules', help='Dump simple_router rules for all paths connectivity',
                     type=str,action="store",required=False)
+parser.add_argument('--loc', help="avenir directory location", type=str, action="store", required=True)
+parser.add_argument('--CLI', help="start CLI", action="store_const", const=True, required=False, default=False)
 
 args = parser.parse_args()
 
@@ -111,11 +113,12 @@ def get_time(f):
         cts = fp.read()
 
     res = re.findall(r", time (\d+)ms", cts)
-    # print "trying",f,"got", res
+    print "trying",cts,"got", res
     if res:
         return res[-1]
     else:
-        return -1
+        print "no data for", f
+        raise ValueError
 
 
 def collect_data(num_hosts):
@@ -126,7 +129,7 @@ def collect_data(num_hosts):
     return data
 
 def process_data(data):
-    print "time,num"
+    # print "time,num"
     data_dict = {}
     for i,t in enumerate(data):
         # print t
@@ -169,6 +172,8 @@ def experiment(num_hosts, mode, experiment):
         h.describe()
 
     sleep(1)
+    if args.CLI:
+        CLI(net)
 
     print "Ready !"
     for src in xrange(num_hosts):
@@ -180,11 +185,12 @@ def experiment(num_hosts, mode, experiment):
 
     os.system(experiment)
 
-    sleep(5)
+    sleep(10)
 
     net.stop()
 
     data = collect_data(num_hosts)
+    print data
     return process_data(data)
 
 
@@ -196,17 +202,19 @@ def normalize(data,hotstartfile):
         tms += float(re.findall(r"(\d+.\d+)",cts)[-1])
     ts = tms / 1000.0
 
-    return {k - ts : v for (k,v) in data.iteritems()}
+    return {max(k - ts,0) : v for (k,v) in data.iteritems()}
 
 def cleanup():
-    os.system("rm h*_ping_h*.txt")
+    for filename in os.listdir('.'):
+        if filename.endswith(".txt"):
+            os.remove(filename)
 
 
 def main():
-    cd = "cd /home/ericthewry/research/hybrid/synthesis"
+    cd = "cd {}".format(args.loc)
     runtime = "benchmarks/bmv2/simple_router/runtime_CLI.py"
-    run_avenir = lambda f: "./avenir synth benchmarks/bmv2/simple_router_logical.p4 benchmarks/bmv2/simple_router_16.p4 benchmarks/bmv2/no_edits.csv benchmarks/bmv2/no_edits.csv benchmarks/bmv2/fvs -data benchmarks/bmv2/mininet/{0} --thrift -b 100 -e 3 -P4 -I1 benchmarks/real/p4includes/ -I2 benchmarks/real/p4includes/ --no-defaults --min --hints exact --no-deletes --cache-edits 3 -s -S {1}".format(args.rules, f)
-    baseline = "cat benchmarks/bmv2/mininet/{0}_solution.txt".format(args.rules)
+    run_avenir = lambda f: "./avenir synth benchmarks/bmv2/simple_router_logical.p4 benchmarks/bmv2/simple_router_16.p4 benchmarks/bmv2/no_edits.csv benchmarks/bmv2/no_edits.csv benchmarks/bmv2/fvs -data benchmarks/bmv2/{0} --thrift -b 100 -e 3 -P4 -I1 benchmarks/real/p4includes/ -I2 benchmarks/real/p4includes/ --no-defaults --min --hints exact --no-deletes --cache-edits 3 -s -S {1}".format(args.rules, f)
+    baseline = "cat benchmarks/bmv2/{0}_solution.txt".format(args.rules)
     experiment_cmd = lambda exp,label: "{0} && (({1} | {2}) 2> /tmp/cache_build_time_{3})".format(cd, exp, runtime, label)
     data0 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir(""), "cold"))
     cleanup()
