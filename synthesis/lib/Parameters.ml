@@ -11,7 +11,7 @@ type t =
     (*bounded search*)
     edits_depth : int;
     search_width : int;
-    timeout : (Time.t * Time.Span.t ) option;
+    timeout : Timeout.t;
     (*Verfications*)
     fastcx : bool;
     vcache : bool;
@@ -76,7 +76,7 @@ let default =
     nlp = false;
     unique_edits = false;
     domain = false;
-    timeout = None;
+    timeout = Timeout.start None;
   }
 
 let ecache_union ec1 ec2 =
@@ -95,16 +95,6 @@ let hint_type_union ht1 ht2 =
   else
     Printf.sprintf "Incompatible %s and %s" ht1 ht2
     |> failwith
-
-let timeout_union t1 t2 =
-  match t1, t2 with
-  | None, None ->
-     None
-  | Some t, None | None, Some t ->
-     Some t
-  | Some (st1,dur1), Some (st2,dur2) ->
-     Some(Time.min st1 st2, Time.Span.max dur1 dur2)
-
 
 let union p1 p2 =
   { widening = p1.widening || p2.widening;
@@ -138,7 +128,7 @@ let union p1 p2 =
     nlp = p1.nlp || p2.nlp;
     unique_edits = p1.unique_edits || p2.unique_edits;
     domain = p1.domain || p2.domain;
-    timeout = timeout_union p1.timeout p2.timeout;
+    timeout = Timeout.union p1.timeout p2.timeout;
 
   }
 

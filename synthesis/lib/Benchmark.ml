@@ -291,10 +291,8 @@ let rec to_int (bytes : int list) =
   | x::xs -> Int.shift_left x (8 * List.length xs) + to_int xs
 
 
-let restart_timer (params : Parameters.t) st =
-  match params.timeout with
-  | None -> params
-  | Some (_,dur) -> {params with timeout = Some(st,dur)}
+let restart_timer (params : Parameters.t) =
+  {params with timeout = Timeout.restart params.timeout}
 
 let mk_ith_meta i = Printf.sprintf "m%d" i
 let mk_ith_var i =  Printf.sprintf "x%d" i
@@ -408,7 +406,7 @@ let square_bench params sz n max_edits =
       (* if xs = 10 && ms = 8 then acc else *)
       Synthesis.edit_cache := EAbstr.make ();
       let st = Time.now () in
-      let es = measure (restart_timer params st) None (problem phys) log_edits in
+      let es = measure (restart_timer params) None (problem phys) log_edits in
       let nd = Time.now () in
       let dur = Time.diff nd st in
       match es with
@@ -506,7 +504,7 @@ let rep params data nrules =
       ]
   in
   let problem = Problem.make ~log:log ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty in
-  measure (restart_timer params (Time.now())) None problem (List.(gen_data >>| return))
+  measure (restart_timer params) None problem (List.(gen_data >>| return))
 
 
 let rep_middle params data nrules =
@@ -581,7 +579,7 @@ let rep_middle params data nrules =
       ]
   in
   let problem = Problem.make ~log:log ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty in
-  measure (restart_timer params (Time.now())) None problem (List.(gen_data >>| return))
+  measure (restart_timer params) None problem (List.(gen_data >>| return))
 
 let rep_of params exactify data nrules =
   let fvs = ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16;"vlan", 12; "pcp", 3] in
@@ -656,7 +654,7 @@ let rep_of params exactify data nrules =
       ]
   in
   let problem = Problem.make ~log:log ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty in
-  measure (restart_timer params (Time.now())) None problem (List.(gen_data >>| return))
+  measure (restart_timer params) None problem (List.(gen_data >>| return))
 
 
 
@@ -741,7 +739,7 @@ let rep_par params data nrules =
       ]
   in
   let problem = Problem.make ~log:log ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty in
-  measure (restart_timer params (Time.now())) None problem (List.(gen_data >>| return))
+  measure (restart_timer params) None problem (List.(gen_data >>| return))
 
 
 
@@ -771,7 +769,7 @@ let headers params sz ntables max_headers max_edits =
     ~f:(fun acc (num_xs,problem,log_edits) ->
       Synthesis.edit_cache := EAbstr.make ();
       let st = Time.now () in
-      let es = measure (restart_timer params st) None problem log_edits in
+      let es = measure (restart_timer params) None problem log_edits in
       let nd = Time.now () in
       let dur = Time.diff nd st in
       match es with
@@ -843,7 +841,7 @@ let metadata params sz nmeta nedits =
     ~f:(fun acc (num_xs,problem,log_edits) ->
       Synthesis.edit_cache := EAbstr.make ();
       let st = Time.now () in
-      let es = measure (restart_timer params st) None problem log_edits in
+      let es = measure (restart_timer params) None problem log_edits in
       let nd = Time.now () in
       let dur = Time.diff nd st in
       match es with
@@ -882,7 +880,7 @@ let tables params sz max_tables nheaders max_edits =
     ~f:(fun acc (num_xs,problem,log_edits) ->
       Synthesis.edit_cache := EAbstr.make ();
       let st = Time.now () in
-      let es = measure (restart_timer params st) None problem log_edits in
+      let es = measure (restart_timer params) None problem log_edits in
       let nd = Time.now () in
       let dur = Time.diff nd st in
       match es with
@@ -938,7 +936,7 @@ let breadth params sz max_tables nheaders max_edits =
     ~f:(fun acc (num_xs,problem,log_edits) ->
       Synthesis.edit_cache := EAbstr.make ();
       let st = Time.now () in
-      let es = measure (restart_timer params st) None problem log_edits in
+      let es = measure (restart_timer params) None problem log_edits in
       let nd = Time.now () in
       let dur = Time.diff nd st in
       match es with

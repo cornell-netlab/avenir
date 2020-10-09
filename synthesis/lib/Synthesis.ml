@@ -249,7 +249,9 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
   Log.log params.debug "cegis_math\n%!";
   Log.print_problem params problem;
   (* Printf.printf "%s\n%!" (List.hd_exn (Problem.log_edits problem) |> Edit.to_string); *)
-  if timed_out params.timeout then None else
+  if Timeout.timed_out params.timeout then
+    None
+  else
     if Option.is_some params.ecache then
       let () = Log.log params.debug "\ttrying cache \n%!"in
       solve_math 1 params data problem
@@ -279,7 +281,9 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
 
 and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
   Log.log params.debug "solve_math\n%!";
-  if timed_out params.timeout || i = 0 then None else
+  if Timeout.timed_out params.timeout || i = 0 then
+    None
+  else
     if Option.is_some params.ecache then
       try_cache params data problem
     else
@@ -300,7 +304,7 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
 and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) searcher =
   Log.log params.debug"loop\n%!";
   let open Option in
-  if timed_out params.timeout then begin
+  if Timeout.timed_out params.timeout then begin
       Printf.printf "Timeout\n%!";
       None
     end

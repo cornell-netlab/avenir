@@ -449,59 +449,59 @@ let holes_for_other_actions table phys actId =
        )
 
 
-let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t) option)=
-  match params.timeout with
-  | Some (st,dur) when Time.(Span.(diff (now()) st > dur)) -> None
-  | _ ->
-     match t.search_space, t.schedule with
-     | [], [] ->
-        if params.debug then Printf.printf "Search failed\n%!";
-        None
-     | [], (opts::schedule) ->
-        let () =
-          if params.debug then
-            Printf.printf "trying heuristics |%s|\n\n%!"
-              (string_of_opts opts)
-        in
-        let search_space = compute_queries params data problem opts in
-        (* Printf.printf "search space rebuild, recursing!\n%!"; *)
-        search params data problem {schedule; search_space}
-     | (test, partial_model) :: search_space, schedule ->
-        Log.check_attempts params.debug problem;
-        Log.print_hints_map params.debug partial_model;
-        if params.debug then Printf.printf "Sending query to Z3\n%!";
-        let model_opt, dur =
-          check_sat params @@
-            fixup_test partial_model @@
-              bigand [
-                  Problem.model_space problem;
-                  test
-                ] in
-        ProfData.incr !data.model_z3_calls;
-        ProfData.update_time_val !data.model_z3_time dur;
-        if params.debug then Printf.printf "Sat Checked\n%!\n";
-        match model_opt with
-        | Some raw_model ->
-           if params.debug then Printf.printf "Found a model, done \n%!";
-           if Problem.seen_attempt problem raw_model then begin
-               Printf.printf "%s\n%!" (Problem.attempts_to_string problem);
-               Printf.printf "\ncurrent model is %s\n%!" (string_of_map raw_model);
-               Printf.printf "\nmodel_space is %s \n%!" (string_of_test @@ Problem.model_space problem);
-               Printf.printf "\nmodel has already been seen and is allowed? %s"
-                 (if Problem.model_space problem |> fixup_test raw_model = True
-                  then "yes! thats a contradiction\n%!"
-                  else "no, but somehow we synthesized it... a contradiction\n%!"
-                 );
-               failwith ""
-             end
-           else begin
-                 Printf.sprintf "IsNOVEL??? \n    %s \n"
-                   (Problem.model_space problem
-                    |> fixup_test raw_model
-                    |> string_of_test)
-                 |> Log.log params.debug;
-                 Some (Hint.join_models partial_model raw_model, t)
-             end
-        | _ ->
-           (* Printf.printf "No model, keep searching with %d opts and %d paths \n%!" (List.length schedule) (List.length search_space); *)
-           search params data problem {schedule; search_space}
+let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t) option) =
+  if Timeout.timed_out params.timeout then
+    None
+  else
+    match t.search_space, t.schedule with
+    | [], [] ->
+       if params.debug then Printf.printf "Search failed\n%!";
+       None
+    | [], (opts::schedule) ->
+       let () =
+         if params.debug then
+           Printf.printf "trying heuristics |%s|\n\n%!"
+             (string_of_opts opts)
+       in
+       let search_space = compute_queries params data problem opts in
+       (* Printf.printf "search space rebuild, recursing!\n%!"; *)
+       search params data problem {schedule; search_space}
+    | (test, partial_model) :: search_space, schedule ->
+       Log.check_attempts params.debug problem;
+       Log.print_hints_map params.debug partial_model;
+       if params.debug then Printf.printf "Sending query to Z3\n%!";
+       let model_opt, dur =
+         check_sat params @@
+           fixup_test partial_model @@
+             bigand [
+                 Problem.model_space problem;
+                 test
+               ] in
+       ProfData.incr !data.model_z3_calls;
+       ProfData.update_time_val !data.model_z3_time dur;
+       if params.debug then Printf.printf "Sat Checked\n%!\n";
+       match model_opt with
+       | Some raw_model ->
+          if params.debug then Printf.printf "Found a model, done \n%!";
+          if Problem.seen_attempt problem raw_model then begin
+              Printf.printf "%s\n%!" (Problem.attempts_to_string problem);
+              Printf.printf "\ncurrent model is %s\n%!" (string_of_map raw_model);
+              Printf.printf "\nmodel_space is %s \n%!" (string_of_test @@ Problem.model_space problem);
+              Printf.printf "\nmodel has already been seen and is allowed? %s"
+                (if Problem.model_space problem |> fixup_test raw_model = True
+                 then "yes! thats a contradiction\n%!"
+                 else "no, but somehow we synthesized it... a contradiction\n%!"
+                );
+              failwith ""
+            end
+          else begin
+              Printf.sprintf "IsNOVEL??? \n    %s \n"
+                (Problem.model_space problem
+                 |> fixup_test raw_model
+                 |> string_of_test)
+              |> Log.log params.debug;
+              Some (Hint.join_models partial_model raw_model, t)
+            end
+       | _ ->
+          (* Printf.printf "No model, keep searching with %d opts and %d paths \n%!" (List.length schedule) (List.length search_space); *)
+          search params data problem {schedule; search_space}

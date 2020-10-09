@@ -93,7 +93,7 @@ let mng_params =
                      debug;
                      thrift_mode;
                      interactive;
-                     timeout = Option.(timeout >>= fun s -> Time.(Span.(Some(now(), of_sec s))))})
+                     timeout = Avenir.Timeout.start timeout})
   ]
 
 
