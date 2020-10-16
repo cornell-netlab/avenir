@@ -209,6 +209,18 @@ header icmp_t {
     bit<64> timestamp;
 }
 
+header gtpu_t {
+    bit<3>          version;
+    bit<1>          pt;
+    bit<1>          spare;
+    bit<1>          ex_flag;
+    bit<1>          seq_flag;
+    bit<1>          npdu_flag;
+    GTPUMessageType msgtype;
+    bit<16>         msglen;
+    teid_t          teid;
+}
+
 struct fabric_metadata_t {
     bit<16>      ip_eth_type;
     vlan_id_t    vlan_id;
