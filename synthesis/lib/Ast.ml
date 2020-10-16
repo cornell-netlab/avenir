@@ -934,6 +934,35 @@ and holify_cmd ~f holes c : cmd=
     
 (** replace all vars in cmd that are also in holes with holes having the same name*)
 let holify ?(f=fun x -> x) holes c =  holify_cmd ~f holes c
+
+
+
+let rec varify_all_expr (e : expr) =
+  let bin op (e1,e2) = op (varify_all_expr e1) (varify_all_expr e2) in
+  let un op e = op @@ varify_all_expr e in
+  match e with
+  | Value _ | Var _ -> e
+  | Hole h -> Var h
+  | Plus es | SatPlus es | SatMinus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es ->
+     bin (ctor_for_binexpr e) es
+  | Cast (sz,e) -> un (mkCast sz) e
+  | Slice {hi;lo;bits} -> un (mkSlice hi lo) bits
+
+
+let rec varify_all_test t =
+  let ebin op (e1,e2) = op (varify_all_expr e1) (varify_all_expr e2) in
+  let tbin op (t1,t2) = op (varify_all_test t1) (varify_all_test t2) in
+  match t with
+  | True | False -> t
+  | Eq es -> ebin (%=%) es
+  | Le es -> ebin (%<=%) es
+  | And ts -> tbin (%&%) ts
+  | Or ts -> tbin (%+%) ts
+  | Impl ts -> tbin (%=>%) ts
+  | Iff ts -> tbin (%<=>%) ts
+  | Neg t -> varify_all_test t
+
+
         
 let sequence = List.reduce_exn ~f:(%:%)
 

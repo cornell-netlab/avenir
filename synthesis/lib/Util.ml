@@ -299,6 +299,12 @@ let strmap_project_list m l =
       | None -> acc
       | Some data -> StringMap.set acc ~key ~data)
 
+
+let list_to_string ~to_string l =
+  List.fold l ~init:"" ~f:(fun acc x -> Printf.sprintf "%s %s" acc (to_string x))
+  |> Printf.sprintf "[%s ]"
+
+
 let string_of_strset s =
   StringSet.fold s ~init:"" ~f:(Printf.sprintf "%s %s")
   |> Printf.sprintf "{%s }"

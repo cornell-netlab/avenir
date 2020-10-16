@@ -34,6 +34,13 @@ let edits =
 
 let same_edits = Alcotest.(check edits) "same edits"
 
+let labels =
+  testable_string
+    (Util.list_to_string ~to_string:(Category.to_string ~to_string:(fun () -> "()")))
+    (List.equal (Category.equal ~equal:(fun () () -> true)))
+
+let same_labels = Alcotest.(check labels) "same labels"
+
 
 (* Testing equality smart constructor *)
 let eq_test _ =
@@ -1379,7 +1386,45 @@ let bmv2_parser_parses_real_rules _ =
   |> same_stringlist (List.map ~f:(Tables.Edit.to_bmv2_string phys) expected)
 
 
-  
+
+let fsm_labels_correctly_12 _ =
+  Prover.make_provers "/usr/bin/z3";
+  let one = mkApply("tbl", ["x", 9; "y",9], ["skip",[],Skip] ,Skip) in
+  let wc s = Hole(snd @@ Hole.match_holes_mask "tbl" s, 9) %=% mkVInt(0,9) in
+  let fsm =
+    let open FSM in
+    mkfsm 0 [
+        {id = 0; accept = true;
+         trans = [(wc "x", 0);
+                  (wc "y", 1)]
+        };
+        {id = 1; accept = true;
+         trans = [(wc "y", 1)]};
+      ]
+  in
+  let y v = Tables.Edit.Add("tbl",([Match.wildcard "x" 9; Match.exact_ "y" (mkInt (v,9))], [], 0)) in
+  let x v = Tables.Edit.Add("tbl", ([Match.exact_ "x" (mkInt (v,9)); Match.wildcard "y" 9], [], 0)) in
+  let operations = [
+      y 5;
+      x 5;
+      y 7;
+      x 7;
+    ] in
+  let res = FSM.label_trace fsm one operations in
+  let exp = [
+      Category.Accept ();
+      Category.Accept ();
+      Category.Reject ();
+      Category.Accept ();
+    ] in
+  same_labels exp res
+
+
+
+
+
+
+
 let () =
   let open Alcotest in
   run "Tests" [
@@ -1451,6 +1496,9 @@ let () =
       [test_case "slices away unnecessary extant rows" `Quick slicing_retargeting_metadata_ethernet;
        test_case "keeps necessary extant rows" `Quick slicing_fabric_example;
        test_case "does the right thing?" `Quick slicing_retargeting_metadata_ipv4;
-      ]
+      ];
+
+      "rv",
+      [test_case "correctly labels 1 -> 2 decomp trace" `Quick fsm_labels_correctly_12]
 
     ]
