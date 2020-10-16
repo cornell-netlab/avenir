@@ -22,3 +22,7 @@ synthesis/benchmarks/fabric_S.csv
 synthesis/benchmarks/real/plot.pdf
 synthesis/benchmarks/fabric_no_caches.csv
 synthesis/benchmarks/retargeting/*.csv
+
+# p4-graphs output
+synthesis/benchmarks/real/*.dot
+synthesis/benchmarks/real/*.pdf
