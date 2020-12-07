@@ -237,7 +237,13 @@ let infer (params : Parameters.t) (cache : t) (phys : cmd) (e : Edit.t) =
       )
 
 let update (cache : t) (log : Edit.t) (physs : Edit.t list) : t =
-  (* Printf.printf "Caching %s\n%!" (Edit.to_string log); *)
+  Printf.printf "Caching %s\n%!" (Edit.to_string log);
+  let oc = Stdlib.open_out_gen [Open_creat; Open_append; Open_wronly] 0o777 "example_cache" in
+    let init1 = (Edit.to_string log) in
+    let fun1 = (fun a b -> a ^ " " ^ (Edit.to_string b)) in
+    let op = List.fold physs ~init: init1 ~f:fun1 in
+    Printf.fprintf oc "%s\n%!" op;
+  Stdlib.close_out oc;
   if List.exists cache ~f:(fun (_,ps) ->  ps = physs)
   then cache
   else (log, physs) :: cache
