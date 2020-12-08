@@ -60,7 +60,7 @@ let rec run_experiment iter seq (phys_seq : Edit.t list) (params : Parameters.t)
                    |> flip (apply_edits_to_log params) edit
                    |> flip (apply_edits_to_phys params) pedits
                    |> delete_phys_edits)
-                        
+
 let rec measure (params : Parameters.t) hints problem insertions =
   if params.hot_start then begin
       Printf.eprintf "\t%s\n%!" ProfData.header_string;
@@ -69,16 +69,17 @@ let rec measure (params : Parameters.t) hints problem insertions =
     end
   else begin
       Printf.printf "%s\n%!" ProfData.header_string;
+      Synthesis.edit_cache := Runtime.cache_of_string (Problem.phys (problem ())) "example_cache";
       run_experiment 0 insertions [] params hints (problem ())
     end
-                                            
+
 let permute l =
   List.map l ~f:(inj_r (Random.int (List.length l)))
   |> List.sort ~compare:(fun (i, _) (j,_) -> compare i j)
-  |> List.map ~f:(snd) 
-              
+  |> List.map ~f:(snd)
+
 let tbl = Printf.sprintf "tbl%d"
-    
+
 let rec mk_pipeline varsize =
   fun n ->
   if n = 0 then [] else
@@ -133,7 +134,7 @@ let rec generate_n_insertions varsize length n avail_tables maxes : Edit.t list 
        let _ : unit = Printf.printf "Inserting\n%!" in
        Add (name, row)
        :: generate_n_insertions varsize length (n-1) avail_tables' maxes'
-                                  
+
 let reorder_benchmark varsize length max_inserts params =
   Random.init 99;
   let logical_pipeline = mk_pipeline varsize length in
@@ -161,8 +162,8 @@ let reorder_benchmark varsize length max_inserts params =
   measure params (Some (List.return)) problem insertion_sequence
 
 
-  
-            
+
+
 (** ONF BENCHMARK **)
 
 let translate_key var_mapping key =
@@ -189,7 +190,7 @@ let onos_to_edits var_mapping filename tbl_nm key =
         [String.split line ~on:','
          |> make_edit]
       ) in
-  edits    
+  edits
 
 
 let (%>) c c' = ignore c; c'
@@ -439,7 +440,7 @@ let generate_out acc  =
           then biggest + one + one
           else biggest + one)
 
-  
+
 let rep params data nrules =
   let fvs = ["ip_src",32; "ip_dst",32] in
   let cb_fvs = List.map ~f:fst fvs in

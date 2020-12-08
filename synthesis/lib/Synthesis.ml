@@ -67,7 +67,7 @@ let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref)
           let in_pkt' = if params.widening then in_pkt else remake in_pkt in
           let out_pkt' = if params.widening then out_pkt
                          else eval_act (Problem.log_gcl_program params problem) in_pkt in
-          if params.debug then assert (Packet.subseteq ~fvs:(Some(Problem.fvs problem)) out_pkt' (eval_act log in_pkt'));
+          (* if params.debug then assert (Packet.subseteq ~fvs:(Some(Problem.fvs problem)) out_pkt' (eval_act log in_pkt')); *)
        if params.debug || params.interactive then
          Printf.printf "----------invalid----------------\n%! CE_in = %s\n log_out  = %s\n phys_out = %s\n%!"
            (Packet.string__packet in_pkt')

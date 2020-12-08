@@ -1,0 +1,4 @@
+ADD,ipv4,hdr.ipv4.dstAddr ~ 0xa000001#32 ,0xb#48;0x1#9,0:|ADD,nexthop,meta.nexthop ~ 0x23940402#32 ,0x1#9,0|ADD,ipv4,hdr.ipv4.dstAddr ~ 0xa000001#32 ,0xb#48;0x23940402#32,0
+ADD,ethernet,hdr.ethernet.dstAddr ~ 0xb#48 ,0x1#9,0:|ADD,ethernet,hdr.ethernet.dstAddr ~ 0xb#48 ,0x23940402#32,0
+ADD,ethernet,hdr.ethernet.dstAddr ~ 0x16#48 ,0x2#9,0:|ADD,nexthop,meta.nexthop ~ 0xaa118a50#32 ,0x2#9,0|ADD,ethernet,hdr.ethernet.dstAddr ~ 0x16#48 ,0xaa118a50#32,0
+ADD,ethernet,hdr.ethernet.dstAddr ~ 0x21#48 ,0x3#9,0:|ADD,nexthop,meta.nexthop ~ 0x1a351340#32 ,0x3#9,0|ADD,ethernet,hdr.ethernet.dstAddr ~ 0x21#48 ,0x1a351340#32,0

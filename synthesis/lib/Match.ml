@@ -156,7 +156,7 @@ let is_wildcard m =
      Bigint.(get_int lo <= zero && hi_v >= max_int sz)
 
 let list_to_string : t list -> string =
-  let list_el_string m = if is_wildcard m then "" else (to_string m ^ " ") in
+  let list_el_string m = if is_wildcard m then "" else (to_string m ^ " ") in (* change to just to string m ^ " " if needed*)
   List.fold ~init:"" ~f:(fun acc m -> Printf.sprintf "%s%s" acc (list_el_string m))
 
 let list_to_test (matches : t list) =
