@@ -20,10 +20,10 @@ val check_sat : Parameters.t  -> test -> ((value StringMap.t) option * Time.Span
 val is_sat : Parameters.t -> test -> bool
 
 (* Checks SMT Query for validity. returning an optional model and timing data *)
-val check_valid : Parameters.t -> test -> ((value StringMap.t) option * Time.Span.t)
+val check_valid : ?rv:bool -> Parameters.t -> test -> ((value StringMap.t) option * Time.Span.t)
 
 (* returns true iff the test is valid *)
-val is_valid : Parameters.t -> test -> bool
+val is_valid : ?rv:bool -> Parameters.t -> test -> bool
 
 (* Checks SMT Query for validity, using the abstraction cache;
    returns an optional model and timing data if it is *)

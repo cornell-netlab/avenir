@@ -33,3 +33,7 @@ let equal ~equal c1 c2 =
     | Unknown x1, Unknown x2 ->
      equal x1 x2
   | _, _ -> false
+
+let should_fail = function
+  | Reject _ -> true
+  | _ -> false

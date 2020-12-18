@@ -8,6 +8,7 @@ let print_debug = false
 
 let valid_prover = ref None
 let sat_prover = ref None
+let rv_prover = ref None
 let shortener = Bishtbl.make ()
 
 let get r = Option.value_exn !r ~message:"Prover not initialized!!!"
@@ -15,7 +16,8 @@ let get r = Option.value_exn !r ~message:"Prover not initialized!!!"
 let make_provers loc =
   Printf.printf "Intializing prover with path %s\n%!" loc;
   sat_prover := Some (Smtlib.make_solver loc);
-  valid_prover := !sat_prover
+  valid_prover := !sat_prover;
+  rv_prover := Some (Smtlib.make_solver loc)
 
 let debug term =
   if force_print || print_debug then
@@ -255,7 +257,7 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
 let is_sat params test =
   check_sat params test |> fst |> Option.is_some
 
-let check_valid (params : Parameters.t) (longtest : Ast.test)  =
+let check_valid ?rv:(rv=false) (params : Parameters.t) (longtest : Ast.test)  =
   let open Smtlib in
   (* Printf.printf "Checking validity for test of size %d\n%!" (num_nodes_in_test test); *)
   let test = Shortener.shorten shortener longtest in
@@ -264,22 +266,23 @@ let check_valid (params : Parameters.t) (longtest : Ast.test)  =
   let vars = free_vars_of_test test
              |> List.dedup_and_sort
                   ~compare:(fun (idx, _) (idy, _) -> Stdlib.compare idx idy) in
+  let prover = if rv then rv_prover else valid_prover in
   let () =
     List.iter vars
       ~f:(fun (id, i) ->
         if force_print || params.debug && print_debug then
           Printf.printf "(declare-const %s (_ BitVec %d))\n%!" id i;
-        declare_const (get valid_prover) (Id id) (BitVecSort i)) in
+        declare_const (get prover) (Id id) (BitVecSort i)) in
   let st = Time.now() in
   let term = not_ (test_to_term test `Valid params.debug) in
   let response =
     if force_print || params.debug && print_debug then debug term;
-    assert_ (get valid_prover) term;
-    check_sat_using QFBV (get valid_prover) in
+    assert_ (get prover) term;
+    check_sat_using QFBV (get prover) in
   let dur = Time.(diff (now()) st) in
   let model =
     match response with
-    | Sat -> get valid_prover
+    | Sat -> get prover
              |> get_model
              |> model_to_packet
              |> Shortener.unshorten_model shortener
@@ -287,12 +290,12 @@ let check_valid (params : Parameters.t) (longtest : Ast.test)  =
     | Unsat ->  None
     | Unknown -> failwith "response unknown"
   in
-  reset (get valid_prover);
+  reset (get prover);
   (model, dur)
 
 
-let is_valid params test =
- test = True || (check_valid params test |> fst |> Option.is_none)
+let is_valid ?rv:(rv=false) params test =
+ test = True || (check_valid ~rv params test |> fst |> Option.is_none)
 
 let cache = ref @@ QAbstr.make ()
 

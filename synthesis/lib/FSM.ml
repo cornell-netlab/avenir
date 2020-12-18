@@ -17,15 +17,19 @@ let get_next (c : cmd) (q : state) (e : Edit.t) =
     ~f:(fun (cond, state_idx) ->
       let cond' = Manip.substV ~holes:true cond m
                   |> varify_all_test in
-      Option.some_if
-        (Prover.is_valid Parameters.default cond')
-        (state_idx)
+      (* Printf.printf "In state %d for edit %s\n in condition %s \n checking %s\n%!" q.id (string_of_map m) (string_of_test cond) (string_of_test cond'); *)
+      if Prover.is_valid ~rv:false Parameters.default cond' then
+        (* let () = Printf.printf "Valid, move to %d \n%!" state_idx in *)
+        Some state_idx
+      else
+        None
     )
 
 
 type t = {
     states : state IntMap.t;
     config : state_idx;
+    start : state_idx;
   }
 
 
@@ -39,7 +43,7 @@ let mkfsm start (ss : state list) : t =
            |> failwith
       )
   in
-  { states; config = start}
+  { states; start; config = start}
 
 
 let get_state (fsm : t) =
@@ -71,3 +75,7 @@ let label_trace (fsm : t) (c : cmd) (trace : Edit.t list) : ( unit Category.t li
       (Category.get fsm, tr @ [res])
     )
   |> snd
+
+
+let reset (fsm : t ) : t =
+  {fsm with config = fsm.start}

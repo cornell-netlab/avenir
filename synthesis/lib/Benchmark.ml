@@ -38,28 +38,35 @@ let rec run_experiment iter seq (phys_seq : Edit.t list) (params : Parameters.t)
      let data = ProfData.zero () in
      let problem_inner = Problem.(replace_log_edits problem edit) in
      let st = Time.now () in
-     assert (List.length (Problem.phys_edits problem_inner) = 0);
-     match cegis_math params data problem_inner with
-     | None -> None
+     (* assert (List.length (Problem.phys_edits problem_inner) = 0); *)
+     let checks = RV.check_props (Problem.log problem) (List.nth_exn edit 0) in
+     Printf.printf "Done checking rv props in %fms\n%!" (Time.(Span.(diff (now ()) st |> to_ms)));
+     match checks with 
+     | None ->
+        Printf.printf "Edit %s failed\n%!" (List.nth_exn edit 0 |> Edit.to_string);
+        run_experiment iter edits phys_seq params hints problem
+     | Some _ -> 
+        match cegis_math params data problem_inner with
+        | None -> None
         (* (\* let _ : Edit.t list option = cegis_math {params with debug = true} data problem_inner in *\)
          * failwith "example failed" *)
-     | Some pedits ->
-        !data.time := Time.(diff (now()) st);
-        !data.log_inst_size :=  Problem.log_inst problem |> Instance.size ;
-        !data.phys_inst_size := Problem.phys_inst problem |> Instance.size;
-        if params.hot_start then
-          Printf.eprintf "\t%s\n%!" (ProfData.to_string !data)
-        else
-          Printf.printf "%s\n%!" (ProfData.to_string !data);
-        run_experiment (iter + 1)
-          edits
-          (phys_seq @ pedits)
-          (params)
-          hints
-          Problem.(problem
-                   |> flip (apply_edits_to_log params) edit
-                   |> flip (apply_edits_to_phys params) pedits
-                   |> delete_phys_edits)
+        | Some pedits ->
+           !data.time := Time.(diff (now()) st);
+           !data.log_inst_size :=  Problem.log_inst problem |> Instance.size ;
+           !data.phys_inst_size := Problem.phys_inst problem |> Instance.size;
+           if params.hot_start then
+             Printf.eprintf "\t%s\n%!" (ProfData.to_string !data)
+           else
+             Printf.printf "%s\n%!" (ProfData.to_string !data);
+           run_experiment (iter + 1)
+             edits
+             (phys_seq @ pedits)
+             (params)
+             hints
+             Problem.(problem
+                      |> flip (apply_edits_to_log params) edit
+                      |> flip (apply_edits_to_phys params) pedits
+                      |> delete_phys_edits)
                         
 let rec measure (params : Parameters.t) hints problem insertions =
   if params.hot_start then begin
@@ -215,6 +222,13 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
   let log_edits = Runtime.parse log log_edits_file in
   let phys_edits = Runtime.parse phys phys_edits_file in
 
+  (* Checking initial edits to ensure well-formedness *)
+  List.iter log_edits ~f:(fun e ->
+      match RV.check_props log e with
+      | None -> failwith @@ Printf.sprintf "Edit %s violated property" (Edit.to_string e)
+      | Some _ ->  ()
+    );
+  
   let problem =
     Problem.make
       ~log  ~phys ~fvs

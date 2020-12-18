@@ -960,7 +960,7 @@ let rec varify_all_test t =
   | Or ts -> tbin (%+%) ts
   | Impl ts -> tbin (%=>%) ts
   | Iff ts -> tbin (%<=>%) ts
-  | Neg t -> varify_all_test t
+  | Neg t -> !%(varify_all_test t)
 
 
         

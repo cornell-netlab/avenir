@@ -17,6 +17,7 @@ module Tables = Avenir.Tables
 module Instance = Avenir.Instance
 module Runtime = Avenir.Runtime
 module Server = Avenir.Server
+module Props = Avenir.Props
 
 let opt_params : Parameters.t Command.Param.t =
   let open Command.Let_syntax in
@@ -150,9 +151,11 @@ let synthesize =
     [%map_open
      let params,mk_prob,data_opt = problem_flags <*> (map2 opt_params mng_params ~f:Parameters.union)
      and measure = flag "-measure" no_arg ~doc:"Produce a CSV of data to stdout"
-     and print_res = flag "-p" no_arg ~doc:"Print synthesized program" in
+     and print_res = flag "-p" no_arg ~doc:"Print synthesized program"
+     and monitor_props = flag "--monitor" (optional string) ~doc:"<name> Comma-separated list of properties to monitor" in
 
          fun () ->
+         Props.init_properties_s (Option.value monitor_props ~default:"");
          let data = Option.value_exn data_opt ~message:"Data must be passed in for synthesis"in
          let prob = mk_prob () in
          let edit_to_string = if params.thrift_mode then
@@ -236,9 +239,11 @@ let onf_real : Command.t =
      and fvs = anon ("fvs" %: string)
      and assume = anon ("assume" %: string)
      and logical_inc = flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
-     and physical_inc = flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file"in
+     and physical_inc = flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file"
+     and monitor_props = flag "--monitor" (optional string) ~doc:"<name> Comma-separated list of properties to monitor" in                             
 
          fun () ->
+         Props.init_properties_s (Option.value monitor_props ~default:"");
          let params = Parameters.union opts mng in
          let res = Benchmark.basic_onf_ipv4_real params
                      data logical_p4 physical_p4 log_edits phys_edits fvs assume logical_inc physical_inc

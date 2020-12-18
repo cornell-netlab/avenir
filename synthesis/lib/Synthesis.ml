@@ -388,28 +388,31 @@ let rec cegis_math_sequence (params : Parameters.t) data get_problem =
          None
       | Some (problem, pedits) ->
          let problem = Problem.replace_log_edits problem [ledit] in
-         Printf.sprintf "\n\n\n%s\n\n\n" (Problem.to_string params problem)
-         |> Log.log params.debug;
-         let phys_edits = match cegis_math params data problem with
-           | None ->
-              if params.no_deletes then
-                cegis_math {params with no_deletes = false} data problem
-              else
-                None
-           | Some phys_edits ->
-              Some phys_edits
-         in
-         match phys_edits with
-         | None ->
-            Printf.printf "Couldn't find solution for:\n%!";
-            Log.print_edits params (Problem.log problem) [ledit];
-            None
-         | Some phys_edits ->
-            Log.print_edits ~tab:false params (Problem.phys problem) phys_edits;
-            Some (Problem.replace_phys_edits problem phys_edits
-                  |> Problem.commit_edits_log params
+         match RV.check_props (Problem.log problem) ledit with
+         | None -> acc
+         | Some _ -> 
+            Printf.sprintf "\n\n\n%s\n\n\n" (Problem.to_string params problem)
+            |> Log.log params.debug;
+            let phys_edits = match cegis_math params data problem with
+              | None ->
+                 if params.no_deletes then
+                   cegis_math {params with no_deletes = false} data problem
+                 else
+                   None
+              | Some phys_edits ->
+                 Some phys_edits
+            in
+            match phys_edits with
+            | None ->
+               Printf.printf "Couldn't find solution for:\n%!";
+               Log.print_edits params (Problem.log problem) [ledit];
+               None
+            | Some phys_edits ->
+               Log.print_edits ~tab:false params (Problem.phys problem) phys_edits;
+               Some (Problem.replace_phys_edits problem phys_edits
+                     |> Problem.commit_edits_log params
                   |> Problem.commit_edits_phys params,
-                  pedits @ phys_edits)
+                     pedits @ phys_edits)
     )
   |> Option.bind ~f:(fun p ->
          if params.hot_start then
