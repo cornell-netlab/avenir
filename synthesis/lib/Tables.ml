@@ -218,7 +218,8 @@ module Edit = struct
 
   let to_string e =
     match e with
-    | Add (nm, row) -> Printf.sprintf "ADD,%s,%s" nm (Row.to_string row)
+    | Add (nm, row) ->
+       Printf.sprintf "ADD,%s,%s" nm (Row.to_string row)
     | Del (nm, idx) -> Printf.sprintf "DEL,%s,%d" nm idx
 
   let to_bmv2_string (cmd : cmd) e =

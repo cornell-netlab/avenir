@@ -292,7 +292,7 @@ let check_valid (params : Parameters.t) (longtest : Ast.test)  =
 
 
 let is_valid params test =
-  check_valid params test |> fst |> Option.is_none
+ test = True || (check_valid params test |> fst |> Option.is_none)
 
 let cache = ref @@ QAbstr.make ()
 

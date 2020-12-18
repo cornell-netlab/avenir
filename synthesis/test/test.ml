@@ -1419,11 +1419,293 @@ let fsm_labels_correctly_12 _ =
     ] in
   same_labels exp res
 
+let fsm_lossy _ =
+  Prover.make_provers "/usr/bin/z3";
+  let rec gen_random rules n =
+    if n <= 0 then
+      []
+    else
+      let op = Random.int 1000
+               |> List.nth_exn rules (Random.int (List.length rules)) in
+      op :: gen_random rules (n-1)
+  in
+  let one = mkApply("tbl", ["x", 32; "y", 32], ["skip",[],Skip] ,Skip) in
+  let wc s = Hole(snd @@ Hole.match_holes_mask "tbl" s, 32) %=% mkVInt(0,32) in
+  let fsm =
+    let open FSM in
+    mkfsm 0 [
+        {id = 0; accept = true;
+         trans = [(wc "x", 0);
+                  (wc "y", 1)]
+        };
+        {id = 1; accept = true;
+         trans = [(wc "y", 1)]};
+      ]
+  in
+  let y v = Tables.Edit.Add("tbl",([Match.wildcard "x" 32; Match.exact_ "y" (mkInt (v,32))], [], 0)) in
+  let x v = Tables.Edit.Add("tbl", ([Match.exact_ "x" (mkInt (v,32)); Match.wildcard "y" 32], [], 0)) in
+  let operations = gen_random [x;y] 10000 in
+  let st = Time.now () in
+  let _ = FSM.label_trace fsm one operations in
+  let nd = Time.now () in
+  Printf.printf "Took %f milliseconds (avg)" (Time.(Span.((diff nd st |> to_ms) /. 10000.0)));
+  same_test True False
 
+let fsm_valid _ =
+  Prover.make_provers "/usr/bin/z3";
+  let rec gen_random rules n =
+    if n <= 0 then
+      []
+    else
+      let op = Random.int 1000
+               |> List.nth_exn rules (Random.int (List.length rules)) in
+      op :: gen_random rules (n-1)
+  in
+  let one = mkApply("tbl", ["x", 1; "y", 32], ["skip",[],Skip] ,Skip) in
+  let cond = (Hole(fst @@ Hole.match_holes_mask "tbl" "x",1) %=%  mkVInt(0,1)) %=>% (Hole(snd @@ Hole.match_holes_mask "tbl" "y", 32) %=% mkVInt(0,32)) in
+  let fsm =
+    let open FSM in
+    mkfsm 0 [
+        {id = 0; accept = true;
+         trans = [(cond, 0);]
+        }
+      ]
+  in
+  let validok v = Tables.Edit.Add("tbl",([Match.exact_ "x" (mkInt(1,1)); Match.exact_ "y" (mkInt (v,32)) ], [], 0)) in
+  let invalidok _ = Tables.Edit.Add("tbl", ([Match.exact_ "x" (mkInt (0,1)); Match.wildcard "y" 32], [], 0)) in
+  let invalidwrong v = Tables.Edit.Add("tbl", ([Match.exact_ "x" (mkInt (0,1)); Match.exact_ "y" (mkInt (v,32))], [], 0)) in
 
+  let operations = gen_random [validok;invalidok;invalidwrong] 40000 in
+  let st = Time.now () in
+  let _ = FSM.label_trace fsm one operations in
+  let nd = Time.now () in
+  Printf.printf "Took %f milliseconds" (Time.(Span.((diff nd st |> to_ms) /. 40000.0)));  
+  same_test True False              
 
+let fsm_lossy2 _ =
+  Prover.make_provers "/usr/bin/z3";
+  let rec gen_random rules n =
+    if n <= 0 then
+      []
+    else
+      let op = Random.int 1000
+               |> List.nth_exn rules (Random.int (List.length rules)) in
+      op :: gen_random rules (n-1)
+  in
+  let one = mkApply("tbl", ["x", 32; "y", 32; "z",32], ["skip",[],Skip] ,Skip) in
+  let wc s = Hole(snd @@ Hole.match_holes_mask "tbl" s, 32) %=% mkVInt(0,32) in
+  let fsm =
+    let open FSM in
+    mkfsm 0 [
+        {id = 0; accept = true;
+         trans = [(wc "x", 0);
+                  (wc "y", 1);
+                  (wc "z", 2)]
+        };
+        {id = 1; accept = true;
+         trans = [(wc "y", 1);
+                  (wc "z", 2);]};
+        {id = 2; accept = true;
+         trans = [(wc "z", 2);]};        
+      ]
+  in
+  let x v = Tables.Edit.Add("tbl", ([Match.exact_ "x" (mkInt (v,32)); Match.wildcard "y" 32; Match.wildcard "z" 32], [], 0)) in  
+  let y v = Tables.Edit.Add("tbl",([Match.wildcard "x" 32; Match.exact_ "y" (mkInt (v,32)); Match.wildcard "z" 32], [], 0)) in
+  let z v = Tables.Edit.Add("tbl", ([Match.wildcard "x" 32; Match.wildcard "y" 32; Match.exact_ "z" (mkInt(v,32))], [], 0)) in  
+  let operations = gen_random [x;y;z] 40000 in
+  let st = Time.now () in
+  let _ = FSM.label_trace fsm one operations in
+  let nd = Time.now () in
+  Printf.printf "Took %f milliseconds (avg)" (Time.(Span.((diff nd st |> to_ms) /. 40000.0)));
+  same_test True False
 
+let fsm_lossy3 _ =
+  Prover.make_provers "/usr/bin/z3";
+  let rec gen_random rules n =
+    if n <= 0 then
+      []
+    else
+      let op = Random.int 1000
+               |> List.nth_exn rules (Random.int (List.length rules)) in
+      op :: gen_random rules (n-1)
+  in
+  let one = mkApply("tbl", ["x", 32; "y", 32; "z",32], ["skip",[],Skip] ,Skip) in
+  let wc s = Hole(snd @@ Hole.match_holes_mask "tbl" s, 32) %=% mkVInt(0,32) in
+  let fsm =
+    let open FSM in
+    mkfsm 0 [
+        {id = 0; accept = true;
+         trans = [(wc "x", 0);
+                  (wc "y", 1);
+                  (wc "z", 2)]
+        };
+        {id = 1; accept = true;
+         trans = [(wc "y", 1);
+                  (wc "z", 2);]};
+        {id = 2; accept = true;
+         trans = [(wc "z", 2);]};        
+      ]
+  in
+  let x v = Tables.Edit.Add("tbl", ([Match.exact_ "x" (mkInt (v,32)); Match.wildcard "y" 32; Match.wildcard "z" 32], [], 0)) in  
+  let y v = Tables.Edit.Add("tbl",([Match.wildcard "x" 32; Match.exact_ "y" (mkInt (v,32)); Match.wildcard "z" 32], [], 0)) in
+  let z v = Tables.Edit.Add("tbl", ([Match.wildcard "x" 32; Match.wildcard "y" 32; Match.exact_ "z" (mkInt(v,32))], [], 0)) in  
+  let operations = gen_random [x;y;z] 40000 in
+  let st = Time.now () in
+  let _ = FSM.label_trace fsm one operations in
+  let nd = Time.now () in
+  Printf.printf "Took %f milliseconds (avg)" (Time.(Span.((diff nd st |> to_ms) /. 40000.0)));
+  same_test True False
 
+let fsm_lossy4 _ =
+  Prover.make_provers "/usr/bin/z3";
+  let rec gen_random rules n =
+    if n <= 0 then
+      []
+    else
+      let op = Random.int 1000
+               |> List.nth_exn rules (Random.int (List.length rules)) in
+      op :: gen_random rules (n-1)
+  in
+  let one = mkApply("tbl", ["x", 32; "y", 32; "z",32;"a",32], ["skip",[],Skip] ,Skip) in
+  let wc s = Hole(snd @@ Hole.match_holes_mask "tbl" s, 32) %=% mkVInt(0,32) in
+  let fsm =
+    let open FSM in
+    mkfsm 0 [
+        {id = 0; accept = true;
+         trans = [(wc "x", 0);
+                  (wc "y", 1);
+                  (wc "z", 2);
+                  (wc "a", 3)]
+        };
+        {id = 1; accept = true;
+         trans = [(wc "y", 1);
+                  (wc "z", 2);
+                  (wc "z", 3)]};
+        {id = 2; accept = true;
+         trans = [(wc "z", 2);
+                  (wc "a", 3)]};        
+        {id = 3; accept = true;
+         trans = [(wc "a", 3)]};        
+      ]
+  in
+  let x v = Tables.Edit.Add("tbl", ([Match.exact_ "x" (mkInt (v,32)); Match.wildcard "y" 32; Match.wildcard "z" 32; Match.wildcard "a" 32], [], 0)) in  
+  let y v = Tables.Edit.Add("tbl",([Match.wildcard "x" 32; Match.exact_ "y" (mkInt (v,32)); Match.wildcard "z" 32; Match.wildcard "a" 32], [], 0)) in
+  let z v = Tables.Edit.Add("tbl", ([Match.wildcard "x" 32; Match.wildcard "y" 32; Match.exact_ "z" (mkInt(v,32)); Match.wildcard "a" 32], [], 0)) in 
+  let a v = Tables.Edit.Add("tbl", ([Match.wildcard "x" 32; Match.wildcard "y" 32; Match.wildcard "z" 32; Match.exact_ "a" (mkInt(v,32))], [], 0)) in  
+  let operations = gen_random [x;y;z;a] 40000 in
+  let st = Time.now () in
+  let _ = FSM.label_trace fsm one operations in
+  let nd = Time.now () in
+  Printf.printf "Took %f milliseconds (avg)" (Time.(Span.((diff nd st |> to_ms) /. 40000.0)));
+  same_test True False
+
+let fsm_lossy5 _ =
+  Prover.make_provers "/usr/bin/z3";
+  let rec gen_random rules n =
+    if n <= 0 then
+      []
+    else
+      let op = Random.int 1000
+               |> List.nth_exn rules (Random.int (List.length rules)) in
+      op :: gen_random rules (n-1)
+  in
+  let one = mkApply("tbl", ["x", 32; "y", 32; "z",32;"a",32;"b",32], ["skip",[],Skip] ,Skip) in
+  let wc s = Hole(snd @@ Hole.match_holes_mask "tbl" s, 32) %=% mkVInt(0,32) in
+  let fsm =
+    let open FSM in
+    mkfsm 0 [
+        {id = 0; accept = true;
+         trans = [(wc "x", 0);
+                  (wc "y", 1);
+                  (wc "z", 2);
+                  (wc "a", 3);                 
+                  (wc "b", 4)]
+        };
+        {id = 1; accept = true;
+         trans = [(wc "y", 1);
+                  (wc "z", 2);
+                  (wc "z", 3);                 
+                  (wc "b", 4)]};
+        {id = 2; accept = true;
+         trans = [(wc "z", 2);
+                  (wc "a", 3);                 
+                  (wc "b", 4)]};        
+        {id = 3; accept = true;
+         trans = [(wc "a", 3);                 
+                  (wc "b", 4)]};        
+        {id = 4; accept = true;
+         trans = [(wc "b", 4)]};        
+      ]
+  in
+  let x v = Tables.Edit.Add("tbl", ([Match.exact_ "x" (mkInt (v,32)); Match.wildcard "y" 32; Match.wildcard "z" 32; Match.wildcard "a" 32; Match.wildcard "b" 32], [], 0)) in  
+  let y v = Tables.Edit.Add("tbl",([Match.wildcard "x" 32; Match.exact_ "y" (mkInt (v,32)); Match.wildcard "z" 32; Match.wildcard "a" 32; Match.wildcard "b" 32], [], 0)) in
+  let z v = Tables.Edit.Add("tbl", ([Match.wildcard "x" 32; Match.wildcard "y" 32; Match.exact_ "z" (mkInt(v,32)); Match.wildcard "a" 32; Match.wildcard "b" 32], [], 0)) in 
+  let a v = Tables.Edit.Add("tbl", ([Match.wildcard "x" 32; Match.wildcard "y" 32; Match.wildcard "z" 32; Match.exact_ "a" (mkInt(v,32)); Match.wildcard "b" 32], [], 0)) in
+  let b v = Tables.Edit.Add("tbl", ([Match.wildcard "x" 32; Match.wildcard "y" 32; Match.wildcard "z" 32; Match.wildcard "a" 32; Match.exact_ "b" (mkInt(v,32))], [], 0)) in    
+  let operations = gen_random [x;y;z;a;b] 40000 in
+  let st = Time.now () in
+  let _ = FSM.label_trace fsm one operations in
+  let nd = Time.now () in
+  Printf.printf "Took %f milliseconds (avg)" (Time.(Span.((diff nd st |> to_ms) /. 40000.0)));
+  same_test True False
+
+let fsm_lossy6 _ =
+  Prover.make_provers "/usr/bin/z3";
+  let rec gen_random rules n =
+    if n <= 0 then
+      []
+    else
+      let op = Random.int 1000
+               |> List.nth_exn rules (Random.int (List.length rules)) in
+      op :: gen_random rules (n-1)
+  in
+  let one = mkApply("tbl", ["x", 32; "y", 32; "z",32;"a",32;"b",32], ["skip",[],Skip] ,Skip) in
+  let wc s = Hole(snd @@ Hole.match_holes_mask "tbl" s, 32) %=% mkVInt(0,32) in
+  let fsm =
+    let open FSM in
+    mkfsm 0 [
+        {id = 0; accept = true;
+         trans = [(wc "x", 0);
+                  (wc "y", 1);
+                  (wc "z", 2);
+                  (wc "a", 3);                 
+                  (wc "b", 4);                 
+                  (wc "c", 5)]
+        };
+        {id = 1; accept = true;
+         trans = [(wc "y", 1);
+                  (wc "z", 2);
+                  (wc "z", 3);                 
+                  (wc "b", 4);                 
+                  (wc "c", 5)]};
+        {id = 2; accept = true;
+         trans = [(wc "z", 2);
+                  (wc "a", 3);                 
+                  (wc "b", 4);                 
+                  (wc "c", 5)]};        
+        {id = 3; accept = true;
+         trans = [(wc "a", 3);                 
+                  (wc "b", 4);                 
+                  (wc "c", 5)]};        
+        {id = 4; accept = true;
+         trans = [(wc "b", 4);                 
+                  (wc "c", 5)]};        
+        {id = 5; accept = true;
+         trans = [(wc "c", 5)]};
+      ]
+  in
+  let x v = Tables.Edit.Add("tbl", ([Match.exact_ "x" (mkInt (v,32)); Match.wildcard "y" 32; Match.wildcard "z" 32; Match.wildcard "a" 32; Match.wildcard "b" 32; Match.wildcard "c" 32], [], 0)) in  
+  let y v = Tables.Edit.Add("tbl",([Match.wildcard "x" 32; Match.exact_ "y" (mkInt (v,32)); Match.wildcard "z" 32; Match.wildcard "a" 32; Match.wildcard "b" 32; Match.wildcard "c" 32], [], 0)) in
+  let z v = Tables.Edit.Add("tbl", ([Match.wildcard "x" 32; Match.wildcard "y" 32; Match.exact_ "z" (mkInt(v,32)); Match.wildcard "a" 32; Match.wildcard "b" 32; Match.wildcard "c" 32], [], 0)) in 
+  let a v = Tables.Edit.Add("tbl", ([Match.wildcard "x" 32; Match.wildcard "y" 32; Match.wildcard "z" 32; Match.exact_ "a" (mkInt(v,32)); Match.wildcard "b" 32; Match.wildcard "c" 32], [], 0)) in
+  let b v = Tables.Edit.Add("tbl", ([Match.wildcard "x" 32; Match.wildcard "y" 32; Match.wildcard "z" 32; Match.wildcard "a" 32; Match.exact_ "b" (mkInt(v,32)); Match.wildcard "c" 32], [], 0)) in
+  let c v = Tables.Edit.Add("tbl", ([Match.wildcard "x" 32; Match.wildcard "y" 32; Match.wildcard "z" 32; Match.wildcard "a" 32; Match.wildcard "b" 32; Match.exact_ "c" (mkInt(v,32))], [], 0)) in      
+  let operations = gen_random [x;y;z;a;b;c] 40000 in
+  let st = Time.now () in
+  let _ = FSM.label_trace fsm one operations in
+  let nd = Time.now () in
+  Printf.printf "Took %f milliseconds (avg)" (Time.(Span.((diff nd st |> to_ms) /. 40000.0)));
+  same_test True False                   
 
 let () =
   let open Alcotest in
@@ -1499,6 +1781,12 @@ let () =
       ];
 
       "rv",
-      [test_case "correctly labels 1 -> 2 decomp trace" `Quick fsm_labels_correctly_12]
-
+      [test_case "correctly labels 1 -> 2 decomp trace" `Quick fsm_labels_correctly_12;
+       test_case "processes rules lossy" `Slow fsm_lossy2;
+       test_case "processes rules validity" `Slow fsm_valid;
+       test_case "processes rules lossy 3" `Slow fsm_lossy3;
+       test_case "processes rules lossy 4" `Slow fsm_lossy4;
+       test_case "processes rules lossy 5" `Slow fsm_lossy5;
+       test_case "processes rules lossy 6" `Slow fsm_lossy6;             
+      ]
     ]
