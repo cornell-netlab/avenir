@@ -71,11 +71,11 @@ class SingleSwitchTopo(Topo):
                                 mac = mac)
             self.addLink(host, switch)
             log_rules.extend([
-                # "table_add send_frame rewrite_mac {} => {}".format(str(hid),mac),
+                "table_add send_frame rewrite_mac {} => {}".format(str(hid),mac),
                 "table_add ipv4_forward set_nhop {0}/32 => {1} {2}".format(ip,mac,str(hid))
                 ])
             phys_rules.extend([
-                # "table_add send_frame rewrite_mac {} => {}".format(str(hid),mac),
+                "table_add send_frame rewrite_mac {} => {}".format(str(hid),mac),
                 "table_add forward set_dmac {} => {}".format(ip,mac),
                 "table_add ipv4_lpm set_nhop {0}/32 => {0} {1}".format(ip,str(hid))
                 ])
@@ -213,7 +213,7 @@ def cleanup():
 def main():
     cd = "cd {}".format(args.loc)
     runtime = "benchmarks/bmv2/simple_router/runtime_CLI.py"
-    run_avenir = lambda f: "./avenir synth benchmarks/bmv2/simple_router_logical.p4 benchmarks/bmv2/simple_router_16.p4 benchmarks/bmv2/no_edits.csv benchmarks/bmv2/no_edits.csv benchmarks/bmv2/fvs -data benchmarks/bmv2/{0} --thrift -b 100 -e 3 -P4 -I1 benchmarks/real/p4includes/ -I2 benchmarks/real/p4includes/ --no-defaults --min --hints exact --no-deletes --cache-edits 3 -s -S {1}".format(args.rules, f)
+    run_avenir = lambda f: "./avenir synth benchmarks/bmv2/simple_router_logical.p4 benchmarks/bmv2/simple_router_16.p4 benchmarks/bmv2/no_edits.csv benchmarks/bmv2/no_edits.csv benchmarks/bmv2/fvs -data benchmarks/bmv2/{0} --thrift -b 100 -e 3 -P4 -I1 benchmarks/real/p4includes/ -I2 benchmarks/real/p4includes/ --no-defaults --min --hints exact --no-deletes --cache-edits 3 -s -S {1} --monitor noeth".format(args.rules, f)
     baseline = "cat benchmarks/bmv2/{0}_solution.txt".format(args.rules)
     experiment_cmd = lambda exp,label: "{0} && (({1} | {2}) 2> /tmp/cache_build_time_{3})".format(cd, exp, runtime, label)
     data0 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir(""), "cold"))
