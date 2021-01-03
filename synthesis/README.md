@@ -11,6 +11,12 @@ opam switch create . ocaml-base-compiler.4.09.0
 to install the correct version of ocaml. Be sure to type `eval $(opam
 env)` to load the appropriate environment.
 
++ Install `m4` if it is not already installed.
+
+``` bash
+sudo apt-get install m4
+```
+
 + Now, install a few things to get you started
 
 ```
@@ -25,49 +31,45 @@ apt install bubblewrap
 opam install menhir
 ```
 
-+ Install a binary of the [Z3 SMT
-  solver](https://github.com/Z3Prover/z3) to `/usr/bin/z3`. This is the default if you run `sudo apt install z3`.
++ Install a binary of the [Z3 SMT solver](https://github.com/Z3Prover/z3) to
+  `/usr/bin/z3`. Ensure you are using version 4.8.7 or greater. You may need to
+  directly download a binary from the _Releases_ tab, as the `apt` repositories
+  may not be up to date.
   
-+ Pin our custom fork of PLASMA's Z3 serialization library that interfaces with the previously-installed binary:
++ Pin our custom fork of PLASMA's Z3 serialization library that interfaces with the previously-installed Z3 binary. You may need to also install GMP-lib if it is not already installed on your system.
 
 ```bash
+sudo apt install libgmp-dev
 opam pin add z3 https://github.com/priyasrikumar/ocaml-z3.git
 ```
 
-+ Install [petr4](https://github.com/cornell-netlab/petr4) using the following instructions. First
-  clone the repository a directory of your choosing `<petr4 fp>`. Run the following commands
++ Incorporate [petr4](https://github.com/cornell-netlab/petr4) into the current switch using the following instructions. First clone the repository a directory of your choosing `<petr4 fp>`. Run the following commands
 ```
 cd <petr4 fp>
 git checkout cd556c1e2c20ccbd5b959f385cecebc43f5cfd72
 ```
-Then change back to the `hybrid/synthesis` directory, and run
+Then change back to the `hybrid/synthesis` directory. Install the version of the p4 preprocessor `p4pp` that works with this specific commit:
+``` bash
+opam install p4pp=0.1.4
+```
+Then, pin the petr4 package to the local state.
 ```
 opam pin add petr4 <petr4 fp>
 ```
 
-+ Install any remaining dependencies (e.g. `async`) using `opam
-  install` (e.g. `opam install async`) that show up when you run the
-  following command:
++ Install any remaining dependencies (e.g. `async`) using `opam install` (e.g.
+  `opam install async`) that show up when you run the following command:
 
 ```
 dune external-lib-deps --missing @all
 ```
 
+The list of packages should be `async cohttp-async ipaddr shell`. If `z3`,
+`petr4`, or `p4pp` show up here, repeat the previous steps untill they no longer appear when you run this command. If `menhir` appears in this list even when `opam` declares that it has been correctly installed, you may proceed.
 
++ Run `make` to verify that `avenir` builds.
 
-<!-- + If you get `libz3.so` error try addding the Z3 library to  your path. In Mac, this can be achieved by setting the DYLD_LIBRARY_PATH variable: -->
-
-<!-- ``` -->
-<!-- export DYLD_LIBRARY_PATH=`opam config var z3:lib` -->
-<!-- ``` -->
-
-<!-- on GNU/Linux systems the same can be done via the LD_LIBRARY_PATH environment variable: -->
-
-<!-- ``` -->
-<!-- export LD_LIBRARY_PATH=`opam config var z3:lib` -->
-<!-- ``` -->
-
-<!-- + If you get linking errors from Z3 and your Z3 installation in opam is 4.8.* try switching back to 4.7.*. -->
++ The makefile is currently a bit wonky, so for subsequent compilations, you may need to run `make rebuild` instead of `make build`.
 
 # Running the code
 
