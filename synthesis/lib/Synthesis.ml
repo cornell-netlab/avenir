@@ -18,6 +18,8 @@ let symbolic_pkt fvs =
           Var (var,sz) %=% Var (symbolize var, sz)
           %&% acc_test)
 
+
+
 let symb_wp ?fvs:(fvs=[]) cmd =
   List.dedup_and_sort ~compare:Stdlib.compare (free_vars_of_cmd cmd @ fvs)
   |> symbolic_pkt
@@ -36,7 +38,7 @@ let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref)
   Log.log params.debug @@ Printf.sprintf "\t it has %d nodes\n" (num_nodes_in_cmd phys);
   Log.log params.debug @@ Printf.sprintf "%s\n%!" (string_of_cmd phys);
   Interactive.pause params.interactive;
-  (* assert (fails_on_some_example log (Problem.fvs problem) (Problem.cexs problem) |> Option.is_none); *)
+  (* assert (fails_on_some_example og (Problem.fvs problem) (Problem.cexs problem) |> Option.is_none); *)
   ProfData.update_time !data.slicing_time st;
 
   match fails_on_some_example phys (Problem.fvs problem) (Problem.cexs problem) with

@@ -32,7 +32,7 @@ opam install menhir
 ```
 
 + Install a binary of the [Z3 SMT solver](https://github.com/Z3Prover/z3) to
-  `/usr/bin/z3`. Ensure you are using version 4.8.7 or greater. You may need to
+  `/usr/bin/z3`. Ensure you are using version 4.8.8 or greater. You may need to
   directly download a binary from the _Releases_ tab, as the `apt` repositories
   may not be up to date.
   
@@ -129,20 +129,156 @@ For example, to start a server that listens for operations on `abstract.p4` and 
 ../avenir server abstract.p4 target.p4 no_edits.csv no_edits.csv fvs -b 1000 -e 10 -data inserts.sv -I1 includes -I2 includes -P4 -p
 ```
 
-# Running Experiments from ONF
+# Running Experiments
 
+We can run the experiments from the NSDI paper, the Switch Reboot case study,
+the retargeting experiment and the BMV2 simple-switch demonstration.
+
+## Prerequisite software
+
+The following packaged are required to run these evaluations:
+- python2.7
+- python-tk (via `apt`)
+- matplotlib (via `pip`)
+- ipython (via `pip`)
+- ipykernel (via `pip`)
+
+The following worked on Ubuntu 20.04 in January 2021.
+
+```bash
+# Install python
+apt install python2
+
+# Install pip
+curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+python2 get-pip.py
+
+# Install packages
+apt install python-tk
+python2 -m pip install matplotlib
+python2 -m pip install ipython
+python2 -m pip install ipykernel
+```
+
+
+## ONF Switch Reboot
 To run the ONF experiments, run
 
+```bash
+bash ./run-avenir-onos.sh
 ```
-./avenir onf-real benchmarks/real/p4programs/onos/pipelines/fabric/impl/src/main/resources/fabric.p4 benchmarks/real/p4programs/stratum-onos-demo/p4src/main.p4 benchmarks/real/log_edits.csv benchmarks/real/phys_edits.csv benchmarks/real/onos_fvs_full.csv benchmarks/real/assume.mt -I1 benchmarks/real/p4programs/onos/pipelines/fabric/impl/src/main/resources/include -I1 benchmarks/real/p4includes/ -I2 benchmarks/real/p4programs/stratum-onos-demo/ -I2 benchmarks/real/p4includes/ -data benchmarks/onos_201_adds.csv -b 100 -e 3 --fastcx --restrict-masks -w --domain-restr --hints -s --cache-edits --min --cache-queries
 
+## Retargeting Experiment
+
+To run the retargeting experiments, run
+
+``` bash
+cd synthesis/benchmarks/retargeting
 ```
 
-However this might take too long, or you may want some intermediate
-results. You can truncate the file using, e.g. `head -100` or `head -1000`
-to create a new file and run:
+This will generate performance graphs for each experiment: `self`,
+`early_validate`, `metadata`, and `action_decompose` in files `*.pdf` and raw
+data files in `*.csv`.
 
+## BMV2 Experiment
+
+To run the bmv2/mininet emulation experiment, there is a bunch of setup to do first.
+
+### Setup
+first you will need to install
+bmv2 [from
+source](https://github.com/p4lang/behavioral-model#building-the-code). The
+following commands worked on Ubuntu 20.04 in January 2021.
+
+First, install toplevel dependencies.
+``` bash
+apt install automake                         \
+            cmake                            \
+            libjudy-dev                      \
+            libgmp-dev                       \
+            libpcap-dev                      \
+            libboost-dev                     \
+            libbost-test-dev                 \
+            libboost-program-options-dev     \
+            libboost-system-dev              \
+            libboost-filesystem-dev          \
+            libboost-thread-dev              \
+            libevent-dev                     \
+            libtool                          \
+            flex                             \
+            bison                            \
+            pkg-config                       \
+            g++                              \
+            libssl-dev                       \
+            mininet
+``` 
+Then, install [thrift 0.11.0](https://github.com/apache/thrift/tree/0.11.0)  from source.
+
+``` bash
+git clone git@github.com:apache/thrift.git
+cd thrift
+git checkout 0.11.0 #? 
+./bootstrap.sh
+./configure
+make
+sudo make install
+cd lib/py
+sudo python setup.py install
+cd ..
 ```
-head -200 ./benchmarks/onos_201_adds.csv > ./benchmarks/onos_201_200_adds.csv
+
+Now, install [nanomsg 1.0.0](https://github.com/nanomsg/nanomsg/tree/1.0.0) from source
+``` bash
+git clone git@github.com:nanomsg/nanomsg.git
+cd nanomsg
+git checkout 1.0.0 # ?
+mkdir build && cd build
+cmake ..
+cmake --build .
+ctest -G Debug .
+sudo cmake --build . --target install
+sudo ldconfig
+cd ../..
+```
+
+And some additional dependencies for interacting with the CLI
+
+``` bash
+sudo apt-get install python-dev libxml2-dev libxslt-dev
+```
+
+Finally, we can download and install Bmv2:
+
+``` bash
+git clone git@github.com:p4lang/behavioral-model.git
+cd behavioral-model
+./autogen.sh
+./configure
+make
+sudo make install
+cd ..
+```
+
+Now return to the Avenir `synthesis` directory. And execute the following commands
+
+``` bash
+cd benchmarks/bmv2
+cp <path to bmv2>/targets/simple_router .
+cp <path to bmv2>/tools/runtime_CLI.py ./simple_router
+```
+
+### Running the BMV2 experiment
+
+Now to run the experiment, execute the following commads
+
+``` bash
+cd mininet
+sudo -E python2 1sw_demo.py \
+    --behavioral-exe ../simple_router/simple_router \
+    --json ../simple_router/simple_router.json \ 
+    --thrift-port 9000 \
+    --num-hosts 64 \
+    --rules rules64.txt \
+    --loc ~/avenir/synthesis
 ```
 

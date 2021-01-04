@@ -210,17 +210,33 @@ def cleanup():
             os.remove(filename)
 
 
-def main():
+def run_avenir(flags):
+    cmd = "./avenir synth benchmarks/bmv2/simple_router_logical.p4 benchmarks/bmv2/simple_router_16.p4 "
+    cmd += "benchmarks/bmv2/no_edits.csv benchmarks/bmv2/no_edits.csv benchmarks/bmv2/fvs "
+    cmd += "-data benchmarks/bmv2/mininet/{0} ".format(args.rules)
+    cmd += "--thrift -b 100 -e 3 -P4 -I1 benchmarks/real/p4includes/ -I2 benchmarks/real/p4includes/ "
+    cmd += "--no-defaults --min --hints exact --no-deletes --cache-edits 3 -s -S {0}".format(flags)
+    print cmd
+    return cmd
+
+def experiment_cmd (exp, label):
     cd = "cd {}".format(args.loc)
-    runtime = "benchmarks/bmv2/simple_router/runtime_CLI.py"
-    run_avenir = lambda f: "./avenir synth benchmarks/bmv2/simple_router_logical.p4 benchmarks/bmv2/simple_router_16.p4 benchmarks/bmv2/no_edits.csv benchmarks/bmv2/no_edits.csv benchmarks/bmv2/fvs -data benchmarks/bmv2/{0} --thrift -b 100 -e 3 -P4 -I1 benchmarks/real/p4includes/ -I2 benchmarks/real/p4includes/ --no-defaults --min --hints exact --no-deletes --cache-edits 3 -s -S {1}".format(args.rules, f)
+    runtime = "tee output.debug | benchmarks/bmv2/simple_router/runtime_CLI.py"
+    cmd = "{0} && (({1} | {2}) 2> /tmp/cache_build_time_{3})".format(cd, exp, runtime, label)
+    print cmd
+    return cmd
+
+def main():
+
     baseline = "cat benchmarks/bmv2/{0}_solution.txt".format(args.rules)
-    experiment_cmd = lambda exp,label: "{0} && (({1} | {2}) 2> /tmp/cache_build_time_{3})".format(cd, exp, runtime, label)
+    print "running cold-start"
     data0 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir(""), "cold"))
     cleanup()
+    print "running hot-start"
     data1 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir("--hot-start"), "hot"))
     data1 = normalize(data1,"/tmp/cache_build_time_hot")
     cleanup()
+    print "running baseline"
     data2 = experiment(args.num_hosts, args.mode, experiment_cmd(baseline, "base"))
     cleanup()
     plotter.plot_series(data1, data0, data2)

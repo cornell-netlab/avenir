@@ -9,13 +9,12 @@ parser.add_argument('--run', help='do run the experiments instead of only data c
 
 args = parser.parse_args()
 
-
-
 def parse_data(f):
     data = [(0.0,0.0)]
     with open("%s.csv" % f,'r') as csvfile:
         csvrows = csv.DictReader(csvfile)
         for row in csvrows:
+            print row
             data.append((float(row["time"]) / 1000.0, (int(row["log_inst_size"]) * 100.0) / 1000.0))
     time_so_far = 0.0
     acc_data = []

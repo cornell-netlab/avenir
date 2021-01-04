@@ -13,7 +13,6 @@ let shortener = Bishtbl.make ()
 let get r = Option.value_exn !r ~message:"Prover not initialized!!!"
 
 let make_provers loc =
-  Printf.printf "Intializing prover with path %s\n%!" loc;
   sat_prover := Some (Smtlib.make_solver loc);
   valid_prover := !sat_prover
 
