@@ -286,3 +286,25 @@ sudo -E python2 1sw_demo.py \
 
 Tests live in the `test` directory. To execute tests, execute `dune runtest` in
 the `synthesis` directory.
+
+## (Recommended) Incorporating Tests into your Git workflow
+
+To incorporate tests as a pre-push commit hook, simply create a file called
+`pre-push` in `.git/hooks` with the following code:
+
+``` bash
+#!/bin/sh
+cd synthesis
+eval $(opam env) && dune runtest
+exit $?
+```
+
+Finally mark the script as executable by running
+
+``` bash
+chmod +x .git/hooks/pre-push
+```
+
+Now, whenever you run `git push`, the tests will be run. If the tests fail, you
+can run `git push --no-verify`
+
