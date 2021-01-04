@@ -282,3 +282,7 @@ sudo -E python2 1sw_demo.py \
     --loc ~/avenir/synthesis
 ```
 
+# Running Tests
+
+Tests live in the `test` directory. To execute tests, execute `dune runtest` in
+the `synthesis` directory.
