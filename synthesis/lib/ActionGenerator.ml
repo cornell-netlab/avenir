@@ -123,7 +123,7 @@ let positive_actions (params : Parameters.t) (phys : cmd) (fvs : (string * int) 
                       StringMap.fold map ~init:true
                         ~f:(fun ~key ~data acc ->
                           if acc then
-                            match StringMap.find outpkt key with
+                            match Packet.get_val_opt outpkt key with
                             | None -> acc
                             | Some v ->
                                (* every input variable is existentially quantified, unsound but complete *)

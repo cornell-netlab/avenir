@@ -1,6 +1,5 @@
 open Core
 open Ast
-open Packet
 open Z3
 
 let force_print = false
@@ -26,10 +25,11 @@ let test_str test =
     let res = Ast.string_of_test test in Printf.printf "TEST: %s\n%!"res
   else ()
 
-let expr_str test =
-  if force_print || print_debug then
-    let res = Ast.string_of_expr test in Printf.printf "EXPR: %s"res
-  else ()
+(* TODO @PYS I commented this out because the compiler was complaining -- is it meant to be used somewhere? *)
+(* let expr_str test =
+ *   if force_print || print_debug then
+ *     let res = Ast.string_of_expr test in Printf.printf "EXPR: %s"res
+ *   else () *)
 
 let quantify expr etyp styp =
   match etyp, styp with
@@ -174,10 +174,11 @@ let rec test_to_term_help test styp : Smtlib.term =
 let toZ3String test = test_to_term_help test `Sat
                       |> Smtlib.term_to_sexp |> Smtlib.sexp_to_string
 
-let expr_to_term e styp d =
-  if force_print || d
-  then (expr_str e; let res = expr_to_term_help e styp in (*debug res;*) res)
-  else expr_to_term_help e styp
+(* TODO @PYS I commented this out because the compiler was complaining -- is it meant to be used somewhere?*)
+(* let expr_to_term e styp d =
+ *   if force_print || d
+ *   then (expr_str e; let res = expr_to_term_help e styp in (\*debug res;*\) res)
+ *   else expr_to_term_help e styp *)
 
 let test_to_term test styp d =
   if force_print || d
@@ -240,24 +241,6 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
 let is_sat params test =
   check_sat params test |> fst |> Option.is_some
 
-let model_to_packet (lst : (Smtlib.identifier * Smtlib.term) list) =
-  let name_vals : (string * value) list =
-    (List.map lst ~f:(fun (Id id, x) ->
-         let id = match String.index id '@' with
-           | None -> id
-           | Some index -> String.drop_prefix id index in
-         match x with
-         | Smtlib.BitVec (n, w) -> let value =
-                                     Int (Bigint.of_int n, w) in id, value
-         | Smtlib.BigBitVec (n, w) -> let value =
-                                        Int (n, w) in id, value
-         | Smtlib.Int i -> let value =
-                             Int (Bigint.of_int i, Int.max_value) in id, value
-         | _ -> raise (Failure "not a supported model")))
-  in
-  StringMap.of_alist_exn name_vals
-
-
 let check_valid (params : Parameters.t) (longtest : Ast.test)  =
   let open Smtlib in
   (* Printf.printf "Checking validity for test of size %d\n%!" (num_nodes_in_test test); *)
@@ -284,7 +267,7 @@ let check_valid (params : Parameters.t) (longtest : Ast.test)  =
     match response with
     | Sat -> get valid_prover
              |> get_model
-             |> model_to_packet
+             |> Packet.of_smt_model
              |> Shortener.unshorten_packet shortener
              |> Some
     | Unsat ->  None
@@ -312,7 +295,7 @@ let rec restriction_cegis ~gas (params : Parameters.t) (restriction : test optio
          List.fold quantified_vars ~init:restr_test
            ~f:(fun acc var ->
              acc %&%
-               match StringMap.find m var with
+               match Packet.get_val_opt m var with
                | None ->
                   if params.debug then Printf.printf "Couldn't find %s in model\n%!" var;
                   True
@@ -332,7 +315,10 @@ let check_valid_cached (params : Parameters.t) (test : Ast.test) =
      (None, Time.(diff (now ()) st))
   | `Hit _ -> (None, (Time.(diff (now ()) st)))
   | `Miss test ->
-     if params.debug then Printf.printf "\tCouldn't abstract from %d previous tests : %d nodes!\n%!" (List.length !cache.seen) (num_nodes_in_test test);
+     if params.debug then begin
+         Printf.printf "\tCouldn't abstract from %d previous tests : %d nodes!\n%!" (List.length !cache.seen) (num_nodes_in_test test);
+         List.iter !cache.seen ~f:(fun t -> Printf.printf "%d\n%!" (num_nodes_in_test t))
+         end;
      let dur' = Time.(diff (now()) st) in
      if params.debug then Printf.printf "Querying\n%!";
      let (m , dur) = check_valid params test in
@@ -363,56 +349,6 @@ let check_valid_cached (params : Parameters.t) (test : Ast.test) =
         Interactive.pause params.interactive;
         cache := QAbstr.add_abs ~query ~restriction test !cache;
         (None, dur')
-
-
-let check_min (params : Parameters.t) (test : Ast.test) =
-  let open Smtlib in
-  let st = Time.now() in
-  let vars = List.map (free_vars_of_test test)
-      ~f:(fun (id, i) -> (Id id, BitVecSort i)) in
-  let holes = holes_of_test test |> List.dedup_and_sort
-                ~compare:(fun (idx, _) (idy, _) -> Stdlib.compare idx idy) in
-  let constraints =
-    List.fold holes
-      ~init:[]
-      ~f:(fun acc (hi,_) ->
-          if String.is_suffix hi ~suffix:"_hi"
-          then
-            let hivar = String.rev hi
-                        |> String.substr_replace_first
-                          ~pattern:"ih_" ~with_:""
-                        |> String.rev in
-            List.fold holes
-              ~init:acc
-              ~f:(fun acc' (lo, sz) ->
-                  if String.is_suffix lo ~suffix:"_lo"
-                  then
-                    let lovar = String.rev lo
-                                |> String.substr_replace_first
-                                  ~pattern:"ol_" ~with_:""
-                                |> String.rev in
-                    if hivar = lovar
-                    then acc @ [(Minus(Hole(hi,sz), Hole(lo,sz)))]
-                    else acc'
-                  else acc'
-                )
-          else acc
-        ) in
-  let ranges = List.map constraints
-      ~f:(fun e -> expr_to_term e `Sat params.debug) in
-  let () = List.iter holes
-      ~f:(fun (id, i) -> declare_const (get sat_prover) (Id id) (BitVecSort i)) in
-  let term = (test_to_term test `Sat params.debug) in
-  let response = assert_ (get sat_prover) (forall_ vars term);
-    List.iter ranges ~f:(fun t -> minimize (get sat_prover) t);
-    check_sat_using (UFBV : tactic) (get sat_prover) in
-  let dur = Time.(diff (now()) st) in
-  let model =
-    if response = Sat then
-      Some (model_to_packet (get_model (get sat_prover)))
-    else None
-  in reset (get sat_prover); (model, dur)
-
 
 let is_valid_cached params test =
   check_valid_cached params test |> fst |> Option.is_none

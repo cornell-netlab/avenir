@@ -4,7 +4,6 @@ open Manip
 open Prover
 open Parameters
 open Semantics
-open Packet
 open VCGen
 
 
@@ -72,9 +71,9 @@ let hits_list_pred params (data : ProfData.t ref) prog inst edits =
     ~f:(fun acc e -> hits_pred params data prog inst edits e :: acc)
 
 
-let make_cex params problem x =
+let make_cex params problem (x : Packet.t) =
      let open Problem in
-     let in_pkt = Packet.make x ~fvs:(fvs problem |> Some) in
+     let in_pkt = Packet.remake x ~fvs:(fvs problem |> Some) in
      let log  = log_gcl_program params problem in
      let phys = phys_gcl_program params problem in
      let log_pkt = eval_act log in_pkt in
@@ -85,8 +84,8 @@ let make_cex params problem x =
            Printf.printf "-------------------------------------------\n%s \n???====?=====????\n %s\n-------------------------------------\n%!"
              (string_of_cmd log) (string_of_cmd phys);
 
-         Printf.printf "LOG :%s -> %s\n" (Packet.string__packet in_pkt) (Packet.string__packet log_pkt);
-         Printf.printf "PHYS:%s -> %s\n" (Packet.string__packet in_pkt) (Packet.string__packet phys_pkt)
+         Printf.printf "LOG :%s -> %s\n" (Packet.to_string in_pkt) (Packet.to_string log_pkt);
+         Printf.printf "PHYS:%s -> %s\n" (Packet.to_string in_pkt) (Packet.to_string phys_pkt)
        end;
      if Packet.equal ~fvs:(fvs problem |> Some) log_pkt phys_pkt
      then
@@ -98,7 +97,7 @@ let make_cex params problem x =
 
 let attempt_model test =
   match test with
-  | Eq(Hole(x,_), Value(v)) -> StringMap.(set empty ~key:x ~data:v) |> Some
+  | Eq(Hole(x,_), Value(v)) -> Packet.(set_field empty x v) |> Some
   | _ -> None
 
 

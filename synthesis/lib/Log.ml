@@ -9,9 +9,9 @@ let cexs (params : Parameters.t) problem log_out_pkt in_pkt =
     (* let fvs = Problem.fvs problem in *)
     let phy_out_pkt = Semantics.eval_act phy_gcl in_pkt in
     Printf.printf "Counterexample found!\nin: %s\nlog:  %s\nphys:  %s\n\n%!"
-      (Packet.string__packet in_pkt)
-      (Packet.string__packet log_out_pkt)
-      (Packet.string__packet phy_out_pkt);
+      (Packet.to_string in_pkt)
+      (Packet.to_string log_out_pkt)
+      (Packet.to_string phy_out_pkt);
     (* let pos_acts = ActionGenerator.positive_actions params (Problem.phys problem) fvs in_pkt log_out_pkt in
      * Printf.printf "There are %d positive actions across %d tables\n%!"
      *   (List.length @@ List.bind pos_acts ~f:snd)

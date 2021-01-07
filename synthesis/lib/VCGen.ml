@@ -107,16 +107,15 @@ let finals fvs sub =
       else vs)
   |> List.sort ~compare:(fun (u,_) (v,_) -> Stdlib.compare u v)
 
-let apply_finals_sub_packet pkt sub =
-  StringMap.fold pkt ~init:StringMap.empty
+let apply_finals_sub_packet (pkt : Packet.t) sub : Packet.t =
+  Packet.fold pkt ~init:Packet.empty
     ~f:(fun ~key ~data acc ->
       let key =
         match StringMap.find sub key with
         | Some (i,_) -> fst (freshen key (size_of_value data) i)
         | None -> key
       in
-      let data = Value data in
-      StringMap.set acc ~key ~data
+      Packet.set_field acc key data
     )
 
 

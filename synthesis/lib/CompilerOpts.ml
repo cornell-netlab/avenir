@@ -28,5 +28,5 @@ let optimize fvs cmd =
 
 
 
-let passive_optimize out_pkt passive_cmd =
-  ConstantProp.passive_propogate_fix out_pkt passive_cmd
+let passive_optimize (out_pkt : Packet.t) passive_cmd =
+  ConstantProp.passive_propogate_fix (Packet.to_expr_map out_pkt) passive_cmd

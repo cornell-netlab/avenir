@@ -2,14 +2,11 @@ open Core
 open Ast
 open Util
 
-module StringMap = Map.Make (String)
-
 type t = value StringMap.t
 
-type located = t * (int option)
+let empty = StringMap.empty
 
-
-let string__packet (p : t) =
+let to_string (p : t) =
   (StringMap.fold ~f:(fun ~key:k ~data:v acc -> acc ^ k ^ "=" ^ (string_of_value v) ^ "\n") p ~init:"(") ^ ")\n"
 
 let set_field (pkt : t) (field : string) (v : value) : t  =
@@ -21,7 +18,7 @@ let get_val_opt (pkt : t) (field : string) : value option =
 
 let get_val (pkt : t) (field : string) : value =
   match get_val_opt pkt field with
-    | None -> failwith ("UseBeforeDef error " ^ field ^ " packet is " ^ string__packet pkt)
+    | None -> failwith ("UseBeforeDef error " ^ field ^ " packet is " ^ to_string pkt)
     | Some v -> v
 
 let rec set_field_of_expr_opt (pkt : t) (field : string) (e : expr) : t option =
@@ -58,21 +55,21 @@ let rec set_field_of_expr_opt (pkt : t) (field : string) (e : expr) : t option =
   | Concat (e,e') -> binop concat_values e e'
 
 
-let init_field_to_random bound pkt (f,sz) =
-  set_field pkt f (Int (Random.int (max bound 1) |> Bigint.of_int_exn, sz))
+(* let init_field_to_random bound pkt (f,sz) =
+ *   set_field pkt f (Int (Random.int (max bound 1) |> Bigint.of_int_exn, sz)) *)
 
-let rec init_field_to_value_in (values : value list) pkt (f, sz) =
-  match values with
-  | [] -> init_field_to_random 10000000 pkt (f,sz)
-  | _ ->
-     let i = Random.int (List.length values) in
-     let vi = List.nth_exn values i in
-     if size_of_value vi = sz then
-       set_field pkt f vi
-     else
-       init_field_to_value_in (List.filter values ~f:(fun x -> x <> vi)) pkt (f, sz)
+(* let rec init_field_to_value_in (values : value list) pkt (f, sz) =
+ *   match values with
+ *   | [] -> init_field_to_random 10000000 pkt (f,sz)
+ *   | _ ->
+ *      let i = Random.int (List.length values) in
+ *      let vi = List.nth_exn values i in
+ *      if size_of_value vi = sz then
+ *        set_field pkt f vi
+ *      else
+ *        init_field_to_value_in (List.filter values ~f:(fun x -> x <> vi)) pkt (f, sz) *)
 
-let to_test ?fvs:(fvs = []) ?random_fill:(random_fill=false) (pkt : t) =
+let to_test ?random_fill:(random_fill=false)  ~fvs (pkt : t) =
   (* let random_fill = false in *)
   List.fold fvs ~init:True
     ~f:(fun acc (x,sz) ->
@@ -86,38 +83,43 @@ let to_test ?fvs:(fvs = []) ?random_fill:(random_fill=false) (pkt : t) =
           | Some v ->
              Var(x, sz) %=% Value(v)))
 
+let of_smt_model (lst : (Z3.Smtlib.identifier * Z3.Smtlib.term) list) =
+  let name_vals : (string * value) list =
+    (List.map lst ~f:(fun (Id id, x) ->
+         let id = match String.index id '@' with
+           | None -> id
+           | Some index -> String.drop_prefix id index in
+         match x with
+         | Z3.Smtlib.BitVec (n, w) -> let value =
+                                     Int (Bigint.of_int n, w) in id, value
+         | Z3.Smtlib.BigBitVec (n, w) -> let value =
+                                        Int (n, w) in id, value
+         | Z3.Smtlib.Int i -> let value =
+                             Int (Bigint.of_int i, Int.max_value) in id, value
+         | _ -> raise (Failure "not a supported model")))
+  in
+  StringMap.of_alist_exn name_vals
 
-let test_of_wide ?fvs:(fvs = []) wide =
-  StringMap.fold wide ~init:True
-    ~f:(fun ~key ~data:(lo,hi,sz) test ->
-      if key <> "loc" && List.exists fvs ~f:(fun (x,_) -> key = x) then
-        (if lo = hi
-         then Var (key, sz) %=% mkVInt(lo,sz)
-         else (mkVInt(lo, sz) %<=% Var(key,sz)) %&% (Var (key, sz) %<=% mkVInt(hi,sz))
-        ) %&% test
-      else ( test ))
+
 
 let to_assignment (pkt : t) =
   StringMap.fold pkt ~init:Skip
     ~f:(fun ~key ~data acc -> (%:%) acc @@ key %<-% Value data)
 
-let empty = StringMap.empty
 
-
-
-let make ?fvs:(fvs = None) (store : value StringMap.t) : t =
+let remake ?fvs:(fvs = None) (pkt : t) : t =
   (* let fvs = None in *)
   match fvs with
-  | None -> store
+  | None -> pkt
   | Some fvs ->
      List.fold fvs ~init:empty
        ~f:(fun acc (var_nm, sz) ->
-         match StringMap.find store var_nm with
+         match get_val_opt pkt var_nm with
          | Some v ->
             (* Printf.printf "Found %s setting it to %s\n%!" var_nm (string_of_value v); *)
             StringMap.set acc ~key:var_nm ~data:v
          | None ->
-            (* Printf.printf "Missed %s setting it to ranodm value\n%!" var_nm; *)
+            (* Printf.printf "Missed %s setting it to random value\n%!" var_nm; *)
             let top = (pow 2 sz) - 1 |> Float.of_int  in
             let upper = Float.(top * 0.9 |> to_int) |> max 1 in
             let lower = Float.(top * 0.1 |> to_int) in
@@ -126,71 +128,70 @@ let make ?fvs:(fvs = None) (store : value StringMap.t) : t =
        )
 
 
-let restrict_packet fvs pkt =
+let restrict_packet (fvs : (string * size) list) pkt =
   StringMap.filter_keys pkt ~f:(fun k -> List.exists fvs ~f:(fun (v,_) -> k = v))
 
-
-let equal ?(fvs = None) (pkt:t) (pkt':t) =
+let equal ?fvs:(fvs = None) (pkt:t) (pkt':t) =
   match fvs with
   | None -> StringMap.equal (=) pkt pkt'
   | Some fvs ->
      StringMap.equal (=) (restrict_packet fvs pkt) (restrict_packet fvs pkt')
 
 
-let subseteq_aux smaller bigger =
-  StringMap.fold smaller ~init:true ~f:(fun ~key ~data acc ->
-      if not acc then acc
-      else
-        match StringMap.find bigger key with
-        | None -> false
-        | Some big_data -> acc && big_data = data
-    )
+(* let subseteq_aux smaller bigger =
+ *   StringMap.fold smaller ~init:true ~f:(fun ~key ~data acc ->
+ *       if not acc then acc
+ *       else
+ *         match StringMap.find bigger key with
+ *         | None -> false
+ *         | Some big_data -> acc && big_data = data
+ *     ) *)
 
-let subseteq ?(fvs = None) (smaller:t) (bigger:t) =
-  match fvs with
-  | None -> subseteq_aux smaller bigger
-  | Some fvs -> subseteq_aux (restrict_packet fvs smaller) (restrict_packet fvs bigger)
-
-
+(* let subseteq ?(fvs = None) (smaller:t) (bigger:t) =
+ *   match fvs with
+ *   | None -> subseteq_aux smaller bigger
+ *   | Some fvs -> subseteq_aux (restrict_packet fvs smaller) (restrict_packet fvs bigger) *)
 
 
-let generate ?bound:(bound=10000000) ?values:(values=([] : value list))  (vars : (string * size) list) =
-  match values with
-  | [] ->
-    List.fold vars ~init:empty ~f:(init_field_to_random bound)
-  | _ ->
-    List.fold vars ~init:empty ~f:(init_field_to_value_in values)
 
-let is_symbolic = String.is_suffix ~suffix:"_SYMBOLIC"
-let symbolize str =
-  if is_symbolic str then str else
-    str ^ "_SYMBOLIC"
-let unsymbolize = String.substr_replace_all ~pattern:"_SYMBOLIC" ~with_:""
 
-let from_CE (model : value StringMap.t) : t =
-  StringMap.fold model ~init:empty
-    ~f:(fun ~key ~data pkt ->
-      let key = String.split key ~on:('!') |> List.hd_exn in
-      if is_symbolic key && not(String.is_prefix key ~prefix:"?ActIn")
-      then pkt
-      else
-        let key = unsymbolize key in
-        set_field pkt key data)
+(* let generate ?bound:(bound=10000000) ?values:(values=([] : value list))  (vars : (string * size) list) =
+ *   match values with
+ *   | [] ->
+ *     List.fold vars ~init:empty ~f:(init_field_to_random bound)
+ *   | _ ->
+ *     List.fold vars ~init:empty ~f:(init_field_to_value_in values) *)
 
-let un_SSA (pkt : t) : t =
-  StringMap.fold pkt ~init:empty
-    ~f:(fun ~key ~data acc_pkt ->
-      match String.rsplit2 key ~on:'$' with
-      | None ->
-         StringMap.set acc_pkt ~key:(key) ~data
-      | Some (key', i) ->
-         if int_of_string i = 0
-         then
-           StringMap.set acc_pkt ~key:(key') ~data
-         else acc_pkt
-    )
+(* let is_symbolic = String.is_suffix ~suffix:"_SYMBOLIC"
+ * let symbolize str =
+ *   if is_symbolic str then str else
+ *     str ^ "_SYMBOLIC"
+ * let unsymbolize = String.substr_replace_all ~pattern:"_SYMBOLIC" ~with_:"" *)
 
-let extract_inout_ce (model : value StringMap.t) : (t * t) =
+(* let from_CE (model : value StringMap.t) : t =
+ *   StringMap.fold model ~init:empty
+ *     ~f:(fun ~key ~data pkt ->
+ *       let key = String.split key ~on:('!') |> List.hd_exn in
+ *       if is_symbolic key && not(String.is_prefix key ~prefix:"?ActIn")
+ *       then pkt
+ *       else
+ *         let key = unsymbolize key in
+ *         set_field pkt key data) *)
+
+(* let un_SSA (pkt : t) : t =
+ *   StringMap.fold pkt ~init:empty
+ *     ~f:(fun ~key ~data acc_pkt ->
+ *       match String.rsplit2 key ~on:'$' with
+ *       | None ->
+ *          StringMap.set acc_pkt ~key:(key) ~data
+ *       | Some (key', i) ->
+ *          if int_of_string i = 0
+ *          then
+ *            StringMap.set acc_pkt ~key:(key') ~data
+ *          else acc_pkt
+ *     ) *)
+
+let extract_inout_ce (model : t) : (t * t) =
   StringMap.fold model
     ~init:((empty, empty), StringMap.empty)
     ~f:(fun ~key ~data (((in_pkt, out_pkt), counter) as acc) ->
@@ -215,9 +216,9 @@ let extract_inout_ce (model : value StringMap.t) : (t * t) =
 
 
 
-let mk_packet_from_list (assoc : (string * value) list) : t =
-  List.fold assoc ~init:empty
-    ~f:(fun pkt (f, v) -> set_field pkt f v)
+(* let mk_packet_from_list (assoc : (string * value) list) : t =
+ *   List.fold assoc ~init:empty
+ *     ~f:(fun pkt (f, v) -> set_field pkt f v) *)
 
 let diff_vars (pkt : t) (pkt' : t) : string list =
   let is_drop pkt = Option.(StringMap.find pkt "standard_metadata.egress_spec" >>| (=) (mkInt(0,9))) in
@@ -242,5 +243,10 @@ let diff_vars (pkt : t) (pkt' : t) : string list =
 
 
 
-let restrict (pkt : t) (vars : StringSet.t) : t =
-  StringMap.filter_keys pkt ~f:(StringSet.mem vars)
+(* let restrict (pkt : t) (vars : StringSet.t) : t =
+ *   StringMap.filter_keys pkt ~f:(StringSet.mem vars) *)
+
+
+(** inherited from Core.Map *)
+let fold = StringMap.fold
+let to_expr_map = StringMap.map ~f:(fun v -> Value v)

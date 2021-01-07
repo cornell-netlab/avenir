@@ -2,7 +2,6 @@ open Core
 open Ast
 open Synthesis
 open Util
-open Packet
 open Classbenching
 module IntMap = Map.Make(Int)
 

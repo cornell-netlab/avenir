@@ -1,6 +1,5 @@
 open Core
 open Ast
-open Util
 
 let namegen = NameGen.make ()
 
@@ -68,9 +67,9 @@ let unshorten_model (bht : Bishtbl.t) (m : Model.t) : Model.t =
         Model.set acc ~key:(Bishtbl.get_back bht ~key) ~data
       )
 
-let unshorten_packet (bht : Bishtbl.t) (m : value StringMap.t) : value StringMap.t =
-  if disable then m else
-    StringMap.fold m ~init:StringMap.empty
+let unshorten_packet (bht : Bishtbl.t) (pkt : Packet.t) : Packet.t =
+  if disable then pkt else
+    Packet.fold pkt ~init:Packet.empty
       ~f:(fun ~key ~data acc ->
-        StringMap.set acc ~key:(Bishtbl.get_back bht ~key) ~data
+        Packet.set_field acc (Bishtbl.get_back bht ~key) data
       )

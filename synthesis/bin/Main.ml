@@ -268,8 +268,8 @@ let equality : Command.t =
          | `NoAndCE (inpkt,_) ->
             let printer p i o =
               Core.Printf.printf "%s\n  in: %s\n  out: %s\n" p
-                (Avenir.Packet.string__packet i)
-                (Avenir.Packet.string__packet o)
+                (Avenir.Packet.to_string i)
+                (Avenir.Packet.to_string o)
             in
             let log_out = Avenir.Semantics.eval_act (Problem.log_gcl_program params problem) inpkt in
             let phys_out = Avenir.Semantics.eval_act (Problem.phys_gcl_program params problem) inpkt in
@@ -281,8 +281,8 @@ let equality : Command.t =
             Problem.fvs problem
             |> List.iter
               ~f:(fun (fv,_) ->
-                match Avenir.Util.StringMap.find log_out fv
-                    , Avenir.Util.StringMap.find phys_out fv with
+                match Avenir.Packet.get_val_opt log_out fv
+                    , Avenir.Packet.get_val_opt phys_out fv with
                 | None, None -> ()
                 | Some (Int(v,_)), None -> Core.Printf.printf "\t%s\t%s\tundefined\n"
                                              fv (Bigint.Hex.to_string v)

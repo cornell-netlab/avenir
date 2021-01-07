@@ -4,7 +4,6 @@ open Util
 
 type t = (Edit.t * Edit.t list) list
 
-
 let make () : t = []
 
 let similar (eold : Edit.t) (enew : Edit.t) =
@@ -58,7 +57,6 @@ let similar (eold : Edit.t) (enew : Edit.t) =
      end
   | _, _ -> (*Printf.printf "but... edits don't match\n%!";*)
      None
-
 
 let sub_consts (adata : value StringMap.t option) (map : Match.t StringMap.t) (e : Edit.t) : Edit.t option =
   match e with
