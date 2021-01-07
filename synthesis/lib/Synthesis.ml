@@ -211,14 +211,14 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
 and try_cache params data problem =
   match EAbstr.infer params !edit_cache (Problem.phys problem) (Problem.log_edits problem |> List.hd_exn) with
   | None ->
-     Log.edit_cache_miss true (*params.debug*);
+     Log.edit_cache_miss params.debug;
      let params =
        {params with ecache = None;   (* caching failed so disable it *)
                     do_slice = false  (* dont slice.. I don't remember why not *)
        } in
      cegis_math params data problem
   | Some ps ->
-     Log.edit_cache_hit {params with debug = true} (Problem.phys problem) ps;
+     Log.edit_cache_hit params (Problem.phys problem) ps;
 
      (* fastCX's preconditions may be violated, so make sure its turned off*)
      let params_nofastcx_with_slicing = {params with fastcx = false} in
@@ -227,18 +227,15 @@ and try_cache params data problem =
      let problem_with_cache_guess = Problem.replace_phys_edits problem ps in
 
      (* try and get a CX to see if the problem works *)
-     Printf.printf "does the cached solution work?\n%!";
      let did_cache_work = get_cex params_nofastcx_with_slicing data problem_with_cache_guess in
 
      match did_cache_work with
      | `Yes ->
         Interactive.pause params.interactive ~prompt:"Caching succeeded";
-        Printf.printf "Caching succeeded \n%!";
         Some ps
      | `NoAndCE (in_pkt,out_pkt) ->
         Log.cexs params problem in_pkt out_pkt;
         Interactive.pause params.interactive ~prompt:"Caching failed";
-        Printf.printf "Caching failed \n%!";
         let params = {params with ecache = None} in (* caching failed so disable it *)
         cegis_math params data problem
 
