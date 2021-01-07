@@ -216,9 +216,8 @@ let extract_inout_ce (model : t) : (t * t) =
 
 
 
-(* let mk_packet_from_list (assoc : (string * value) list) : t =
- *   List.fold assoc ~init:empty
- *     ~f:(fun pkt (f, v) -> set_field pkt f v) *)
+let mk_packet_from_list (assoc : (string * value) list) : t =
+  StringMap.of_alist_exn assoc
 
 let diff_vars (pkt : t) (pkt' : t) : string list =
   let is_drop pkt = Option.(StringMap.find pkt "standard_metadata.egress_spec" >>| (=) (mkInt(0,9))) in

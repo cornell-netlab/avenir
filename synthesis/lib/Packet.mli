@@ -68,3 +68,6 @@ val diff_vars : t -> t -> string list
 
 (** [to_expr_map pkt] produces a map [m] such that if [x |-> v] in [pkt] then [x |-> Value v] in [m]  *)
 val to_expr_map : t -> expr Util.StringMap.t
+
+(** [mk_packet_from_list l] constructs a packet from the association list [l] *)
+val mk_packet_from_list : (string * value) list -> t

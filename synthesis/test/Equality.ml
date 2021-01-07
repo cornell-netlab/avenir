@@ -14,7 +14,7 @@ let same_test = Alcotest.(check test) "same test"
 let cmd = testable_string sexp_string_of_cmd Stdlib.(=)
 let same_cmd = Alcotest.(check cmd) "same cmd"
 
-let packet = testable_string Packet.string__packet Packet.equal
+let packet = testable_string Packet.to_string Packet.equal
 let same_packet = Alcotest.(check packet) "same packet"
 
 let vv_stringmap = testable_string
