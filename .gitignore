@@ -26,3 +26,4 @@ synthesis/benchmarks/retargeting/*.csv
 # p4-graphs output
 synthesis/benchmarks/real/*.dot
 synthesis/benchmarks/real/*.pdf
+*.debug

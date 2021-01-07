@@ -228,7 +228,7 @@ def experiment_cmd (exp, label):
 
 def main():
 
-    baseline = "cat benchmarks/bmv2/{0}_solution.txt".format(args.rules)
+    baseline = "cat benchmarks/bmv2/mininet/{0}_solution.txt".format(args.rules)
     print "running cold-start"
     data0 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir(""), "cold"))
     cleanup()
