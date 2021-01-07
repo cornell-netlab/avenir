@@ -307,7 +307,13 @@ let string_of_intlist (l : int list) : string =
   List.fold l ~init:"" ~f:(Printf.sprintf "%s %d")
   |> Printf.sprintf "[%s ]"
 
-
+let string_of_strmap m ~to_string : string =
+  StringMap.fold m ~init:"{}"
+    ~f:(fun ~key ~data s ->
+      Printf.sprintf "%s (%s |-> %s)" s key (to_string data)
+    )
+  |> Printf.sprintf "%s }"
+  
 
 let find2_exn map1 s1 s2 =
   match StringMap.find map1 s1 with
