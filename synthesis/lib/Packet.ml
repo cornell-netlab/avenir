@@ -54,21 +54,6 @@ let rec set_field_of_expr_opt (pkt : t) (field : string) (e : expr) : t option =
   | Shl (e,e') -> binop shl_values e e'
   | Concat (e,e') -> binop concat_values e e'
 
-
-(* let init_field_to_random bound pkt (f,sz) =
- *   set_field pkt f (Int (Random.int (max bound 1) |> Bigint.of_int_exn, sz)) *)
-
-(* let rec init_field_to_value_in (values : value list) pkt (f, sz) =
- *   match values with
- *   | [] -> init_field_to_random 10000000 pkt (f,sz)
- *   | _ ->
- *      let i = Random.int (List.length values) in
- *      let vi = List.nth_exn values i in
- *      if size_of_value vi = sz then
- *        set_field pkt f vi
- *      else
- *        init_field_to_value_in (List.filter values ~f:(fun x -> x <> vi)) pkt (f, sz) *)
-
 let to_test ?random_fill:(random_fill=false)  ~fvs (pkt : t) =
   (* let random_fill = false in *)
   List.fold fvs ~init:True
@@ -100,12 +85,9 @@ let of_smt_model (lst : (Z3.Smtlib.identifier * Z3.Smtlib.term) list) =
   in
   StringMap.of_alist_exn name_vals
 
-
-
 let to_assignment (pkt : t) =
   StringMap.fold pkt ~init:Skip
     ~f:(fun ~key ~data acc -> (%:%) acc @@ key %<-% Value data)
-
 
 let remake ?fvs:(fvs = None) (pkt : t) : t =
   (* let fvs = None in *)
@@ -127,7 +109,6 @@ let remake ?fvs:(fvs = None) (pkt : t) : t =
               ~data:(mkInt(lower + Random.int upper, sz))
        )
 
-
 let restrict_packet (fvs : (string * size) list) pkt =
   StringMap.filter_keys pkt ~f:(fun k -> List.exists fvs ~f:(fun (v,_) -> k = v))
 
@@ -136,60 +117,6 @@ let equal ?fvs:(fvs = None) (pkt:t) (pkt':t) =
   | None -> StringMap.equal (=) pkt pkt'
   | Some fvs ->
      StringMap.equal (=) (restrict_packet fvs pkt) (restrict_packet fvs pkt')
-
-
-(* let subseteq_aux smaller bigger =
- *   StringMap.fold smaller ~init:true ~f:(fun ~key ~data acc ->
- *       if not acc then acc
- *       else
- *         match StringMap.find bigger key with
- *         | None -> false
- *         | Some big_data -> acc && big_data = data
- *     ) *)
-
-(* let subseteq ?(fvs = None) (smaller:t) (bigger:t) =
- *   match fvs with
- *   | None -> subseteq_aux smaller bigger
- *   | Some fvs -> subseteq_aux (restrict_packet fvs smaller) (restrict_packet fvs bigger) *)
-
-
-
-
-(* let generate ?bound:(bound=10000000) ?values:(values=([] : value list))  (vars : (string * size) list) =
- *   match values with
- *   | [] ->
- *     List.fold vars ~init:empty ~f:(init_field_to_random bound)
- *   | _ ->
- *     List.fold vars ~init:empty ~f:(init_field_to_value_in values) *)
-
-(* let is_symbolic = String.is_suffix ~suffix:"_SYMBOLIC"
- * let symbolize str =
- *   if is_symbolic str then str else
- *     str ^ "_SYMBOLIC"
- * let unsymbolize = String.substr_replace_all ~pattern:"_SYMBOLIC" ~with_:"" *)
-
-(* let from_CE (model : value StringMap.t) : t =
- *   StringMap.fold model ~init:empty
- *     ~f:(fun ~key ~data pkt ->
- *       let key = String.split key ~on:('!') |> List.hd_exn in
- *       if is_symbolic key && not(String.is_prefix key ~prefix:"?ActIn")
- *       then pkt
- *       else
- *         let key = unsymbolize key in
- *         set_field pkt key data) *)
-
-(* let un_SSA (pkt : t) : t =
- *   StringMap.fold pkt ~init:empty
- *     ~f:(fun ~key ~data acc_pkt ->
- *       match String.rsplit2 key ~on:'$' with
- *       | None ->
- *          StringMap.set acc_pkt ~key:(key) ~data
- *       | Some (key', i) ->
- *          if int_of_string i = 0
- *          then
- *            StringMap.set acc_pkt ~key:(key') ~data
- *          else acc_pkt
- *     ) *)
 
 let extract_inout_ce (model : t) : (t * t) =
   StringMap.fold model
@@ -214,8 +141,6 @@ let extract_inout_ce (model : t) : (t * t) =
     )
   |> fst
 
-
-
 let mk_packet_from_list (assoc : (string * value) list) : t =
   StringMap.of_alist_exn assoc
 
@@ -238,12 +163,6 @@ let diff_vars (pkt : t) (pkt' : t) : string list =
       | `Left v | `Right v | `Both(_,v) -> Some v)
   in
   StringMap.keys diff_map
-
-
-
-
-(* let restrict (pkt : t) (vars : StringSet.t) : t =
- *   StringMap.filter_keys pkt ~f:(StringSet.mem vars) *)
 
 
 (** inherited from Core.Map *)
