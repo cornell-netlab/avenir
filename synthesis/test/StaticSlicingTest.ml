@@ -29,7 +29,7 @@ let slicing_retargeting_metadata_ethernet _ =
                  )]
                ] in
   let edits =
-    let open Tables.Edit in
+    let open Edit in
     [Add("ethernet", (
            [Match.exact_ "hdr.ethernet.dstAddr" (mkInt(11,48))],
            [mkInt(3,32)],
@@ -91,7 +91,7 @@ let slicing_retargeting_metadata_ipv4 _ =
                  )]
                ] in
   let edits =
-    let open Tables.Edit in
+    let open Edit in
     [Add("ipv4", (
            [Match.exact_ "hdr.ipv4.dstAddr" (mkInt(11,32))],
            [mkInt(3,32)],
@@ -138,7 +138,7 @@ let slicing_fabric_example _ =
                  )]
                ] in
   let edits =
-    let open Tables.Edit in
+    let open Edit in
     [Add("ethernet", (
            [Match.exact_ "hdr.ethernet.dstAddr" (mkInt(11,48))],
            [mkInt(1,32)],

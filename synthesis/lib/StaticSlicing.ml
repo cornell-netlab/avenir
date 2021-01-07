@@ -1,7 +1,6 @@
 open Core
 open Ast
 open Util
-open Tables
 
 let fvs_to_set = StringSet.of_list %. fsts
 

@@ -264,7 +264,7 @@ let feasible_tables phys fvs matches inpkt outpkt =
 
 
 
-let traces (log_edit : Tables.Edit.t) fvs phys inpkt outpkt =
+let traces (log_edit : Edit.t) fvs phys inpkt outpkt =
   match log_edit with
   | Del _ -> failwith "unsupported"
   | Add (_, (matches, _,_)) ->

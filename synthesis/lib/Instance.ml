@@ -1,6 +1,5 @@
 open Core
 open Util
-open Tables
 open Ast
 open Manip
 
@@ -158,8 +157,7 @@ let rec apply ?no_miss:(no_miss = false)
 
 
 
-let update_consistently checker (params:Parameters.t) match_model (phys : cmd) (tbl_name : string) (act_data : Row.action_data option) (act : int) (acc : [`Ok of t | `Conflict of t]) : [`Ok of t | `Conflict of t] =
-  let (keys,_,_) = get_schema_of_table tbl_name phys |> Option.value_exn in
+let update_consistently (params:Parameters.t) match_model (phys : cmd) (tbl_name : string) (act_data : Row.action_data option) (act : int) (acc : [`Ok of t | `Conflict of t]) : [`Ok of t | `Conflict of t] =
   match acc with
   | `Ok pinst -> begin match StringMap.find pinst tbl_name,
                              Row.mk_new_row match_model phys tbl_name act_data act with
@@ -171,14 +169,8 @@ let update_consistently checker (params:Parameters.t) match_model (phys : cmd) (
                  | Some rows, Some (ks, data,act) ->
                     if params.interactive then
                       Printf.printf "+%s : %s" tbl_name (Row.to_string (ks,data,act));
-                    begin match Row.remove_conflicts checker params tbl_name keys ks rows with
-                    | None ->
-                       `Ok (StringMap.set pinst ~key:tbl_name
-                              ~data:((ks,data,act)::rows))
-                    | Some rows' ->
-                       `Conflict (StringMap.set pinst ~key:tbl_name
-                                    ~data:((ks,data,act)::rows'))
-                    end
+                    `Ok (StringMap.set pinst ~key:tbl_name
+                           ~data:((ks,data,act)::rows))
                  end
   | `Conflict pinst ->
      begin match StringMap.find pinst tbl_name,
@@ -191,23 +183,18 @@ let update_consistently checker (params:Parameters.t) match_model (phys : cmd) (
      | Some rows, Some (ks, data, act) ->
         if params.interactive then
           Printf.printf "+%s : %s\n%!" tbl_name (Row.to_string (ks,data,act));
-        begin match Row.remove_conflicts checker params tbl_name keys ks rows with
-        | None -> `Conflict (StringMap.set pinst ~key:tbl_name
-                               ~data:((ks,data,act)::rows))
-        | Some rows' ->
-           `Conflict (StringMap.set pinst ~key:tbl_name
-                        ~data:((ks,data,act)::rows'))
-        end
+        `Conflict (StringMap.set pinst ~key:tbl_name
+                     ~data:((ks,data,act)::rows))
      end
 
-let remove_deleted_rows (params : Parameters.t) match_model (pinst : t) : t =
+let remove_deleted_rows (params : Parameters.t) (match_model : Model.t) (pinst : t) : t =
   StringMap.fold pinst ~init:empty ~f:(fun ~key:tbl_name ~data acc ->
       StringMap.set acc ~key:tbl_name
         ~data:(
           List.filteri data ~f:(fun i _ ->
               match Hole.delete_hole i tbl_name with
               | Hole(s,_) ->
-                 begin match StringMap.find match_model s with
+                 begin match Model.find match_model s with
                  | None -> true
                  | Some do_delete when get_int do_delete = Bigint.one ->
                     if params.interactive then Printf.printf "- %s : row %d\n%!" tbl_name i;
@@ -220,14 +207,14 @@ let remove_deleted_rows (params : Parameters.t) match_model (pinst : t) : t =
 
     )
 
-let fixup_edit checker (params : Parameters.t) (data : ProfData.t ref) match_model (action_map : (Row.action_data * size) StringMap.t option) (phys : cmd) (pinst : t) : [`Ok of t | `Conflict of t] =
+let fixup_edit (params : Parameters.t) (data : ProfData.t ref) match_model (action_map : (Row.action_data * size) StringMap.t option) (phys : cmd) (pinst : t) : [`Ok of t | `Conflict of t] =
   let st = Time.now() in
   match action_map with
   | Some m -> StringMap.fold ~init:(`Ok pinst) m ~f:(fun ~key:tbl_name ~data:(act_data,act) ->
-                  update_consistently checker params match_model phys tbl_name (Some act_data) act)
+                  update_consistently params match_model phys tbl_name (Some act_data) act)
   | None ->
      let tables_added_to =
-       StringMap.fold match_model ~init:[]
+       Model.fold match_model ~init:[]
          ~f:(fun ~key ~data acc ->
            if String.is_substring key ~substring:"AddRowTo"
               && data = Int(Bigint.one,1)
@@ -240,12 +227,12 @@ let fixup_edit checker (params : Parameters.t) (data : ProfData.t ref) match_mod
      let out = List.fold tables_added_to ~init:(`Ok pinst')
                  ~f:(fun inst tbl_name ->
                    let str = ("?ActIn" ^ tbl_name) in
-                   match StringMap.find match_model ("?ActIn" ^ tbl_name) with
+                   match Model.find match_model ("?ActIn" ^ tbl_name) with
                    | None ->
                       Printf.sprintf "Couldn't Find var %s\n" str |> failwith
                    | Some v ->
                       let act = get_int v |> Bigint.to_int_exn in
-                      update_consistently checker params match_model phys tbl_name None act inst )
+                      update_consistently params match_model phys tbl_name None act inst )
      in
      ProfData.update_time !data.fixup_time st;
      out

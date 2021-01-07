@@ -1,5 +1,4 @@
 open Ast
-open Tables
 
 type t
 

@@ -45,7 +45,7 @@ let bmv2_parser_parses_real_rules _ =
       ]
   in
   let expected =
-    let open Tables.Edit in
+    let open Edit in
     [
       Add("send_frame", ([Match.exact_ "standard_metadata.egress_port" (mkInt(1,9))],
                          [Int(Bigint.of_string "0x00aabb000000", 48)],
@@ -68,8 +68,8 @@ let bmv2_parser_parses_real_rules _ =
     ]
   in
   List.map entries ~f:(Runtime.parse_bmv2_entry phys)
-  |> List.map ~f:(Tables.Edit.to_bmv2_string phys)
-  |> Equality.same_stringlist (List.map ~f:(Tables.Edit.to_bmv2_string phys) expected)
+  |> List.map ~f:(Edit.to_bmv2_string phys)
+  |> Equality.same_stringlist (List.map ~f:(Edit.to_bmv2_string phys) expected)
 
 let test_bmv2 : unit Alcotest.test_case list =
   [Alcotest.test_case "parses_real_rules" `Quick bmv2_parser_parses_real_rules]

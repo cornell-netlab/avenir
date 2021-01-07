@@ -1,7 +1,5 @@
 open Core
 open Ast
-open Tables
-(* open Util *)
 
 let new_slicing = true
 
@@ -75,7 +73,7 @@ let to_gcl (params : Parameters.t) (_ : (string * int) list) (p : t) =
       let slice = StaticSlicing.rule_slice (params) (edited_instance params p) (edits p) (pipeline p) in
       let c = Instance.apply params ~no_miss:true NoHoles `Exact (slice) (pipeline p) in
       (* let () = Printf.printf "Sliced program has %d nodes\n%!" (num_nodes_in_cmd c) in *)
-    c
+      c
   else
     match !(p.gcl) with
     | None ->

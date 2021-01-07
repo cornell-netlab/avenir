@@ -61,9 +61,16 @@ let rec unshorten (bht : Bishtbl.t) (t : test) : test =
     | Neg t1 -> mkNeg @@ unshorten bht t1
 
 
-let unshorten_model (bht : Bishtbl.t) (m : value StringMap.t) : value StringMap.t =
+let unshorten_model (bht : Bishtbl.t) (m : Model.t) : Model.t =
+  if disable then m else
+    Model.fold m ~init:Model.empty
+      ~f:(fun ~key ~data acc ->
+        Model.set acc ~key:(Bishtbl.get_back bht ~key) ~data
+      )
+
+let unshorten_packet (bht : Bishtbl.t) (m : value StringMap.t) : value StringMap.t =
   if disable then m else
     StringMap.fold m ~init:StringMap.empty
       ~f:(fun ~key ~data acc ->
-        StringMap.add_exn acc ~key:(Bishtbl.get_back bht ~key) ~data
+        StringMap.set acc ~key:(Bishtbl.get_back bht ~key) ~data
       )

@@ -1,6 +1,4 @@
 open Ast
-open Util
-
 type t
 
 val exact_ : string -> value -> t
@@ -14,7 +12,7 @@ val to_bmv2_string : t -> string
 val to_test : t -> test
 val to_model_alist : string -> t -> (string * value) list
 val list_to_model_alist : string -> t list -> (string * value) list
-val list_to_model : string -> t list -> value StringMap.t
+val list_to_model : string -> t list -> Model.t
 
 val to_test_hole : string -> t -> test
 val test_hole_of_lists : string -> t list -> test
@@ -32,7 +30,7 @@ val get_exact_val : t -> value
 val get_base_value : t -> value
 val exactify : t -> t
 val exactify_list : t list -> t list
-val to_model : ?typ:[`Vals | `NoVals] -> string -> t -> value StringMap.t
+val to_model : ?typ:[`Vals | `NoVals] -> string -> t -> Model.t
 val relevant_matches : t list -> t list
 val relevant_keys : t list -> string list
 val hits : t -> value -> bool

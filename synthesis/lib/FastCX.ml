@@ -1,6 +1,5 @@
 open Core
 open Ast
-open Tables
 open Manip
 open Prover
 open Parameters
@@ -112,14 +111,13 @@ let unreachable params (problem : Problem.t) (test : Ast.test) =
   (* Printf.printf "IN DROP_SPEC%s\n%!" (string_of_test drop_spec); *)
   let n = 10 in
   let rec loop i phi =
-    let mk_query t = holify_test ~f:(fun x -> x) (List.map ~f:fst @@ free_vars_of_test t) t in
-    let query = mk_query @@ test %&% phi in
+    let query = !%(test %&% phi) in
     if params.debug then
       Printf.printf "FAST CX QUERY %d : \n %s\n%!" (n - i) (string_of_test query);
     match attempt_model query with
     | Some in_pkt -> makecexloop params problem i in_pkt phi
     | None ->
-       match check_sat params query with
+       match check_valid params query with
        | (Some in_pkt, _) -> makecexloop params problem i in_pkt phi
        | None, _ when n = i-> `Yes
        | None, _ -> `NotFound (Packet.empty)

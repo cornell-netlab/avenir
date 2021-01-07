@@ -1,10 +1,8 @@
 open Core
 open Util
 open Ast
-open Tables
 
-
-type t = value StringMap.t
+type t = Model.t
 
 
 (* HOLE-BASED optimization*)
@@ -20,12 +18,12 @@ let edits_domain (prog : cmd) (edits : Edit.t list) : (string * size) list =
 let log_edit_domain problem = Problem.(edits_domain (log problem) (log_edits problem))
 
 let make (problem : Problem.t) : t =
-    List.fold (Problem.phys problem |> get_tables_vars) ~init:StringMap.empty
+    List.fold (Problem.phys problem |> get_tables_vars) ~init:Model.empty
       ~f:(fun acc (tbl,vars) ->
         if nonempty_inter vars (log_edit_domain problem) then
           acc
         else
-          StringMap.set acc ~key:("?AddRowTo"^tbl) ~data:(mkInt(0,1))
+          Model.set acc ~key:("?AddRowTo"^tbl) ~data:(mkInt(0,1))
       )
 
 let apply (inj : t) (phi : test) =

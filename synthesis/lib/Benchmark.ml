@@ -3,7 +3,6 @@ open Ast
 open Synthesis
 open Util
 open Packet
-open Tables
 open Classbenching
 module IntMap = Map.Make(Int)
 

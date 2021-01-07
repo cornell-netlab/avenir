@@ -10,15 +10,13 @@ val cegis_math :
       Parameters.t ->
       ProfData.t ref -> 
       Problem.t -> 
-      Tables.Edit.t list option
+      Edit.t list option
 
 val cegis_math_sequence:
       Parameters.t ->
       ProfData.t ref -> 
       (unit -> Problem.t) ->
-      (Problem.t * Tables.Edit.t list) option
-
-val symb_wp : ?fvs:(string * int) list -> Ast.cmd -> Ast.test
+      (Problem.t * Edit.t list) option
 
 val edit_cache : EAbstr.t ref
                      

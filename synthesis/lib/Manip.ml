@@ -276,13 +276,13 @@ let bind_action_data vals (_, scope, cmd) : cmd =
        (string_of_cmd cmd)
      |> failwith
 
-let rec fixup_expr (model : value StringMap.t) (e : expr)  : expr =
+let rec fixup_expr (model : Model.t) (e : expr)  : expr =
   (* let _ = Printf.printf "FIXUP\n%!" in *)
   let binop op (e,e') = op (fixup_expr model e) (fixup_expr model e') in
   match e with
   | Value _ | Var _ -> e
   | Hole (h,sz) -> 
-     begin match StringMap.find model h with
+     begin match Model.find model h with
      | None -> e
      | Some v -> let sz' = size_of_value v in
                  let strv = string_of_value v in
@@ -298,7 +298,7 @@ let rec fixup_expr (model : value StringMap.t) (e : expr)  : expr =
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es  | SatPlus es | SatMinus es
     -> binop (ctor_for_binexpr e) es
 
-let rec fixup_test (model : value StringMap.t) (t : test) : test =
+let rec fixup_test (model : Model.t) (t : test) : test =
   let binop ctor call left right = ctor (call left) (call right) in 
   match t with
   | True | False -> t
@@ -310,7 +310,7 @@ let rec fixup_test (model : value StringMap.t) (t : test) : test =
   | Eq (v, w) -> binop (%=%)  (fixup_expr model) v w
   | Le (v, w) -> binop (%<=%) (fixup_expr model) v w
 
-let rec fixup_selects (model : value StringMap.t) (es : (test * cmd) list) =
+let rec fixup_selects (model : Model.t) (es : (test * cmd) list) =
   match es with
   | [] -> []
   | (cond, act)::es' ->
@@ -326,7 +326,7 @@ let rec fixup_selects (model : value StringMap.t) (es : (test * cmd) list) =
       else
         (cond, act) :: fixup_selects model es'
     )    
-and fixup (real:cmd) (model : value StringMap.t) : cmd =
+and fixup (real:cmd) (model : Model.t) : cmd =
   (* Printf.printf "FIXUP WITH MODEL: %s\n%!\n" (string_of_map model); *)
   match real with
   | Skip -> Skip

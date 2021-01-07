@@ -1,6 +1,4 @@
-open Util
 open Ast
-open Tables
 
 type t
 
@@ -17,7 +15,7 @@ val to_string : Parameters.t -> t -> string
 val fvs : t -> (string * int) list
 val cexs : t -> (Packet.t * Packet.t) list
 val model_space : t -> test
-val attempts : t -> value StringMap.t list
+val attempts : t -> Model.t list
 val add_cex : t  -> (Packet.t * Packet.t) -> t
 
 val log : t -> cmd
@@ -49,11 +47,13 @@ val commit_edits_log : Parameters.t -> t -> t
 val commit_edits_phys : Parameters.t -> t -> t
 
 val reset_attempts : t -> t
-val add_attempt : t -> value StringMap.t -> t
+val add_attempt : t -> Model.t -> t
 val attempts_to_string : t -> string
 val num_attempts : t -> int
-val seen_attempt : t -> value StringMap.t -> bool
+val seen_attempt : t -> Model.t -> bool
 
 
 val reset_model_space : t -> t
 val refine_model_space : t -> test -> t
+
+val slice_conclusive : Parameters.t -> ProfData.t ref -> t -> bool

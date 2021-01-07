@@ -2,8 +2,7 @@ open Core
 open Util
 open Ast
 open Manip
-open Tables
-              
+
 type trace = (Row.action_data * int) StringMap.t
 
 

@@ -25,7 +25,7 @@ type opts =
 
 type t = {
     schedule : opts list;
-    search_space : (test * value StringMap.t) list;
+    search_space : (test * Model.t) list;
   }
 
 let condcat b app s =
@@ -184,7 +184,7 @@ let single problem (opts : opts) query_holes =
           (if Hole.is_add_row_hole h
               && List.exists (Problem.phys_edits problem)
                    ~f:(fun e ->
-                     Tables.Edit.table e = String.chop_prefix_exn h ~prefix:Hole.add_row_prefix
+                     Edit.table e = String.chop_prefix_exn h ~prefix:Hole.add_row_prefix
                    )
            then
              (Hole(h,sz) %=% mkVInt(0,sz))
@@ -341,7 +341,7 @@ let compute_vc (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   (wp_list, phys, hints)
 
 
-let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_list,phys,hints)  =
+let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_list,phys,hints) : (test * Model.t) list  =
   let hole_type = if opts.mask then `Mask else `Exact in
   let fvs = Problem.fvs problem  in
   let tests =
@@ -416,7 +416,7 @@ let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_li
   tests
 
 
-let compute_queries (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) (opts : opts)  =
+let compute_queries (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) (opts : opts) : (test * Model.t) list =
   let st = Time.now() in
   let queries = compute_vc params data problem opts
                 |> with_opts params problem opts in
@@ -449,7 +449,7 @@ let holes_for_other_actions table phys actId =
        )
 
 
-let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t) option) =
+let rec search (params : Parameters.t) data problem t : ((Model.t * t) option) =
   if Timeout.timed_out params.timeout then
     None
   else
@@ -485,7 +485,7 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
           if params.debug then Printf.printf "Found a model, done \n%!";
           if Problem.seen_attempt problem raw_model then begin
               Printf.printf "%s\n%!" (Problem.attempts_to_string problem);
-              Printf.printf "\ncurrent model is %s\n%!" (string_of_map raw_model);
+              Printf.printf "\ncurrent model is %s\n%!" (Model.to_string raw_model);
               Printf.printf "\nmodel_space is %s \n%!" (string_of_test @@ Problem.model_space problem);
               Printf.printf "\nmodel has already been seen and is allowed? %s"
                 (if Problem.model_space problem |> fixup_test raw_model = True
@@ -500,7 +500,7 @@ let rec search (params : Parameters.t) data problem t : ((value StringMap.t * t)
                  |> fixup_test raw_model
                  |> string_of_test)
               |> Log.log params.debug;
-              Some (Hint.join_models partial_model raw_model, t)
+              Some (Model.join partial_model raw_model, t)
             end
        | _ ->
           (* Printf.printf "No model, keep searching with %d opts and %d paths \n%!" (List.length schedule) (List.length search_space); *)

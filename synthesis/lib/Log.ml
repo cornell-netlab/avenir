@@ -1,7 +1,5 @@
 open Core
-open Tables
 open Ast
-open Util
 (* open ActionGenerator *)
 
 
@@ -35,10 +33,10 @@ let cexs (params : Parameters.t) problem log_out_pkt in_pkt =
     Interactive.pause params.interactive
 
 
-let already_explored_error model_space model =
+let already_explored_error model_space (model : Model.t) =
   Printf.printf "ALREADY EXPLORED\n %s \n\n %s \n%!"
     (Ast.string_of_test model_space)
-    (Ast.string_of_map model);
+    (Model.to_string model);
   let res = Manip.fixup_test model model_space in
   Printf.printf "applied \n\n\n %s\n\n\n" (Ast.string_of_test res)
 
@@ -63,7 +61,7 @@ let string_vars vs =
   |> Printf.sprintf "[%s]"
 
 
-let print_search_state (params : Parameters.t) problem es model =
+let print_search_state (params : Parameters.t) problem es (model : Model.t) =
   let print_space = false in
   let print_model = true in
   if params.debug then begin
@@ -81,7 +79,7 @@ let print_search_state (params : Parameters.t) problem es model =
       if print_model then begin
           Printf.printf "\t***model***\n";
           Printf.printf "%s\n%!"
-            (StringMap.fold model ~init:"" ~f:(fun ~key ~data acc ->
+            (Model.fold model ~init:"" ~f:(fun ~key ~data acc ->
                  Printf.sprintf "%s\n\t%s |--> %s" acc key (string_of_value data)))
         end;
       (* Interactive.pause params.interactive; *)
@@ -117,7 +115,7 @@ let check_attempts do_check problem =
     | None -> ()
     | Some model ->
        Printf.printf "Model\n %s \n is allowed by model space:\n%s\n\n There are %d total attempts\n%!"
-         (string_of_map model)
+         (Model.to_string model)
          (string_of_test (Problem.model_space problem))
          (List.length (Problem.attempts problem));
        failwith "Duplicate model"
@@ -140,10 +138,10 @@ let check_qe do_check test =
       end
 
 
-let print_hints_map do_print (partial_model : value StringMap.t) =
+let print_hints_map do_print (partial_model : Model.t) =
   if do_print then begin
       Printf.printf "Hints are : {\n%!";
-      StringMap.iteri partial_model
+      Model.iteri partial_model
         ~f:(fun ~key ~data ->
           Printf.printf "\t%s -> %s\n" key (string_of_value data)
         );

@@ -1,6 +1,5 @@
 open Core
 open Ast
-open Tables
 open Util
 
 type t = (Edit.t * Edit.t list) list
@@ -114,11 +113,6 @@ let similar_edit_list edits edits' =
     )
 
 
-let diff l r =
-  StringMap.merge l r ~f:(fun ~key:_ -> function
-      | `Both (l,r) when Stdlib.(l <> r) -> Some (l,r)
-      | _ -> None
-    )
 
 let equivalences diffmap : StringSet.t list =
   StringMap.fold diffmap ~init:[]
@@ -147,8 +141,8 @@ let infer_fresh phys (curr_edits : Edit.t list) substs (old_edits : Edit.t list 
   let old_edit_maps = List.map inferred_old_edits ~f:(Edit.list_to_model phys) in
   List.find_map old_edit_maps
     ~f:(fun old_model ->
-      if StringMap.equal Stdlib.(=) curr_edit_model old_model then None else
-      let diff_map = diff curr_edit_model old_model in
+      if Model.equal curr_edit_model old_model then None else
+      let diff_map = Model.diff curr_edit_model old_model in
       (* let () =
        *   List.iter (StringMap.keys curr_edit_model) ~f:(fun key ->
        *       let l_opt = StringMap.find curr_edit_model key in
@@ -167,38 +161,32 @@ let infer_fresh phys (curr_edits : Edit.t list) substs (old_edits : Edit.t list 
          let chis = List.fold eqs ~init:StringMap.empty
                       ~f:(fun acc s -> StringMap.set acc ~key:(StringSet.choose_exn s) ~data:[]) in
          let prohibited : value list StringMap.t =
-           List.fold old_edit_maps ~init:chis
-             ~f:(fun chis edit_map ->
-               StringMap.merge chis edit_map ~f:(fun ~key:_ -> function
-                   | `Left l -> Some l
-                   | `Right _ -> None
-                   | `Both (l,r) -> Some (r::l)
-                 )
-             )
+           List.fold old_edit_maps ~init:chis ~f:(Model.extend_multi_model)
          in
          let valuation =
-           StringMap.map prohibited ~f:(fun x ->
-               let random_x = random_int_nin (List.map x ~f:(get_int_exn)) in
-               mkInt(random_x, size_of_value (List.hd_exn x))
+           StringMap.fold prohibited ~init:Model.empty
+             ~f:(fun ~key ~data:prohibs m ->
+               let random_x = random_int_nin (List.map prohibs ~f:(get_int_exn)) in
+               Model.set m ~key ~data:(mkInt(random_x, size_of_value (List.hd_exn prohibs)))
              )
          in
          (* Printf.printf "generating free vars : %s\n%!" (string_of_map valuation); *)
          let expanded_valuation =
-           StringMap.fold valuation ~init:StringMap.empty
+           Model.fold valuation ~init:Model.empty
              ~f:(fun ~key ~data acc ->
                match List.find eqs ~f:(Fn.flip StringSet.mem key) with
-               | None -> StringMap.set acc ~key ~data
+               | None -> Model.set acc ~key ~data
                | Some eqs ->
-           StringSet.fold eqs ~init:acc ~f:(fun acc key -> StringMap.set acc ~key ~data)
+                  StringSet.fold eqs ~init:acc ~f:(fun acc key -> Model.set acc ~key ~data)
              )
          in
-         StringMap.merge curr_edit_model expanded_valuation
+         Model.merge curr_edit_model expanded_valuation
            ~f:(fun ~key:_ -> function
              | `Left l -> Some l
              | `Right r -> Some r
              | `Both (_,r) -> Some r
            )
-         |> Edit.extract phys
+         |> Edit.of_model phys
        )
 
 

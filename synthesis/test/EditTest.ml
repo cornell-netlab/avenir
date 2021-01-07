@@ -38,7 +38,7 @@ let extract_edits_from_model _ =
       ]
   in
   let model =
-    Util.StringMap.of_alist_exn [
+    Model.of_alist_exn [
       "?AddRowToethernet", mkInt(1,1);
       "?AddRowToipv4_fib", mkInt(0,1);
       "?AddRowToipv4_rewrite", mkInt(1,1);
@@ -77,7 +77,7 @@ let extract_edits_from_model _ =
       ]
   in
   let expected_edits =
-    let open Tables.Edit in
+    let open Edit in
     [
       Add("nexthop",
           ([Match.exact_ "meta.nexthop" (Int(Bigint.of_string "0x226890e0",32))],
@@ -92,7 +92,7 @@ let extract_edits_from_model _ =
 
     ]
   in
-  Tables.Edit.extract phys model
+  Edit.of_model phys model
   |> same_edits expected_edits
 
 

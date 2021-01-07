@@ -1,53 +1,22 @@
 open Core
 open Ast
-open Packet
 open Semantics
 open Prover
-open Manip
 open Util
 open VCGen
-open Tables
-
-let symbolic_pkt fvs =
-  List.fold fvs ~init:True
-    ~f:(fun acc_test (var,sz) ->
-        if String.get var 0 |> Char.is_uppercase
-        || String.substr_index var ~pattern:("NEW") |> Option.is_some
-        then acc_test
-        else
-          Var (var,sz) %=% Var (symbolize var, sz)
-          %&% acc_test)
-
-
-
-let symb_wp ?fvs:(fvs=[]) cmd =
-  List.dedup_and_sort ~compare:Stdlib.compare (free_vars_of_cmd cmd @ fvs)
-  |> symbolic_pkt
-  |> wp `Negs cmd
 
 let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t)
     : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
   let params = {params with no_defaults = false} in
   let st = Time.now () in
-  Log.log params.debug "slicing logical\n";
   let log = Problem.log_gcl_program params problem in
-  Log.log params.debug @@ Printf.sprintf "\t it has %d nodes\n" (num_nodes_in_cmd log);
-  Log.log params.debug @@ Printf.sprintf "%s\n%!" (string_of_cmd log);
-  Log.log params.debug "slicing physical\n";
   let phys = Problem.phys_gcl_program params problem in
-  Log.log params.debug @@ Printf.sprintf "\t it has %d nodes\n" (num_nodes_in_cmd phys);
-  Log.log params.debug @@ Printf.sprintf "%s\n%!" (string_of_cmd phys);
   Interactive.pause params.interactive;
-  (* assert (fails_on_some_example og (Problem.fvs problem) (Problem.cexs problem) |> Option.is_none); *)
   ProfData.update_time !data.slicing_time st;
 
   match fails_on_some_example phys (Problem.fvs problem) (Problem.cexs problem) with
   | Some (in_pkt, out_pkt) -> `NoAndCE (in_pkt,out_pkt)
   | None ->
-     Log.log false @@
-       Printf.sprintf "-------------------------------------------\n%s \n???====?=====????\n %s\n-------------------------------------\n%!"
-         (string_of_cmd log) (string_of_cmd phys);
-     Interactive.pause params.interactive;
      let st_mk_cond = Time.now () in
      let condition = equivalent ~neg data Problem.(fvs problem) log phys in
      ProfData.update_time !data.make_vc_time st_mk_cond;
@@ -79,103 +48,6 @@ let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref)
      in
      ProfData.update_time !data.normalize_packet_time st;
      pkt_opt
-
-
-let unique_in_table params (_ (*prog*) : cmd) inst edits e =
-  let open Edit in
-  match e with
-  | Del _ -> false
-  | Add (tbl, (ms, _,_)) ->
-     let index_of_e = List.findi edits ~f:(fun _ e' -> e = e') |> Option.value_exn |> fst in
-     let earlier_edits = List.filteri edits ~f:(fun i _ -> i < index_of_e) in
-     let inst' = Instance.update_list params inst earlier_edits in
-     let earlier_rows = Instance.get_rows inst' tbl in
-     List.for_all earlier_rows ~f:(fun (ms', _, _) ->
-         not (Match.has_inter_l ms ms')
-       )
-
-
-let exists_in_table params (_ (*prog*) : cmd) inst edits e =
-  let open Edit in
-  match e with
-  | Del _ -> false
-  | Add (tbl, (ms, ad, aid)) ->
-     let index_of_e = List.findi edits ~f:(fun _ e' -> e = e') |> Option.value_exn |> fst in
-     let earlier_edits = List.filteri edits ~f:(fun i _ -> i < index_of_e) in
-     let inst' = Instance.update_list params inst earlier_edits in
-     let earlier_rows = Instance.get_rows inst' tbl in
-     List.exists earlier_rows ~f:(fun (ms', ad', aid') ->
-         List.equal (fun m m' -> Match.equal m m') ms ms'
-         && aid = aid'
-         && List.equal (fun v v' -> Stdlib.(v = v')) ad ad'
-       )
-
-
-
-(* The truth of a slice implies the truth of the full programs when
- * the inserted rules are disjoint with every previous rule (i.e. no overlaps or deletions)
- * Here we only check that the rules are exact, which implies this property given the assumption that every insertion is reachable
-*)
-let slice_conclusive (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) =
-  let st = Time.now () in
-  let log_edit = Problem.log_edits problem |> List.hd_exn in
-  let res =
-    let open Problem in
-      unique_in_table params (log problem) (log_inst problem) (log_edits problem) log_edit
-      &&
-        List.for_all (phys_edits problem) ~f:(fun e ->
-            unique_in_table params (phys problem) (phys_inst problem) (phys_edits problem) e
-            || exists_in_table params (phys problem) (phys_inst problem) (phys_edits problem) e
-          )
-    (* then
-     *   (\* let () = Log.log params.debug @@ Printf.sprintf "\nquick sliceable check succeeded in %fms!\n%!" Time.(Span.(diff(now()) st |> to_ms))  in *\)
-     *   true
-     * else
-     *   false
-     *   (\* let () = Printf.printf "\nquick sliceable check FAILED!\n%!" in
-     *    * let log_eqs  = FastCX.hits_list_pred params data (log problem) (log_inst problem) (log_edits problem) in
-     *    * let phys_eqs = FastCX.hits_list_pred params data (phys problem) (phys_inst problem) (phys_edits problem) in
-     *    * if log_eqs = phys_eqs
-     *    * then
-     *    *   true
-     *    * else
-     *    *   check_valid params (List.reduce_exn ~f:mkOr log_eqs %<=>% List.reduce_exn ~f:mkOr phys_eqs)
-     *    *   |> fst
-     *    *   |> Option.is_none *\) *)
-  in
-  ProfData.update_time !data.check_sliceable_time st;
-  (* Printf.printf "\tSlice is %s\n%!" (if res then "conclusive" else "inconclusive"); *)
-  res
-
-let negate_model problem (model : value StringMap.t) (es : Edit.t list) : test =
-  !%(if List.is_empty es
-     then StringMap.fold model
-            ~init:True
-            ~f:(fun ~key ~data:(Int(i,sz)) acc ->
-              mkAnd acc @@
-                Hole(key, sz) %=% Value(Int(i,sz)))
-     else
-       Edit.test_of_list (Problem.phys problem) es
-    )
-
-
-
-let remove_missed_edits params data problem es =
-  List.fold es ~init:[] ~f:(fun acc e ->
-      let cex = List.hd_exn (Problem.cexs problem) in
-      let check = Packet.to_test ~fvs:(Problem.fvs problem) (fst cex)
-                  %=>% FastCX.hits_pred params data (Problem.phys problem) (Problem.phys_inst problem) (Problem.phys_edits problem) e in
-      match check_valid params check with
-      | None,_ ->
-         (* Printf.printf "Checked \n%s\n" (string_of_test check); *)
-         acc @ [e]
-      | Some _,_ -> acc)
-
-let extract_reached_edits (params : Parameters.t) data problem model =
-  Edit.extract (Problem.phys problem) model
-  |> if params.reach_filter then
-       remove_missed_edits params data problem
-     else Fn.id
 
 
 
@@ -213,7 +85,7 @@ let get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref) (pr
       | `NoAndCE counter ->
          Log.log params.debug "BACKTRACKING (SLICED)\n!%";
          `NoAndCE counter
-      | `Yes when slice_conclusive params data problem ->
+      | `Yes when Problem.slice_conclusive params data problem ->
          Log.log params.debug "\tconclusively\n%!";
          `Yes
       | `Yes ->
@@ -293,15 +165,6 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref) (proble
       |=> fun _ ->
           ModelFinder.make_searcher params data problem
           |> drive_search params.search_width params data problem
-(* end *)
-(* else begin
-       *     Printf.printf "Exhausted the Space\n%!";
-       *     match get_new_cex params data problem with
-       *     | Some p -> solve_math i params data p
-       *     | None ->
-       *        Printf.printf "we really have exhausted the space\n";
-       *        None
-       *   end *)
 
 and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) searcher =
   Log.log params.debug"loop\n%!";
@@ -319,7 +182,7 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
     let model_opt = ModelFinder.search params data problem searcher in
     ProfData.update_time !data.model_search_time st;
     model_opt >>= fun (model, searcher) ->
-    let es = extract_reached_edits params data problem model in
+    let es = EditSimpl.extract_reached_edits params data problem model in
 
     Log.print_search_state params problem es model;
     Interactive.pause ~prompt:"\n" params.interactive;
@@ -329,7 +192,7 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref) (prob
                             |> reset_attempts) in
 
     let problem = Problem.add_attempt problem model in
-    let restriction = negate_model problem model es in
+    let restriction = Edit.negate (Problem.phys problem) model es in
     let problem = Problem.refine_model_space problem restriction in
 
     Log.check_attempts params.debug problem;

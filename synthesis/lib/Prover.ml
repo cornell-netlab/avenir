@@ -170,21 +170,6 @@ let rec test_to_term_help test styp : Smtlib.term =
                       (test_to_term_help t1 styp)
   | Neg t -> Smtlib.not_ (test_to_term_help t styp)
 
-let model_to_packet (lst : (Smtlib.identifier * Smtlib.term) list) =
-  let name_vals : (string * value) list =
-    (List.map lst ~f:(fun (Id id, x) ->
-         let id = match String.index id '@' with
-           | None -> id
-           | Some index -> String.drop_prefix id index in
-         match x with
-         | Smtlib.BitVec (n, w) -> let value =
-                                     Int (Bigint.of_int n, w) in id, value
-         | Smtlib.BigBitVec (n, w) -> let value =
-                                        Int (n, w) in id, value
-         | Smtlib.Int i -> let value =
-                             Int (Bigint.of_int i, Int.max_value) in id, value
-         | _ -> raise (Failure "not a supported model")))
-  in StringMap.of_alist_exn name_vals
 
 let toZ3String test = test_to_term_help test `Sat
                       |> Smtlib.term_to_sexp |> Smtlib.sexp_to_string
@@ -214,7 +199,7 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
   let open Smtlib in
   (* Printf.printf "Finding model for test of size %d\n%!" (num_nodes_in_test test); *)
   (* Printf.printf "\n%s\n\n%!" (string_of_test test); *)
-  if longtest = True then (Some StringMap.empty, Time.Span.zero) else
+  if longtest = True then (Some Model.empty, Time.Span.zero) else
   if longtest = False then (None, Time.Span.zero) else
   let test = Shortener.shorten shortener longtest in
   if params.debug then assert (longtest = Shortener.unshorten shortener test);
@@ -241,18 +226,37 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
       let model =
         get sat_prover
         |> get_model
-        |> model_to_packet
+        |> Model.of_smt_model
         |> Shortener.unshorten_model shortener in
       if params.debug && print_debug then
-        Printf.printf "MODEL: %s\n%!" (Packet.string__packet model);
+        Printf.printf "MODEL: %s\n%!" (Model.to_string model);
       Some model
       else if response = Unknown then
         failwith "UNKNOWN"
       else None
-  in reset (get sat_prover); (model, dur)
+  in reset (get sat_prover);
+     (model, dur)
 
 let is_sat params test =
   check_sat params test |> fst |> Option.is_some
+
+let model_to_packet (lst : (Smtlib.identifier * Smtlib.term) list) =
+  let name_vals : (string * value) list =
+    (List.map lst ~f:(fun (Id id, x) ->
+         let id = match String.index id '@' with
+           | None -> id
+           | Some index -> String.drop_prefix id index in
+         match x with
+         | Smtlib.BitVec (n, w) -> let value =
+                                     Int (Bigint.of_int n, w) in id, value
+         | Smtlib.BigBitVec (n, w) -> let value =
+                                        Int (n, w) in id, value
+         | Smtlib.Int i -> let value =
+                             Int (Bigint.of_int i, Int.max_value) in id, value
+         | _ -> raise (Failure "not a supported model")))
+  in
+  StringMap.of_alist_exn name_vals
+
 
 let check_valid (params : Parameters.t) (longtest : Ast.test)  =
   let open Smtlib in
@@ -281,7 +285,7 @@ let check_valid (params : Parameters.t) (longtest : Ast.test)  =
     | Sat -> get valid_prover
              |> get_model
              |> model_to_packet
-             |> Shortener.unshorten_model shortener
+             |> Shortener.unshorten_packet shortener
              |> Some
     | Unsat ->  None
     | Unknown -> failwith "response unknown"

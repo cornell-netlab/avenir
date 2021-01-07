@@ -1,7 +1,6 @@
 open Core
 open Util
 open Ast
-open Tables
 
 type t = {table:string;
           match_opt:Match.t list option;
@@ -149,22 +148,7 @@ let extract_action_data table act_id params (data_opt : Row.action_data option) 
          acc @ [Hole.action_data table act_id param sz, value]
        )
 
-let aggregate_models =
-  List.fold ~init:StringMap.empty
-    ~f:(fun acc m ->
-      StringMap.merge acc m ~f:(fun ~key -> function
-          | `Left l -> Some l
-          | `Right r -> Some r
-          | `Both (l,r) when veq l r -> Some l
-          | `Both (l,r) ->
-             failwith @@
-               Printf.sprintf "[Hint.aggregate_models] conflicting values %s is both %s and %s"
-                 key (string_of_value l) (string_of_value r)))
-
-
-let join_models m1 m2 = aggregate_models [m1;m2]
-
-let to_model typ (phys : cmd) (hint : t): value StringMap.t =
+let to_model typ (phys : cmd) (hint : t) : Model.t =
   let (keys, actions, _) = get_schema_of_table hint.table phys
                         |> Option.value_exn
                              ~message:(Printf.sprintf "couldn't find table %s in %s" hint.table (string_of_cmd phys))
@@ -172,19 +156,19 @@ let to_model typ (phys : cmd) (hint : t): value StringMap.t =
   let action =
     let add_hole = Hole.add_row_hole_name hint.table in
     match hint.act_id_opt with
-    | None -> StringMap.empty
+    | None -> Model.empty
     | Some Int(act_id, act_size) ->
        let act_id_int = Bigint.to_int_exn act_id in
        let which_act = Hole.which_act_hole_name hint.table in
        let _, act_params, _ = List.nth_exn actions (act_id_int) in
-       StringMap.of_alist_exn @@  [
+       Model.of_alist_exn @@  [
            which_act, Int(act_id, act_size);
            add_hole, mkInt(1,1);
          ] @ extract_action_data hint.table act_id_int act_params hint.act_data_opt
   in
   let matches =
     match hint.match_opt with
-    | None -> StringMap.empty
+    | None -> Model.empty
     | Some ms ->
        List.map ms ~f:(Match.to_model ~typ hint.table)
        @ List.filter_map keys ~f:(fun (k,sz,v_opt) ->
@@ -197,10 +181,10 @@ let to_model typ (phys : cmd) (hint : t): value StringMap.t =
                      wildcard k sz
                      |> to_model hint.table
                      |> Some)
-       |> aggregate_models
+       |> Model.aggregate
   in
-  aggregate_models [matches;action]
+  Model.join matches action
 
-let list_to_model typ (phys : cmd) (hints : t list) : value StringMap.t =
+let list_to_model typ (phys : cmd) (hints : t list) : Model.t =
   let hints = List.map hints ~f:(to_model typ phys) in
-  aggregate_models hints
+  Model.aggregate hints

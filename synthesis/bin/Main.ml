@@ -13,7 +13,7 @@ module OneBigTable = Avenir.OneBigTable
 module Parameters = Avenir.Parameters
 module ProfData = Avenir.ProfData
 module Problem = Avenir.Problem
-module Tables = Avenir.Tables
+module Edit = Avenir.Edit
 module Instance = Avenir.Instance
 module Runtime = Avenir.Runtime
 module Server = Avenir.Server
@@ -156,9 +156,9 @@ let synthesize =
          let data = Option.value_exn data_opt ~message:"Data must be passed in for synthesis"in
          let prob = mk_prob () in
          let edit_to_string = if params.thrift_mode then
-                                Tables.Edit.to_bmv2_string (Problem.phys prob)
+                                Edit.to_bmv2_string (Problem.phys prob)
                               else
-                                Tables.Edit.to_string in
+                                Edit.to_string in
 
          if measure then
            match Benchmark.measure params None mk_prob data with
@@ -216,7 +216,7 @@ let benchmark =
      and max_inserts = anon ("max_inserts" %: int) in
          fun () ->
          let params = Parameters.union opts mng in
-         ignore(Benchmark.reorder_benchmark varsize num_tables max_inserts params : Tables.Edit.t list option)
+         ignore(Benchmark.reorder_benchmark varsize num_tables max_inserts params : Edit.t list option)
     ]
 
 
@@ -247,7 +247,7 @@ let onf_real : Command.t =
          | None -> Core.Printf.printf "no example could be found\n"
          | Some r when print ->
             List.iter r ~f:(fun edit ->
-                Tables.Edit.to_string edit
+                Edit.to_string edit
                 |> Core.Printf.printf "%s\n%!"
               )
          | Some _ -> ()
@@ -308,22 +308,22 @@ let classbench_cmd : Command.t =
          fun () ->
          let params = Parameters.union opt mng in
          if String.(uppercase expname = "IPONLY") then
-           ignore(Benchmark.rep params data nrules : Tables.Edit.t list option)
+           ignore(Benchmark.rep params data nrules : Edit.t list option)
          else if String.(uppercase expname = "TCPIP" || uppercase expname = "IPTCP") then
-           ignore(Benchmark.rep_middle params data nrules : Tables.Edit.t list option)
+           ignore(Benchmark.rep_middle params data nrules : Edit.t list option)
          else if String.(uppercase expname = "FULL"
                          || uppercase expname = "ETHTCPIP"
                          || uppercase expname = "ETHIPTCP"
                          || uppercase expname = "OF") then
-          ignore(Benchmark.rep_of params false data nrules : Tables.Edit.t list option)
+          ignore(Benchmark.rep_of params false data nrules : Edit.t list option)
          else if String.(uppercase expname = "PAR") then
-           ignore(Benchmark.rep_par params data nrules : Tables.Edit.t list option)
+           ignore(Benchmark.rep_par params data nrules : Edit.t list option)
          else if String.(uppercase expname = "ALL") then
            List.iter (Parameters.all_params params)
              ~f:(fun params ->
                Core.Printf.printf "\n\n%s\n\n" (Parameters.to_string params);
                try
-                 ignore (Benchmark.rep_par params data nrules : Tables.Edit.t list option)
+                 ignore (Benchmark.rep_par params data nrules : Edit.t list option)
                with _ ->
                  Core.Printf.printf "well that failed"
              )

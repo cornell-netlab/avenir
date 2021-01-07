@@ -1,6 +1,5 @@
 open Core
 open Ast
-open Tables
 
 let action_data_of_string ?sep:(sep=';') (data_str : string) : Row.action_data =
   String.split data_str ~on:sep

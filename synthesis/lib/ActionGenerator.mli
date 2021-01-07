@@ -12,7 +12,7 @@ val mkstate : StringSet.t -> StringSet.t -> t
 
 val positive_actions : Parameters.t -> cmd -> (string * size) list -> Packet.t -> Packet.t -> (string * ((string * size) list * int * cmd) list) list * StringSet.t
 
-val traces : Tables.Edit.t -> (string * size) list -> cmd -> Packet.t -> Packet.t -> (t * (string * int) list) list
+val traces : Edit.t -> (string * size) list -> cmd -> Packet.t -> Packet.t -> (t * (string * int) list) list
 
 
 val string_of_traces : (t * (string * int) list) list -> string

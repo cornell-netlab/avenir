@@ -1,6 +1,4 @@
-open Util
 open Ast
-open Tables
 
 type t
 
@@ -13,10 +11,6 @@ val to_string : t -> string
     phys can accomodate the logical insertion of e **)
 val construct : cmd -> Edit.t -> t list
 
-val to_model : [`Vals | `NoVals] -> cmd -> t -> value StringMap.t
 
 (* union a disjoint sequence of hints. Conflicts throw an assertion error *)
-val list_to_model : [`Vals | `NoVals] -> cmd -> t list -> value StringMap.t
-
-
-val join_models : value StringMap.t -> value StringMap.t -> value StringMap.t
+val list_to_model : [`Vals | `NoVals] -> cmd -> t list -> Model.t

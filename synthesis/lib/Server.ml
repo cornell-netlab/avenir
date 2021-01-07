@@ -1,7 +1,6 @@
 open Core
 open Async
 open Cohttp_async
-open Tables
 open Runtime
 (* module Server = Cohttp_async.Server *)
 

@@ -11,10 +11,9 @@ open Packet
  *)
 val make_provers : string -> unit
 
-
 (* Checks whether a formula is satisfiable; returns an optional model
    and timing data if it is *)
-val check_sat : Parameters.t  -> test -> ((value StringMap.t) option * Time.Span.t)
+val check_sat : Parameters.t  -> test -> (Model.t option * Time.Span.t)
 
 (* Is a formula satisfiable? returns a boolean *)
 val is_sat : Parameters.t -> test -> bool

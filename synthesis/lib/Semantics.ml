@@ -1,8 +1,6 @@
 open Core
 open Ast
 open Util
-open Manip
-open Tables
 
 let rec eval_expr (pkt_loc : Packet.located) ( e : expr ) : value option =
   let open Option in
@@ -212,7 +210,7 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
                match action_to_execute pkt_loc wide rules with
                | (cond, Some wide, Some (data, aid)) ->
                   (* Printf.printf "HIT A RULE\n%!"; *)
-                  let pkt', wide', cmd', trace = trace_eval_inst ~wide (List.nth_exn t.actions aid |> bind_action_data data) inst pkt_loc in
+                  let pkt', wide', cmd', trace = trace_eval_inst ~wide (List.nth_exn t.actions aid |> Manip.bind_action_data data) inst pkt_loc in
                   (pkt', wide', mkAssume cond %:% cmd', StringMap.set ~key:t.name ~data:(data, aid) trace)
                | (cond, _, _) ->
                   (* Printf.printf "Missed everything\n%!"; *)
@@ -268,7 +266,7 @@ let rec trace_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : ((string 
         List.foldi rules ~init:[] ~f:(fun i acc (ms, data, aid) ->
             let cond = Match.list_to_test ms in
             ifte_test cond (pkt,None)
-              (fun _ -> List.map (trace_nd_hits (List.nth_exn t.actions aid |> bind_action_data data) inst pkt)
+              (fun _ -> List.map (trace_nd_hits (List.nth_exn t.actions aid |> Manip.bind_action_data data) inst pkt)
                           ~f:(fun (hits, pkt') -> (t.name,i) :: hits, pkt'))
               (fun _ -> [])
             @ acc)

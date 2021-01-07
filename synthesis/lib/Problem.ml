@@ -1,7 +1,5 @@
 open Core
-open Util
 open Ast
-open Tables
 
 type t =
   {
@@ -14,7 +12,7 @@ type t =
     (* formula encoding search space that has been traversed *)
     model_space : Ast.test;
     (* previously obtained models *)
-    attempts : value StringMap.t list;
+    attempts : Model.t list;
     (* variables used to check equality, and their widths *)
     fvs : (string * int) list
   }
@@ -54,7 +52,7 @@ let fvs (p : t) : (string * int) list = p.fvs
 let cexs (p : t) : (Packet.t * Packet.t) list = p.cexs
 let add_cex (p : t) cex = {p with cexs = cex::p.cexs}
 let model_space (p : t) : test = p.model_space
-let attempts (p : t) : value StringMap.t list = p.attempts
+let attempts (p : t) : Model.t list = p.attempts
 
 let log (p : t) : cmd = Switch.pipeline p.log
 let log_inst (p : t) : Instance.t = Switch.inst p.log
@@ -112,12 +110,12 @@ let reset_attempts (p : t) : t =
   (* Printf.printf "RESETTING ATTEMPTS\n%!"; *)
   set_attempts p []
 
-let add_attempt (p : t) (attempt : value StringMap.t) : t =
+let add_attempt (p : t) (attempt : Model.t) : t =
   (* Printf.printf "ADDING ATTEMPT\n%!"; *)
   set_attempts p @@ attempt :: p.attempts
 
-let seen_attempt (p : t)  (attempt : value StringMap.t) : bool =
-  List.exists p.attempts ~f:(StringMap.equal veq attempt)
+let seen_attempt (p : t)  (attempt : Model.t) : bool =
+  List.exists p.attempts ~f:(Model.equal attempt)
 
 let set_model_space (p : t) (model_space : test) : t =
   {p with model_space}
@@ -145,7 +143,55 @@ let update_log (p : t) (log_cmd : cmd) : t =
 
 
 let attempts_to_string (p : t) : string =
-  List.map p.attempts ~f:(string_of_map)
+  List.map p.attempts ~f:(Model.to_string)
   |> List.fold ~init:"" ~f:(Printf.sprintf "%s,\n%s")
 
 let num_attempts (p : t) : int = List.length p.attempts
+
+
+let unique_in_table params (_ (*prog*) : cmd) inst edits e =
+  let open Edit in
+  match e with
+  | Del _ -> false
+  | Add (tbl, (ms, _,_)) ->
+     let index_of_e = List.findi edits ~f:(fun _ e' -> e = e') |> Option.value_exn |> fst in
+     let earlier_edits = List.filteri edits ~f:(fun i _ -> i < index_of_e) in
+     let inst' = Instance.update_list params inst earlier_edits in
+     let earlier_rows = Instance.get_rows inst' tbl in
+     List.for_all earlier_rows ~f:(fun (ms', _, _) ->
+         not (Match.has_inter_l ms ms')
+       )
+
+
+let exists_in_table params (_ (*prog*) : cmd) inst edits e =
+  let open Edit in
+  match e with
+  | Del _ -> false
+  | Add (tbl, (ms, ad, aid)) ->
+     let index_of_e = List.findi edits ~f:(fun _ e' -> e = e') |> Option.value_exn |> fst in
+     let earlier_edits = List.filteri edits ~f:(fun i _ -> i < index_of_e) in
+     let inst' = Instance.update_list params inst earlier_edits in
+     let earlier_rows = Instance.get_rows inst' tbl in
+     List.exists earlier_rows ~f:(fun (ms', ad', aid') ->
+         List.equal (fun m m' -> Match.equal m m') ms ms'
+         && aid = aid'
+         && List.equal (fun v v' -> Stdlib.(v = v')) ad ad'
+       )
+
+(* The truth of a slice implies the truth of the full programs when
+ * the inserted rules are disjoint with every previous rule (i.e. no overlaps or deletions)
+ * Here we only check that the rules are exact, which implies this property given the assumption that every insertion is reachable
+*)
+let slice_conclusive (params : Parameters.t) (data : ProfData.t ref) (problem : t) =
+  let st = Time.now () in
+  let log_edit = log_edits problem |> List.hd_exn in
+  let res =
+      unique_in_table params (log problem) (log_inst problem) (log_edits problem) log_edit
+      &&
+        List.for_all (phys_edits problem) ~f:(fun e ->
+            unique_in_table params (phys problem) (phys_inst problem) (phys_edits problem) e
+            || exists_in_table params (phys problem) (phys_inst problem) (phys_edits problem) e
+          )
+  in
+  ProfData.update_time !data.check_sliceable_time st;
+  res

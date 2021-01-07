@@ -117,9 +117,35 @@ let test_hole_of_lists tbl ms =
 
 let list_to_model_alist tbl ms = List.bind ms ~f:(to_model_alist tbl)
 
+
+let to_model ?typ:(typ=`Vals) table (m : t) =
+  let encode_msk (v,msk) (hv,hmsk) =
+    let model = [ (*Hole.add_row_hole_name table, mkInt(1,1);*) hmsk, msk] in
+       begin match typ  with
+       | `Vals ->
+          (hv, v) :: model
+       | `NoVals ->
+          model
+       end
+  in
+  Model.of_alist_exn @@
+    match m.data with
+    | Exact (v) ->
+       let sz = size_of_value v in
+       let msk = Int(max_int sz, sz) in
+       Hole.match_holes_mask table m.key
+       |> encode_msk (v,msk)
+    | Mask (v,msk) ->
+       Hole.match_holes_mask table m.key
+       |> encode_msk (v,msk)
+    | Between (lo, hi) ->
+       let hlo, hhi = Hole.match_holes_range table m.key in
+       [hlo,lo; hhi,hi]
+
+
 let list_to_model tbl ms =
   list_to_model_alist tbl ms
-  |> StringMap.of_alist_exn
+  |> Model.of_alist_exn
 
 
 let to_valuation_test table hole_typ mtch =
@@ -302,30 +328,6 @@ let exactify (m : t) : t =
 
 let exactify_list = List.map ~f:exactify
 
-
-let to_model ?typ:(typ=`Vals) table (m:t) =
-  let encode_msk (v,msk) (hv,hmsk) =
-    let model = [ (*Hole.add_row_hole_name table, mkInt(1,1);*) hmsk, msk] in
-       begin match typ  with
-       | `Vals ->
-          (hv, v) :: model
-       | `NoVals ->
-          model
-       end
-  in
-  StringMap.of_alist_exn @@
-    match m.data with
-    | Exact (v) ->
-       let sz = size_of_value v in
-       let msk = Int(max_int sz, sz) in
-       Hole.match_holes_mask table m.key
-       |> encode_msk (v,msk)
-    | Mask (v,msk) ->
-       Hole.match_holes_mask table m.key
-       |> encode_msk (v,msk)
-    | Between (lo, hi) ->
-       let hlo, hhi = Hole.match_holes_range table m.key in
-       [hlo,lo; hhi,hi]
 
 let relevant_matches = List.filter ~f:(Fn.non is_wildcard)
 let relevant_keys = Fn.compose (List.map ~f:get_key) relevant_matches
