@@ -91,6 +91,8 @@ let append_phys_edits (p : t) (es : Edit.t list) : t =
 let append_log_edits (p : t) (es : Edit.t list) : t =
   {p with log = Switch.append_edits p.log es}
 
+let empty_log_edits (p : t) : bool = List.empty log_edits
+let empty_phys_edits (p : t) : bool = List.empty phys_edits
 
 let replace_log_edits (p : t) (log_edits : Edit.t list) : t =
   {p with log = Switch.replace_edits p.log log_edits}

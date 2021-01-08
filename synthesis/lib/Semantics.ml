@@ -293,15 +293,10 @@ let get_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : (string * int) 
 
 
 (*TODO: Can do this faster(?) by transposing the traversal*)
-let fails_on_some_example c fvs cexs =
+let fails_on_some_example params problem =
+  let eval_log = eval_act (Problem.log_gcl_program params problem) in
+  let cexs = Problem.cexs problem in
+  let fvs = Some (Problem.fvs problem) in
   List.find cexs ~f:(fun (inpkt,outpkt) ->
-      if Packet.equal ~fvs:(Some fvs)
-           (eval_act c inpkt)
-           outpkt
-      then false
-      else begin
-          (* Printf.printf "Failed! in:\n %s\n\nout\n%s\n\n%!" (Packet.string__packet inpkt) (Packet.string__packet outpkt); *)
-          true
-        end
-
+      Packet.equal ~fvs outpkt (eval_log inpkt)
     )

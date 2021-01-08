@@ -5,100 +5,61 @@ open Prover
 open Util
 open VCGen
 
-let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t)
-    : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
-  let params = {params with no_defaults = false} in
-  let st = Time.now () in
-  let log = Problem.log_gcl_program params problem in
-  let phys = Problem.phys_gcl_program params problem in
-  Interactive.pause params.interactive;
-  ProfData.update_time !data.slicing_time st;
-
-  match fails_on_some_example phys (Problem.fvs problem) (Problem.cexs problem) with
-  | Some (in_pkt, out_pkt) -> `NoAndCE (in_pkt,out_pkt)
-  | None ->
-     let st_mk_cond = Time.now () in
-     let condition = equivalent ~neg data Problem.(fvs problem) log phys in
-     ProfData.update_time !data.make_vc_time st_mk_cond;
-     let cv_st = Time.now () in
-     let model_opt, z3time = if params.vcache then check_valid_cached params condition else check_valid params condition in
-     ProfData.update_time !data.check_valid_time cv_st;
-     ProfData.update_time_val !data.eq_time z3time;
-     !data.tree_sizes :=  num_nodes_in_test condition :: !(!data.tree_sizes);
-     ProfData.incr !data.eq_num_z3_calls;
-     let st = Time.now () in
-     let pkt_opt = match model_opt with
-       | None  ->
-          Log.log params.debug "++++++++++valid+++++++++++++\n%!";
-          Interactive.pause params.interactive;
-          `Yes
-       | Some x ->
-          let in_pkt, out_pkt = Packet.extract_inout_ce x in
-          let remake = Packet.remake ~fvs:(Problem.fvs problem |> Some) in
-          let in_pkt' = if params.widening then in_pkt else remake in_pkt in
-          let out_pkt' = if params.widening then out_pkt
-                         else eval_act (Problem.log_gcl_program params problem) in_pkt in
-          (* if params.debug then assert (Packet.subseteq ~fvs:(Some(Problem.fvs problem)) out_pkt' (eval_act log in_pkt')); *)
-       if params.debug || params.interactive then
-         Printf.printf "----------invalid----------------\n%! CE_in = %s\n log_out  = %s\n phys_out = %s\n%!"
-           (Packet.to_string in_pkt')
-           (Packet.to_string out_pkt')
-           (Packet.to_string @@ eval_act (Problem.phys_gcl_program params problem) in_pkt)
-       ; `NoAndCE (in_pkt', out_pkt')
-     in
-     ProfData.update_time !data.normalize_packet_time st;
-     pkt_opt
-
-
-
 let edit_cache = ref @@ EAbstr.make ()
 
-let get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref) (problem : Problem.t)
-    : [> `NoAndCE of Packet.t * Packet.t | `Yes] =
-  if params.do_slice then Interactive.pause params.interactive ~prompt:"slicing begins!";
-  if params.fastcx then begin
-      let st = Time.now () in
-      let cex = FastCX.get_cex ~neg params data problem in
-      ProfData.update_time !data.fast_cex_time st;
-      match cex with
-      | `Yes ->
-         Log.log params.debug "New rule is not reachable\n%!";
-         `Yes
-      | `NotFound _ ->
-         Log.log params.debug "No cex to be found rapidly, check full equivalence\n%!";
-         let st = Time.now () in
-         let res = implements ~neg params data problem in
-         ProfData.update_time !data.impl_time st;
-         res
-      | `NoAndCE counter ->
-         Log.log params.debug "BACKTRACKING\n%!";
-         `NoAndCE counter
-    end
+let check_equivalence neg (params : Parameters.t) data problem =
+  (* ensure default actions are used in constructing the equivalence condition *)
+  let params = {params with no_defaults = false} in
+  let log = Problem.log_gcl_program params problem in
+  let phys = Problem.phys_gcl_program params problem in
+  let condition = equivalent ~neg data Problem.(fvs problem) log phys in
+  if params.vcache then
+    check_valid_cached params condition |> fst
   else
-    if params.do_slice && not( List.is_empty (Problem.phys_edits problem)) then
-      let () = Log.log params.debug "\tSLICING\n%!" in
-      let st = Time.now () in
-      let res = implements ~neg params data (Problem.slice params problem) in
-      let () = Log.log params.debug "\tslice checked\n%!" in
-      ProfData.update_time !data.impl_time st;
-      match res with
-      | `NoAndCE counter ->
-         Log.log params.debug "BACKTRACKING (SLICED)\n!%";
-         `NoAndCE counter
-      | `Yes when Problem.slice_conclusive params data problem ->
-         Log.log params.debug "\tconclusively\n%!";
-         `Yes
-      | `Yes ->
-         Log.log params.debug "\tinconclusively\n%!";
-         implements ~neg params data problem
-    else
-      (* let () = Printf.printf "\tNormal Eq Check %d edits \n%!" (Problem.phys_edits problem |> List.length)in *)
-      let st = Time.now () in
-      let res = implements ~neg params data problem in
-      ProfData.update_time !data.impl_time st;
-      res
+    check_valid params condition |> fst
+
+let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t)
+    : (Packet.t * Packet.t) option =
+  try_in_sequence [
+      (fun _ -> fails_on_some_example params problem);
+      (fun _ -> let open Option in
+                check_equivalence neg params data problem
+                >>| Packet.extract_inout_ce)
+    ]
+
+let handle_fast_cex neg (params : Parameters.t) data problem = function
+  | `Yes ->
+     Log.log params.debug "New rule is not reachable\n%!";
+     None
+  | `NotFound _ ->
+     Log.log params.debug "No cex to be found rapidly, check full equivalence\n%!";
+     implements ~neg params data problem
+  | `NoAndCE counter ->
+     Log.log params.debug "Found CX\n%!";
+     Some counter
+
+let slice_ok problem = not (Problem.empty_phys_edits problem)
+
+let handle_sliced_equivalence neg problem params data = function
+  | Some counter ->
+     Some counter
+  | None ->
+     if Problem.slice_conclusive params data problem then
+       None
+     else
+       implements ~neg params data problem
 
 
+let get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref) (problem : Problem.t) : (Packet.t * Packet.t) option =
+  if params.fastcx then
+    FastCX.get_cex ~neg params data problem
+    |> handle_fast_cex neg params data problem
+  else if params.do_slice && slice_ok problem then
+    Problem.slice params problem
+    |> implements ~neg params data
+    |> handle_sliced_equivalence neg problem params data
+  else
+    implements ~neg params data problem
 
 let rec minimize_edits params data problem certain uncertain =
   match uncertain with
@@ -106,8 +67,8 @@ let rec minimize_edits params data problem certain uncertain =
   | e::es ->
      (* Printf.printf "\t%s" (Edit.to_string e); *)
      match implements params data (Problem.replace_phys_edits problem (certain @ es)) with
-     | `Yes -> minimize_edits params data problem certain es
-     | `NoAndCE _ -> minimize_edits params data problem (certain@[e]) es
+     | None -> minimize_edits params data problem certain es
+     | Some _ -> minimize_edits params data problem (certain@[e]) es
 
 let minimize_solution (params : Parameters.t) data problem =
   if params.minimize then
@@ -117,7 +78,6 @@ let minimize_solution (params : Parameters.t) data problem =
     |> Problem.replace_phys_edits problem
   else
     problem
-
 
 let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t) : (Edit.t list option) =
   Log.log params.debug "cegis_math\n%!";
@@ -131,7 +91,7 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
       solve_math 1 params data problem
     else
       match get_cex params data problem with
-      | `Yes ->
+      | None ->
          (* optionally minimize the solution*)
          let problem = minimize_solution params data problem in
 
@@ -146,7 +106,7 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref) (problem : Pr
 
          Some (Problem.phys_edits problem)
 
-      | `NoAndCE (in_pkt, _) ->
+      | Some (in_pkt, _) ->
          let log_out_pkt = Semantics.eval_act (Problem.log_gcl_program params problem) in_pkt in
          let params = {params with fastcx = false; ecache = None} in
          let problem = Problem.add_cex problem (in_pkt, log_out_pkt) in
@@ -230,10 +190,10 @@ and try_cache params data problem =
      let did_cache_work = get_cex params_nofastcx_with_slicing data problem_with_cache_guess in
 
      match did_cache_work with
-     | `Yes ->
+     | None ->
         Interactive.pause params.interactive ~prompt:"Caching succeeded";
         Some ps
-     | `NoAndCE (in_pkt,out_pkt) ->
+     | Some (in_pkt,out_pkt) ->
         Log.cexs params problem in_pkt out_pkt;
         Interactive.pause params.interactive ~prompt:"Caching failed";
         let params = {params with ecache = None} in (* caching failed so disable it *)
