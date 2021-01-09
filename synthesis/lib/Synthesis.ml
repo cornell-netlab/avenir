@@ -173,47 +173,41 @@ and try_cache params data problem =
         let params = {params with ecache = None} in (* caching failed so disable it *)
         cegis_math params data problem
 
+(* TODO -- this needs to be incorporated into [cegis_math], or does it? In some
+   sense this can be managed at the command line by the user.*)
+let manage_outer_heurs (params : Parameters.t) data problem = function
+  | None ->
+     if params.no_deletes then
+       cegis_math {params with no_deletes = false} data problem
+     else
+       None
+  | Some phys_edits ->
+     Some phys_edits
 
-let rec cegis_math_sequence (params : Parameters.t) data get_problem =
-  let t = Time.now() in
-  let initial_problem = get_problem () in
-  let log_edit_sequence = Problem.log_edits initial_problem in
-  let problem = Problem.replace_log_edits initial_problem [] in
+let cegis_math_sequence_once (params : Parameters.t) data (problem : Problem.t) =
+  let log_edit_sequence = Problem.log_edits problem in
+  let problem = Problem.replace_log_edits problem [] in
   List.fold log_edit_sequence ~init:(Some(problem,[]))
     ~f:(fun acc ledit ->
-      match acc with
-      | None ->
-         Log.log true "Rule failed";
-         None
-      | Some (problem, pedits) ->
-         let problem = Problem.replace_log_edits problem [ledit] in
-         Printf.sprintf "\n\n\n%s\n\n\n" (Problem.to_string params problem)
-         |> Log.log params.debug;
-         let phys_edits = match cegis_math params data problem with
-           | None ->
-              if params.no_deletes then
-                cegis_math {params with no_deletes = false} data problem
-              else
-                None
-           | Some phys_edits ->
-              Some phys_edits
-         in
-         match phys_edits with
-         | None ->
-            Printf.printf "Couldn't find solution for:\n%!";
-            Log.print_edits params (Problem.log problem) [ledit];
-            None
-         | Some phys_edits ->
-            Log.print_edits ~tab:false params (Problem.phys problem) phys_edits;
-            Some (Problem.replace_phys_edits problem phys_edits
-                  |> Problem.commit_edits_log params
-                  |> Problem.commit_edits_phys params,
-                  pedits @ phys_edits)
+      let open Option.Let_syntax in
+      let%bind (problem, pedits) = acc in
+      let problem = Problem.replace_log_edits problem [ledit] in
+      let%bind phys_edits = cegis_math params data problem
+                            |> manage_outer_heurs params data problem in
+      Log.print_edits ~tab:false params (Problem.phys problem) phys_edits;
+      Some (Problem.replace_phys_edits problem phys_edits
+            |> Problem.commit_edits_log params
+            |> Problem.commit_edits_phys params,
+            pedits @ phys_edits)
     )
-  |> Option.bind ~f:(fun p ->
-         if params.hot_start then
-           let () = Printf.eprintf "%f\n%!" Time.(now () |> Fn.flip diff t |> Span.to_ms) in
-           cegis_math_sequence {params with hot_start = false} data get_problem
-         else
-           Some p
-       )
+
+let cegis_math_sequence (params : Parameters.t) data (get_problem : unit -> Problem.t) =
+  if params.hot_start then
+    let open Option.Let_syntax in
+    let st = Time.now () in
+    let%bind _ = cegis_math_sequence_once params data (get_problem ()) in
+    let () = Printf.eprintf "%f\n%!" Time.(now () |> Fn.flip diff st |> Span.to_ms) in
+    cegis_math_sequence_once {params with hot_start = false} data (get_problem ())
+  else
+    (get_problem ())
+    |> cegis_math_sequence_once params data
