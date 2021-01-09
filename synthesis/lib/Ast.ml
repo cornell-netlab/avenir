@@ -8,10 +8,16 @@ let (<>) = Stdlib.(<>)
 
 let enable_smart_constructors = true
 
-type size = int
+type size = int [@@deriving yojson]
+
+let bigint_to_yojson (bi: Bigint.t) : Yojson.Safe.t = `Intlit (Bigint.to_string bi)
+let bigint_of_yojson (j: Yojson.Safe.t) : Bigint.t Ppx_deriving_yojson_runtime.error_or =
+  match j with
+  | `Intlit s -> Result.Ok (Bigint.of_string s)
+  | _ -> Result.Error "t"
 
 type value =
-  | Int of (Bigint.t * size)
+  | Int of ((Bigint.t [@to_yojson bigint_to_yojson] [@of_yojson bigint_of_yojson]) * size) [@@deriving yojson]
 
 let string_of_value (v : value) : string =
   match v with
@@ -106,13 +112,13 @@ let rec string_of_expr (e : expr) : string =
 let sexp_string_of_value (v : value) =
   match v with
   | Int (i,sz) -> Printf.sprintf "mkInt(%s,%d)" (Bigint.to_string i) sz
-                   
+
 let rec sexp_string_of_expr (e : expr) =
   let string_binop ctor (e1, e2) = Printf.sprintf "%s(%s, %s)" ctor (sexp_string_of_expr e1) (sexp_string_of_expr e2) in
   match e with
   | Value v -> "Value(" ^ sexp_string_of_value v ^ ")"
   | Var (x, s) -> "Var(\"" ^ x ^ "\"," ^ string_of_int s ^ ")"
-  | Hole (x, s) -> "Hole(\"" ^ x ^ "\"," ^ string_of_int s ^ ")"  
+  | Hole (x, s) -> "Hole(\"" ^ x ^ "\"," ^ string_of_int s ^ ")"
   | Cast (i,e) -> Printf.sprintf "Cast(%d, %s)" i (string_of_expr e)
   | Plus es -> string_binop "Plus" es
   | SatPlus es -> string_binop "SatPlus" es
@@ -133,11 +139,11 @@ let get_int (v : value) : Bigint.t =
 let get_int_exn (v : value) : int =
   match v with
   | Int (x,_) -> Bigint.to_int_exn x
-                  
+
 let size_of_value (v : value) : size =
   match v with
   | Int (_, s) -> s
-                           
+
 let rec size_of_expr (e : expr) : size =
   match e with
   | Value v -> size_of_value v
@@ -170,7 +176,7 @@ let rec num_nodes_in_expr e =
      + 1
 
 
-                   
+
 let add_values (v : value) (v' : value) : value =
   match v, v' with
   | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x + x' % max_int sz),sz)
@@ -289,7 +295,7 @@ type test =
   | Or of (test * test)
   | Impl of (test * test)
   | Iff of (test * test)
-  | Neg of test       
+  | Neg of test
 
 let rec string_of_test t =
   match t with
@@ -342,7 +348,7 @@ let bigand = List.fold ~init:True ~f:(mkAnd)
 
 let (%&%) = mkAnd
 
-       
+
 let mkNeg t =
   if enable_smart_constructors then begin
       match t with
@@ -355,9 +361,9 @@ let mkNeg t =
 
 let (!%) = mkNeg
 
-             
+
 let mkEq (e : expr) (e':expr) =
-  if not enable_smart_constructors then Eq(e,e') else 
+  if not enable_smart_constructors then Eq(e,e') else
   if e = e' then
     ((*Printf.printf "[=] %s and %s are equal, so True\n" (string_of_expr e) (string_of_expr e');*)
      True)
@@ -388,7 +394,7 @@ let mkEq (e : expr) (e':expr) =
     | Var x, Var x'
       -> if x < x'
          then Eq (e, e')
-         else Eq (e', e)           
+         else Eq (e', e)
     | _, _ ->
        if ord e < ord e'
        then Eq (e, e')
@@ -406,9 +412,9 @@ let mkLe (e : expr) (e' : expr) : test =
     | Value(Int first), Value(Int second) ->
        if first < second then True else False
     | _, _ -> Le(e, e')
-            
+
 let (%=%) = mkEq
-let (%<>%) v v' = Neg(v %=% v') 
+let (%<>%) v v' = Neg(v %=% v')
 
 let (%<=%) = mkLe
 let (%>=%) e e' = e' %<=% e
@@ -457,8 +463,8 @@ let rec num_nodes_in_test t =
   | Iff (left, right) | Or (left, right) | And(left, right) | Impl(left, right)
     -> num_nodes_in_test left + 1 + num_nodes_in_test right
   | Neg t -> num_nodes_in_test t + 1
-                          
-           
+
+
 let rec remove_dups y xs =
   match xs with
   | [] -> []
@@ -467,7 +473,7 @@ let rec remove_dups y xs =
        remove_dups y xs
      else
        x :: remove_dups y xs
-    
+
 let rec dedup xs =
   match xs with
   | [] -> []
@@ -487,7 +493,7 @@ let rec free_of_expr typ e : (string * size) list =
 
 let rec free_of_test typ test : (string * size) list =
   begin match test with
-  | True | False -> 
+  | True | False ->
     []
   | Or (l,r) | And (l, r) | Impl (l,r) | Iff (l, r) ->
      free_of_test typ l @ free_of_test typ r
@@ -501,8 +507,8 @@ let rec free_of_test typ test : (string * size) list =
 let free_vars_of_test t : (string * size) list=
   let vs = free_of_test `Var t in
   vs
-            
-                
+
+
 let holes_of_test = free_of_test `Hole
 
 let rec has_hole_expr = function
@@ -512,7 +518,7 @@ let rec has_hole_expr = function
   | Plus (e1,e2) | Minus(e1,e2) | Times (e1,e2) | Mask (e1,e2) | Xor (e1,e2) | BOr (e1,e2) | Shl (e1,e2) | Concat (e1,e2)
     | SatPlus(e1,e2) | SatMinus (e1,e2)
     -> has_hole_expr e1 || has_hole_expr e2
-                                 
+
 let rec has_hole_test = function
   | True | False -> false
   | Neg b -> has_hole_test b
@@ -520,7 +526,7 @@ let rec has_hole_test = function
      has_hole_test a || has_hole_test b
   | Eq (e1,e2) | Le (e1,e2) ->
      has_hole_expr e1 || has_hole_expr e2
-                                 
+
 
 let multi_ints_of_value e : (Bigint.t * size) list =
   match e with
@@ -534,10 +540,10 @@ let rec multi_ints_of_expr e : (Bigint.t * size) list =
   | Plus (e,e') | Times (e,e') | Minus (e,e')  | Mask (e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') | Concat (e,e')
     | SatPlus (e,e') | SatMinus(e,e')
     -> multi_ints_of_expr e @ multi_ints_of_expr e'
-                  
+
 let rec multi_ints_of_test test : (Bigint.t * size) list =
   begin match test with
-    | True | False -> 
+    | True | False ->
       []
     | Or (l, r) | And (l, r)
       | Impl (l, r) | Iff (l,r)
@@ -600,7 +606,7 @@ let mkAssume t =
 
 let clean_selects_list ss = ss
 
-let mkPartial ss = 
+let mkPartial ss =
   if not enable_smart_constructors then Select(Partial, ss) else
     let selects = clean_selects_list ss in
     if List.length selects = 0 then
@@ -681,7 +687,7 @@ let combineSelects e e' =
 let (%%) = combineSelects
 
 let rec repeat c n =  if n = 0 then "" else c ^ repeat c (n-1)
-                    
+
 let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
   match e with
   | Skip ->    repeat "\t" depth ^ "skip"
@@ -720,11 +726,11 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
                     ^") -> " else "")
                     ^ string_of_cmd (trd3 a) ^ "}")
       ^ "), {" ^ string_of_cmd t.default ^ "})"
-                                       
-            
-  
+
+
+
 let rec sexp_string_of_cmd e : string =
-  let string_select = concatMap 
+  let string_select = concatMap
                         ~f:(fun (cond,act) -> "(" ^ sexp_string_of_test cond ^ "," ^ sexp_string_of_cmd act ^ ")")
                         ~c:(fun acc d -> acc ^ ";" ^ d) in
   match e with
@@ -760,7 +766,7 @@ let rec tables_of_cmd (c:cmd) : string list =
   | Seq (c,c') -> tables_of_cmd c @ tables_of_cmd c'
   | Select (_, cs) -> concatMap cs ~c:(@) ~init:(Some []) ~f:(fun (_, c) -> tables_of_cmd c)
   | Apply t -> [t.name]
-                                                              
+
 
 let rec num_nodes_in_cmd c =
   1 +
@@ -854,7 +860,7 @@ let rec free_of_cmd typ (c:cmd) : (string * size) list =
 
 let free_vars_of_cmd = free_of_cmd `Var
 let holes_of_cmd = free_of_cmd `Hole
-      
+
 let rec multi_ints_of_cmd c : (Bigint.t * size) list =
   match c with
   | Skip -> []
@@ -899,7 +905,7 @@ let rec holify_expr ~f holes (e : expr) : expr =
     | Shl es
     | Concat es
     -> binop (ctor_for_binexpr e) es
-                          
+
 and holify_test ~f holes b : test =
   match b with
   | True | False -> b
@@ -910,7 +916,7 @@ and holify_test ~f holes b : test =
   | Impl(b,b') -> holify_test ~f holes b %=>% holify_test ~f holes b'
   | Iff(b, b') -> holify_test ~f holes b %=>% holify_test ~f holes b'
   | Neg b       -> !%(holify_test ~f holes b)
-                     
+
 and holify_cmd ~f holes c : cmd=
   match c with
   | Skip -> c
@@ -930,11 +936,11 @@ and holify_cmd ~f holes c : cmd=
                                            ) in
                             (n, data, holify_cmd ~f holes' act));
              default = holify_cmd ~f holes t.default}
-              
-    
+
+
 (** replace all vars in cmd that are also in holes with holes having the same name*)
 let holify ?(f=fun x -> x) holes c =  holify_cmd ~f holes c
-        
+
 let sequence = List.reduce_exn ~f:(%:%)
 
 let rec assigned_vars = function
@@ -949,7 +955,7 @@ let rec assigned_vars = function
 
 let rec get_schema_of_table name phys =
   match phys with
-  | Skip 
+  | Skip
     | Assume _
     | Assign _
     -> None

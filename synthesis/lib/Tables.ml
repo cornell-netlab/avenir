@@ -4,10 +4,10 @@ open Ast
 open Manip
 
 module Row = struct
-  type action_data = value list
+  type action_data = value list [@@deriving yojson]
 
   (* Match expressions, action data, action index*)
-  type t = Match.t list * action_data * int
+  type t = Match.t list * action_data * int [@@deriving yojson]
 
   let equals (ms, ad, i) (ms', ad', i') =
     List.equal Match.equal ms ms'
@@ -144,7 +144,7 @@ end
 
 module Edit = struct
   type t = Add of string * Row.t (* Name of table *)
-         | Del of string * int
+         | Del of string * int [@@deriving yojson]
 
   let table = function
     | Add (name, _ )

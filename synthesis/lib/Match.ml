@@ -8,8 +8,9 @@ type match_data =
   | Exact of value
   | Between of value * value
   | Mask of value * value
+  [@@deriving yojson]
 
-type t = {key : string; data : match_data}
+type t = {key : string; data : match_data} [@@deriving yojson]
 
 let mk_match key data = {key; data}
 let exact_ key v = mk_match key @@ Exact v

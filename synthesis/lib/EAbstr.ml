@@ -3,7 +3,7 @@ open Ast
 open Tables
 open Util
 
-type t = (Edit.t * Edit.t list) list
+type t = (Edit.t * Edit.t list) list [@@deriving yojson]
 
 
 let make () : t = []
@@ -238,6 +238,7 @@ let infer (params : Parameters.t) (cache : t) (phys : cmd) (e : Edit.t) =
 
 let update (cache : t) (log : Edit.t) (physs : Edit.t list) : t =
   (* Printf.printf "Caching %s\n%!" (Edit.to_string log); *)
+  Printf.printf "%s\n" (Yojson.Safe.to_string (to_yojson cache));
   if List.exists cache ~f:(fun (_,ps) ->  ps = physs)
   then cache
   else (log, physs) :: cache
