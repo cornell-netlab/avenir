@@ -220,7 +220,7 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
       ~phys_inst:Instance.(update_list params empty phys_edits)
       ~log_edits:[]
   in
-  assert (implements params (ProfData.zero ()) (problem ()) = `Yes);
+  assert (implements params (ProfData.zero ()) (problem ()) |> Option.is_none);
   measure params None problem (onos_to_edits var_mapping data_file "routing_v6" "hdr.ipv6.dst_addr")
 
 and zero_init fvs cmd =

@@ -59,3 +59,7 @@ val reset_model_space : t -> t
 val refine_model_space : t -> test -> t
 
 val slice_conclusive : Parameters.t -> ProfData.t ref -> t -> bool
+
+(** [step_search_state p es] commits the physical edits [es] and resets models and attempts *)
+val step_search_state : t -> Edit.t list -> t
+val negate_model_in_model_space : t -> Model.t -> Edit.t list-> t

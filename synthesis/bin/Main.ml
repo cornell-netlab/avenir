@@ -264,8 +264,8 @@ let equality : Command.t =
          let problem = mk_prob () in
          assert (Option.is_none data);
          match Synthesis.implements params (ProfData.zero ()) problem with
-         | `Yes -> Core.Printf.printf "Equivalent\n%!"
-         | `NoAndCE (inpkt,_) ->
+         | None -> Core.Printf.printf "Equivalent\n%!"
+         | Some (inpkt,_) ->
             let printer p i o =
               Core.Printf.printf "%s\n  in: %s\n  out: %s\n" p
                 (Avenir.Packet.to_string i)

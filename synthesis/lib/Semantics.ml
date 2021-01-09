@@ -298,5 +298,5 @@ let fails_on_some_example params problem =
   let cexs = Problem.cexs problem in
   let fvs = Some (Problem.fvs problem) in
   List.find cexs ~f:(fun (inpkt,outpkt) ->
-      Packet.equal ~fvs outpkt (eval_log inpkt)
+      not (Packet.equal ~fvs outpkt (eval_log inpkt))
     )

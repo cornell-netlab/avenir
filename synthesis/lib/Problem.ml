@@ -91,8 +91,8 @@ let append_phys_edits (p : t) (es : Edit.t list) : t =
 let append_log_edits (p : t) (es : Edit.t list) : t =
   {p with log = Switch.append_edits p.log es}
 
-let empty_log_edits (p : t) : bool = List.empty log_edits
-let empty_phys_edits (p : t) : bool = List.empty phys_edits
+let empty_log_edits (p : t) : bool = List.is_empty (Switch.edits p.log)
+let empty_phys_edits (p : t) : bool = List.is_empty (Switch.edits p.phys)
 
 let replace_log_edits (p : t) (log_edits : Edit.t list) : t =
   {p with log = Switch.replace_edits p.log log_edits}
@@ -197,3 +197,14 @@ let slice_conclusive (params : Parameters.t) (data : ProfData.t ref) (problem : 
   in
   ProfData.update_time !data.check_sliceable_time st;
   res
+
+
+let step_search_state problem es =
+  append_phys_edits problem es
+  |> reset_model_space
+  |> reset_attempts
+
+let negate_model_in_model_space p m es =
+  let p = add_attempt p m in
+  Edit.negate (phys p) m es
+  |> refine_model_space p

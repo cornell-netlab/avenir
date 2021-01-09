@@ -13,7 +13,12 @@ let remove_missed_edits params data problem es =
       | Some _,_ -> acc)
 
 let extract_reached_edits (params : Parameters.t) data problem model =
-  Edit.of_model (Problem.phys problem) model
-  |> if params.reach_filter then
-       remove_missed_edits params data problem
-     else Fn.id
+  let es = Edit.of_model (Problem.phys problem) model in
+  let es = if params.reach_filter then
+             remove_missed_edits params data problem es
+           else es
+  in
+  if List.is_empty es then
+    None
+  else
+    Some es

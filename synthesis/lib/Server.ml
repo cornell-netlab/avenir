@@ -126,8 +126,8 @@ let verify_stub abstract_ops physical_ops =
     Problem.append_phys_edits problem_
     @@ List.map physical_ops ~f:(edit_of_op (Problem.phys !problem)) in
   match Synthesis.implements !params (ProfData.zero ()) problem_ with
-  | `Yes -> true
-  | _ -> false
+  | None -> true
+  | Some _ -> false
 
 
 let handle_op_request (op : op) =

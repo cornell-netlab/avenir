@@ -3,7 +3,7 @@ val implements :
       Parameters.t ->
       ProfData.t ref ->
       Problem.t -> 
-      [> `NoAndCE of Packet.t * Packet.t | `Yes ]
+      (Packet.t * Packet.t) option
 
 (** [cegis_math params prof prob] is [opt_soln] iff ... *)
 val cegis_math :
