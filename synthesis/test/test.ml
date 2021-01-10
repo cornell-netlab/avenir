@@ -17,4 +17,5 @@ let () =
       "bmv2_parser", RuntimeTest.test_bmv2;
       "slicing", StaticSlicingTest.test;
       "model interface", ModelTest.test;
+      "value interface", ValueTest.test;
     ]

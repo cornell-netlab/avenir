@@ -39,3 +39,9 @@ let edits =
     (fun es es' -> String.(Edit.list_to_string es =  Edit.list_to_string es'))
 
 let same_edits = Alcotest.(check edits) "same edits"
+
+let value = testable_string Value.to_string Value.eq
+let valuele = testable_string Value.to_string Value.leq
+let same_values = Alcotest.(check value) "same values"
+let diff_values = Alcotest.(check (neg value)) "different values"
+let leq_values = Alcotest.(check valuele) "less than"

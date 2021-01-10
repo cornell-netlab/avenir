@@ -3,12 +3,15 @@ type t
 val make : (int * int) -> t
 val big_make : (Bigint.t * int) -> t
 val str_make : (string * int) -> t
+(** [unsafe_make] forgoes all bounds checking -- used for testing *)
+val unsafe_make : (int * int) -> t
 val to_string : t -> string
 val to_bmv2_string : t -> string
 val to_sexp_string : t -> string
 val to_smt : t -> Z3.Smtlib.term
 val ueq : t -> Bigint.t -> bool
 val eq : t -> t -> bool
+val neq : t -> t -> bool
 val leq : t -> t -> bool
 
 val zero : int -> t

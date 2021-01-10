@@ -17,6 +17,10 @@ let make (i,sz) =
 let str_make (s,sz) =
   big_make (Bigint.of_string s, sz)
 
+let unsafe_big_make (i,sz) = Sized.make i sz
+
+let unsafe_make (i,sz) = unsafe_big_make (Bigint.of_int_exn i, sz)
+
 let to_string v : string =
   Sized.to_string ~f:Bigint.Hex.to_string v
 
@@ -30,6 +34,7 @@ let to_smt v = Z3.Smtlib.bbv (Sized.get v) (Sized.size v)
 
 let ueq = Sized.map ~f:Bigint.(=)
 let eq = Sized.map2 ~f:Bigint.(=)
+let neq v v' = not (eq v v')
 
 let leq = Sized.map2 ~f:Bigint.(<=)
 
@@ -42,18 +47,25 @@ let get_int_exn v = get_bigint v |> Bigint.to_int_exn
 let size v = Sized.size v
 let same_size v v' = size v = size v'
 
+let wrap sz x = Bigint.(x % max_int sz)
 
 let add =
-  Sized.fmap2s ~f:(fun x x' sz -> Bigint.(x + x' % max_int sz))
+  Sized.fmap2s ~f:(fun x x' sz -> Bigint.(x + x') |> wrap sz)
 
 let sat_add =
-  Sized.fmap2s ~f:(fun x x' sz -> Bigint.(min (x + x') (max_int sz)))
+  Sized.fmap2s ~f:(fun x x' sz ->
+      Printf.printf "min (%s + %s = %s) and %s\n%!"
+        (Bigint.to_string x)
+        (Bigint.to_string x')
+        (Bigint.(to_string (x + x')))
+        (Bigint.to_string (max_int sz));
+      Bigint.(min (x + x') (max_int sz)))
 
 let multiply =
-  Sized.fmap2s ~f:(fun x x' sz ->  Bigint.(x * x' % max_int sz))
+  Sized.fmap2s ~f:(fun x x' sz ->  Bigint.(x * x') |> wrap sz)
 
 let subtract =
-  Sized.fmap2s ~f:(fun x x' sz -> Bigint.(x - x' % max_int sz))
+  Sized.fmap2s ~f:(fun x x' sz -> Bigint.(x - x') |> wrap sz)
 
 let sat_subtract =
   Sized.fmap2 ~f:(fun x x' -> Bigint.(max (x - x') zero))
@@ -64,13 +76,14 @@ let xor = Sized.fmap2 ~f:Bigint.(lxor)
 
 let or_ = Sized.fmap2 ~f:Bigint.(lor)
 
-let shl =
-  Sized.fmap2 ~f:(fun x x' -> Bigint.(shift_left x @@ to_int_exn x'))
-
 (* [sized_mask sz] computes a bigint of [2^{sz} - 1]*)
 let sized_mask sz =
   let open Bigint in
   (pow (of_int 2) (of_int sz)) - one
+
+let shl =
+  Sized.fmap2s ~f:(fun x x' sz ->
+      Bigint.((shift_left x (to_int_exn x')) land sized_mask sz))
 
 let cast w v =
   (* v & (2^w -1)#w *)
