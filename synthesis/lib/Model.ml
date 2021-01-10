@@ -2,27 +2,11 @@ open Core
 open Util
 open Ast
 
-type t = value StringMap.t
+type t = Value.t StringMap.t
 
 let to_string = string_of_map
 
-let of_smt_model (lst : (Z3.Smtlib.identifier * Z3.Smtlib.term) list) =
-  let name_vals : (string * value) list =
-    (List.map lst ~f:(fun (Id id, x) ->
-         let id = match String.index id '@' with
-           | None -> id
-           | Some index -> String.drop_prefix id index in
-         match x with
-         | Z3.Smtlib.BitVec (n, w) -> let value =
-                                     Int (Bigint.of_int n, w) in id, value
-         | Z3.Smtlib.BigBitVec (n, w) -> let value =
-                                        Int (n, w) in id, value
-         | Z3.Smtlib.Int i -> let value =
-                             Int (Bigint.of_int i, Int.max_value) in id, value
-         | _ -> raise (Failure "not a supported model")))
-  in
-  StringMap.of_alist_exn name_vals
-
+let of_smt_model = Z3ModelExtractor.of_smt_model
 
 let extend_multi_model multi m =
   StringMap.merge multi m ~f:(fun ~key:_ -> function
@@ -36,11 +20,11 @@ let aggregate =
       StringMap.merge acc m ~f:(fun ~key -> function
           | `Left l -> Some l
           | `Right r -> Some r
-          | `Both (l,r) when veq l r -> Some l
+          | `Both (l,r) when Value.eq l r -> Some l
           | `Both (l,r) ->
              failwith @@
                Printf.sprintf "[Model.aggregate] conflicting values %s is both %s and %s"
-                 key (string_of_value l) (string_of_value r)))
+                 key (Value.to_string l) (Value.to_string r)))
 
 let join m1 m2 = aggregate [m1;m2]
 

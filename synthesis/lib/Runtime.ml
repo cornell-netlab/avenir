@@ -18,7 +18,7 @@ let action_data_of_string ?sep:(sep=';') (data_str : string) : Row.action_data =
           else
             value_str
         in
-        Int(Bigint.of_string value_str, int_of_string size_str))
+        Value.big_make (Bigint.of_string value_str, int_of_string size_str))
 
 let matches_of_string ?sep:(sep=';') (keys : (string * int) list) (data_str : string) : Match.t list =
   let data = String.split data_str ~on:sep |> List.filter ~f:(Fn.non String.is_empty) in
@@ -40,7 +40,10 @@ let matches_of_string ?sep:(sep=';') (keys : (string * int) list) (data_str : st
                  let range = String.strip
                                ~drop:(fun c -> c = '[' || c = ']') vals in
                  begin match String.lsplit2 range ~on:':' with
-                 | Some (hi, lo) -> Match.between_ key (Int(Bigint.of_string hi, size)) (Int(Bigint.of_string lo, size))
+                 | Some (hi, lo) ->
+                    Match.between_ key
+                      (Value.big_make (Bigint.of_string hi, size))
+                      (Value.big_make (Bigint.of_string lo, size))
                  | _ -> Printf.sprintf "Couldn't parse range match from string %s" range
                         |> failwith
                  end
@@ -63,7 +66,7 @@ let matches_of_string ?sep:(sep=';') (keys : (string * int) list) (data_str : st
                     (* Printf.printf "COnverting %s\n to bigint\n%!" mask_hex_str; *)
                     let mask = Bigint.of_string mask_hex_str in
                     let addr = Bigint.of_string fst in
-                    Match.mask_ key (Int(addr, size)) (Int(mask, size))
+                    Match.mask_ key (Value.big_make (addr, size)) (Value.big_make (mask, size))
                  | _ -> Printf.sprintf "Couldn't parse mask match from string %s, no #" match_str
                         |> failwith
                  end
@@ -88,7 +91,7 @@ let matches_of_string ?sep:(sep=';') (keys : (string * int) list) (data_str : st
                    in
                    let size = int_of_string size_str in
                    let value = Bigint.of_string value_str in
-                   Match.exact_ key (Int(value, size))
+                   Match.exact_ key (Value.big_make (value, size))
               end
          )
 
@@ -147,7 +150,7 @@ let parse_bmv2_entry cmd string : Edit.t =
           matches_of_string ~sep:' ' keys matches_str,
           action_data_of_string ~sep:' ' action_data_str
           |> List.fold2_exn params ~init:[]
-               ~f:(fun acc (_,i) (Int(d,_)) -> acc @[Int(d,i)])
+               ~f:(fun acc (_,i) v -> acc @[Value.resize v i])
 
      in
      Add(tbl_name, (matches, action_data, action_id))

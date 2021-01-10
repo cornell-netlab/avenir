@@ -3,14 +3,12 @@ open Avenir
 open Ast
 open Hint
 
- 
-
 let hints_injects_keys _ =
   let matches =
     let open Match in
-    [exact_ "x" (mkInt (5,32));
+    [exact_ "x" (Value.make (5,32));
      wildcard "y" 32;
-     exact_ "q" (mkInt(55,32))]
+     exact_ "q" (Value.make(55,32))]
     in
   let phys =
     sequence [
@@ -27,10 +25,10 @@ let hints_injects_keys _ =
   let edit = Edit.Add ("logical", (matches, [], 0)) in
   let model = construct phys edit |> list_to_model `NoVals phys in
   let expected = Model.of_alist_exn
-                   [ "?x_p2b_mask", Int(Util.max_int 32,32);
-                     "?q_p2b_mask", Int(Util.max_int 32,32);
-                     "?z_p2b", mkInt(0,32);
-                     "?z_p2b_mask", mkInt(0,32);
+                   [ "?x_p2b_mask", Value.big_make(Util.max_int 32,32);
+                     "?q_p2b_mask", Value.big_make(Util.max_int 32,32);
+                     "?z_p2b", Value.make(0,32);
+                     "?z_p2b_mask", Value.make(0,32);
                    ]
   in
   same_model expected model

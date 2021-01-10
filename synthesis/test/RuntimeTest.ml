@@ -47,23 +47,23 @@ let bmv2_parser_parses_real_rules _ =
   let expected =
     let open Edit in
     [
-      Add("send_frame", ([Match.exact_ "standard_metadata.egress_port" (mkInt(1,9))],
-                         [Int(Bigint.of_string "0x00aabb000000", 48)],
+      Add("send_frame", ([Match.exact_ "standard_metadata.egress_port" (Value.make(1,9))],
+                         [Value.str_make("0x00aabb000000", 48)],
                          0));
-      Add("send_frame", ([Match.exact_ "standard_metadata.egress_port" (mkInt(2,9))],
-                         [Int(Bigint.of_string "0x00aabb000001", 48)],
+      Add("send_frame", ([Match.exact_ "standard_metadata.egress_port" (Value.make(2,9))],
+                         [Value.str_make("0x00aabb000001", 48)],
                          0));
-      Add("forward", ([Match.exact_ "meta.routing_metadata.nhop_ipv4" (Int(Bigint.of_string "0x0a00000a",32))],
-                         [Int(Bigint.of_string "0x000400000000", 48)],
+      Add("forward", ([Match.exact_ "meta.routing_metadata.nhop_ipv4" (Value.str_make("0x0a00000a",32))],
+                         [Value.str_make("0x000400000000", 48)],
                          0));
-      Add("forward", ([Match.exact_ "meta.routing_metadata.nhop_ipv4" (Int(Bigint.of_string "0x0a00010a",32))],
-                         [Int(Bigint.of_string "0x000400000001", 48)],
+      Add("forward", ([Match.exact_ "meta.routing_metadata.nhop_ipv4" (Value.str_make("0x0a00010a",32))],
+                         [Value.str_make("0x000400000001", 48)],
                          0));
-      Add("ipv4_lpm", ([Match.exact_ "hdr.ipv4.dstAddr" (Int(Bigint.of_string "0x0a00000a",32))],
-                       [Int(Bigint.of_string "0x0a00000a",32);mkInt(1,9)],
+      Add("ipv4_lpm", ([Match.exact_ "hdr.ipv4.dstAddr" (Value.str_make("0x0a00000a",32))],
+                       [Value.str_make("0x0a00000a",32);Value.make(1,9)],
                        0));
-      Add("ipv4_lpm", ([Match.exact_ "hdr.ipv4.dstAddr" (Int(Bigint.of_string "0x0a00010a",32))],
-                       [Int(Bigint.of_string "0x0a00010a",32);mkInt(2,9)],
+      Add("ipv4_lpm", ([Match.exact_ "hdr.ipv4.dstAddr" (Value.str_make("0x0a00010a",32))],
+                       [Value.str_make("0x0a00010a",32);Value.make(2,9)],
                        0));
     ]
   in

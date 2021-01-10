@@ -202,7 +202,7 @@ let restrict_mask (opts : opts) query_holes =
             let all_1s = max_int sz in
             mkAnd acc @@
               bigor [
-                  Hole(h, sz) %=% Value(Int(all_1s, sz));
+                  Hole(h, sz) %=% Value(Value.big_make (all_1s, sz));
                   bigand [
                       (Hole(h_value,sz) %=% mkVInt(0,sz));
                       (Hole(h,sz) %=% mkVInt(0,sz));
@@ -215,20 +215,22 @@ let active_domain_restrict params problem opts query_holes : test =
     let ints = (multi_ints_of_cmd (Problem.log_gcl_program params problem))
                @ (multi_ints_of_cmd (Problem.phys_gcl_program params problem))
                |> List.dedup_and_sort ~compare:(Stdlib.compare)
-               |> List.filter ~f:(fun (v,_) -> Bigint.(v <> zero && v <> one)) in
+               |> List.filter ~f:(fun v -> Bigint.(Value.get_bigint v <> zero && Value.get_bigint v <> one)) in
     let test = List.fold query_holes ~init:True
                  ~f:(fun acc (h,sz) ->
                    let restr =
                      List.fold ints
                        ~init:(False)
-                       ~f:(fun acci (i,szi) ->
+                       ~f:(fun acci v ->
+                         let szi = Value.size v in
+                         let i = Value.get_bigint v in
                          mkOr acci @@
                            if sz = szi
                               && not (String.is_suffix h ~suffix:"_mask")
                               && not (Hole.is_add_row_hole h)
                               && not (Hole.is_delete_hole h)
                               && not (Hole.is_which_act_hole h)
-                           then (Hole(h,sz) %=% Value(Int(i,szi))
+                           then (Hole(h,sz) %=% Value(Value.big_make (i,szi))
                                  %+% (Hole(h,sz) %=% mkVInt(0,szi))
                                  %+% (Hole(h,sz) %=% mkVInt(1,szi)))
                            else False)

@@ -109,17 +109,17 @@ let rec generate_n_insertions varsize length n avail_tables maxes : Edit.t list 
         else
           let (max', mtch) =
             if Random.int 6 < 1 then
-              (max_i + 1, Match.exact_ k (mkInt(max_i, varsize)))
+              (max_i + 1, Match.exact_ k (Value.make (max_i, varsize)))
             else
               let lo = max_i in
               let hi = min (lo + Random.int 3) (pow 2 varsize - 1) in
               if lo = hi then
-                (hi + 1, Match.exact_ k (mkInt(hi, varsize)))
+                (hi + 1, Match.exact_ k (Value.make (hi, varsize)))
               else
-                (hi + 1, Match.between_ k (mkInt(lo, varsize)) (mkInt(hi, varsize)))
+                (hi + 1, Match.between_ k (Value.make (lo, varsize)) (Value.make (hi, varsize)))
           in
           let maxes' = StringMap.set maxes ~key:(tbl i) ~data:max' in
-          let act_data = mkInt(Random.int (pow 2 varsize),varsize) in
+          let act_data = Value.make (Random.int (pow 2 varsize),varsize) in
           let row = ([mtch], [act_data], 0) in
           Some (maxes', avail_tables, tbl i, row)
     in
@@ -174,7 +174,7 @@ let onos_to_edits var_mapping filename tbl_nm key =
   let make_edit data : Edit.t =
     match data with
     | [_; "ADD"; _; ipv6; id] ->
-       Add (tbl_nm, ([Match.mk_ipv6_match key ipv6], [Int(Bigint.of_string id, 32)], 0))
+       Add (tbl_nm, ([Match.mk_ipv6_match key ipv6], [Value.big_make (Bigint.of_string id, 32)], 0))
     | [_; "REMOVE"; _; _; _] ->
        failwith "cannot yet handle removes"
     | _ ->
@@ -273,10 +273,11 @@ and variables_test t =
 
 and get_width e =
   match e with
-  | Value(Int(_, w)) | Var(_, w) | Hole(_, w) | Cast(w,_)
-    -> w
-  | Slice {hi;lo;_} -> let sz = hi - lo in
-                       if sz < 0 then -1 else sz
+  | Value v -> Value.size v
+  | Var(_, w) | Hole(_, w) | Cast(w,_) -> w
+  | Slice {hi;lo;_} ->
+     let sz = hi - lo in
+     if sz < 0 then -1 else sz
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es
     | SatPlus es | SatMinus es
     -> get_width (fst es)
@@ -342,7 +343,7 @@ let create_bench sz num_tables num_xs num_ms =
                  )
     ]
 
-let wildcard k = Match.mask_ k (mkInt(0,32)) (mkInt(0,32))
+let wildcard k = Match.wildcard k 32
 let wildcards_between lo hi =
   List.map (range_ex lo hi) ~f:(fun k -> wildcard (Printf.sprintf "x%d" k))
 
@@ -350,17 +351,17 @@ let wildcards_between lo hi =
 let match_row sz num_xs ~ith ~has_value : Edit.t =
   let matches =
     wildcards_between 0 (ith-1)
-    @ [ Match.exact_ (Printf.sprintf "x%d" ith) (mkInt(has_value,sz)) ]
+    @ [ Match.exact_ (Printf.sprintf "x%d" ith) (Value.make (has_value,sz)) ]
     @ wildcards_between (num_xs - ith) num_xs
   in
-  Edit.Add("logical",(matches, [mkInt(has_value,9)], 0))
+  Edit.Add("logical",(matches, [Value.make (has_value,9)], 0))
 
 let match_row_easier sz num_xs ~has_value =
   let open Match in
   let matches =
-    exact_ "x0" (mkInt(has_value,sz)) :: wildcards_between 1 num_xs
+    exact_ "x0" (Value.make (has_value,sz)) :: wildcards_between 1 num_xs
   in
-  Edit.Add("logical",(matches, [mkInt(has_value,9)], 0))
+  Edit.Add("logical",(matches, [Value.make (has_value,9)], 0))
 
 
 let rec create_log_edits_easier sz i max_edits num_xs =
@@ -424,13 +425,14 @@ let square_bench params sz n max_edits =
 let cb_to_matches fvs cb_row =
   List.map fvs ~f:(fun (f,sz) ->
                     get cb_row f
-                    |> Option.value ~default:(Match.mask_ f (mkInt(0,sz)) (mkInt(0,sz))))
+                    |> Option.value ~default:(Match.mask_ f (Value.make (0,sz)) (Value.make (0,sz))))
 
 let generate_out acc  =
   let open Edit in
   let biggest = List.fold acc ~init:Bigint.one ~f:(fun max_so_far curr ->
                     match curr with
-                    | Add(_,(_,[Int(i,_)],_)) when Bigint.(i > max_so_far) -> i
+                    | Add(_,(_,[v],_)) when Bigint.(Value.get_bigint v > max_so_far) ->
+                       Value.get_bigint v
                     | _ -> max_so_far
                   ) in
   Bigint.(if (biggest + one) % (of_int 512) = zero
@@ -455,7 +457,7 @@ let rep params data nrules =
            then acc
            else
              let outp = generate_out acc in
-             acc @ [Add("obt", (matches, [Int(outp,9)], 0))]
+             acc @ [Add("obt", (matches, [Value.big_make (outp,9)], 0))]
          )
   in
   Printf.printf "there are cleaned rules %d\n%!" (List.length gen_data);
@@ -522,7 +524,7 @@ let rep_middle params data nrules =
            then acc
            else
              let outp = generate_out acc in
-             acc @ [Add("obt", (matches, [Int(outp,9)], 0))]
+             acc @ [Add("obt", (matches, [Value.big_make (outp,9)], 0))]
          )
   in
   Printf.printf "there are cleaned rules %d\n%!" (List.length gen_data);
@@ -603,7 +605,7 @@ let rep_of params exactify data nrules =
              acc
            else
              let outp = generate_out acc in
-             let e =  Add("obt", (matches, [Int(outp,9)], 0)) in
+             let e =  Add("obt", (matches, [Value.big_make (outp,9)], 0)) in
              (* let () = Printf.printf "Keeping %s\n" (Edit.to_string e) in *)
              acc @ [e]
          )
@@ -676,7 +678,7 @@ let rep_par params data nrules =
           acc
         else
           let outp = generate_out acc in
-          let e =  Add("obt", (matches, [Int(outp,9)], 0)) in
+          let e =  Add("obt", (matches, [Value.big_make (outp,9)], 0)) in
           (* let () = Printf.printf "Keeping %s\n" (Edit.to_string e) in *)
           acc @ [e]
       )
@@ -827,7 +829,7 @@ let metadata params sz nmeta nedits =
         let log_edits =
           List.map (range_ex 0 nedits)
             ~f:(fun i ->
-              [Edit.Add("logical", ([Match.exact_ "x" (mkInt(i,sz))], [mkInt(i,9)],0)) ]
+              [Edit.Add("logical", ([Match.exact_ "x" (Value.make (i,sz))], [Value.make (i,9)],0)) ]
             )
         in
         Printf.printf "Log:\n%s\n%!" (string_of_cmd logical_table);

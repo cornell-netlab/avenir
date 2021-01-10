@@ -1188,7 +1188,7 @@ let apply_model_from_file (c : cmd) (model_file : string) : cmd =
       match parse_line line with
       | None -> c
       | Some (hole, data) ->
-         StringMap.singleton hole (mkInt (data, -1))
+         Model.(set empty ~key:hole ~data:(Value.make (data, -1)))
          |> fill_holes c)
 
 (* P4-PARSING *)

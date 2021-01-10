@@ -112,7 +112,7 @@ let apply_finals_sub_packet (pkt : Packet.t) sub : Packet.t =
     ~f:(fun ~key ~data acc ->
       let key =
         match StringMap.find sub key with
-        | Some (i,_) -> fst (freshen key (size_of_value data) i)
+        | Some (i,_) -> fst (freshen key (Value.size data) i)
         | None -> key
       in
       Packet.set_field acc key data

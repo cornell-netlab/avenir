@@ -2,21 +2,21 @@ open Core
 open Ast
 open Util
 
-type t = value StringMap.t
+type t = Value.t StringMap.t
 
 let empty = StringMap.empty
 
 let to_string (p : t) =
-  (StringMap.fold ~f:(fun ~key:k ~data:v acc -> acc ^ k ^ "=" ^ (string_of_value v) ^ "\n") p ~init:"(") ^ ")\n"
+  (StringMap.fold ~f:(fun ~key:k ~data:v acc -> acc ^ k ^ "=" ^ (Value.to_string v) ^ "\n") p ~init:"(") ^ ")\n"
 
-let set_field (pkt : t) (field : string) (v : value) : t  =
+let set_field (pkt : t) (field : string) (v : Value.t) : t  =
   (* Printf.printf "Setting %s to %s;\n" (field) (string_of_value v); *)
   StringMap.set pkt ~key:field ~data:v
 
-let get_val_opt (pkt : t) (field : string) : value option =
+let get_val_opt (pkt : t) (field : string) : Value.t option =
   StringMap.find pkt field
 
-let get_val (pkt : t) (field : string) : value =
+let get_val (pkt : t) (field : string) : Value.t =
   match get_val_opt pkt field with
     | None -> failwith ("UseBeforeDef error " ^ field ^ " packet is " ^ to_string pkt)
     | Some v -> v
@@ -39,20 +39,20 @@ let rec set_field_of_expr_opt (pkt : t) (field : string) (e : expr) : t option =
   | Hole _ -> failwith "impossible"
   | Cast (i,e) ->
      set_field_of_expr_opt pkt field e >>| fun pkt_e ->
-     set_field pkt field @@ cast_value i @@ get_val pkt_e field
+     set_field pkt field @@ Value.cast i @@ get_val pkt_e field
   | Slice {hi;lo;bits} ->
      set_field_of_expr_opt pkt field bits >>| fun pkt_bits ->
-     set_field pkt field @@ slice_value hi lo @@ get_val pkt_bits field
-  | Plus  (e, e') -> binop add_values e e'
-  | SatPlus (e,e') -> binop sat_add_values e e'
-  | Times (e, e') -> binop multiply_values e e'
-  | Minus (e, e') -> binop subtract_values e e'
-  | SatMinus (e,e') -> binop sat_subtract_values e e'
-  | Mask (e,e') -> binop mask_values e e'
-  | Xor (e,e') -> binop xor_values e e'
-  | BOr (e,e') -> binop or_values e e'
-  | Shl (e,e') -> binop shl_values e e'
-  | Concat (e,e') -> binop concat_values e e'
+     set_field pkt field @@ Value.slice hi lo @@ get_val pkt_bits field
+  | Plus  (e, e') -> binop Value.add e e'
+  | SatPlus (e,e') -> binop Value.sat_add e e'
+  | Times (e, e') -> binop Value.multiply e e'
+  | Minus (e, e') -> binop Value.subtract e e'
+  | SatMinus (e,e') -> binop Value.sat_subtract e e'
+  | Mask (e,e') -> binop Value.mask e e'
+  | Xor (e,e') -> binop Value.xor e e'
+  | BOr (e,e') -> binop Value.or_ e e'
+  | Shl (e,e') -> binop Value.shl e e'
+  | Concat (e,e') -> binop Value.concat e e'
 
 let to_test ?random_fill:(random_fill=false)  ~fvs (pkt : t) =
   (* let random_fill = false in *)
@@ -68,22 +68,8 @@ let to_test ?random_fill:(random_fill=false)  ~fvs (pkt : t) =
           | Some v ->
              Var(x, sz) %=% Value(v)))
 
-let of_smt_model (lst : (Z3.Smtlib.identifier * Z3.Smtlib.term) list) =
-  let name_vals : (string * value) list =
-    (List.map lst ~f:(fun (Id id, x) ->
-         let id = match String.index id '@' with
-           | None -> id
-           | Some index -> String.drop_prefix id index in
-         match x with
-         | Z3.Smtlib.BitVec (n, w) -> let value =
-                                     Int (Bigint.of_int n, w) in id, value
-         | Z3.Smtlib.BigBitVec (n, w) -> let value =
-                                        Int (n, w) in id, value
-         | Z3.Smtlib.Int i -> let value =
-                             Int (Bigint.of_int i, Int.max_value) in id, value
-         | _ -> raise (Failure "not a supported model")))
-  in
-  StringMap.of_alist_exn name_vals
+let of_smt_model = Z3ModelExtractor.of_smt_model
+
 
 let to_assignment (pkt : t) =
   StringMap.fold pkt ~init:Skip
@@ -106,7 +92,7 @@ let remake ?fvs:(fvs = None) (pkt : t) : t =
             let upper = Float.(top * 0.9 |> to_int) |> max 1 in
             let lower = Float.(top * 0.1 |> to_int) in
             StringMap.set acc ~key:var_nm
-              ~data:(mkInt(lower + Random.int upper, sz))
+              ~data:(Value.make (lower + Random.int upper, sz))
        )
 
 let restrict_packet (fvs : (string * size) list) pkt =
@@ -141,11 +127,11 @@ let extract_inout_ce (model : t) : (t * t) =
     )
   |> fst
 
-let mk_packet_from_list (assoc : (string * value) list) : t =
+let mk_packet_from_list (assoc : (string * Value.t) list) : t =
   StringMap.of_alist_exn assoc
 
 let diff_vars (pkt : t) (pkt' : t) : string list =
-  let is_drop pkt = Option.(StringMap.find pkt "standard_metadata.egress_spec" >>| (=) (mkInt(0,9))) in
+  let is_drop pkt = Option.(StringMap.find pkt "standard_metadata.egress_spec" >>| (=) (Value.make (0,9))) in
   let alternate_drop =
     match is_drop pkt, is_drop pkt' with
     | Some dropped, Some dropped' ->
@@ -159,7 +145,7 @@ let diff_vars (pkt : t) (pkt' : t) : string list =
   else
   let diff_map = StringMap.merge pkt pkt'
     ~f:(fun ~key:_ -> function
-      | `Both (l,r) when veq l r -> None
+      | `Both (l,r) when Value.eq l r -> None
       | `Left v | `Right v | `Both(_,v) -> Some v)
   in
   StringMap.keys diff_map

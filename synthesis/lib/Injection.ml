@@ -23,7 +23,7 @@ let make (problem : Problem.t) : t =
         if nonempty_inter vars (log_edit_domain problem) then
           acc
         else
-          Model.set acc ~key:("?AddRowTo"^tbl) ~data:(mkInt(0,1))
+          Model.set acc ~key:("?AddRowTo"^tbl) ~data:(Value.make (0,1))
       )
 
 let apply (inj : t) (phi : test) =

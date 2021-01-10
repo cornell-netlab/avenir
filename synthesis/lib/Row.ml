@@ -3,7 +3,7 @@ open Ast
 open Manip
 open Util
 
-type action_data = value list
+type action_data = Value.t list
 
 (* Match expressions, action data, action index*)
 type t = Match.t list * action_data * int
@@ -14,7 +14,7 @@ let equals (ms, ad, i) (ms', ad', i') =
   && i = i'
 
 let action_data_to_string ad =
-  (List.map ad ~f:(string_of_value)
+  (List.map ad ~f:(Value.to_string)
    |> List.reduce ~f:(Printf.sprintf "%s;%s")
    |> Option.value ~default:"")
 
@@ -32,7 +32,7 @@ let list_to_string ?tab:(tab="") rs : string =
 let test_of_data (tbl : string) (act_id : int) (vars : (string * size) list) (vals : action_data) =
   List.fold2_exn vars vals ~init:True
     ~f:(fun acc (x,sz) v ->
-      assert (sz = size_of_value v);
+      assert (sz = Value.size v);
       mkAnd acc @@
         (Hole.action_data_hole tbl act_id x sz %=% Value v)
     )
@@ -40,7 +40,7 @@ let test_of_data (tbl : string) (act_id : int) (vars : (string * size) list) (va
 let model_alist_of_data (tbl : string) (act_id : int) (vars : (string * size) list) (vals : action_data) =
   List.fold2_exn vars vals ~init:[]
     ~f:(fun acc (x,sz) v ->
-      assert (sz = size_of_value v);
+      assert (sz = Value.size v);
       acc @
         [Hole.action_data tbl act_id x sz, v]
     )
@@ -75,7 +75,7 @@ let mk_new_row (match_model : Model.t) phys tbl_name data_opt act : t option =
                         fixup_expr match_model (Hole(hm,sz))
                   with
                   | Hole _,_ ->
-                     Some (ks @ [Match.mask_ key (mkInt(0,sz)) (mkInt(0,sz))])
+                     Some (ks @ [Match.mask_ key (Value.make(0,sz)) (Value.make(0,sz))])
                   | Value v,Hole _ ->
                      Some (ks @ [Match.exact_ key v])
                   | Value v, Value m ->
@@ -83,7 +83,7 @@ let mk_new_row (match_model : Model.t) phys tbl_name data_opt act : t option =
                   | _ -> failwith "Model did something weird"
                 end
               | Some ks, Value lo, Value hi ->
-                 let k = if vleq hi lo
+                 let k = if Value.eq hi lo
                          then failwith "Low value greater than high value in model from z3"
                          else [Match.between_ key lo hi] in
                  Some (ks @ k)
@@ -106,7 +106,7 @@ let mk_new_row (match_model : Model.t) phys tbl_name data_opt act : t option =
                    match Model.find match_model p_hole  with
                    | None ->
                       Printf.printf "[WARNING] couldn't find action data %s in %s \n%!" p_hole (Model.to_string match_model);
-                      Int (Random.int (pow 2 sz) |> Bigint.of_int_exn, sz)
+                      Value.make (Random.int (pow 2 sz), sz)
                    | Some v ->
                       v
                  in

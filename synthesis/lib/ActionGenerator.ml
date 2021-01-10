@@ -130,7 +130,7 @@ let positive_actions (params : Parameters.t) (phys : cmd) (fvs : (string * int) 
                                let unknowns = fsts @@ free_of_expr `Var data in
                                let exp = holify_expr ~f:Fn.id unknowns data in
                                let test = Value v %=% exp in
-                               Printf.printf "%s.action[%d]\tchecking %s = %s" table act_id (string_of_expr exp) (string_of_value v);
+                               Printf.printf "%s.action[%d]\tchecking %s = %s" table act_id (string_of_expr exp) (Value.to_string v);
                                Prover.is_sat params test
                           else
                             acc

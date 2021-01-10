@@ -144,7 +144,7 @@ let cp_affects_actions_and_keys _ =
         "out" %<-% int 0;
         "meta" %<-% var "addr";
         Apply {name = "tbl";
-               keys = [("z",32,Some (mkInt(99,32))); ("addr",32,None)];
+               keys = [("z",32,Some (Value.make (99,32))); ("addr",32,None)];
                actions = [ "action",
                            ["port",9],
                            sequence [

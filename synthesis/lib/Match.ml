@@ -5,9 +5,9 @@ open Ast
 
 (* TYPES *)
 type match_data =
-  | Exact of value
-  | Between of value * value
-  | Mask of value * value
+  | Exact of Value.t
+  | Between of Value.t * Value.t
+  | Mask of Value.t * Value.t
 
 type t = {key : string; data : match_data}
 
@@ -19,17 +19,17 @@ let between_ key lo hi =
     else
       mk_match key @@ Between (lo, hi)
 let mask_ key v m =
-  if Bigint.(get_int m >= max_int (size_of_value v))
+  if Bigint.(Value.get_bigint m >= max_int (Value.size v))
   then exact_ key v
   else mk_match key @@ Mask(v,m)
 
-let wildcard key sz = mask_ key (mkInt(0,sz)) (mkInt(0,sz))
+let wildcard key sz = mask_ key (Value.zero sz) (Value.zero sz)
 
 let equal_data d d' =
   match d, d' with
-  | Exact v, Exact v' -> veq v v'
-  | Between (lo, hi), Between (lo',hi') -> veq lo lo' && veq hi hi'
-  | Mask (v,msk), Mask (v',msk') -> veq v v' && veq msk msk'
+  | Exact v, Exact v' -> Value.eq v v'
+  | Between (lo, hi), Between (lo',hi') -> Value.eq lo lo' && Value.eq hi hi'
+  | Mask (v,msk), Mask (v',msk') -> Value.eq v v' && Value.eq msk msk'
   | _,_ -> false
 
 let equal m m' = m.key = m'.key && equal_data m.data m'.data
@@ -39,27 +39,27 @@ let get_key m = m.key
 let to_string (m : t) : string =
   match m.data with
   | Exact x ->
-     Printf.sprintf "%s ~ %s" m.key (string_of_value x)
+     Printf.sprintf "%s ~ %s" m.key (Value.to_string x)
   | Between (lo,hi) ->
-     Printf.sprintf "%s ~ [%s,%s]" m.key (string_of_value lo) (string_of_value hi)
+     Printf.sprintf "%s ~ [%s,%s]" m.key (Value.to_string lo) (Value.to_string hi)
   | Mask (v, msk) ->
-     Printf.sprintf "%s ~ %s & %s" m.key (string_of_value v) (string_of_value msk)
+     Printf.sprintf "%s ~ %s & %s" m.key (Value.to_string v) (Value.to_string msk)
 
 let to_bmv2_string (m:t) : string =
   match m.data with
   | Exact v ->
-     bmv2_string_of_value v
+     Value.to_bmv2_string v
   | Mask (v,m) ->
-     Printf.sprintf "%s &&& %s" (bmv2_string_of_value v) (bmv2_string_of_value m)
+     Printf.sprintf "%s &&& %s" (Value.to_bmv2_string v) (Value.to_bmv2_string m)
   | _ ->
      Printf.sprintf "[Unimplemented] Don't know how to install range matches"
      |> failwith
 
 let get_size (m : t) : size =
   match m.data with
-  | Exact (Int(_,sz))
-  | Mask (Int(_,sz),_)
-  | Between (Int(_,sz),_) -> sz
+  | Exact v
+  | Mask (v,_)
+  | Between (v,_) -> Value.size v
 
 
 let to_test (m : t) : test =
@@ -69,14 +69,14 @@ let to_test (m : t) : test =
   | Exact v ->
      Var k %=% Value v
   | Between (lo, hi) ->
-     let upper_bound = Int(max_int sz,sz) in
+     let upper_bound = Value.big_make (max_int sz,sz) in
      let lo_test =
-       if vleq lo (mkInt(0,sz)) then
+       if Value.leq lo (Value.zero sz) then
         True
       else
         Value lo %<=% Var (m.key, sz) in
      let hi_test =
-       if vleq upper_bound hi
+       if Value.leq upper_bound hi
        then True
        else Var k %<=% Value hi
      in
@@ -84,29 +84,28 @@ let to_test (m : t) : test =
   | Mask (v, m) ->
      (mkMask (Var k) (Value m)) %=% Value v
 
+(**Assume match is well-typed for tbl*)
 let to_test_hole tbl m =
   match m.data with
-  | Exact (Int(_,sz) as v) ->
-     Hole (Hole.match_hole_exact tbl m.key,sz) %=% Value(v)
-  | Between((Int(_,lsz) as l), (Int(_,hsz) as h)) ->
-     assert (lsz = hsz);
+  | Exact v ->
+     Hole (Hole.match_hole_exact tbl m.key,Value.size v) %=% Value v
+  | Between (l, h) ->
+     let sz = Value.size l in
      let (loh, hih) = Hole.match_holes_range tbl m.key in
-     (Hole(loh,lsz) %=% Value l) %&% (Hole(hih,hsz) %=% Value h)
-  | Mask ((Int(_,vsz) as vint), (Int(_,msz) as mask)) ->
-     assert (vsz = msz);
+     (Hole(loh, sz) %=% Value l) %&% (Hole(hih, sz) %=% Value h)
+  | Mask (vint, mask) ->
      let (vh, mh) = Hole.match_holes_mask tbl m.key in
-     (Hole(vh,vsz) %=% Value vint) %&% (Hole(mh,msz) %=% Value mask)
+     let sz = Value.size vint in
+     (Hole(vh,sz) %=% Value vint) %&% (Hole(mh,sz) %=% Value mask)
 
 let to_model_alist tbl m =
   match m.data with
   | Exact v ->
      [Hole.match_hole_exact tbl m.key, v]
-  | Between((Int(_,lsz) as l), (Int(_,hsz) as h)) ->
-     assert (lsz = hsz);
+  | Between  (l, h) ->
      let (loh, hih) = Hole.match_holes_range tbl m.key in
      [loh, l; hih, h]
-  | Mask ((Int(_,vsz) as vint), (Int(_,msz) as mask)) ->
-     assert (vsz = msz);
+  | Mask (vint, mask) ->
      let (vh, mh) = Hole.match_holes_mask tbl m.key in
      [vh, vint; mh, mask]
 
@@ -131,8 +130,8 @@ let to_model ?typ:(typ=`Vals) table (m : t) =
   Model.of_alist_exn @@
     match m.data with
     | Exact (v) ->
-       let sz = size_of_value v in
-       let msk = Int(max_int sz, sz) in
+       let sz = Value.size v in
+       let msk = Value.big_make (max_int sz, sz) in
        Hole.match_holes_mask table m.key
        |> encode_msk (v,msk)
     | Mask (v,msk) ->
@@ -165,7 +164,7 @@ let to_valuation_test table hole_typ mtch =
      let hv, hm = Hole.match_holes_mask table k in
      bigand [
          Hole(hv,sz) %=% Value v;
-         Hole(hm,sz) %=% Value(Int(max_int sz,sz))
+         Hole(hm,sz) %=% Value(Value.big_make(max_int sz,sz))
        ]
   | _, Between _ ->
      failwith "[Match.valuation] Between Holes are impossible, so cannot create such a valuation"
@@ -177,9 +176,11 @@ let is_wildcard m =
   | Exact _ ->
      false
   | Mask (_, m) ->
-     Bigint.(get_int m = zero)
-  | Between(lo,Int(hi_v,sz)) ->
-     Bigint.(get_int lo <= zero && hi_v >= max_int sz)
+     Bigint.(Value.get_bigint m = zero)
+  | Between(lo,hi) ->
+     let sz = Value.size hi in
+     Bigint.(Value.get_bigint lo <= zero
+             && Value.get_bigint hi >= max_int sz)
 
 let list_to_string : t list -> string =
   let list_el_string m = if is_wildcard m then "" else (to_string m ^ " ") in
@@ -215,12 +216,12 @@ let mk_ipv6_match key ipv6_str =
   in
   let bv = Bigint.of_string ("0x" ^ hex_addr) in
   let data = if prefix_len = 128 then
-               Exact(Int(bv,128))
+               Exact(Value.big_make (bv,128))
              else
                let mask = Bigint.of_string ("0b" ^ String.make (prefix_len/4) 'f' ^ String.make ((128 - prefix_len) / 4) '0' ) in
                let hi = Bigint.(((bv land mask) + (Bigint.shift_left Bigint.one (Int.(128 - prefix_len))) - Bigint.one)) in
                let lo = Bigint.(bv land mask) in
-               Between (Int(lo,128), Int(hi,128))
+               Between (Value.big_make(lo,128), Value.big_make (hi,128))
   in
   {key;data}
 
@@ -231,19 +232,19 @@ let cap (m : t) (m' : t) =
   else
     match m.data, m'.data with
     | Exact x, Exact y->
-       if veq x y then [m] else []
+       if Value.eq x y then [m] else []
     | Exact x, Between (lo, hi)
       | Between (lo, hi), Exact x->
-       if vleq lo x && vleq x hi then
+       if Value.leq lo x && Value.leq x hi then
          [m]
        else
          []
     | Between (lo, hi), Between (lo', hi') ->
        let lo'' = Stdlib.max lo lo' in
        let hi'' = Stdlib.min hi hi' in
-       if veq lo'' hi'' then
+       if Value.leq lo'' hi'' then
          [{m with data = Exact lo''}]
-       else if vleq lo'' hi'' then
+       else if Value.leq lo'' hi'' then
          [{m with data = Between (lo'', hi'')}]
        else
          []
@@ -253,21 +254,21 @@ let cap (m : t) (m' : t) =
 
 let rec has_inter_data (d : match_data) (d' : match_data) : bool =
   match d, d' with
-  | Exact x, Exact y
-    -> veq x y
+  | Exact x, Exact y ->
+     Value.eq x y
   | Exact x, Between (lo, hi)
-    | Between(lo,hi), Exact(x)
-    -> vleq lo x && vleq x hi
+    | Between(lo,hi), Exact(x) ->
+    Value.leq lo x && Value.leq x hi
 
   | Between(lo, hi), Between(lo',hi')
     -> Stdlib.max lo lo' <= Stdlib.min hi hi'
 
   | Mask(v,msk), Exact(v')
     | Exact (v'), Mask(v,msk)
-    -> Bigint.(get_int v land get_int msk = get_int v' land get_int msk)
+    -> Bigint.(Value.get_bigint v land Value.get_bigint msk = Value.get_bigint v' land Value.get_bigint msk)
 
   | Mask (v,msk),mm | mm, Mask (v,msk)
-    -> if Bigint.(get_int msk >= pow (of_int 2) (of_int @@ size_of_value msk) - one)
+    -> if Bigint.(Value.get_bigint msk >= pow (of_int 2) (of_int @@ Value.size msk) - one)
        then has_inter_data (Exact v) mm
        else failwith "Cant' tell"
 
@@ -284,10 +285,10 @@ let has_inter_l (ms : t list) (ms' : t list) : bool =
 
 let is_subset_data (d : match_data) (d' : match_data) : bool =
   match d, d' with
-  | Exact i, Exact j -> veq i j
-  | Exact i, Between (lo', hi') -> vleq lo' i && vleq i hi'
-  | Between (lo, hi), Exact j -> veq lo j && veq hi j
-  | Between (lo, hi), Between (lo', hi') -> vleq lo hi' && vleq lo' hi
+  | Exact i, Exact j -> Value.eq i j
+  | Exact i, Between (lo', hi') -> Value.leq lo' i && Value.leq i hi'
+  | Between (lo, hi), Exact j -> Value.leq lo j && Value.leq hi j
+  | Between (lo, hi), Between (lo', hi') -> Value.leq lo hi' && Value.leq lo' hi
   | Mask _, _ | _, Mask _ ->
      failwith "Dont know how to subset masks"
 
@@ -299,7 +300,9 @@ let is_subset (m : t) (m': t) : bool =
 let get_bitmask mtch =
   match mtch.data with
   | Mask(_,m) -> m
-  | Exact(Int(_,sz)) -> Int(Bigint.of_string ("0b"^String.make sz '1'), sz)
+  | Exact(v) ->
+     let sz = Value.size v in
+     Value.big_make (Bigint.of_string ("0b"^String.make sz '1'), sz)
   | Between(_,_) -> failwith "cannot get bitmask of a range"
 
 
@@ -322,12 +325,11 @@ let exactify (m : t) : t =
     {m with data = match m.data with
                    | Mask (v,_) | Exact (v) -> Exact v
                    | Between (lo,hi) ->
-                      if Bigint.(get_int lo = zero)
+                      if Bigint.(Value.get_bigint lo = zero)
                       then Exact hi
                       else Exact lo }
 
 let exactify_list = List.map ~f:exactify
-
 
 let relevant_matches = List.filter ~f:(Fn.non is_wildcard)
 let relevant_keys = Fn.compose (List.map ~f:get_key) relevant_matches
@@ -336,8 +338,8 @@ let relevant_keys = Fn.compose (List.map ~f:get_key) relevant_matches
 let hits mtch v =
   match mtch.data with
   | Exact v' ->
-     veq v v'
+     Value.eq v v'
   | Mask (v',msk) ->
-     veq v (mask_values v' msk)
+     Value.eq v (Value.mask v' msk)
   | Between (lo,hi) ->
-     vleq lo v && vleq v hi
+     Value.leq lo v && Value.leq v hi

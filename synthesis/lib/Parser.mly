@@ -70,7 +70,7 @@ select :
   { (t, c) :: s }
 
 expr :
-| i = INT; POUND; size = INT { Ast.(Value (Int (Bigint.of_string i, int_of_string size))) }
+| i = INT; POUND; size = INT { Ast.(Value (Value.big_make (Bigint.of_string i, int_of_string size))) }
 | x = ID; POUND; size = INT  { Ast.Var (x, int_of_string size) }
 | e = expr; PLUS; e1 = expr { Ast.(mkPlus e e1) }
 | e = expr; MINUS; e1 = expr { Ast.(mkMinus e e1) }

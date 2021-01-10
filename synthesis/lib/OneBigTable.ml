@@ -24,7 +24,7 @@ let combine_actions (act1 : string * (string * size) list * cmd) (act2 : string 
   let new_p2' = List.map new_p2 ~f:(fun (_, v, w) -> v, w) in
   n1 ^ "_" ^ n2, new_p1' @ new_p2', new_c1 %:% new_c2
 
-type only_apply = {keys:(string * size * value option) list;
+type only_apply = {keys:(string * size * Value.t option) list;
                    actions: ((string * (string * size) list * cmd) list);
                    default: cmd}
 

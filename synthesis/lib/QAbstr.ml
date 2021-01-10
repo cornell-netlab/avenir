@@ -24,22 +24,22 @@ let rec abstract_expr (m : string StringMap.t) (e1 : expr) (e2 : expr) : (string
        | Some (m, e2) -> Some (m, f e1 e2)
   in
   match e1, e2 with
-  | Value(Int(_,sz)), Value(Int(_,sz')) when sz <> sz' -> None
+  | Value v1, Value v2 when not(Value.same_size v1 v2) -> None
   | Value(v1), Value(v2) ->
-     if veq v1 v2
+     if Value.eq v1 v2
      then Some (m, e1)
      else
        begin
-       let v1_str = string_of_value v1 in
-       let v2_str = string_of_value v2 in
+       let v1_str = Value.to_string v1 in
+       let v2_str = Value.to_string v2 in
        match StringMap.find m v1_str, StringMap.find m v2_str with
        | Some abstr1, Some abstr2 when abstr1 = abstr2 ->
-          Some(m, Var(abstr1,size_of_value v1))
+          Some(m, Var(abstr1,Value.size v1))
        | None, None ->
           let x = NameGen.get_fresh_name gen () in
           let m' = StringMap.set m ~key:v1_str ~data:x
                    |> StringMap.set ~key:v2_str ~data:x in
-          Some (m', Var(x, size_of_value v1))
+          Some (m', Var(x, Value.size v1))
        | _, _ -> None
        end
   | Var s1, Var s2 | Hole s1, Hole s2 ->
@@ -90,13 +90,13 @@ let rec abstract (m : string StringMap.t) (q1 : test) (q2 : test) : (string Stri
      None
 
 
-let rec abstracted_expr (e1 : expr) (e2 : expr) (valuation : value StringMap.t) : value StringMap.t option =
+let rec abstracted_expr (e1 : expr) (e2 : expr) (valuation : Value.t StringMap.t) : Value.t StringMap.t option =
   let open Option in
   let recurse e11 e12 e21 e22 =
     abstracted_expr e11 e21 valuation >>= abstracted_expr e12 e22
   in
   match e1, e2 with
-  | Value(Int(v1,sz1)), Value(Int(v2,sz2)) when sz1 = sz2 && v2 = v1 -> Some valuation
+  | Value v1, Value v2 when Value.eq v1 v2 -> Some valuation
   | Value _, Value _ ->
      (* if false then Printf.printf "Int values are different %s  <> %s" (sexp_string_of_expr e1) (sexp_string_of_expr e2); *)
      None
@@ -104,7 +104,7 @@ let rec abstracted_expr (e1 : expr) (e2 : expr) (valuation : value StringMap.t) 
      let open StringMap in
      begin match find valuation x with
      | None -> Some (set valuation ~key:x ~data:v)
-     | Some v' when veq v v' -> Some valuation
+     | Some v' when Value.eq v v' -> Some valuation
      | Some _ -> None
      end
   | Var s1, Var s2 | Hole s1, Hole s2 ->
@@ -122,7 +122,7 @@ let rec abstracted_expr (e1 : expr) (e2 : expr) (valuation : value StringMap.t) 
      None
 
 
-let rec abstracted (q1 : test) (q2 : test) (valuation : value StringMap.t) : value StringMap.t option =
+let rec abstracted (q1 : test) (q2 : test) (valuation : Value.t StringMap.t) : Value.t StringMap.t option =
   (* if false then Printf.printf "ABSTRACTED size %d  =?= size %d\n%!" (num_nodes_in_test q1) (num_nodes_in_test q2); *)
   let open Option in
   let trecurse t11 t12 t21 t22 = abstracted t11 t21 valuation >>= abstracted t12 t22 in

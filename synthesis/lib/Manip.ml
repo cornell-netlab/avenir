@@ -143,17 +143,16 @@ let rec wp negs c phi =
 (** [fill_holes(|_value|_test]) replace the applies the substitution
    [subst] to the supplied cmd|value|test. It only replaces HOLES, and
    has no effect on vars *)
-let rec fill_holes_expr e (subst : value StringMap.t) =
+let rec fill_holes_expr e (subst : Model.t) =
   let fill_holesS e = fill_holes_expr e subst in
   let binop op (e,e') = op (fill_holesS e) (fill_holesS e') in
   match e with
   | Value _ | Var _ -> e
   | Hole (h,sz) ->
-     begin match StringMap.find subst h with
+     begin match Model.find subst h with
      | None -> e
-     | Some v -> let sz' = size_of_value v in
-                 let strv = string_of_value v in
-                 (if sz <> sz' then (Printf.printf "[Warning] replacing %s#%d with %s#%d, but the sizes may be different, taking the size of %s to be ground truth" h sz strv (size_of_value v) strv));
+     | Some v -> let sz' = Value.size v in
+                 (if sz <> sz' then (Printf.printf "[Warning] replacing %s#%d with %s, but the sizes may be different, taking the size of %s to be ground truth" h sz (Value.to_string v) (Value.to_string v)));
                  Value v
      end
   | Cast (i,e) -> mkCast i @@ fill_holesS e
@@ -181,11 +180,10 @@ let rec fill_holes (c : cmd) subst =
                        [(fill_holes_test cond subst, fill_holes act subst)]) in
   match c with
   | Assign (f, Hole (h,sz)) ->
-     begin match StringMap.find subst h with
+     begin match Model.find subst h with
      | None -> c
-     | Some v -> let sz' = size_of_value v in
-                 let strv = string_of_value v in
-                 (if sz <> sz' then (Printf.printf "[Warning] replacing %s#%d with %s#%d, but the sizes may be different, taking the size of %s to be ground truth" h sz strv (size_of_value v) strv));
+     | Some v -> let sz' = Value.size v in
+                 (if sz <> sz' then (Printf.printf "[Warning] replacing %s#%d with %s, but the sizes may be different, taking the size of %s to be ground truth" h sz (Value.to_string v) (Value.to_string v)));
                  Assign (f, Value v)
      end
   | Assign (_, _) -> c
@@ -268,7 +266,7 @@ let bind_action_data vals (_, scope, cmd) : cmd =
   | Unequal_lengths ->
      Printf.sprintf
        "Incorrect number of action arguments: (%s) vs (%s) for %s"
-       (List.map vals ~f:string_of_value
+       (List.map vals ~f:Value.to_string
         |> List.reduce ~f:(Printf.sprintf "%s,%s")
         |> Option.value ~default:"")
        (List.reduce holes ~f:(Printf.sprintf "%s,%s")
@@ -284,8 +282,8 @@ let rec fixup_expr (model : Model.t) (e : expr)  : expr =
   | Hole (h,sz) -> 
      begin match Model.find model h with
      | None -> e
-     | Some v -> let sz' = size_of_value v in
-                 let strv = string_of_value v in
+     | Some v -> let sz' = Value.size v in
+                 let strv = Value.to_string v in
                  (if sz <> sz' then
                     (Printf.printf "[Warning] replacing %s#%d with %s, \
                                     but the sizes may be different, \
@@ -370,7 +368,7 @@ let rec action_reads (nm, data, cmd) =
 
 
 let is_zero = function
-  | Value (Int(i,_)) -> Bigint.(i = zero)
+  | Value v -> Bigint.(Value.get_bigint v = zero)
   | _ -> false
 
 

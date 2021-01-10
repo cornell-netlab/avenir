@@ -73,7 +73,7 @@ let to_bmv2_string (cmd : cmd) e =
      in
      let bmv2_data =
        List.fold action_data ~init:""
-         ~f:(fun acc d -> Printf.sprintf "%s %s" acc (bmv2_string_of_value d))
+         ~f:(fun acc d -> Printf.sprintf "%s %s" acc (Value.to_bmv2_string d))
      in
      Printf.sprintf "table_add %s %s%s =>%s" nm act_name bmv2_matches bmv2_data
 
@@ -123,14 +123,14 @@ let write_vars cmd = function
 let to_model_alist phys e =
   match e with
   | Del(t,i) ->
-     [Hole.delete_row_hole_name i t, mkInt(1,1)]
+     [Hole.delete_row_hole_name i t, Value.make(1,1)]
   | Add(t,(ms,ds,i)) ->
      match get_schema_of_table t phys with
      | None -> failwith @@ Printf.sprintf "Couldn't find table %s" t
      | Some (_,actions,_) ->
         let actSize = max (log2 (List.length actions)) 1 in
-        [Hole.add_row_hole_name t, mkInt(1,1);
-         Hole.which_act_hole_name t, mkInt(i,actSize)]
+        [Hole.add_row_hole_name t, Value.make(1,1);
+         Hole.which_act_hole_name t, Value.make(i,actSize)]
         @ Match.list_to_model_alist t ms
         @ Row.model_alist_of_data t i (List.nth_exn actions i |> snd3) ds
 
@@ -151,9 +151,9 @@ let negate phys (model : Model.t) (es : t list) : test =
   !%(if List.is_empty es
      then Model.fold model
             ~init:True
-            ~f:(fun ~key ~data:(Int(i,sz)) acc ->
+            ~f:(fun ~key ~data:v acc ->
               mkAnd acc @@
-                Hole(key, sz) %=% Value(Int(i,sz)))
+                Hole(key, Value.size v) %=% Value v)
      else
        test_of_list phys es
     )
@@ -165,18 +165,17 @@ let extract_dels_adds phys (m : Model.t) =
       match Hole.find_add_row key with
       | None -> begin
           match Hole.find_delete_row key with
-          | Some (table_name,row_idx) when data |> get_int = Bigint.one -> begin
-              (Del(table_name, row_idx) :: fst acc, snd acc)
-            end
+          | Some (table_name,row_idx) when data |> Value.get_bigint = Bigint.one ->
+             (Del(table_name, row_idx) :: fst acc, snd acc)
           |  _ -> acc
         end
       | Some tbl ->
-         if data |> get_int = Bigint.one then
+         if data |> Value.get_bigint = Bigint.one then
            let act = match Model.find m (Hole.which_act_hole_name tbl) with
              | None ->
                 Printf.sprintf "WARNING:: Couldn't find %s even though I found %s to be true\n%!"  (Hole.which_act_hole_name tbl) key
                 |> failwith
-             | Some v -> get_int v |> Bigint.to_int_exn in
+             | Some v -> Value.get_int_exn v in
            (* Printf.printf "Making new row from \n %s \n in tbl %s and action %d \n%!" (string_of_map m) tbl act; *)
            match Row.mk_new_row m phys tbl None act with
            | None -> failwith (Printf.sprintf "Couldn't make new row in table %s\n" tbl)

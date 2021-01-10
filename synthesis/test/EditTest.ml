@@ -39,56 +39,56 @@ let extract_edits_from_model _ =
   in
   let model =
     Model.of_alist_exn [
-      "?AddRowToethernet", mkInt(1,1);
-      "?AddRowToipv4_fib", mkInt(0,1);
-      "?AddRowToipv4_rewrite", mkInt(1,1);
-      "?AddRowTonexthop", mkInt(1,1);
-      "?AddRowTopunt", mkInt(0,1);
-      "?ActInethernet", mkInt(0,1);
-      "?ActInipv4_fib", mkInt(1,1);
-      "?ActInipv4_rewrite", mkInt(0,1);
-      "?ActInnexthop", mkInt(0,1);
-      "?ActInpunt", mkInt(0,1);
-      "?hdr.ethernet.dstAddr_ethernet", mkInt(0,48);
-      "?hdr.ethernet.dstAddr_ethernet_mask", mkInt(0,48);
-      "?hdr.ethernet.etherType_punt", mkInt(0,16);
-      "?hdr.ethernet.etherType_punt_mask", mkInt(0,16);
-      "?hdr.ipv4.dstAddr_ipv4_fib" , Int(Util.max_int 32, 32);
-      "?hdr.ipv4.dstAddr_ipv4_fib_mask", Int(Util.max_int 32,32);
-      "?hdr.ipv4.dstAddr_ipv4_rewrite", Int(Bigint.of_string "0xa008",32);
-      "?hdr.ipv4.dstAddr_ipv4_rewrite_mask", Int(Util.max_int 32,32);
-      "?hdr.ipv4.dstAddr_punt", Int(Bigint.of_string "0x200000", 32);
-      "?hdr.ipv4.dstAddr_punt_mask", Int(Util.max_int 32,32);
-      "?hdr.ipv4.isValid_punt", mkInt(0,1);
-      "?hdr.ipv4.isValid_punt_mask", mkInt(0,1);
-      "?hdr.ipv4.srcAddr_punt", mkInt(0,32);
-      "?hdr.ipv4.srcAddr_punt_mask", mkInt(0,32);
-      "?hdr.ipv4.ttl_punt", mkInt(0,8);
-      "?hdr.ipv4.ttl_punt_mask", mkInt(0,8);
-      "?hdr.ipv4.version_punt", mkInt(0,4);
-      "?hdr.ipv4.version_punt_mask", mkInt(0,4);
-      "?meta.nexthop_nexthop", Int(Bigint.of_string "0x226890e0",32);
-      "?meta.nexthop_nexthRunop_mask", Int(Bigint.of_string "0xffffffff",32);
-      "ethernet_0_nexthop_32", Int(Bigint.of_string "0x226890e0",32);
-      "ipv4_fib_0_nexthop_32", Int(Bigint.of_string "0x6d1a0610",32);
-      "ipv4_fib_action_run", mkInt(3,2);
-      "ipv4_rewrite_0_dstAddr_48", mkInt(8,48);
-      "nexthop_0_port_9", mkInt(8,9);
+      "?AddRowToethernet", Value.make(1,1);
+      "?AddRowToipv4_fib", Value.make(0,1);
+      "?AddRowToipv4_rewrite", Value.make(1,1);
+      "?AddRowTonexthop", Value.make(1,1);
+      "?AddRowTopunt", Value.make(0,1);
+      "?ActInethernet", Value.make(0,1);
+      "?ActInipv4_fib", Value.make(1,1);
+      "?ActInipv4_rewrite", Value.make(0,1);
+      "?ActInnexthop", Value.make(0,1);
+      "?ActInpunt", Value.make(0,1);
+      "?hdr.ethernet.dstAddr_ethernet", Value.make(0,48);
+      "?hdr.ethernet.dstAddr_ethernet_mask", Value.make(0,48);
+      "?hdr.ethernet.etherType_punt", Value.make(0,16);
+      "?hdr.ethernet.etherType_punt_mask", Value.make(0,16);
+      "?hdr.ipv4.dstAddr_ipv4_fib" , Value.big_make(Util.max_int 32, 32);
+      "?hdr.ipv4.dstAddr_ipv4_fib_mask", Value.big_make(Util.max_int 32,32);
+      "?hdr.ipv4.dstAddr_ipv4_rewrite", Value.big_make(Bigint.of_string "0xa008",32);
+      "?hdr.ipv4.dstAddr_ipv4_rewrite_mask", Value.big_make(Util.max_int 32,32);
+      "?hdr.ipv4.dstAddr_punt", Value.big_make(Bigint.of_string "0x200000", 32);
+      "?hdr.ipv4.dstAddr_punt_mask", Value.big_make(Util.max_int 32,32);
+      "?hdr.ipv4.isValid_punt", Value.make(0,1);
+      "?hdr.ipv4.isValid_punt_mask", Value.make(0,1);
+      "?hdr.ipv4.srcAddr_punt", Value.make(0,32);
+      "?hdr.ipv4.srcAddr_punt_mask", Value.make(0,32);
+      "?hdr.ipv4.ttl_punt", Value.make(0,8);
+      "?hdr.ipv4.ttl_punt_mask", Value.make(0,8);
+      "?hdr.ipv4.version_punt", Value.make(0,4);
+      "?hdr.ipv4.version_punt_mask", Value.make(0,4);
+      "?meta.nexthop_nexthop", Value.big_make(Bigint.of_string "0x226890e0",32);
+      "?meta.nexthop_nexthRunop_mask", Value.big_make(Bigint.of_string "0xffffffff",32);
+      "ethernet_0_nexthop_32", Value.big_make(Bigint.of_string "0x226890e0",32);
+      "ipv4_fib_0_nexthop_32", Value.big_make(Bigint.of_string "0x6d1a0610",32);
+      "ipv4_fib_action_run", Value.make(3,2);
+      "ipv4_rewrite_0_dstAddr_48", Value.make(8,48);
+      "nexthop_0_port_9", Value.make(8,9);
       ]
   in
   let expected_edits =
     let open Edit in
     [
       Add("nexthop",
-          ([Match.exact_ "meta.nexthop" (Int(Bigint.of_string "0x226890e0",32))],
-           [mkInt(8,9)],0));
+          ([Match.exact_ "meta.nexthop" (Value.str_make("0x226890e0",32))],
+           [Value.make(8,9)],0));
       Add("ipv4_rewrite",
-          ([Match.exact_ "hdr.ipv4.dstAddr" (Int(Bigint.of_string "0xa008",32))]
-          ,[mkInt(8,48)],0));
+          ([Match.exact_ "hdr.ipv4.dstAddr" (Value.str_make("0xa008",32))]
+          ,[Value.make(8,48)],0));
       Add("ethernet",
           ([Match.wildcard "hdr.ethernet.dstAddr" 32;
             Match.wildcard "hdr.ethernet.etherType" 16;
-           ],[Int(Bigint.of_string "0x226890e0",32)],0) );
+           ],[Value.str_make("0x226890e0",32)],0) );
 
     ]
   in

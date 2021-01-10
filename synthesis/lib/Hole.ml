@@ -72,7 +72,7 @@ let action_data tbl i v sz = Printf.sprintf "%s%s_%d" (action_data_prefix tbl i)
 let action_data_hole tbl i v sz = Hole(action_data tbl i v sz, sz)
 
 
-let table_hole encode_tag (keys: (string * size * value option) list) tbl actID actSize =
+let table_hole encode_tag (keys: (string * size * Value.t option) list) tbl actID actSize =
   match_holes_table encode_tag tbl keys
   %&% (add_row_hole tbl %=% mkVInt (1,1))
   %&% (which_act_hole tbl actSize %=% mkVInt (actID,actSize))

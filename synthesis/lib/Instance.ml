@@ -196,7 +196,7 @@ let remove_deleted_rows (params : Parameters.t) (match_model : Model.t) (pinst :
               | Hole(s,_) ->
                  begin match Model.find match_model s with
                  | None -> true
-                 | Some do_delete when get_int do_delete = Bigint.one ->
+                 | Some do_delete when Value.get_bigint do_delete = Bigint.one ->
                     if params.interactive then Printf.printf "- %s : row %d\n%!" tbl_name i;
                     false
                  | Some _ -> true
@@ -217,7 +217,7 @@ let fixup_edit (params : Parameters.t) (data : ProfData.t ref) match_model (acti
        Model.fold match_model ~init:[]
          ~f:(fun ~key ~data acc ->
            if String.is_substring key ~substring:"AddRowTo"
-              && data = Int(Bigint.one,1)
+              && data = Value.make (1,1)
            then (String.substr_replace_all key ~pattern:"?" ~with_:""
                  |> String.substr_replace_first ~pattern:"AddRowTo" ~with_:"")
                 :: acc
@@ -231,7 +231,7 @@ let fixup_edit (params : Parameters.t) (data : ProfData.t ref) match_model (acti
                    | None ->
                       Printf.sprintf "Couldn't Find var %s\n" str |> failwith
                    | Some v ->
-                      let act = get_int v |> Bigint.to_int_exn in
+                      let act = Value.get_int_exn v in
                       update_consistently params match_model phys tbl_name None act inst )
      in
      ProfData.update_time !data.fixup_time st;

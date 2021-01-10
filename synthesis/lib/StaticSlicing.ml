@@ -126,7 +126,7 @@ let size_of_facts =
     )
 
 
-let edit_slice_table (params : Parameters.t) (name,keys,actions,default) (facts : value list StringMap.t) (inst : Instance.t) (edits : Edit.t list) =
+let edit_slice_table (params : Parameters.t) (name,keys,actions,default) (facts : Value.t list StringMap.t) (inst : Instance.t) (edits : Edit.t list) =
   let eliminable = List.find (fsts3 keys)
                      ~f:(fun k -> StringMap.find facts k
                                   |> Option.value_map ~f:(Fn.non List.is_empty) ~default:false) in
@@ -150,7 +150,7 @@ let edit_slice_table (params : Parameters.t) (name,keys,actions,default) (facts 
   (* if params.debug then Printf.printf "slicing %s to \n%s\n%!" (name) (string_of_cmd table); *)
   table, facts'
 
-let project_to_exprfacts (multifacts : value list StringMap.t) : expr StringMap.t =
+let project_to_exprfacts (multifacts : Value.t list StringMap.t) : expr StringMap.t =
   StringMap.filter_map multifacts ~f:(function
       | [v] -> Some(Value v)
       | _ -> None)

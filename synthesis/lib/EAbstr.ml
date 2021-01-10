@@ -22,7 +22,7 @@ let similar (eold : Edit.t) (enew : Edit.t) =
                 (* let () = Printf.printf "\t[DATA] %s identical, moving on\n%!" (string_of_value od) in *)
                 Some acc
               else
-                let od_s = string_of_value od in
+                let od_s = Value.to_string od in
                 match StringMap.find acc od_s with
                 | Some nd' -> if nd' = nd then Some acc else None
                 | None -> StringMap.set acc ~key:od_s ~data:nd |> Some
@@ -58,7 +58,7 @@ let similar (eold : Edit.t) (enew : Edit.t) =
   | _, _ -> (*Printf.printf "but... edits don't match\n%!";*)
      None
 
-let sub_consts (adata : value StringMap.t option) (map : Match.t StringMap.t) (e : Edit.t) : Edit.t option =
+let sub_consts (adata : Value.t StringMap.t option) (map : Match.t StringMap.t) (e : Edit.t) : Edit.t option =
   match e with
   | Del _ -> None
   | Add (table, (ms, ad, idx)) ->
@@ -79,7 +79,7 @@ let sub_consts (adata : value StringMap.t option) (map : Match.t StringMap.t) (e
                       let ad' =
                         List.map ad
                           ~f:(fun d ->
-                            match StringMap.find dmap (string_of_value d) with
+                            match StringMap.find dmap (Value.to_string d) with
                             | None -> d
                             | Some d' -> d')
                       in
@@ -158,14 +158,14 @@ let infer_fresh phys (curr_edits : Edit.t list) substs (old_edits : Edit.t list 
          (*characteristic elements *)
          let chis = List.fold eqs ~init:StringMap.empty
                       ~f:(fun acc s -> StringMap.set acc ~key:(StringSet.choose_exn s) ~data:[]) in
-         let prohibited : value list StringMap.t =
+         let prohibited : Value.t list StringMap.t =
            List.fold old_edit_maps ~init:chis ~f:(Model.extend_multi_model)
          in
          let valuation =
            StringMap.fold prohibited ~init:Model.empty
              ~f:(fun ~key ~data:prohibs m ->
-               let random_x = random_int_nin (List.map prohibs ~f:(get_int_exn)) in
-               Model.set m ~key ~data:(mkInt(random_x, size_of_value (List.hd_exn prohibs)))
+               let random_x = random_int_nin (List.map prohibs ~f:(Value.get_int_exn)) in
+               Model.set m ~key ~data:(Value.make (random_x, Value.size (List.hd_exn prohibs)))
              )
          in
          (* Printf.printf "generating free vars : %s\n%!" (string_of_map valuation); *)

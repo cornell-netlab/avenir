@@ -39,9 +39,7 @@ let quantify expr etyp styp =
 
 let rec expr_to_term_help expr styp : Smtlib.term =
   match expr with
-  | Value (Int (num, sz)) ->
-     let num = if Bigint.(num < zero) then Bigint.(Util.max_int sz - num) else num in
-     Smtlib.bbv (num) sz
+  | Value v -> Value.to_smt v
   | Var (v, _) -> quantify v `Var styp
   | Hole (h, _) -> quantify h `Hole styp
   | Cast (i,e) ->
@@ -69,7 +67,7 @@ let rec expr_to_term_help expr styp : Smtlib.term =
      let t1 = expr_to_term_help e1 styp in
      let t2 = expr_to_term_help e2 styp in
      let sz = size_of_expr e1 in
-     let maxt = expr_to_term_help (Value(Int(Util.max_int sz, sz))) styp in
+     let maxt = expr_to_term_help (Value(Value.big_make (Util.max_int sz, sz))) styp in
      let bad = Smtlib.(bvugt t2 (bvsub maxt t1)) in
      Smtlib.(ite bad maxt (bvadd t1 t2))
 
@@ -299,7 +297,7 @@ let rec restriction_cegis ~gas (params : Parameters.t) (restriction : test optio
                | None ->
                   if params.debug then Printf.printf "Couldn't find %s in model\n%!" var;
                   True
-               | Some v -> Var(var, size_of_value v) %<>% Value v) in
+               | Some v -> Var(var, Value.size v) %<>% Value v) in
        restriction_cegis ~gas:(gas - 1) params (Some restr_test') query quantified_vars
 
 

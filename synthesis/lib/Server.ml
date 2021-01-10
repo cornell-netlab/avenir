@@ -97,7 +97,7 @@ let op_of_edit e =
   | Edit.Add (table, (matches, actionData, actId)) ->
      Add (table
         , List.map ~f:(Match.to_string) matches
-        , List.map ~f:(Ast.string_of_value) actionData
+        , List.map ~f:(Value.to_string) actionData
         , actId)
   | Edit.Del(table, rowId) ->  Delete (table, rowId)
 

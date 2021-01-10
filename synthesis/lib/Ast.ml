@@ -10,29 +10,8 @@ let enable_smart_constructors = true
 
 type size = int
 
-type value =
-  | Int of (Bigint.t * size)
-
-let string_of_value (v : value) : string =
-  match v with
-  | Int (i,x) -> Printf.sprintf "%s#%d" (Bigint.Hex.to_string i) x
-
-let bmv2_string_of_value (v : value) : string =
-  match v with
-  | Int (i,_) -> Bigint.Hex.to_string i
-
-let veq v v' =
-  match v,v' with
-  | Int (i,sz), Int(i',sz') when sz = sz' ->  Bigint.equal i i'
-  | Int (i,sz), Int(i',sz') -> failwith @@ Printf.sprintf "Ints are different sizes: %s#%d = %s#%d " (Bigint.Hex.to_string i) sz (Bigint.Hex.to_string i') sz'
-
-let vleq v v' =
-  match v, v' with
-  | Int(i,sz), Int(i',sz') when sz = sz' -> Bigint.(<=) i i'
-  | Int(i,sz), Int(i',sz') -> failwith @@ Printf.sprintf "Ints are different sizes: %s#%d <= %s#%d " (Bigint.Hex.to_string i) sz (Bigint.Hex.to_string i') sz'
-
 type expr =
-  | Value of value
+  | Value of Value.t
   | Var of (string * size)
   | Hole of (string * size)
   | Plus of (expr * expr)
@@ -48,14 +27,7 @@ type expr =
   | Cast of (int * expr)
   | Slice of {hi : int; lo: int; bits: expr}
 
-let mkInt (i,sz) =
-  if i < 0 then
-    failwith @@ Printf.sprintf "Negative integers not representable, tried %d" i
-  else if sz >= 0 && Bigint.(of_int_exn i > max_int sz) then
-    failwith @@ Printf.sprintf "int %d larger than 2^%d-1" i sz
-  else
-    Int (Bigint.of_int_exn i, sz)
-let mkVInt i = Value (mkInt i)
+let mkVInt i = Value (Value.make i)
 let mkCast i e = Cast(i,e)
 let mkPlus e e' = Plus(e,e')
 let mkMinus e e' = Minus (e, e')
@@ -86,7 +58,7 @@ let ctor_for_binexpr =
 let rec string_of_expr (e : expr) : string =
   let string_binop e1 op e2 = Printf.sprintf "(%s %s %s)" (string_of_expr e1) op (string_of_expr e2) in
   match e with
-  | Value v -> string_of_value v
+  | Value v -> Value.to_string v
   | Var (x,s) -> x ^ "#" ^ string_of_int s
   | Hole (x,s) -> "?" ^ x ^ "#" ^ string_of_int s
   | Cast (i,e)    -> Printf.sprintf "((<%d>) %s)" i (string_of_expr e)
@@ -102,15 +74,10 @@ let rec string_of_expr (e : expr) : string =
   | Concat (e,e') -> string_binop e "APPEND" e'
   | Slice {hi; lo; bits} -> Printf.sprintf "%s[%d:%d]" (string_of_expr bits) hi lo
 
-
-let sexp_string_of_value (v : value) =
-  match v with
-  | Int (i,sz) -> Printf.sprintf "mkInt(%s,%d)" (Bigint.to_string i) sz
-                   
 let rec sexp_string_of_expr (e : expr) =
   let string_binop ctor (e1, e2) = Printf.sprintf "%s(%s, %s)" ctor (sexp_string_of_expr e1) (sexp_string_of_expr e2) in
   match e with
-  | Value v -> "Value(" ^ sexp_string_of_value v ^ ")"
+  | Value v -> "Value(" ^ Value.to_sexp_string v ^ ")"
   | Var (x, s) -> "Var(\"" ^ x ^ "\"," ^ string_of_int s ^ ")"
   | Hole (x, s) -> "Hole(\"" ^ x ^ "\"," ^ string_of_int s ^ ")"  
   | Cast (i,e) -> Printf.sprintf "Cast(%d, %s)" i (string_of_expr e)
@@ -126,21 +93,9 @@ let rec sexp_string_of_expr (e : expr) =
   | Concat es -> string_binop "Concat" es
   | Slice {hi;lo;bits} -> Printf.sprintf "Slice {hi=%d;lo=%d;bits=%s}" hi lo (sexp_string_of_expr bits)
 
-let get_int (v : value) : Bigint.t =
-  match v with
-  | Int (x, _) -> x
-
-let get_int_exn (v : value) : int =
-  match v with
-  | Int (x,_) -> Bigint.to_int_exn x
-                  
-let size_of_value (v : value) : size =
-  match v with
-  | Int (_, s) -> s
-                           
 let rec size_of_expr (e : expr) : size =
   match e with
-  | Value v -> size_of_value v
+  | Value v -> Value.size v
   | Var (_,s) -> s
   | Hole (_,s) -> s
   | Cast (i,_) -> i
@@ -170,112 +125,24 @@ let rec num_nodes_in_expr e =
      + 1
 
 
-                   
-let add_values (v : value) (v' : value) : value =
-  match v, v' with
-  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x + x' % max_int sz),sz)
-  | Int (x, sz), Int(x',sz') ->
-     failwith (Printf.sprintf "Type error %s#%d and %s#%d have different bitvec sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
-
-let sat_add_values (v : value) (v' : value) : value =
-  match add_values v v' with
-  | Int (v, sz) ->
-     if Bigint.(v > max_int sz) then
-       Int(max_int sz, sz)
-     else
-       Int(v,sz)
-
-
-let multiply_values (v : value) (v' : value) : value =
-  match v, v' with
-  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x * x' % max_int sz), sz)
-  | Int (x,sz), Int (x',sz') -> failwith (Printf.sprintf "Type error %s#%d and %s#%d have different bitvec sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
-
-
-let subtract_values (v : value) (v' : value) : value =
-  match v, v' with
-  | Int (x, sz), Int (x',sz') when sz = sz' ->
-     Int (Bigint.(x - x' % max_int sz), sz)
-  | Int (x, sz), Int (x', sz') ->
-     failwith (Printf.sprintf "Type error %s#%d and %s#%d have different bitvec sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
-
-let sat_subtract_values (v : value) (v' : value) : value =
-  match subtract_values v v' with
-  | Int (v,sz) ->
-     if Bigint.(v < zero) then
-       mkInt(0,sz)
-     else
-       Int(v,sz)
-
-
-let mask_values (v : value) (v' : value) : value =
-  match v,v' with
-  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x land x'), sz)
-  | Int (x, sz), Int (x', sz') ->
-     failwith (Printf.sprintf "MASK: Type error %s#%d and %s#%d have different BV sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
-
-let xor_values (v : value) (v' : value) : value =
-  match v,v' with
-  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x lxor x'), sz)
-  | Int (x, sz), Int (x', sz') ->
-     failwith (Printf.sprintf "MASK: Type error %s#%d and %s#%d have different BV sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
-
-let or_values (v : value) (v' : value) : value =
-  match v,v' with
-  | Int (x, sz), Int (x',sz') when sz = sz' -> Int (Bigint.(x lor x'), sz)
-  | Int (x, sz), Int (x', sz') ->
-     failwith (Printf.sprintf "MASK: Type error %s#%d and %s#%d have different BV sizes" (Bigint.to_string x) sz (Bigint.to_string x') sz')
-
-let shl_values (v : value) (v' : value) : value =
-  match v,v' with
-  | Int (x, sz), Int (x',_) ->
-     Int (Bigint.(shift_left x @@ to_int_exn x'), sz)
-
-let cast_value w (v : value) : value =
-  match v with
-  | Int(x,sz) ->
-     if w < sz then
-       Int(Bigint.(x land ((pow (one + one) (of_int w)) - one)), w)
-     else if w > sz then
-       Int(x,w)
-     else
-       v
-
-let slice_value (hi : size) (lo : size) (v : value) : value =
-  match v with
-  | Int(x,sz) ->
-     if hi > sz || lo > sz then failwith "index out of range"
-     else
-       let sz' = hi - lo in
-       if sz' < 0 then Printf.printf "Trying to slice %s \n%!" (string_of_expr (mkSlice hi lo (Value v)));
-       let mask = Bigint.((pow (of_int 2) (of_int sz')) - one) in
-       let x' = Bigint.((shift_right x lo) land mask) in
-       Int (x', sz')
-
-let concat_values (l : value) (r : value) : value =
-  match l,r with
-  | Int (lx,lsz), Int(rx, rsz) ->
-     Int(Bigint.(shift_left lx rsz + rx)
-       , lsz + rsz)
-
 let sem_for_binexpr =
   function
   | Hole _ | Value _ | Var _ | Cast _ | Slice _ -> failwith "[bin_ctor_for_expr] received hole, value, var, cast, or slice"
-  | Plus _ -> add_values
-  | Times _ -> multiply_values
-  | Minus _ -> subtract_values
-  | SatPlus _ -> sat_add_values
-  | SatMinus _ -> sat_subtract_values
-  | Mask _ -> mask_values
-  | Xor _ -> xor_values
-  | BOr _ -> or_values
-  | Shl _ -> shl_values
-  | Concat _ -> concat_values
+  | Plus _ -> Value.add
+  | Times _ -> Value.multiply
+  | Minus _ -> Value.subtract
+  | SatPlus _ -> Value.sat_add
+  | SatMinus _ -> Value.sat_subtract
+  | Mask _ -> Value.mask
+  | Xor _ -> Value.xor
+  | BOr _ -> Value.or_
+  | Shl _ -> Value.shl
+  | Concat _ -> Value.concat
 
 let sem_for_unexpr =
   function
-  | Cast (s,_) -> cast_value s
-  | Slice {hi;lo;_} -> slice_value hi lo
+  | Cast (s,_) -> Value.cast s
+  | Slice {hi;lo;_} -> Value.slice hi lo
   | e ->
      Printf.sprintf "Expected slice or cast, recieved %s" (string_of_expr e)
      |> failwith
@@ -395,16 +262,16 @@ let mkEq (e : expr) (e':expr) =
        else Eq (e', e)
     in
     match norm with
-    | Eq(Value(Int(_,_)), Mask(Var(_,_), Value(Int(m,_))))
-         when Bigint.(m = zero) -> True
+    | Eq(Value(_), Mask(Var(_,_), Value(m)))
+         when Value.ueq m Bigint.zero -> True
     | _ -> norm
 
 
 let mkLe (e : expr) (e' : expr) : test =
   if not enable_smart_constructors then Le(e,e') else
   match e, e' with
-    | Value(Int first), Value(Int second) ->
-       if first < second then True else False
+    | Value(first), Value(second) ->
+       if Value.leq first second then True else False
     | _, _ -> Le(e, e')
             
 let (%=%) = mkEq
@@ -522,20 +389,16 @@ let rec has_hole_test = function
      has_hole_expr e1 || has_hole_expr e2
                                  
 
-let multi_ints_of_value e : (Bigint.t * size) list =
+let rec multi_ints_of_expr e : Value.t list =
   match e with
-  | Int (i,sz) -> [i,sz]
-
-let rec multi_ints_of_expr e : (Bigint.t * size) list =
-  match e with
-  | Value v -> multi_ints_of_value v
+  | Value v -> [v]
   | Var _ | Hole _ -> []
   | Cast (_,e) | Slice {bits=e;_} -> multi_ints_of_expr e
   | Plus (e,e') | Times (e,e') | Minus (e,e')  | Mask (e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') | Concat (e,e')
     | SatPlus (e,e') | SatMinus(e,e')
     -> multi_ints_of_expr e @ multi_ints_of_expr e'
                   
-let rec multi_ints_of_test test : (Bigint.t * size) list =
+let rec multi_ints_of_test test : Value.t list =
   begin match test with
     | True | False -> 
       []
@@ -571,7 +434,7 @@ type cmd =
   | Seq of (cmd * cmd)
   | Select of (select_typ * ((test * cmd) list))
   | Apply of {name:string;
-              keys:(string * size * value option) list;
+              keys:(string * size * Value.t option) list;
               actions:((string * (string * size) list * cmd) list);
               default: cmd}
 
@@ -709,7 +572,7 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
        "apply (" ^ t.name ^ ",("
       ^ List.fold t.keys ~init:""
           ~f:(fun str (k,sz,v_opt) ->
-            let eq = match v_opt with | None -> "" | Some v -> " = " ^ string_of_value v in
+            let eq = match v_opt with | None -> "" | Some v -> " = " ^ Value.to_string v in
             str ^ k ^ "#" ^ string_of_int sz ^ eq ^ ",") ^ ")"
       ^ ",(" ^ List.foldi t.actions ~init:""
                 ~f:(fun i str a ->
@@ -744,7 +607,7 @@ let rec sexp_string_of_cmd e : string =
      ^ List.fold_left t.keys ~init:"" ~f:(fun str (k,sz,v) -> str ^ ";\"" ^ k ^ "\"," ^ string_of_int sz ^ "," ^
                                                                 match v with
                                                                 | None -> "None"
-                                                                | Some v -> "Some(" ^ string_of_value v ^ ")")
+                                                                | Some v -> "Some(" ^ Value.to_string v ^ ")")
      ^ "],["
      ^ List.fold_left t.actions ~init:"" ~f:(fun str a -> str ^ ";((SOME ACTION DATA), " ^ sexp_string_of_cmd (trd3 a) ^")")
      ^ "]," ^ sexp_string_of_cmd t.default
@@ -855,7 +718,7 @@ let rec free_of_cmd typ (c:cmd) : (string * size) list =
 let free_vars_of_cmd = free_of_cmd `Var
 let holes_of_cmd = free_of_cmd `Hole
       
-let rec multi_ints_of_cmd c : (Bigint.t * size) list =
+let rec multi_ints_of_cmd c : (Value.t) list =
   match c with
   | Skip -> []
   (* | Assign (_, Int i) ->
@@ -1005,4 +868,4 @@ let rec get_tables_keys = function
 
 
 let string_of_map m =
-  StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (string_of_value v) ^ ") " ^ acc)) m ~init:""
+  StringMap.fold ~f:(fun ~key:k ~data:v acc -> ("(" ^ k ^ " -> " ^ (Value.to_string v) ^ ") " ^ acc)) m ~init:""

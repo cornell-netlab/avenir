@@ -1,5 +1,6 @@
 open Core
 open Async
+module Value = Avenir.Value
 module Ast = Avenir.Ast
 module Parser = Avenir.Parser
 module Lexer = Avenir.Lexer
@@ -237,7 +238,6 @@ let onf_real : Command.t =
      and assume = anon ("assume" %: string)
      and logical_inc = flag "-I1" (listed string) ~doc:"<dir> add directory to include search path for logical file"
      and physical_inc = flag "-I2" (listed string) ~doc:"<dir> add directory to include search path for physical file"in
-
          fun () ->
          let params = Parameters.union opts mng in
          let res = Benchmark.basic_onf_ipv4_real params
@@ -284,14 +284,14 @@ let equality : Command.t =
                 match Avenir.Packet.get_val_opt log_out fv
                     , Avenir.Packet.get_val_opt phys_out fv with
                 | None, None -> ()
-                | Some (Int(v,_)), None -> Core.Printf.printf "\t%s\t%s\tundefined\n"
-                                             fv (Bigint.Hex.to_string v)
-                | None, Some (Int(v,_)) -> Core.Printf.printf "\t%s\tundefined\t%s\n"
-                                             fv (Bigint.Hex.to_string v)
-                | Some (Int(vl,_)), Some(Int(vp,_)) ->
-                   if Bigint.(vl <> vp) then
+                | Some v, None -> Core.Printf.printf "\t%s\t%s\tundefined\n"
+                                             fv (Value.to_string v)
+                | None, Some v -> Core.Printf.printf "\t%s\tundefined\t%s\n"
+                                             fv (Value.to_string v)
+                | Some vl, Some vp ->
+                   if not (Value.eq vl vp) then
                      Core.Printf.printf "\t%s\t%s\t%s\n"
-                       fv (Bigint.Hex.to_string vl) (Bigint.Hex.to_string vp)
+                       fv (Value.to_string vl) (Value.to_string vp)
               )
     ]
 

@@ -4,7 +4,7 @@ open Ast
 
 type t = {table:string;
           match_opt:Match.t list option;
-          act_id_opt:value option; (* unused *)
+          act_id_opt:Value.t option; (* unused *)
           act_data_opt:Row.action_data option} (* unused *)
 
 (* let well_formed (hint : t) : bool =
@@ -28,7 +28,7 @@ let to_string (h : t) =
   let (acts, act_id) = match h.act_id_opt with
     | None -> ("","")
     | Some a ->
-       (Printf.sprintf "%s" (string_of_value a),
+       (Printf.sprintf "%s" (Value.to_string a),
         match h.act_data_opt with
         | None -> ""
         | Some data -> Printf.sprintf "(%s)" (Row.action_data_to_string data))
@@ -139,7 +139,7 @@ let construct phys (e : Edit.t) : t list =
        ~f:(fun acc table -> acc @ [make e table])
 
 
-let extract_action_data table act_id params (data_opt : Row.action_data option) : (string * value) list =
+let extract_action_data table act_id params (data_opt : Row.action_data option) : (string * Value.t) list =
   match data_opt with
   | None -> []
   | Some data ->
@@ -157,14 +157,15 @@ let to_model typ (phys : cmd) (hint : t) : Model.t =
     let add_hole = Hole.add_row_hole_name hint.table in
     match hint.act_id_opt with
     | None -> Model.empty
-    | Some Int(act_id, act_size) ->
-       let act_id_int = Bigint.to_int_exn act_id in
+    | Some v ->
+       let act_id = Value.get_int_exn v in
+       let act_size = Value.size v in
        let which_act = Hole.which_act_hole_name hint.table in
-       let _, act_params, _ = List.nth_exn actions (act_id_int) in
+       let _, act_params, _ = List.nth_exn actions act_id in
        Model.of_alist_exn @@  [
-           which_act, Int(act_id, act_size);
-           add_hole, mkInt(1,1);
-         ] @ extract_action_data hint.table act_id_int act_params hint.act_data_opt
+           which_act, Value.make (act_id, act_size);
+           add_hole, Value.make (1,1);
+         ] @ extract_action_data hint.table act_id act_params hint.act_data_opt
   in
   let matches =
     match hint.match_opt with

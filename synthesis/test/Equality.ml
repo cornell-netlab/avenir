@@ -18,8 +18,8 @@ let packet = testable_string Packet.to_string Packet.equal
 let same_packet = Alcotest.(check packet) "same packet"
 
 let vv_stringmap = testable_string
-                     (Util.string_of_strmap ~to_string:(fun (v1,v2) -> Printf.sprintf "(%s, %s)" (string_of_value v1) (string_of_value v2)))
-                     (Util.StringMap.equal (fun (v1,v2) (v1',v2') -> veq v1 v1' && veq v2 v2'))
+                     (Util.string_of_strmap ~to_string:(fun (v1,v2) -> Printf.sprintf "(%s, %s)" (Value.to_string v1) (Value.to_string v2)))
+                     (Util.StringMap.equal (fun (v1,v2) (v1',v2') -> Value.eq v1 v1' && Value.eq v2 v2'))
 let same_vv_stringmap = Alcotest.(check vv_stringmap) "same value^2 string map"
 (* let packet = testable_string string_of_map (Util.StringMap.equal veq)
  * let same_packet = Alcotest.(check packet) "same packet" *)

@@ -31,22 +31,22 @@ let rec eval_const_expr e =
   match e with
   | Value v -> Some (v)
   | Var _ | Hole _ -> None
-  | Plus es -> binop add_values es
-  | SatPlus es -> binop sat_add_values es
-  | Times es -> binop multiply_values es
-  | Minus es -> binop subtract_values es
-  | SatMinus es -> binop sat_subtract_values es
-  | Mask es -> binop mask_values es
-  | Xor es -> binop xor_values es
-  | BOr es -> binop or_values es
-  | Shl es -> binop shl_values es
-  | Concat es -> binop concat_values es
+  | Plus es -> binop Value.add es
+  | SatPlus es -> binop Value.sat_add es
+  | Times es -> binop Value.multiply es
+  | Minus es -> binop Value.subtract es
+  | SatMinus es -> binop Value.sat_subtract es
+  | Mask es -> binop Value.mask es
+  | Xor es -> binop Value.xor es
+  | BOr es -> binop Value.or_ es
+  | Shl es -> binop Value.shl es
+  | Concat es -> binop Value.concat es
   | Cast (i, e') ->
      let open Option in
-     eval_const_expr e' >>| cast_value i
+     eval_const_expr e' >>| Value.cast i
   | Slice {hi;lo;bits} ->
      let open Option in
-     eval_const_expr bits >>| slice_value hi lo
+     eval_const_expr bits >>| Value.slice hi lo
 
 let rec propogate_expr (map : expr StringMap.t) (e : expr) =
   let eval_if_const e =
@@ -153,9 +153,9 @@ let rec propogate_cmd (map : expr StringMap.t) (cmd : cmd) =
            | Some (Var(k',_)) -> (k',sz, None)
            | Some (Value v) ->
               begin match v_opt with
-              | Some v' when not(veq v v') ->
+              | Some v' when not(Value.eq v v') ->
                  Printf.sprintf "conflicting values for key %s in table %s : have %s inferred %s"
-                   k name (string_of_value v') (string_of_value v)
+                   k name (Value.to_string v') (Value.to_string v)
                  |> failwith
               | _ ->
                  (k,sz, Some v)
@@ -196,7 +196,7 @@ let rec infer (known_facts : expr StringMap.t) (b : test) : (expr StringMap.t * 
      begin match StringMap.find known_facts x with
      | None ->
         (StringMap.set known_facts ~key:x ~data:(Value v), b)
-     | Some (Value v') when veq v v' -> (known_facts, True)
+     | Some (Value v') when Value.eq v v' -> (known_facts, True)
      | Some (Value _) -> (known_facts, False)
      | _ -> (known_facts, substitute b known_facts)
      end
@@ -216,13 +216,13 @@ let rec infer (known_facts : expr StringMap.t) (b : test) : (expr StringMap.t * 
 
   | Neg t -> (known_facts, !%(substitute t known_facts))
 
-let to_value_map (emap : expr StringMap.t) : value StringMap.t =
+let to_value_map (emap : expr StringMap.t) : Value.t StringMap.t =
   StringMap.filter_map emap ~f:(fun data ->
       match data with
       | Value v -> Some v
       | _ -> None)
 
-let to_expr_map (vmap : value StringMap.t) : expr StringMap.t =
+let to_expr_map (vmap : Value.t StringMap.t) : expr StringMap.t =
   StringMap.map vmap ~f:(fun v -> Value v)
 
 let rec passive_propogate_aux dir map cmd =
@@ -274,7 +274,7 @@ let passive_propogate_fix map cmd =
   |> snd
 
 
-let rec eval_expr_choices facts (e : expr) : value list option =
+let rec eval_expr_choices facts (e : expr) : Value.t list option =
   let open Option in
   let map_over_product f (e1, e2) =
     let v1s = eval_expr_choices facts e1
@@ -304,7 +304,7 @@ let rec eval_expr_choices facts (e : expr) : value list option =
     | Slice {bits;_} ->
      map (sem_for_unexpr e) bits
 
-let rec propogate_choices (facts : value list StringMap.t) = function
+let rec propogate_choices (facts : Value.t list StringMap.t) = function
   | Skip -> facts
   | Assign (f,e) ->
      if false then Printf.printf "Propogating assignment \n%!";

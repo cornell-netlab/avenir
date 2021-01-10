@@ -80,7 +80,7 @@ let print_search_state (params : Parameters.t) problem es (model : Model.t) =
           Printf.printf "\t***model***\n";
           Printf.printf "%s\n%!"
             (Model.fold model ~init:"" ~f:(fun ~key ~data acc ->
-                 Printf.sprintf "%s\n\t%s |--> %s" acc key (string_of_value data)))
+                 Printf.sprintf "%s\n\t%s |--> %s" acc key (Value.to_string data)))
         end;
       (* Interactive.pause params.interactive; *)
     end
@@ -143,7 +143,7 @@ let print_hints_map do_print (partial_model : Model.t) =
       Printf.printf "Hints are : {\n%!";
       Model.iteri partial_model
         ~f:(fun ~key ~data ->
-          Printf.printf "\t%s -> %s\n" key (string_of_value data)
+          Printf.printf "\t%s -> %s\n" key (Value.to_string data)
         );
       Printf.printf "}\n%!"
     end

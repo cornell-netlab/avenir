@@ -19,9 +19,9 @@ let cross_packet =
           True, Skip ]
       ]
   in
-  let update f j pkt = Packet.set_field pkt f (mkInt(j,2)) in
+  let update f j pkt = Packet.set_field pkt f (Value.make(j,2)) in
   let mkPacket i j = Packet.empty |> update "src" i |> update "dst" j in
-  let update f j pkt = Packet.set_field pkt f (mkInt(j,2)) in
+  let update f j pkt = Packet.set_field pkt f (Value.make(j,2)) in
   let pkt00 = mkPacket 0 0 in
   let pkt01 = mkPacket 0 1 in
   let pkt10 = mkPacket 1 0 in

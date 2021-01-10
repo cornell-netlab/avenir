@@ -5,11 +5,14 @@ open Ast
 let rec relabel (e : expr) (sz : size) : expr =
   let binop mk (e,e') = mk (relabel e sz) (relabel e' sz) in
   match e with
-  | Value (Int(_,sz'))
-    | Var (_,sz')
+  | Value v when Value.size v >= 0 && Value.size v <> sz ->
+     failwith @@ Printf.sprintf
+                   "Tried to relabel %s with #%d"
+                   (Value.to_string v) sz
+  |Var (_,sz')
     | Hole (_,sz') when sz' >= 0 && sz <> sz' ->
      failwith @@ Printf.sprintf "Tried to relabel %s to width %d" (string_of_expr e) sz
-  | Value (Int(v, _)) -> Value(Int(v, sz))
+  | Value v -> Value(Value.resize v sz)
   | Var (x, _) -> Var(x, sz)
   | Hole(h,_) -> Hole(h, sz)
   | Cast (i,_) -> if i = sz then e else failwith "Tried to relabel an explicit cast incorrectly:("

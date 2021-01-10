@@ -9,34 +9,34 @@ let slicing_retargeting_metadata_ethernet _ =
   let params = Parameters.({default with above = false}) in
   let inst = StringMap.of_alist_exn [
                  "ethernet", [(
-                   [Match.exact_ "hdr.ethernet.dstAddr" (mkInt(99,48))],
-                   [mkInt(1,32)],
+                   [Match.exact_ "hdr.ethernet.dstAddr" (Value.make(99,48))],
+                   [Value.make(1,32)],
                    0
                  )];
                  "ipv4", [(
-                   [Match.exact_ "hdr.ipv4.dstAddr" (mkInt(44,32))],
-                   [mkInt(2,32)],
+                   [Match.exact_ "hdr.ipv4.dstAddr" (Value.make(44,32))],
+                   [Value.make(2,32)],
                    0
                  )];
                  "nexthop", [(
-                   [Match.exact_ "meta.nhop" (mkInt(1,32))],
-                   [mkInt(99,9)],
+                   [Match.exact_ "meta.nhop" (Value.make(1,32))],
+                   [Value.make(99,9)],
                    0
                  );(
-                   [Match.exact_ "meta.nhop" (mkInt(2,32))],
-                   [mkInt(44,9)],
+                   [Match.exact_ "meta.nhop" (Value.make(2,32))],
+                   [Value.make(44,9)],
                    0
                  )]
                ] in
   let edits =
     let open Edit in
     [Add("ethernet", (
-           [Match.exact_ "hdr.ethernet.dstAddr" (mkInt(11,48))],
-           [mkInt(3,32)],
+           [Match.exact_ "hdr.ethernet.dstAddr" (Value.make(11,48))],
+           [Value.make(3,32)],
            0));
      Add("nexthop", (
-           [Match.exact_ "meta.nhop" (mkInt(3,32))],
-           [mkInt(11,9)],
+           [Match.exact_ "meta.nhop" (Value.make(3,32))],
+           [Value.make(11,9)],
            0))]
   in
   let set_port i = "standard_metadata.egress_spec" %<-% i in
@@ -71,34 +71,34 @@ let slicing_retargeting_metadata_ipv4 _ =
   let params = Parameters.({default with above = false}) in
   let inst = StringMap.of_alist_exn [
                  "ethernet", [(
-                   [Match.exact_ "hdr.ethernet.dstAddr" (mkInt(99,48))],
-                   [mkInt(1,32)],
+                   [Match.exact_ "hdr.ethernet.dstAddr" (Value.make(99,48))],
+                   [Value.make(1,32)],
                    0
                  )];
                  "ipv4", [(
-                   [Match.exact_ "hdr.ipv4.dstAddr" (mkInt(44,32))],
-                   [mkInt(2,32)],
+                   [Match.exact_ "hdr.ipv4.dstAddr" (Value.make(44,32))],
+                   [Value.make(2,32)],
                    0
                  )];
                  "nexthop", [(
-                   [Match.exact_ "meta.nhop" (mkInt(1,32))],
-                   [mkInt(99,9)],
+                   [Match.exact_ "meta.nhop" (Value.make(1,32))],
+                   [Value.make(99,9)],
                    0
                  );(
-                   [Match.exact_ "meta.nhop" (mkInt(2,32))],
-                   [mkInt(44,9)],
+                   [Match.exact_ "meta.nhop" (Value.make(2,32))],
+                   [Value.make(44,9)],
                    0
                  )]
                ] in
   let edits =
     let open Edit in
     [Add("ipv4", (
-           [Match.exact_ "hdr.ipv4.dstAddr" (mkInt(11,32))],
-           [mkInt(3,32)],
+           [Match.exact_ "hdr.ipv4.dstAddr" (Value.make(11,32))],
+           [Value.make(3,32)],
            0));
      Add("nexthop", (
-           [Match.exact_ "meta.nhop" (mkInt(3,32))],
-           [mkInt(11,9)],
+           [Match.exact_ "meta.nhop" (Value.make(3,32))],
+           [Value.make(11,9)],
            0))]
   in
   let set_port i = "standard_metadata.egress_spec" %<-% i in
@@ -132,16 +132,16 @@ let slicing_fabric_example _ =
   let params = Parameters.({default with above = false}) in
   let inst = StringMap.of_alist_exn [
                  "nexthop", [(
-                   [Match.exact_ "meta.nhop" (mkInt(1,32))],
-                   [mkInt(11,9)],
+                   [Match.exact_ "meta.nhop" (Value.make(1,32))],
+                   [Value.make(11,9)],
                    0
                  )]
                ] in
   let edits =
     let open Edit in
     [Add("ethernet", (
-           [Match.exact_ "hdr.ethernet.dstAddr" (mkInt(11,48))],
-           [mkInt(1,32)],
+           [Match.exact_ "hdr.ethernet.dstAddr" (Value.make(11,48))],
+           [Value.make(1,32)],
            0))]
   in
   let set_port i = "standard_metadata.egress_spec" %<-% i in

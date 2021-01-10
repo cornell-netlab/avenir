@@ -5,11 +5,11 @@ open Ast
 let construct_model_query_PA_is_sat1 _ =
   Prover.make_provers "z3";
   let inpkt = Packet.mk_packet_from_list
-                ["ipv4.dst", mkInt(5,32);
-                 "port", mkInt(8,9)] in
+                ["ipv4.dst", Value.make (5,32);
+                 "port", Value.make (8,9)] in
   let outpkt = Packet.mk_packet_from_list
-                 ["ipv4.dst", mkInt(5,32);
-                  "port", mkInt(99,9)] in
+                 ["ipv4.dst", Value.make (5,32);
+                  "port", Value.make (99,9)] in
   let fvs = ["port", 9; "ipv4.dst", 32] in
   let phys =
     sequence [
@@ -149,26 +149,26 @@ let construct_model_query_PA_is_sat_hello _ =
     ]
   in
   let inpkt = Packet.mk_packet_from_list
-                [ "hdr.ethernet.dstAddr", Int(Bigint.of_string "0x287bb416626", 48);
-                  "hdr.ethernet.srcAddr", Int(Bigint.of_string "0xffffffffffff", 48);
-                  "hdr.ipv4.dstAddr", Int(Bigint.of_string "0x0", 32);
-                  "hdr.ipv4.srcAddr", Int(Bigint.of_string "0xabd62d8b", 32);
-                  "hdr.ipv4.ttl", Int(Bigint.of_string "0x65", 8);
-                  "hdr.ipv4_valid", Int(Bigint.of_string "0x1", 1);
-                  "standard_metadata.egress_spec", Int(Bigint.of_string "0x1ff",9)] in
+                [ "hdr.ethernet.dstAddr", Value.str_make ("0x287bb416626", 48);
+                  "hdr.ethernet.srcAddr", Value.str_make ("0xffffffffffff", 48);
+                  "hdr.ipv4.dstAddr", Value.str_make ("0x0", 32);
+                  "hdr.ipv4.srcAddr", Value.str_make ("0xabd62d8b", 32);
+                  "hdr.ipv4.ttl", Value.str_make ("0x65", 8);
+                  "hdr.ipv4_valid", Value.str_make ("0x1", 1);
+                  "standard_metadata.egress_spec", Value.str_make ("0x1ff",9)] in
   let outpkt =
     Packet.mk_packet_from_list
-      ["hdr.ethernet.dstAddr", Int(Bigint.of_string "0x0",48);
-       "hdr.ethernet.srcAddr", Int(Bigint.of_string "0x287bb416626",48);
-       "hdr.ipv4.dstAddr", Int(Bigint.of_string "0x0",32);
-       "hdr.ipv4.srcAddr", Int(Bigint.of_string "0xabd62d8b",32);
-       "hdr.ipv4.ttl", Int(Bigint.of_string "0x64",8);
-       "hdr.ipv4_valid", Int(Bigint.of_string "0x1",1);
-       "ipv4_lpm_action_run", Int(Bigint.of_string "0x1",1);
-       "return1", Int(Bigint.of_string "0x0",1);
-       "return2", Int(Bigint.of_string "0x0",1);
-       "standard_metadata.egress_port", Int(Bigint.of_string "0x1",9);
-       "standard_metadata.egress_spec", Int(Bigint.of_string "0x1",9)] in
+      ["hdr.ethernet.dstAddr", Value.str_make ("0x0",48);
+       "hdr.ethernet.srcAddr", Value.str_make ("0x287bb416626",48);
+       "hdr.ipv4.dstAddr", Value.str_make ("0x0",32);
+       "hdr.ipv4.srcAddr", Value.str_make ("0xabd62d8b",32);
+       "hdr.ipv4.ttl", Value.str_make ("0x64",8);
+       "hdr.ipv4_valid", Value.str_make ("0x1",1);
+       "ipv4_lpm_action_run", Value.str_make ("0x1",1);
+       "return1", Value.str_make ("0x0",1);
+       "return2", Value.str_make ("0x0",1);
+       "standard_metadata.egress_port", Value.str_make ("0x1",9);
+       "standard_metadata.egress_spec", Value.str_make ("0x1",9)] in
   let query =
     ModelFinder.construct_model_query ModelFinder.no_opts `PassiveAggressive fvs [inpkt,outpkt] inpkt hello_phys outpkt
   in
@@ -246,26 +246,26 @@ let construct_model_query_PA_is_sat_hello_smaller _ =
     ]
   in
   let inpkt = Packet.mk_packet_from_list
-                [ "hdr.ethernet.dstAddr", Int(Bigint.of_string "0x287bb416626", 48);
-                  "hdr.ethernet.srcAddr", Int(Bigint.of_string "0xffffffffffff", 48);
-                  "hdr.ipv4.dstAddr", Int(Bigint.of_string "0x0", 32);
-                  "hdr.ipv4.srcAddr", Int(Bigint.of_string "0xabd62d8b", 32);
-                  "hdr.ipv4.ttl", Int(Bigint.of_string "0x65", 8);
-                  "hdr.ipv4_valid", Int(Bigint.of_string "0x1", 1);
-                  "standard_metadata.egress_spec", Int(Bigint.of_string "0x1ff",9)] in
+                [ "hdr.ethernet.dstAddr", Value.str_make ("0x287bb416626", 48);
+                  "hdr.ethernet.srcAddr", Value.str_make ("0xffffffffffff", 48);
+                  "hdr.ipv4.dstAddr", Value.str_make ("0x0", 32);
+                  "hdr.ipv4.srcAddr", Value.str_make ("0xabd62d8b", 32);
+                  "hdr.ipv4.ttl", Value.str_make ("0x65", 8);
+                  "hdr.ipv4_valid", Value.str_make ("0x1", 1);
+                  "standard_metadata.egress_spec", Value.str_make ("0x1ff",9)] in
   let outpkt =
     Packet.mk_packet_from_list
-      ["hdr.ethernet.dstAddr", Int(Bigint.of_string "0x0",48);
-       "hdr.ethernet.srcAddr", Int(Bigint.of_string "0x287bb416626",48);
-       "hdr.ipv4.dstAddr", Int(Bigint.of_string "0x0",32);
-       "hdr.ipv4.srcAddr", Int(Bigint.of_string "0xabd62d8b",32);
-       "hdr.ipv4.ttl", Int(Bigint.of_string "0x65",8);
-       "hdr.ipv4_valid", Int(Bigint.of_string "0x1",1);
-       "ipv4_lpm_action_run", Int(Bigint.of_string "0x1",1);
-       "return1", Int(Bigint.of_string "0x0",1);
-       "return2", Int(Bigint.of_string "0x0",1);
-       "standard_metadata.egress_port", Int(Bigint.of_string "0x1",9);
-       "standard_metadata.egress_spec", Int(Bigint.of_string "0x1",9)] in
+      ["hdr.ethernet.dstAddr", Value.str_make ("0x0",48);
+       "hdr.ethernet.srcAddr", Value.str_make ("0x287bb416626",48);
+       "hdr.ipv4.dstAddr", Value.str_make ("0x0",32);
+       "hdr.ipv4.srcAddr", Value.str_make ("0xabd62d8b",32);
+       "hdr.ipv4.ttl", Value.str_make ("0x65",8);
+       "hdr.ipv4_valid", Value.str_make ("0x1",1);
+       "ipv4_lpm_action_run", Value.str_make ("0x1",1);
+       "return1", Value.str_make ("0x0",1);
+       "return2", Value.str_make ("0x0",1);
+       "standard_metadata.egress_port", Value.str_make ("0x1",9);
+       "standard_metadata.egress_spec", Value.str_make ("0x1",9)] in
   let query form =
     ModelFinder.construct_model_query ModelFinder.no_opts form fvs [inpkt,outpkt] inpkt hello_phys outpkt
   in
