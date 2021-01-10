@@ -82,7 +82,7 @@ let to_test (m : t) : test =
      in
      lo_test %&% hi_test
   | Mask (v, m) ->
-     (mkMask (Var k) (Value m)) %=% Value v
+     Expr.((mask (Var k) (Value m)) %=% Value v)
 
 (**Assume match is well-typed for tbl*)
 let to_test_hole tbl m =

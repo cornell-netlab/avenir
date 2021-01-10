@@ -10,6 +10,7 @@ let get_val subsMap str default =
 let rec substituteE ?holes:(holes = false) substMap e =
   let binop op (e,e') = op (substituteE ~holes substMap e) (substituteE ~holes substMap e') in
   let subst = get_val substMap in
+  let open Expr in
     match e with
     | Value _ -> e
     | Var (field,_) ->
@@ -22,10 +23,10 @@ let rec substituteE ?holes:(holes = false) substMap e =
          ((*Printf.printf "%s -> %s \n%!" field (string_of_expr e');*)
           e')
        else ((*Printf.printf "NO SUBST\n%!";*)  e)
-    | Cast (i,e) -> mkCast i @@ substituteE ~holes substMap e
-    | Slice {hi;lo;bits} -> mkSlice hi lo @@ substituteE ~holes substMap bits
+    | Cast (i,e) -> cast i @@ substituteE ~holes substMap e
+    | Slice {hi;lo;bits} -> slice hi lo @@ substituteE ~holes substMap bits
     | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
-      -> binop (ctor_for_binexpr e) es
+      -> binop (bin_ctor e) es
 
                                              
 (** computes ex[xs -> vs], replacing only Vars whenever holes is false, replacing both whenever holes is true *)
@@ -44,7 +45,7 @@ let rec substitute ?holes:(holes = false) ex subsMap =
 
 let substV ?holes:(holes = false) ex substMap =
   StringMap.fold substMap ~init:StringMap.empty ~f:(fun ~key ~data acc ->
-      StringMap.set acc ~key ~data:(Value data))
+      StringMap.set acc ~key ~data:(Expr.Value data))
   |> substitute ~holes ex
 
 let rec substitute_cmd ?holes:(holes = false) cmd subst =
@@ -53,7 +54,7 @@ let rec substitute_cmd ?holes:(holes = false) cmd subst =
   | Assume t -> substitute ~holes t subst |> mkAssume
   | Assign (f,e) ->
      begin match StringMap.find subst f with
-     | Some e' -> failwith @@ Printf.sprintf "Tried to substitute %s for %s but it occurs on the right hand side of the assignment %s" f (string_of_expr e') (string_of_cmd cmd)
+     | Some e' -> failwith @@ Printf.sprintf "Tried to substitute %s for %s but it occurs on the right hand side of the assignment %s" f (Expr.to_string e') (string_of_cmd cmd)
      | None ->
         f %<-% substituteE ~holes subst e
      end
@@ -146,6 +147,7 @@ let rec wp negs c phi =
 let rec fill_holes_expr e (subst : Model.t) =
   let fill_holesS e = fill_holes_expr e subst in
   let binop op (e,e') = op (fill_holesS e) (fill_holesS e') in
+  let open Expr in
   match e with
   | Value _ | Var _ -> e
   | Hole (h,sz) ->
@@ -155,10 +157,10 @@ let rec fill_holes_expr e (subst : Model.t) =
                  (if sz <> sz' then (Printf.printf "[Warning] replacing %s#%d with %s, but the sizes may be different, taking the size of %s to be ground truth" h sz (Value.to_string v) (Value.to_string v)));
                  Value v
      end
-  | Cast (i,e) -> mkCast i @@ fill_holesS e
-  | Slice {hi;lo;bits} -> mkSlice hi lo @@ fill_holesS bits
+  | Cast (i,e) -> cast i @@ fill_holesS e
+  | Slice {hi;lo;bits} -> slice hi lo @@ fill_holesS bits
   | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es  | SatPlus es | SatMinus es
-    -> binop (ctor_for_binexpr e) es
+    -> binop (bin_ctor e) es
 
 
 (* Fills in first-order holes according to subst  *)                  
@@ -254,12 +256,12 @@ let rec wp_paths negs c phi : (cmd * test) list =
      let open List in
      (t.default :: List.map ~f:(fun (_, sc, a) -> holify (List.map sc ~f:fst) a) t.actions) >>= flip (wp_paths negs) phi
 
-let bind_action_data vals (_, scope, cmd) : cmd =
+let bind_action_data (vals : Value.t list) (_, scope, cmd) : cmd =
   let holes = fsts scope in
   let subst =
     List.fold2 holes vals
       ~init:StringMap.empty
-      ~f:(fun acc x v -> StringMap.set acc ~key:x ~data:(Value v))
+      ~f:(fun acc x v -> StringMap.set acc ~key:x ~data:(Expr.Value v))
   in
   match subst with
   | Ok subst -> substitute_cmd cmd subst
@@ -274,7 +276,7 @@ let bind_action_data vals (_, scope, cmd) : cmd =
        (string_of_cmd cmd)
      |> failwith
 
-let rec fixup_expr (model : Model.t) (e : expr)  : expr =
+let rec fixup_expr (model : Model.t) (e : Expr.t) : Expr.t =
   (* let _ = Printf.printf "FIXUP\n%!" in *)
   let binop op (e,e') = op (fixup_expr model e) (fixup_expr model e') in
   match e with
@@ -291,10 +293,10 @@ let rec fixup_expr (model : Model.t) (e : expr)  : expr =
                                     truth\n%!" h sz strv strv));
                  Value v
      end
-  | Cast (i,e) -> mkCast i @@ fixup_expr model e
-  | Slice {hi;lo;bits} -> mkSlice hi lo @@ fixup_expr model bits
+  | Cast (i,e) -> Expr.cast i @@ fixup_expr model e
+  | Slice {hi;lo;bits} -> Expr.slice hi lo @@ fixup_expr model bits
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es  | SatPlus es | SatMinus es
-    -> binop (ctor_for_binexpr e) es
+    -> binop (Expr.bin_ctor e) es
 
 let rec fixup_test (model : Model.t) (t : test) : test =
   let binop ctor call left right = ctor (call left) (call right) in 
@@ -351,7 +353,7 @@ let rec action_reads (nm, data, cmd) =
                   (data_s)
   | Assign (_,e) ->
      StringSet.diff
-       (StringSet.of_list @@ fsts @@ free_of_expr `Var e)
+       (StringSet.of_list @@ fsts @@ Expr.frees `Var e)
        (data_s)
   | Seq (c1,c2) ->
      action_reads (nm, data, c1)
@@ -368,7 +370,7 @@ let rec action_reads (nm, data, cmd) =
 
 
 let is_zero = function
-  | Value v -> Bigint.(Value.get_bigint v = zero)
+  | Expr.Value v -> Bigint.(Value.get_bigint v = zero)
   | _ -> false
 
 

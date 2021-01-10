@@ -32,13 +32,20 @@ val to_smt : t -> Z3.Smtlib.term
 
 
 (** [eq v v'] is true when [v] and [v] are the same bitvector. It throws an
- ** exception if [v] and [v'] have differnt sizes
+ ** exception if [v] and [v'] have different sizes
  ***)
 val eq : t -> t -> bool
 
-(** [ueq v i] ignores sizing information when checking that [v] is equivalent
+
+(** [equals v v'] is true when [v] and [v] are the same bitvector and when they
+ ** have the same size. Does not throw an exception when [v] and [v'] are
+ ** differenlty sized, it simple returns false
+ ***)
+val equals : t -> t -> bool
+
+(** [big v i] ignores sizing information when checking that [v] is equivalent
    to [i] *)
-val ueq : t -> Bigint.t -> bool
+val big_eq : t -> Bigint.t -> bool
 
 (** [neq v v'] is true when [eq v v'] is false, and throws exceptions in the
  ** same situations. *)

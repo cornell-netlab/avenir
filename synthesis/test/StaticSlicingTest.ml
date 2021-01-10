@@ -41,12 +41,12 @@ let slicing_retargeting_metadata_ethernet _ =
   in
   let set_port i = "standard_metadata.egress_spec" %<-% i in
   let cmd =
-    let drop = set_port (mkVInt(0,9)) in
+    let drop = set_port (Expr.value (0,9)) in
     let _drop = "drop", [], drop in
     let set_metadata = "nhop", ["nhop",32], "meta.nhop" %<-% Var("nhop",32) in
     let classify_actions = [set_metadata; _drop] in
     let fwd_actions =
-      ["set_port",["port", 9], Var("port",9) |> set_port ; _drop]
+      ["set_port",["port", 9], Expr.Var("port",9) |> set_port ; _drop]
     in
     sequence [
         mkApply("ethernet",["hdr.ethernet.dstAddr",48],classify_actions,drop);
@@ -56,10 +56,10 @@ let slicing_retargeting_metadata_ethernet _ =
   in
   let expected =
     sequence [
-        mkAssume (Var("hdr.ethernet.dstAddr",48) %=% mkVInt(11,48));
-        "meta.nhop" %<-% mkVInt(3,32);
-        mkAssume (Var("meta.nhop",32) %=% mkVInt(3,32));
-        set_port (mkVInt(11,9));
+        mkAssume (Var("hdr.ethernet.dstAddr",48) %=% Expr.value (11,48));
+        "meta.nhop" %<-% Expr.value (3,32);
+        mkAssume (Var("meta.nhop",32) %=% Expr.value (3,32));
+        set_port (Expr.value (11,9));
       ]
   in
   StaticSlicing.edit_slice params inst edits cmd
@@ -103,12 +103,12 @@ let slicing_retargeting_metadata_ipv4 _ =
   in
   let set_port i = "standard_metadata.egress_spec" %<-% i in
   let cmd =
-    let drop = set_port (mkVInt(0,9)) in
+    let drop = set_port (Expr.value (0,9)) in
     let _drop = "drop", [], drop in
     let set_metadata = "nhop", ["nhop",32], "meta.nhop" %<-% Var("nhop",32) in
     let classify_actions = [set_metadata; _drop] in
     let fwd_actions =
-      ["set_port",["port", 9], Var("port",9) |> set_port ; _drop]
+      ["set_port",["port", 9], Expr.Var("port",9) |> set_port ; _drop]
     in
     sequence [
         mkApply("ethernet",["hdr.ethernet.dstAddr",48],classify_actions,drop);
@@ -118,10 +118,10 @@ let slicing_retargeting_metadata_ipv4 _ =
   in
   let expected =
     sequence [
-        mkAssume (Var("hdr.ipv4.dstAddr",32) %=% mkVInt(11,32));
-        "meta.nhop" %<-% mkVInt(3,32);
-        mkAssume (Var("meta.nhop",32) %=% mkVInt(3,32));
-        set_port (mkVInt(11,9));
+        mkAssume (Var("hdr.ipv4.dstAddr",32) %=% Expr.value (11,32));
+        "meta.nhop" %<-% Expr.value (3,32);
+        mkAssume (Var("meta.nhop",32) %=% Expr.value (3,32));
+        set_port (Expr.value (11,9));
       ]
   in
   StaticSlicing.edit_slice params inst edits cmd
@@ -146,12 +146,12 @@ let slicing_fabric_example _ =
   in
   let set_port i = "standard_metadata.egress_spec" %<-% i in
   let cmd =
-    let drop = set_port (mkVInt(0,9)) in
+    let drop = set_port (Expr.value (0,9)) in
     let _drop = "drop", [], drop in
     let set_metadata = "nhop", ["nhop",32], "meta.nhop" %<-% Var("nhop",32) in
     let classify_actions = [set_metadata; _drop] in
     let fwd_actions =
-      ["set_port",["port", 9], Var("port",9) |> set_port ; _drop]
+      ["set_port",["port", 9], Expr.Var("port",9) |> set_port ; _drop]
     in
     sequence [
         mkApply("ethernet",["hdr.ethernet.dstAddr",48],classify_actions,drop);
@@ -160,10 +160,10 @@ let slicing_fabric_example _ =
   in
   let expected =
     sequence [
-        mkAssume (Var("hdr.ethernet.dstAddr",48) %=% mkVInt(11,48));
-        "meta.nhop" %<-% mkVInt(1,32);
-        mkAssume (Var("meta.nhop",32) %=% mkVInt(1,32));
-        set_port (mkVInt(11,9));
+        mkAssume (Var("hdr.ethernet.dstAddr",48) %=% Expr.value (11,48));
+        "meta.nhop" %<-% Expr.value (1,32);
+        mkAssume (Var("meta.nhop",32) %=% Expr.value (1,32));
+        set_port (Expr.value (11,9));
       ]
   in
   StaticSlicing.edit_slice params inst edits cmd

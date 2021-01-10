@@ -10,8 +10,8 @@ let wp_skip_eq _ =
   Equality.same_test phi (wp `Negs Skip phi)
 
 let wp_int_assign_eq _ =
-  let pre = mkVInt(7,8) %=% Var ("g",8) in
-  let cmd = "h" %<-% mkVInt(7,8) in
+  let pre = Expr.value(7,8) %=% Var ("g",8) in
+  let cmd = "h" %<-% Expr.value (7,8) in
   let post = Var("h",8) %=% Var ("g",8) in
   same_test pre (wp `Negs cmd post)
 
@@ -24,41 +24,44 @@ let wp_var_assign_eq _ =
 
 
 let wp_ordered_eq _ =
-  let post = Var("g",8) %=% mkVInt(8,8) in
+  let open Expr in
+  let post = Var("g",8) %=% value (8,8) in
   let pre =
     bigand [
         bigand [
-            Var ("h",8) %<>% mkVInt (2,8);
-            mkNeg @@ bigor [Var("h",8) %=% mkVInt(99,8);
+            Var ("h",8) %<>% value (2,8);
+            mkNeg @@ bigor [Var("h",8) %=% value (99,8);
                             Var("h",8) %=% Var("g",8)] ;
           ] %=>% post;
         bigand [
-            Var("h",8) %=%  mkVInt(99,8);
+            Var("h",8) %=% value (99,8);
             Var("h",8) %<>% Var("g",8)
         ] %=>% post;
-        Var("h",8) %=% Var ("g",9) %=>% (mkVInt(8,8) %=% mkVInt(8,8));
+        Var("h",8) %=% Var ("g",9) %=>% (value (8,8) %=% value (8,8));
       ]
   in
   let cmd =
-    mkOrdered [ Var ("h",8) %=%  Var ("g",8)    , "g" %<-% mkVInt (8,8);
-                Var ("h",8) %=%  mkVInt (99,8)  , "h" %<-% mkVInt (4,8);
-                Var ("h",8) %<>% mkVInt (2,8)   , "h" %<-% Var    ("g",8)
+    mkOrdered [ Var ("h",8) %=%  Var ("g",8)    , "g" %<-% value (8,8);
+                Var ("h",8) %=%  value (99,8)  , "h" %<-% value (4,8);
+                Var ("h",8) %<>% value (2,8)   , "h" %<-% Var    ("g",8)
       ]
   in
-  let post = Var("g",8) %=% mkVInt(8,8) in
+  let post = Var("g",8) %=% value(8,8) in
   same_test pre (wp `Negs cmd post)
 
 let wp_seq_eq _ =
   let open Manip in
-  let cmd = ("h" %<-% mkVInt (10,8)) %:% ("h" %<-% mkVInt (80,8)) in
+  let open Expr in
+  let cmd = ("h" %<-% value (10,8)) %:% ("h" %<-% value (80,8)) in
   let post = Var ("h",8) %=% Var ("g",8) in
-  let pre = mkVInt (80,8) %=% Var ("g",8) in
+  let pre = value (80,8) %=% Var ("g",8) in
   same_test pre (wp `Negs cmd post)
 
 
 let wp_assume_eq _ = (* wp behaves well with assertions *)
   let open Manip in
-  let phi = bigand [Var ("h",8) %<>% mkVInt (10,8); Var ("h",8) %<>% mkVInt (15,8)] in
+  let open Expr in
+  let phi = bigand [Var ("h",8) %<>% value (10,8); Var ("h",8) %<>% value (15,8)] in
   let cmd = Assume(phi) in
   let post =  Var ("h",8) %=% Var ("g",8) in
   same_test (phi %=>% post) (wp `Negs cmd post)

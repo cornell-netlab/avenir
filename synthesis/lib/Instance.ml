@@ -117,8 +117,8 @@ let rec apply ?no_miss:(no_miss = false)
                 if List.exists ghosts ~f:((=) i) then
                   let ghost = Printf.sprintf "%s_hits_row_%d" t.name i in
                   sequence
-                    [ ghost %<-% mkVInt(1,1);
-                      mkOrdered [Var(ghost,1) %=% mkVInt(1,1), action; True, Skip]]
+                    [ ghost %<-% Expr.value(1,1);
+                      mkOrdered [Var(ghost,1) %=% Expr.value(1,1), action; True, Skip]]
                 else
                   action in
               let cond =
@@ -127,7 +127,7 @@ let rec apply ?no_miss:(no_miss = false)
                     | WithHoles (ds,_) ->
                        let i = List.length rows - i - 1 in
                        if List.exists ds ~f:((=) (t.name, i))
-                       then (Hole.delete_hole i t.name %=% mkVInt(0,1))
+                       then (Hole.delete_hole i t.name %=% Expr.value(0,1))
                        else True
                     | _ -> True in
               if action >= List.length t.actions then

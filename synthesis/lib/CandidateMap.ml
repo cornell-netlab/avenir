@@ -60,7 +60,7 @@ let apply_hints
   | Some h ->
      List.map (h m) ~f:(fun t -> (compute_cand_for_trace typ pline pinst t, Some t))
 
-let rec project_cmd_on_acts c (subst : expr StringMap.t) : cmd list =
+let rec project_cmd_on_acts c (subst : Expr.t StringMap.t) : cmd list =
   (* Printf.printf "PROJECTING\n%!"; *)
   let holes = true in
   match c with
@@ -104,7 +104,7 @@ let compute_candidates h pkt phys =
      let action_mapping =
        let p = StringMap.filter_keys pkt ~f:(String.is_prefix ~prefix:"?ActIn") in
        (* Printf.printf "action mapping is %s" (Packet.string__packet p);        *)
-       p |> StringMap.map ~f:(fun v -> Value v)
+       p |> StringMap.map ~f:(fun v -> Expr.Value v)
      in
      List.(f action_mapping >>= project_cmd_on_acts phys)
 

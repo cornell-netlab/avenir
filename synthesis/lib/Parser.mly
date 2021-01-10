@@ -70,14 +70,14 @@ select :
   { (t, c) :: s }
 
 expr :
-| i = INT; POUND; size = INT { Ast.(Value (Value.big_make (Bigint.of_string i, int_of_string size))) }
-| x = ID; POUND; size = INT  { Ast.Var (x, int_of_string size) }
-| e = expr; PLUS; e1 = expr { Ast.(mkPlus e e1) }
-| e = expr; MINUS; e1 = expr { Ast.(mkMinus e e1) }
-| e = expr; TIMES; e1 = expr { Ast.(mkTimes e e1) }
-| e = expr; LAND; e1 = expr { Ast.(mkMask e e1) }
+| i = INT; POUND; size = INT { Expr.Value (Value.big_make (Bigint.of_string i, int_of_string size)) }
+| x = ID; POUND; size = INT  { Expr.Var (x, int_of_string size) }
+| e = expr; PLUS; e1 = expr { Expr.(plus e e1) }
+| e = expr; MINUS; e1 = expr { Expr.(minus e e1) }
+| e = expr; TIMES; e1 = expr { Expr.(times e e1) }
+| e = expr; LAND; e1 = expr { Expr.(mask e e1) }
 | LPAREN; e = expr; RPAREN { e }
-| QUESTION; x = ID; POUND; size = INT { Ast.Hole (x, int_of_string size) }
+| QUESTION; x = ID; POUND; size = INT { Expr.Hole (x, int_of_string size) }
 
 test :
 | TRUE

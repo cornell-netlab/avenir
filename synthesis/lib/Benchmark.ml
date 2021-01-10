@@ -83,7 +83,7 @@ let rec mk_pipeline varsize =
     (tbl n
     , [("k_" ^tbl n, varsize)]
     , [("Action", [Printf.sprintf "v%d" n,varsize],("x_"^tbl n) %<-% Var(Printf.sprintf "v%d" n,varsize))]
-    , ("x_"^tbl n) %<-% mkVInt (0,varsize)
+    , ("x_"^tbl n) %<-% Expr.value (0,varsize)
     ) :: mk_pipeline varsize (n-1)
 
 
@@ -229,15 +229,15 @@ and zero_init fvs cmd =
            |> List.dedup_and_sort ~compare:(fun (v1, _) (v2, _) -> String.compare v1 v2) in
   let zi = List.filter vs ~f:(fun (v,_) -> StringSet.(mem fvs v) |> not) in
   sequence @@
-    List.map zi ~f:(fun (v, w) -> v %<-% mkVInt(0, w))
+    List.map zi ~f:(fun (v, w) -> v %<-% Expr.value (0, w))
     @ [cmd]
 
 
 and drop_handle fvs cmd =
-  let c_end = List.map fvs ~f:(fun (v, w) -> mkAssn v (mkVInt(0, w)))
+  let c_end = List.map fvs ~f:(fun (v, w) -> mkAssn v (Expr.value (0, w)))
               |> List.fold ~init:Skip ~f:(fun c1 c2 -> c1 %:% c2)
   in
-  cmd %:% mkOrdered [ Var("standard_metadata.egress_spec", 9) %=% mkVInt(0, 9), c_end;
+  cmd %:% mkOrdered [ Var("standard_metadata.egress_spec", 9) %=% Expr.value (0, 9), c_end;
                       True, Skip]
 
 and variables cmd =
@@ -330,7 +330,7 @@ let mk_ith_table sz num_tables tbl_idx num_xs num_ms =
 let initialize_ms sz num_ms =
   if num_ms = 0 then Skip else
   List.map (range_ex 0 num_ms)
-    ~f:(fun i -> mk_ith_meta i %<-% mkVInt (0,sz))
+    ~f:(fun i -> mk_ith_meta i %<-% Expr.value (0,sz))
   |> sequence
 
 
@@ -465,15 +465,15 @@ let rep params data nrules =
   let fvs = ("out", 9) :: fvs in
   let log =
     sequence [
-        "out" %<-% mkVInt(0,9);
+        "out" %<-% Expr.value (0,9);
         mkApply ("obt",
                  ["ip_src",32;"ip_dst",32],
                  ["action", ["o",9], "out" %<-% Var("o",9)],
                  Skip);
         mkOrdered [
-            Var("out",9) %=% mkVInt(0,9),
+            Var("out",9) %=% Expr.value (0,9),
             List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
-                acc %:% (fv %<-% mkVInt(0,sz))
+                acc %:% (fv %<-% Expr.value (0,sz))
               );
             True, Skip
           ]
@@ -481,7 +481,7 @@ let rep params data nrules =
   in
   let phys =
     sequence [
-        "out" %<-% mkVInt(0,9);
+        "out" %<-% Expr.value (0,9);
         mkApply("validation",
                 ["ip_src",32],
                 ["action", ["ov",9], "out" %<-% Var("ov",9)],
@@ -495,9 +495,9 @@ let rep params data nrules =
                 ["action", ["oa",9], "out" %<-% Var("oa", 9)],
                 Skip);
         mkOrdered [
-            Var("out",9) %=% mkVInt(0,9),
+            Var("out",9) %=% Expr.value (0,9),
             List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
-                acc %:% (fv %<-% mkVInt(0,sz))
+                acc %:% (fv %<-% Expr.value (0,sz))
               );
             True, Skip
           ]
@@ -532,15 +532,15 @@ let rep_middle params data nrules =
   let fvs = ("out", 9) :: fvs in
   let log =
     sequence [
-        "out" %<-% mkVInt(0,9);
+        "out" %<-% Expr.value (0,9);
         mkApply ("obt",
                  ["ip_src",32;"ip_dst",32; "proto",8; "tcp_sport", 16; "tcp_dport", 16],
                  ["action", ["o",9], "out" %<-% Var("o",9)],
                  Skip);
         mkOrdered [
-            Var("out",9) %=% mkVInt(0,9),
+            Var("out",9) %=% Expr.value (0,9),
             List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
-                acc %:% (fv %<-% mkVInt(0,sz))
+                acc %:% (fv %<-% Expr.value (0,sz))
               );
             True, Skip
           ]
@@ -548,12 +548,12 @@ let rep_middle params data nrules =
   in
   let phys =
     sequence [
-        "out" %<-% mkVInt(0,9);
+        "out" %<-% Expr.value (0,9);
         (* mkOrdered [
-         *     Var("proto",8) %=% mkVInt(6,8),
+         *     Var("proto",8) %=% Expr.value (6,8),
          *     sequence [
-         *         "tcp_sport" %<-% mkVInt(0,16);
-         *         "tcp_dport" %<-% mkVInt(0,16)
+         *         "tcp_sport" %<-% Expr.value (0,16);
+         *         "tcp_dport" %<-% Expr.value (0,16)
          *       ];
          *     True , Skip
          *   ]; *)
@@ -570,9 +570,9 @@ let rep_middle params data nrules =
                 ["action", ["oa",9], "out" %<-% Var("oa", 9)],
                 Skip);
         mkOrdered [
-            Var("out",9) %=% mkVInt(0,9),
+            Var("out",9) %=% Expr.value (0,9),
             List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
-                acc %:% (fv %<-% mkVInt(0,sz))
+                acc %:% (fv %<-% Expr.value (0,sz))
               );
             True, Skip
           ]
@@ -615,15 +615,15 @@ let rep_of params exactify data nrules =
   let fvs = ("out", 9) :: fvs in
   let log =
     sequence [
-        "out" %<-% mkVInt(0,9);
+        "out" %<-% Expr.value (0,9);
         mkApply ("obt",
                  ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16; "vlan", 12; "pcp", 3],
                  ["action", ["o",9], "out" %<-% Var("o",9)],
                  Skip);
         mkOrdered [
-            Var("out",9) %=% mkVInt(0,9),
+            Var("out",9) %=% Expr.value (0,9),
             List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
-                acc %:% (fv %<-% mkVInt(0,sz))
+                acc %:% (fv %<-% Expr.value (0,sz))
               );
             True, Skip
           ]
@@ -631,7 +631,7 @@ let rep_of params exactify data nrules =
   in
   let phys =
     sequence [
-        "out" %<-% mkVInt(0,9);
+        "out" %<-% Expr.value (0,9);
         mkApply("validation",
                 ["in_port", 9;"eth_src",48;"eth_typ",16;"ip_src",32],
                 ["action", ["ov",9], "out" %<-% Var("ov",9)],
@@ -645,9 +645,9 @@ let rep_of params exactify data nrules =
                 ["action", ["oa",9], "out" %<-% Var("oa", 9)],
                 Skip);
         mkOrdered [
-            Var("out",9) %=% mkVInt(0,9),
+            Var("out",9) %=% Expr.value (0,9),
             List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
-                acc %:% (fv %<-% mkVInt(0,sz))
+                acc %:% (fv %<-% Expr.value (0,sz))
               );
             True, Skip
           ]
@@ -688,15 +688,15 @@ let rep_par params data nrules =
   let fvs = ("out", 9) :: fvs in
   let log =
     sequence [
-        "out" %<-% mkVInt(0,9);
+        "out" %<-% Expr.value (0,9);
         mkApply ("obt",
                  ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16],
                  ["action", ["o",9], "out" %<-% Var("o",9)],
                  Skip);
         mkOrdered [
-            Var("out",9) %=% mkVInt(0,9),
+            Var("out",9) %=% Expr.value (0,9),
             List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
-                acc %:% (fv %<-% mkVInt(0,sz))
+                acc %:% (fv %<-% Expr.value (0,sz))
               );
             True, Skip
           ]
@@ -704,22 +704,22 @@ let rep_par params data nrules =
   in
   let phys =
     sequence [
-        "out" %<-% mkVInt(0,9);
+        "out" %<-% Expr.value (0,9);
         mkApply("station",
                 ["in_port", 9;"eth_src",48],
                 ["action", ["n",9], "next_tbl" %<-% Var("ov",2)],
-                "next_tbl" %<-% mkVInt(0,2)) ;
+                "next_tbl" %<-% Expr.value (0,2)) ;
         mkOrdered [
-            Var("next_tbl",2) %=% mkVInt(1,2), mkApply("l3",
+            Var("next_tbl",2) %=% Expr.value (1,2), mkApply("l3",
                                                        ["ip_dst",32],
                                                        ["action", ["of",9], "out" %<-% Var("of",9) ],
                                                        Skip);
-            Var("next_tbl",2) %=% mkVInt(2,2), mkApply("l2",
+            Var("next_tbl",2) %=% Expr.value (2,2), mkApply("l2",
                                                        ["eth_dst",32],
                                                        ["action", ["o2",9], "out" %<-% Var("o2",9) ],
                                                        Skip);
 
-            Var("next_tbl",2) %=% mkVInt(3,2), mkApply("l4",
+            Var("next_tbl",2) %=% Expr.value (3,2), mkApply("l4",
                                                        ["tcp_dst",32],
                                                        ["action", ["o4",9], "out" %<-% Var("o4",9)],
                                                        Skip);
@@ -730,9 +730,9 @@ let rep_par params data nrules =
                 ["action", ["oa",9], "out" %<-% Var("oa", 9)],
                 Skip);
         mkOrdered [
-            Var("out",9) %=% mkVInt(0,9),
+            Var("out",9) %=% Expr.value (0,9),
             List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
-                acc %:% (fv %<-% mkVInt(0,sz))
+                acc %:% (fv %<-% Expr.value (0,sz))
               );
             True, Skip
           ]
@@ -793,7 +793,7 @@ let metadata params sz nmeta nedits =
         let fvs = [("out",9) ; ("x",sz)] in
         let logical_table =
           sequence [
-              "out" %<-% mkVInt(0,9);
+              "out" %<-% Expr.value (0,9);
               mkApply("logical",
                       ["x", sz],
                       ["action", ["o", 9], "out" %<-% Var("o", 9)],
@@ -801,9 +801,9 @@ let metadata params sz nmeta nedits =
             ]
         in
         let phys =
-          "out" %<-% mkVInt(0,9) ::
+          "out" %<-% Expr.value (0,9) ::
             List.map (range_ex 0 nmeta)
-              ~f:(fun i -> Printf.sprintf "m%d" i %<-% mkVInt(0,sz))
+              ~f:(fun i -> Printf.sprintf "m%d" i %<-% Expr.value (0,sz))
           @
           List.map (range_ex 0 nmeta)
             ~f:(fun table_idx ->
@@ -903,11 +903,11 @@ let create_par_bench sz num_tables num_xs num_ms =
            ; mkApply("stage",
                      mk_normal_keys sz num_xs,
                      ["action", ["stg",tblsize], "table_id" %<-% Var("stg",tblsize)],
-                     "table_id" %<-% mkVInt(num_tables + 1, tblsize))
+                     "table_id" %<-% Expr.value (num_tables + 1, tblsize))
            ; mkOrdered @@
                List.map (range_ex 0 num_tables)
                  ~f:(fun tbl_idx ->
-                   mkVInt(tbl_idx,tblsize) %=% Var("table_id",tblsize),
+                   Expr.value (tbl_idx,tblsize) %=% Var("table_id",tblsize),
                    mk_ith_table sz num_tables tbl_idx num_xs num_ms
                  )
     ]

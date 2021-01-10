@@ -2,7 +2,8 @@ open Core
 open Ast
 
 
-let rec relabel (e : expr) (sz : size) : expr =
+let rec relabel (e : Expr.t) (sz : size) : Expr.t =
+  let open Expr in
   let binop mk (e,e') = mk (relabel e sz) (relabel e' sz) in
   match e with
   | Value v when Value.size v >= 0 && Value.size v <> sz ->
@@ -11,7 +12,7 @@ let rec relabel (e : expr) (sz : size) : expr =
                    (Value.to_string v) sz
   |Var (_,sz')
     | Hole (_,sz') when sz' >= 0 && sz <> sz' ->
-     failwith @@ Printf.sprintf "Tried to relabel %s to width %d" (string_of_expr e) sz
+     failwith @@ Printf.sprintf "Tried to relabel %s to width %d" (Expr.to_string e) sz
   | Value v -> Value(Value.resize v sz)
   | Var (x, _) -> Var(x, sz)
   | Hole(h,_) -> Hole(h, sz)
@@ -20,12 +21,13 @@ let rec relabel (e : expr) (sz : size) : expr =
                        if sz = sz' then e else failwith "Tried to incorrectly relabel a slice"
   | Concat _ -> e
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | SatPlus es | SatMinus es
-    -> binop (ctor_for_binexpr e) es
+    -> binop (bin_ctor e) es
 
-let rec infer_expr (e : expr) : expr =
+let rec infer_expr (e : Expr.t) : Expr.t =
+  let open Expr in
   let binop f (e1,e2) =
-    let s1 = size_of_expr e1 in
-    let s2 = size_of_expr e2 in
+    let s1 = size e1 in
+    let s2 = size e2 in
     assert (s1 >= -1);
     assert (s2 >= -1);
     if s1 = s2
@@ -38,7 +40,7 @@ let rec infer_expr (e : expr) : expr =
       else
         if s2 = -1
         then f e1 (relabel e2 s1)
-        else begin Printf.printf "sizes are known and differ!\n\t%s\t%s\n%!" (string_of_expr e1) (string_of_expr e2);
+        else begin Printf.printf "sizes are known and differ!\n\t%s\t%s\n%!" (Expr.to_string e1) (Expr.to_string e2);
                    failwith "BitWidth type error"
              end
   in
@@ -46,18 +48,18 @@ let rec infer_expr (e : expr) : expr =
   | Value _
     | Var _
     | Hole _ -> e
-  | Cast (i,e) -> mkCast i @@ infer_expr e
-  | Slice {hi;lo;bits} -> mkSlice hi lo @@ infer_expr bits
-  | Concat (e,e') -> mkConcat (infer_expr e) (infer_expr e')
+  | Cast (i,e) -> cast i @@ infer_expr e
+  | Slice {hi;lo;bits} -> slice hi lo @@ infer_expr bits
+  | Concat (e,e') -> concat (infer_expr e) (infer_expr e')
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | SatPlus es | SatMinus es
-    -> binop (ctor_for_binexpr e) es
+    -> binop (bin_ctor e) es
 
 let rec infer_test (t : test) : test =
   let binop_e op e1 e2 =
     let e1' = infer_expr e1 in
     let e2' = infer_expr e2 in
-    let sz1 = size_of_expr e1' in
-    let sz2 = size_of_expr e2' in
+    let sz1 = Expr.size e1' in
+    let sz2 = Expr.size e2' in
     if sz1 = -1 && sz2 >= 0 then
       op (relabel e1' sz2) e2'
     else if sz1 >= 0 && sz2 = -1 then
@@ -65,7 +67,7 @@ let rec infer_test (t : test) : test =
     else if sz1 = sz2 then
       op e1' e2'
     else
-      failwith @@ Printf.sprintf "[TypeError] %s and %s have different bitwidths" (string_of_expr e1) (string_of_expr e2)
+      failwith @@ Printf.sprintf "[TypeError] %s and %s have different bitwidths" (Expr.to_string e1) (Expr.to_string e2)
   in
   match t with
   | True -> True

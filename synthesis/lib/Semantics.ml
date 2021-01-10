@@ -2,7 +2,7 @@ open Core
 open Ast
 open Util
 
-let rec eval_expr (pkt : Packet.t) ( e : expr ) : Value.t option =
+let rec eval_expr (pkt : Packet.t) (e : Expr.t) : Value.t option =
   let open Option in
   let binop op e e' =
     let f = eval_expr pkt in

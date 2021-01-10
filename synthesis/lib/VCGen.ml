@@ -5,6 +5,7 @@ open Util
 let freshen v sz i = (v ^ "$" ^ string_of_int i, sz)
 
 let rec indexVars_expr e (sub : ((int * int) StringMap.t)) =
+  let open Expr in
   let binop f (e1,e2) =
     let (e1', sub1) = indexVars_expr e1 sub in
     let (e2', sub2) = indexVars_expr e2 sub in
@@ -31,12 +32,12 @@ let rec indexVars_expr e (sub : ((int * int) StringMap.t)) =
      end
   | Cast (i,e) ->
      let e', sub' = indexVars_expr e sub in
-     mkCast i e', sub'
+     cast i e', sub'
   | Slice {hi;lo;bits} ->
      let e', sub' = indexVars_expr bits sub in
-     mkSlice hi lo e', sub'
+     slice hi lo e', sub'
   | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
-    -> binop (ctor_for_binexpr e) es
+    -> binop (bin_ctor e) es
 
 
 let rec indexVars b sub =
@@ -66,14 +67,15 @@ let inits fvs sub =
       else vs)
   |> List.dedup_and_sort ~compare:(fun (u,_) (v,_) -> Stdlib.compare u v)
 
-let rec apply_init_expr (e : expr) =
+let rec apply_init_expr (e : Expr.t) =
+  let open Expr in
   let unop op e = op @@ apply_init_expr e in
   let binop op (e,e') = op (apply_init_expr e) (apply_init_expr e') in
   match e with
   | Value _ | Hole _ -> e
   | Var (v, sz) -> Var (freshen v sz 0)
-  | Cast (sz, e) -> unop (mkCast sz) e
-  | Slice {hi;lo;bits} -> unop (mkSlice hi lo) bits
+  | Cast (sz, e) -> unop (cast sz) e
+  | Slice {hi;lo;bits} -> unop (slice hi lo) bits
   | Plus es
     | Times es
     | Minus es
@@ -83,7 +85,7 @@ let rec apply_init_expr (e : expr) =
     | Shl es
     | Concat es
     | SatPlus es
-    | SatMinus es -> binop (ctor_for_binexpr e) es
+    | SatMinus es -> binop (bin_ctor e) es
 
 let rec apply_init_test t =
   let ebinop op (e,e') = op (apply_init_expr e) (apply_init_expr e') in
@@ -120,6 +122,7 @@ let apply_finals_sub_packet (pkt : Packet.t) sub : Packet.t =
 
 
 let rec apply_finals_sub_expr e sub =
+  let open Expr in
   let unop op e = op @@ apply_finals_sub_expr e sub in
   let binop op (e,e') = op (apply_finals_sub_expr e sub) (apply_finals_sub_expr e' sub) in
   match e with
@@ -129,8 +132,8 @@ let rec apply_finals_sub_expr e sub =
      | Some (i,_) -> Var (freshen v sz i)
      | None -> Var (v,sz)
      end
-  | Cast (sz, e) -> unop (mkCast sz) e
-  | Slice {hi;lo;bits} -> unop (mkSlice hi lo) bits
+  | Cast (sz, e) -> unop (cast sz) e
+  | Slice {hi;lo;bits} -> unop (slice hi lo) bits
   | Plus es
     | Times es
     | Minus es
@@ -140,7 +143,7 @@ let rec apply_finals_sub_expr e sub =
     | Shl es
     | Concat es
     | SatPlus es
-    | SatMinus es -> binop (ctor_for_binexpr e) es
+    | SatMinus es -> binop (bin_ctor e) es
 
 
 let rec apply_finals_sub_test t sub =
@@ -163,15 +166,16 @@ let zip_eq_exn xs ys =
 let prepend_str = Printf.sprintf "%s%s"
 
 let rec prepend_expr pfx e =
+  let open Expr in
   let binop op (e,e') = op (prepend_expr pfx e) (prepend_expr pfx e') in
   match e with
   | Value _ -> e
   | Var (v,sz) -> Var(prepend_str pfx v, sz)
   | Hole(v, sz) -> Var(prepend_str pfx v, sz)
-  | Cast (i,e) -> mkCast i @@ prepend_expr pfx e
-  | Slice {hi;lo;bits} -> mkSlice hi lo @@ prepend_expr pfx bits
+  | Cast (i,e) -> cast i @@ prepend_expr pfx e
+  | Slice {hi;lo;bits} -> slice hi lo @@ prepend_expr pfx bits
   | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
-    -> binop (ctor_for_binexpr e) es
+    -> binop (bin_ctor e) es
 
 let rec prepend_test pfx b =
   match b with
@@ -211,7 +215,7 @@ let rec passify_aux sub c : ((int * int) StringMap.t * cmd) =
   | Assign (f,e) ->
      begin match StringMap.find sub f with
      | None ->
-        let sz = size_of_expr e in
+        let sz = Expr.size e in
         (StringMap.set sub ~key:f ~data:(1, sz)
         , Assume (Var (freshen f sz 1) %=% fst(indexVars_expr e sub)))
      | Some (idx, sz) ->

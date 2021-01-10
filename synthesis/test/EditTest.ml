@@ -5,12 +5,12 @@ open Equality
 
 (*Edits*)
 let extract_edits_from_model _ =
-  let drop = "standard_metadata.egress_spec" %<-% mkVInt(0,9) in
+  let drop = "standard_metadata.egress_spec" %<-% Expr.value(0,9) in
   let phys =
     sequence [
         mkApply("ethernet",["hdr.ethernet.dstAddr", 48],["nexthop", ["nexthop",32],"meta.nexthop" %<-% Var("nexthop",32);"drop", [],drop],drop);
         mkOrdered [
-            Var("hdr.ipv4.isValid",1) %=% mkVInt(1,1),
+            Var("hdr.ipv4.isValid",1) %=% Expr.value(1,1),
             sequence [
                 mkApply("ipv4_fib", ["hdr.ipv4.dstAddr", 32], ["nexthop", ["nexthop",32],"meta.nexthop" %<-% Var("nexthop",32);"drop",[],drop], drop);
                 mkApply("ipv4_rewrite",
@@ -21,7 +21,7 @@ let extract_edits_from_model _ =
                              "hdr.ethernet.srcAddr" %<-% Var("hdr.ethernet.dstAddr",48);
                              "hdr.ethernet.dstAddr" %<-% Var("dstAddr",32);
                              "hdr.ipv4.ttl" %<-%
-                               SatMinus(Var("hdr.ipv4.ttl",16), mkVInt(1,16))
+                               SatMinus(Var("hdr.ipv4.ttl",16), Expr.value(1,16))
                            ]
                         ], Skip)
               ];

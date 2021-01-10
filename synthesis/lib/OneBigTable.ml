@@ -17,8 +17,8 @@ let combine_actions (act1 : string * (string * size) list * cmd) (act2 : string 
   let new_p2 = List.map p2 ~f:(uniquify_var "_2") in
 
   let remap v1 v2 = StringMap.of_alist_exn [(v1, v2)] in
-  let new_c1 = List.fold new_p1 ~init:c1 ~f:(fun e (v1, v2, w) -> substitute_cmd e (remap v1 (Var (v2, w))) ~holes:false) in
-  let new_c2 = List.fold new_p2 ~init:c2 ~f:(fun e (v1, v2, w) -> substitute_cmd e (remap v1 (Var (v2, w))) ~holes:false) in
+  let new_c1 = List.fold new_p1 ~init:c1 ~f:(fun e (v1, v2, w) -> substitute_cmd e (remap v1 (Expr.Var (v2, w))) ~holes:false) in
+  let new_c2 = List.fold new_p2 ~init:c2 ~f:(fun e (v1, v2, w) -> substitute_cmd e (remap v1 (Expr.Var (v2, w))) ~holes:false) in
 
   let new_p1' = List.map new_p1 ~f:(fun (_, v, w) -> v, w) in
   let new_p2' = List.map new_p2 ~f:(fun (_, v, w) -> v, w) in

@@ -142,7 +142,7 @@ let well_formed_adds (params : Parameters.t) (problem : Problem.t) encode_tag =
   |> concatMap ~c:(%&%) ~init:(Some True)
        ~f:(fun t ->
          let t_rows = Instance.get_rows phys_inst t in
-         (Hole.add_row_hole t %=% mkVInt(1,1)) %=>%
+         (Hole.add_row_hole t %=% Expr.value (1,1)) %=>%
            concatMap t_rows ~init:(Some True) ~c:(%&%)
              ~f:(fun (ms,_,_) ->
                !%(concatMap ms ~init:(Some False) ~c:(%&%)
@@ -161,7 +161,7 @@ let adds_are_reachable params (problem : Problem.t) (opts : opts) fvs encode_tag
       ~init:True
       ~f:(fun acc (tbl_name,keys) ->
         mkAnd acc @@
-          mkImplies (Hole.add_row_hole tbl_name %=% mkVInt(1,1)) @@
+          mkImplies (Hole.add_row_hole tbl_name %=% Expr.value (1,1)) @@
             FastCX.is_reachable encode_tag params problem fvs in_pkt tbl_name keys
       )
 
@@ -171,8 +171,8 @@ let non_empty_adds (problem : Problem.t) =
   |> List.fold ~init:None
        ~f:(fun acc tbl ->
          match acc with
-         | None -> Some (Hole.add_row_hole tbl %=% mkVInt(1,1))
-         | Some acc -> Some (acc %+% (Hole.add_row_hole tbl %=% mkVInt(1,1)))
+         | None -> Some (Hole.add_row_hole tbl %=% Expr.value (1,1))
+         | Some acc -> Some (acc %+% (Hole.add_row_hole tbl %=% Expr.value (1,1)))
        )
   |> Option.value ~default:True
 
@@ -187,7 +187,7 @@ let single problem (opts : opts) query_holes =
                      Edit.table e = String.chop_prefix_exn h ~prefix:Hole.add_row_prefix
                    )
            then
-             (Hole(h,sz) %=% mkVInt(0,sz))
+             (Hole(h,sz) %=% Expr.value (0,sz))
            else
              acc))
 
@@ -204,8 +204,8 @@ let restrict_mask (opts : opts) query_holes =
               bigor [
                   Hole(h, sz) %=% Value(Value.big_make (all_1s, sz));
                   bigand [
-                      (Hole(h_value,sz) %=% mkVInt(0,sz));
-                      (Hole(h,sz) %=% mkVInt(0,sz));
+                      (Hole(h_value,sz) %=% Expr.value (0,sz));
+                      (Hole(h,sz) %=% Expr.value (0,sz));
                     ]
                 ]
           else True)
@@ -231,8 +231,8 @@ let active_domain_restrict params problem opts query_holes : test =
                               && not (Hole.is_delete_hole h)
                               && not (Hole.is_which_act_hole h)
                            then (Hole(h,sz) %=% Value(Value.big_make (i,szi))
-                                 %+% (Hole(h,sz) %=% mkVInt(0,szi))
-                                 %+% (Hole(h,sz) %=% mkVInt(1,szi)))
+                                 %+% (Hole(h,sz) %=% Expr.value (0,szi))
+                                 %+% (Hole(h,sz) %=% Expr.value (1,szi)))
                            else False)
                    in
                    if restr = False then acc else (acc %&% restr)
@@ -253,7 +253,7 @@ let no_defaults (params : Parameters.t) opts fvs phys =
           )
       )
     |> List.fold ~init:True ~f:(fun acc (v,sz) ->
-           acc %&% (Hole(v,sz) %<>% mkVInt(0,sz)))
+           acc %&% (Hole(v,sz) %<>% Expr.value (0,sz)))
 
 
 let rec construct_model_query opts form fvs cexs in_pkt phys out_pkt =
@@ -361,7 +361,7 @@ let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_li
                            ~f:(fun acc (tbl,num_acts) ->
                              acc %&%
                                (Hole(Hole.which_act_hole_name tbl,max (log2 num_acts) 1)
-                                %<=% mkVInt(num_acts-1,max (log2 num_acts) 1)))
+                                %<=% Expr.value (num_acts-1,max (log2 num_acts) 1)))
                          |> Log.print_and_return_test params.debug ~pre:"WF holes:\n" ~post:"\n--------\n\n"
           in
 

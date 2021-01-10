@@ -14,7 +14,8 @@ let make () = {seen = []; generals = []}
 
 let gen = NameGen.make ()
 
-let rec abstract_expr (m : string StringMap.t) (e1 : expr) (e2 : expr) : (string StringMap.t  * expr) option =
+let rec abstract_expr (m : string StringMap.t) (e1 : Expr.t) (e2 : Expr.t) : (string StringMap.t  * Expr.t) option =
+  let open Expr in
   let erecurse f m e11 e12 e21 e22 =
     match abstract_expr m e11 e21 with
     | None -> None
@@ -44,12 +45,12 @@ let rec abstract_expr (m : string StringMap.t) (e1 : expr) (e2 : expr) : (string
        end
   | Var s1, Var s2 | Hole s1, Hole s2 ->
      if Stdlib.(s1 = s2) then Some (m,e1) else None
-  | Plus  (e11, e12), Plus  (e21, e22) -> erecurse mkPlus  m e11 e12 e21 e22
-  | Times (e11, e12), Times (e21, e22) -> erecurse mkTimes m e11 e12 e21 e22
-  | Minus (e11, e12), Minus (e21, e22) -> erecurse mkMinus m e11 e12 e21 e22
-  | Mask  (e11, e12), Mask  (e21, e22) -> erecurse mkMask  m e11 e12 e21 e22
+  | Plus  (e11, e12), Plus  (e21, e22) -> erecurse plus  m e11 e12 e21 e22
+  | Times (e11, e12), Times (e21, e22) -> erecurse times m e11 e12 e21 e22
+  | Minus (e11, e12), Minus (e21, e22) -> erecurse minus m e11 e12 e21 e22
+  | Mask  (e11, e12), Mask  (e21, e22) -> erecurse mask  m e11 e12 e21 e22
   | _, _ ->
-     if false then Printf.printf "\n%s\n doesn't match \n%s\n%!" (sexp_string_of_expr e1) (sexp_string_of_expr e2);
+     if false then Printf.printf "\n%s\n doesn't match \n%s\n%!" (to_sexp_string e1) (to_sexp_string e2);
      None
 
 
@@ -90,7 +91,7 @@ let rec abstract (m : string StringMap.t) (q1 : test) (q2 : test) : (string Stri
      None
 
 
-let rec abstracted_expr (e1 : expr) (e2 : expr) (valuation : Value.t StringMap.t) : Value.t StringMap.t option =
+let rec abstracted_expr (e1 : Expr.t) (e2 : Expr.t) (valuation : Value.t StringMap.t) : Value.t StringMap.t option =
   let open Option in
   let recurse e11 e12 e21 e22 =
     abstracted_expr e11 e21 valuation >>= abstracted_expr e12 e22

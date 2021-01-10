@@ -38,67 +38,68 @@ let quantify expr etyp styp =
   | _, `Sat -> Smtlib.const expr
 
 let rec expr_to_term_help expr styp : Smtlib.term =
+  let open Expr in
   match expr with
   | Value v -> Value.to_smt v
   | Var (v, _) -> quantify v `Var styp
   | Hole (h, _) -> quantify h `Hole styp
   | Cast (i,e) ->
-     let sz = size_of_expr e in
+     let sz = size e in
      let t = expr_to_term_help e styp in
      if sz > i
      then Smtlib.extract (i-1) 0 t
      else if sz < i
-     then Smtlib.concat (expr_to_term_help (mkVInt(0,i-sz))  styp) t
+     then Smtlib.concat (expr_to_term_help (value (0,i-sz))  styp) t
      else t
   | Slice {hi;lo;bits} ->
      let term = expr_to_term_help bits styp in
      Smtlib.extract (hi-1) lo term
 
   | Plus (e1, e2) ->
-     if size_of_expr e1 <> size_of_expr e2
-     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     if size e1 <> size e2
+     then Printf.printf "%s and %s are differently sized\n%!" (to_string e1) (to_string e2);
      Smtlib.bvadd
        (expr_to_term_help e1 styp)
        (expr_to_term_help e2 styp)
 
   | SatPlus(e1,e2) ->
-     if size_of_expr e1 <> size_of_expr e2
-     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     if size e1 <> size e2
+     then Printf.printf "%s and %s are differently sized\n%!" (to_string e1) (to_string e2);
      let t1 = expr_to_term_help e1 styp in
      let t2 = expr_to_term_help e2 styp in
-     let sz = size_of_expr e1 in
+     let sz = size e1 in
      let maxt = expr_to_term_help (Value(Value.big_make (Util.max_int sz, sz))) styp in
      let bad = Smtlib.(bvugt t2 (bvsub maxt t1)) in
      Smtlib.(ite bad maxt (bvadd t1 t2))
 
 
   | Times (e1, e2) ->
-     if size_of_expr e1 <> size_of_expr e2
-     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     if size e1 <> size e2
+     then Printf.printf "%s and %s are differently sized\n%!" (to_string e1) (to_string e2);
      Smtlib.bvmul
        (expr_to_term_help e1 styp)
        (expr_to_term_help e2 styp)
 
   | Minus (e1, e2) ->
-     if size_of_expr e1 <> size_of_expr e2
-     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     if size e1 <> size e2
+     then Printf.printf "%s and %s are differently sized\n%!" (to_string e1) (to_string e2);
      Smtlib.bvsub
        (expr_to_term_help e1 styp)
        (expr_to_term_help e2 styp)
 
   | SatMinus (e1,e2) ->
-     if size_of_expr e1 <> size_of_expr e2
-     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     if size e1 <> size e2
+     then Printf.printf "%s and %s are differently sized\n%!" (to_string e1) (to_string e2);
      let t1 = expr_to_term_help e1 styp in
      let t2 = expr_to_term_help e2 styp in
-     let sz = size_of_expr e1 in
-     let zero = expr_to_term_help (mkVInt(0, sz)) styp in
+     let sz = size e1 in
+     let zero = expr_to_term_help (value (0, sz)) styp in
      let bad = Smtlib.(bvult t1 t2) in
      Smtlib.(ite bad zero (bvsub t1 t2))
 
   | Mask (e1,e2) ->
-     if size_of_expr e1 <> size_of_expr e2
-     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     if size e1 <> size e2
+     then Printf.printf "%s and %s are differently sized\n%!" (to_string e1) (to_string e2);
      let sexp = Smtlib.bvand
                   (expr_to_term_help e1 styp)
                   (expr_to_term_help e2 styp) in
@@ -106,8 +107,8 @@ let rec expr_to_term_help expr styp : Smtlib.term =
       * debug sexp; *)
      sexp
   | Xor (e1,e2) ->
-     if size_of_expr e1 <> size_of_expr e2
-     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     if size e1 <> size e2
+     then Printf.printf "%s and %s are differently sized\n%!" (to_string e1) (to_string e2);
      let sexp = Smtlib.bvneg @@
                   Smtlib.bvxnor
                     (expr_to_term_help e1 styp)
@@ -116,8 +117,8 @@ let rec expr_to_term_help expr styp : Smtlib.term =
       * debug sexp; *)
      sexp
   | BOr (e1,e2) ->
-     if size_of_expr e1 <> size_of_expr e2
-     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     if size e1 <> size e2
+     then Printf.printf "%s and %s are differently sized\n%!" (to_string e1) (to_string e2);
      let sexp = Smtlib.bvor
                   (expr_to_term_help e1 styp)
                   (expr_to_term_help e2 styp) in
@@ -143,14 +144,16 @@ let rec test_to_term_help test styp : Smtlib.term =
   | True -> Smtlib.bool_to_term true
   | False -> Smtlib.bool_to_term false
   | Eq (e1, e2) ->
-     if size_of_expr e1 <> size_of_expr e2
-     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     let open Expr in
+     if size e1 <> size e2
+     then Printf.printf "%s and %s are differently sized\n%!" (to_string e1) (to_string e2);
      Smtlib.equals
        (expr_to_term_help e1 styp)
        (expr_to_term_help e2 styp)
   | Le (e1, e2) ->
-     if size_of_expr e1 <> size_of_expr e2
-     then Printf.printf "%s and %s are differently sized\n%!" (string_of_expr e1) (string_of_expr e2);
+     let open Expr in
+     if size e1 <> size e2
+     then Printf.printf "%s and %s are differently sized\n%!" (to_string e1) (to_string e2);
      Smtlib.bvule
        (expr_to_term_help e1 styp)
        (expr_to_term_help e2 styp)

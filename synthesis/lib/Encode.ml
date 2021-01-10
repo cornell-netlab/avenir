@@ -365,12 +365,12 @@ and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) 
     op (encode_expression_to_value_with_width fw type_ctx e) (encode_expression_to_value_with_width fw' type_ctx e')
   in
   match snd e with
-  | E.True -> mkVInt(1, 1)
-  | E.False -> mkVInt(0, 1)
+  | E.True -> Expr.value (1, 1)
+  | E.False -> Expr.value (0, 1)
   | E.Int (_,i) ->
       begin match i.width_signed with
-        | Some (w, _) -> mkVInt(i.value |> Bigint.to_int_exn, w)
-        | None -> mkVInt(i.value |> Bigint.to_int_exn, width)
+        | Some (w, _) -> Expr.value (i.value |> Bigint.to_int_exn, w)
+        | None -> Expr.value (i.value |> Bigint.to_int_exn, width)
       end
   | E.Name name ->
     let w = get_width type_ctx e in
@@ -387,19 +387,19 @@ and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) 
      Var (dn, w)
   | E.BinaryOp {op;args=(e, e')} ->
      begin match snd op with
-     | Plus -> binop mkPlus e e'
-     | Minus -> binop mkMinus e e'
-     | Mul -> binop mkTimes e e'
-     | BitAnd -> binop mkMask e e'
-     | BitXor -> binop mkXor e e'
-     | BitOr -> binop mkBOr e e'
-     | Shl -> binop mkShl e e'
+     | Plus -> binop Expr.plus e e'
+     | Minus -> binop Expr.minus e e'
+     | Mul -> binop Expr.times e e'
+     | BitAnd -> binop Expr.mask e e'
+     | BitXor -> binop Expr.xor e e'
+     | BitOr -> binop Expr.or_ e e'
+     | Shl -> binop Expr.shl e e'
      | MinusSat ->
         (* Printf.eprintf "Warning, interpreting |-| as -\n%!"; *)
-        binop mkSatMinus e e'
+        binop Expr.sat_minus e e'
      | PlusSat ->
         (* Printf.eprintf "Warning, interpreting |+| as +\n%!"; *)
-        binop mkSatPlus e e'
+        binop Expr.sat_plus e e'
 
      | Div | Mod
        -> unimplemented (string_of_binop op)
@@ -430,13 +430,13 @@ and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) 
       * |> failwith *)
   | E.Cast {typ=(_,typ);expr} ->
      begin match typ with
-     | BitType (_,Int (_,i)) -> mkCast (Bigint.to_int_exn i.value) @@ encode_expression_to_value_with_width width type_ctx expr
+     | BitType (_,Int (_,i)) -> Expr.cast (Bigint.to_int_exn i.value) @@ encode_expression_to_value_with_width width type_ctx expr
      | _ -> Printf.printf "[ERROR] unsupported cast type";
             failwith "[encode_expression_to_value_with_width]"
      end
   | E.BitStringAccess {bits;lo;hi} ->
      begin match lo, hi with
-     | (_,Int (_,i)), (_,Int (_,j)) -> mkSlice (Bigint.to_int_exn j.value) (Bigint.to_int_exn i.value)
+     | (_,Int (_,i)), (_,Int (_,j)) -> Expr.slice (Bigint.to_int_exn j.value) (Bigint.to_int_exn i.value)
                            @@ encode_expression_to_value_with_width width type_ctx bits
      | _, _ -> failwith "Bit string accesses must be ints"
      end
@@ -488,7 +488,7 @@ let rec encode_expression_to_test (type_ctx : Declaration.t list) (e: Expression
   | E.False -> False
   | E.Int _ -> type_error "an integer"
   | E.String (_,s) -> type_error ("a string \"" ^ s ^ "\"")
-  | E.Name s -> Eq(Var(name_string s, 1), mkVInt(1, 1)) (* This must be a boolean value *)
+  | E.Name s -> Eq(Var(name_string s, 1), Expr.value (1, 1)) (* This must be a boolean value *)
   | E.ArrayAccess _ -> type_error ("an array access")
   | E.BitStringAccess _ -> type_error ("a bitstring access")
   | E.List _ -> type_error "a list"
@@ -531,7 +531,7 @@ let rec encode_expression_to_test (type_ctx : Declaration.t list) (e: Expression
      begin match List.last members with
      | None -> unimplemented "Function Call with nothing to dispatch"
      | Some (_,"isValid") ->
-        Var (validity_bit members, 1) %=% mkVInt(1, 1)
+        Var (validity_bit members, 1) %=% Expr.value (1, 1)
         (* Var (string_of_memberlist members ^ "()", -1) %=% Value(Int (1, 1) ) *)
      | Some _ -> unimplemented ("FunctionCall for members " ^ string_of_memberlist members)
      end
@@ -541,11 +541,11 @@ let rec encode_expression_to_test (type_ctx : Declaration.t list) (e: Expression
     let members = dispatch_list expr in
      begin match name with
      | (_,"hit") ->
-        Var (hit_bit members, 1) %=% mkVInt(1, 1)
+        Var (hit_bit members, 1) %=% Expr.value (1, 1)
      | _ ->
         Var (Printf.sprintf "%s.%s" (string_of_memberlist members) (snd name),
              get_width type_ctx e)
-          %<>% mkVInt(0,get_width type_ctx e)
+          %<>% Expr.value (0,get_width type_ctx e)
         (* unimplemented ("ExpressionMember for members " ^ string_of_memberlist members) *)
      end
   | E.TypeMember _ as expr->
@@ -599,13 +599,13 @@ let get_return_value =
 let rec dispatch prog ctx type_ctx rv members =
   match members with
   | [] -> failwith "[RuntimeException] Tried to Dispatch an empty list of names"
-  | [(_,"mark_to_drop")] -> `Motley ("standard_metadata.egress_spec" %<-% mkVInt(0,9), false, false)
+  | [(_,"mark_to_drop")] -> `Motley ("standard_metadata.egress_spec" %<-% Expr.value (0,9), false, false)
   | [(_,"clone3")] -> `Motley (Skip, false, false) (* TODO: Anything we can do with this?  Seems out of scope for now... *)
 
   | _ when Option.map (List.last members) ~f:snd = Some "setInvalid" ->
-    `Motley ((validity_bit members) %<-% mkVInt(0,1), false, false)
+    `Motley ((validity_bit members) %<-% Expr.value (0,1), false, false)
   | _ when Option.map (List.last members) ~f:snd = Some "setValid" ->
-    `Motley ((validity_bit members) %<-% mkVInt(1,1), false, false)
+    `Motley ((validity_bit members) %<-% Expr.value (1,1), false, false)
 
 
   | [member] ->
@@ -671,12 +671,12 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t l
         | Slice {hi;lo;bits=(Var(f,s) as bits)} ->
            let concat_if_necessary =
              if lo > 0 then
-               Fn.flip mkConcat (mkSlice (lo-1) 0 bits)
+               Fn.flip Expr.concat (Expr.slice (lo-1) 0 bits)
              else
                Fn.id
              in
-           f %<-%(mkConcat
-                    (mkSlice s hi bits)
+           f %<-%(Expr.concat
+                    (Expr.slice s hi bits)
                     (encode_expression_to_value_with_width (hi - lo) type_ctx rhs)
                   |> concat_if_necessary)
           , false
@@ -702,13 +702,13 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t l
   | BlockStatement {block} ->
     encode_block3 prog ctx type_ctx rv block
   | Exit ->
-    mkAssn exit_bit  (mkVInt(1, 1)), false, true
+    mkAssn exit_bit  (Expr.value (1, 1)), false, true
   | EmptyStatement ->
     Skip, false, false
   | Return {expr} ->
     (match expr with
       | None ->
-        mkAssn (return_bit rv) (mkVInt(1, 1)), true, false
+        mkAssn (return_bit rv) (Expr.value (1, 1)), true, false
       | _ -> unimplemented "Return")
   | Switch {expr; cases} ->
      let tbl_apply, cases = encode_switch prog ctx type_ctx expr rv cases in
@@ -737,7 +737,7 @@ and dispatch_control (type_ctx : Declaration.t list) (Program(top_decls) as prog
     (match List.zip (c.params) args with
       | Ok param_args ->
         let rv = get_return_value () in
-        let assign_rv = mkAssn (return_bit rv) (mkVInt(0, 1)) in
+        let assign_rv = mkAssn (return_bit rv) (Expr.value (0, 1)) in
         let new_typ_ctx = get_type_decls top_decls @ type_ctx in
         let b = List.concat_map param_args ~f:(assign_param new_typ_ctx) in
         let new_typ_ctx2 = List.map c.params ~f:(update_typ_ctx_from_param new_typ_ctx) @ new_typ_ctx in
@@ -880,11 +880,11 @@ and encode_action3 prog (ctx : Declaration.t list) (type_ctx : Declaration.t lis
       ~f:(fun (rst, in_rb, in_eb) stmt ->
             let tstmt, ret_rb, ret_eb = encode_statement prog ctx type_ctx rv stmt in
             let tstmt2 = if in_rb
-                            then mkOrdered [ mkEq (Var(return_bit rv, 1)) (mkVInt(0, 1)), tstmt
+                            then mkOrdered [ mkEq (Var(return_bit rv, 1)) (Expr.value (0, 1)), tstmt
                                            ; True , Skip ]
                             else tstmt in
             let tstmt3 = if in_eb
-                            then mkOrdered [ mkEq (Var(exit_bit, 1)) (mkVInt(0, 1)), tstmt2
+                            then mkOrdered [ mkEq (Var(exit_bit, 1)) (Expr.value (0, 1)), tstmt2
                                            ; True, Skip ]
                             else tstmt in
             (rst %:% tstmt3, ret_rb, ret_eb))
@@ -908,7 +908,7 @@ and encode_switch prog (ctx : Declaration.t list) (type_ctx : Declaration.t list
   tbl,
   (List.filter_map cases ~f:(encode_switch_case prog ctx type_ctx e acs rv))
 
-and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) (e : Expression.t) : cmd * expr * Table.action_ref list =
+and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) (e : Expression.t) : cmd * Expr.t * Table.action_ref list =
   let dispList = dispatch_list e in
   match dispList with
   | [] -> failwith "[RuntimeException] Tried to encode an empty list of names"
@@ -937,7 +937,7 @@ and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t
 
 
 
-and encode_switch_case prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : expr)
+and encode_switch_case prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : Expr.t)
                       (ts : Table.action_ref list) (rv : int)
                       (case : Statement.switch_case) : ((test * cmd) option) =
   let open Statement in
@@ -951,7 +951,7 @@ and encode_switch_case prog (ctx : Declaration.t list) (type_ctx : Declaration.t
         let block = encode_block prog ctx type_ctx rv code in
         begin match act_i with
         | Some (i, _) ->
-           let test = expr %=% mkVInt(i + 1, -1) in
+           let test = expr %=% Expr.value (i + 1, -1) in
            Some (test, block)
         | None -> failwith ("Action not found when encoding switch statement")
         end
@@ -1033,11 +1033,11 @@ and encode_program (Program(top_decls) as prog : program ) =
   match get_ingress_egress_names top_decls with
   | Some (ingress_name, egress_name) ->
      sequence [
-         mkAssume (Var("standard_metadata.egress_spec",9) %=% mkVInt(0,9));
+         mkAssume (Var("standard_metadata.egress_spec",9) %=% Expr.value (0,9));
          encode_pipeline type_cxt prog ingress_name;
          "standard_metadata.egress_port" %<-% Var("standard_metadata.egress_spec", 9);
          mkOrdered [
-             Var("standard_metadata.egress_spec", 9) %<>% mkVInt(0, 9),
+             Var("standard_metadata.egress_spec", 9) %<>% Expr.value (0, 9),
              sequence [
                  encode_pipeline type_cxt prog egress_name
                ];
@@ -1057,7 +1057,7 @@ and encode_pipeline (type_cxt : Declaration.t list) (Program(top_decls) as prog:
   | None -> failwith ("Could not find control module " ^ pn)
   | Some (_, Control c) ->
     let rv = get_return_value () in
-    let assign_rv = mkAssn (return_bit rv) (mkVInt(0, 1)) in
+    let assign_rv = mkAssn (return_bit rv) (Expr.value (0, 1)) in
     let type_cxt2 = List.map c.params ~f:(update_typ_ctx_from_param type_cxt) @ type_cxt in
     (* let _ = printf "type_cxt\n%s\n" (Sexp.to_string ([%sexp_of: Declaration.t list] type_cxt)) in *)
     (* let assign_consts = assign_constants type_cxt2 top_decls in *)
@@ -1088,7 +1088,7 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
     let action_data = List.map ad ~f:(fun (_,p) -> Parameter.(p.variable, p.typ)) in
     (*let action_data_names = List.map action_data ~f:fst in*)
     (* Set up an action run variable so we can use it to figure out which action ran in switch statements *)
-    let set_action_run = mkAssn (snd name ^ action_run_suffix) (mkVInt(i + 1, action_run_size)) in
+    let set_action_run = mkAssn (snd name ^ action_run_suffix) (Expr.value (i + 1, action_run_size)) in
     let add_tctx = List.map ad ~f:(update_typ_ctx_from_param type_ctx) in 
     let type_ctx2 = add_tctx @ type_ctx in
     let out = name_string a.name
@@ -1117,7 +1117,7 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
                       | None -> Skip
   in
 
-  let init_action_run = mkAssn (snd name ^ action_run_suffix) (mkVInt(0, action_run_size)) in
+  let init_action_run = mkAssn (snd name ^ action_run_suffix) (Expr.value (0, action_run_size)) in
 
   init_action_run %:% Apply { name = snd name; keys = str_keys; actions =  action_cmds; default =  enc_def_act }
 
@@ -1129,7 +1129,7 @@ and functioncall_args type_ctx (fc : Expression.t) =
                                | _ -> failwith "functioncall_args: bad arg")
   | _ -> []
 
-and replace_consts (consts : (string * expr)  list) (prog : cmd) =
+and replace_consts (consts : (string * Expr.t)  list) (prog : cmd) =
   match prog with
   | Skip -> Skip
   | Assign(v, e) -> Assign(v, replace_consts_expr consts e)
@@ -1142,7 +1142,7 @@ and replace_consts (consts : (string * expr)  list) (prog : cmd) =
     let default' = replace_consts consts default in
     Apply{name; keys; actions = actions'; default = default'}
 
-and replace_consts_expr (consts : (string * expr)  list) (e : expr) =
+and replace_consts_expr (consts : (string * Expr.t)  list) (e : Expr.t) =
   let binop mk (e1,e2) = mk (replace_consts_expr consts e1) (replace_consts_expr consts e2) in
   match e with
   | Value v -> Value v
@@ -1152,12 +1152,12 @@ and replace_consts_expr (consts : (string * expr)  list) (e : expr) =
     | None -> Var(v, w)
     end
   | Hole h -> Hole h
-  | Cast (i,e) -> mkCast i @@ replace_consts_expr consts e
-  | Slice {hi;lo;bits} -> mkSlice hi lo @@ replace_consts_expr consts bits
+  | Cast (i,e) -> Expr.cast i @@ replace_consts_expr consts e
+  | Slice {hi;lo;bits} -> Expr.slice hi lo @@ replace_consts_expr consts bits
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
-    -> binop (ctor_for_binexpr e) es
+    -> binop (Expr.bin_ctor e) es
 
-and replace_consts_test (consts : (string * expr) list) (t : test) =
+and replace_consts_test (consts : (string * Expr.t) list) (t : test) =
   match t with
   | True -> True
   | False -> False
@@ -1208,15 +1208,15 @@ let preprocess include_dirs p4file =
   str
 
 
-let rec rewrite_expr (m : (string * int) StringMap.t) (e : expr) : expr =
+let rec rewrite_expr (m : (string * int) StringMap.t) (e : Expr.t) : Expr.t =
   let binop mk (e,e') = mk (rewrite_expr m e) (rewrite_expr m e') in
   match e with
   | Value _ | Hole _ -> e
   | Var (v,sz) -> Var (StringMap.find m v |> Option.value ~default:(v,sz))
-  | Cast (i,e) -> mkCast i @@ rewrite_expr m e
-  | Slice {hi;lo;bits} -> mkSlice hi lo @@ rewrite_expr m bits
+  | Cast (i,e) -> Expr.cast i @@ rewrite_expr m e
+  | Slice {hi;lo;bits} -> Expr.slice hi lo @@ rewrite_expr m bits
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
-    -> binop (ctor_for_binexpr e) es
+    -> binop (Expr.bin_ctor e) es
 
 let rec rewrite_test (m : (string * int) StringMap.t) (t : test) : test =
   match t with

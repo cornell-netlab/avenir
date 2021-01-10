@@ -12,20 +12,20 @@ let bmv2_parser_parses_real_rules _ =
      "table_add forward set_dmac 10.0.1.10 => 00:04:00:00:00:01";
      "table_add ipv4_lpm set_nhop 10.0.0.10/32 => 10.0.0.10 1";
      "table_add ipv4_lpm set_nhop 10.0.1.10/32 => 10.0.1.10 2" ] in
-  let drop = "standard_metadata.egress_spec" %<-% mkVInt(0,9) in
+  let drop = "standard_metadata.egress_spec" %<-% Expr.value (0,9) in
   let phys =
     sequence [
         mkOrdered[
             bigand [
-                Var("hdr.ipv4.isValid",1) %=% mkVInt(1,1);
-                Var("hdr.ipv4.ttl",8) %>% mkVInt(0,8)]
+                Var("hdr.ipv4.isValid",1) %=% Expr.value (1,1);
+                Var("hdr.ipv4.ttl",8) %>% Expr.value (0,8)]
           , sequence [
                 mkApply("ipv4_lpm", ["hdr.ipv4.dstAddr",32],
                         [("set_nhop", ["nhop_ipv4",32; "port", 9],
                          sequence [
                              "meta.routing_metadata.nhop_ipv4" %<-% Var("nhop_ipv4",32);
                              "standard_metadata.egress_spec" %<-% Var("port",9);
-                             "hdr.ipv4.ttl" %<-% mkMinus (Var("hdr.ipv4.ttl", 8)) (mkVInt(1,8));
+                             "hdr.ipv4.ttl" %<-% Expr.(minus (Var("hdr.ipv4.ttl", 8)) (value (1,8)));
                            ]);
                          ("drop", [], drop)
                         ], drop);

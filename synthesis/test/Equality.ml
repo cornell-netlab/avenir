@@ -5,7 +5,7 @@ open Ast
 let testable_string (type a) (f : a -> string) (eq : a -> a -> bool) =
   Alcotest.testable (Fmt.of_to_string f) (eq)
 
-let expr = testable_string string_of_expr Stdlib.(=)
+let expr = testable_string Expr.to_string Expr.equals
 let same_expr = Alcotest.(check expr) "same expr"
 
 let test = testable_string string_of_test Stdlib.(=)

@@ -14,7 +14,7 @@ let hints_injects_keys _ =
     sequence [
         mkApply ("p1", ["x",32;"y",32], ["action", [],Skip], Skip);
         mkOrdered [
-            Var("x",32) %=% mkVInt(100,32),
+            Var("x",32) %=% Expr.value (100,32),
             mkApply ("p2a", ["y", 32; "q",32], ["action", [], Skip], Skip);
 
             True,

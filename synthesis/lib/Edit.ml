@@ -37,15 +37,15 @@ let get_row_exn = function
 
 let to_test phys e =
   match e with
-  | Del(t,i) -> Hole.delete_hole i t %=% mkVInt(1,1)
+  | Del(t,i) -> Hole.delete_hole i t %=% Expr.value (1,1)
   | Add(t,(ms,ds,i)) ->
      match get_schema_of_table t phys with
      | None -> failwith @@ Printf.sprintf "Couldn't find table %s" t
      | Some (_,actions,_) ->
         let actSize = max (log2 (List.length actions)) 1 in
-        Hole.add_row_hole t %=% mkVInt(1,1)
+        Hole.add_row_hole t %=% Expr.value (1,1)
         %&%
-          (Hole.which_act_hole t actSize %=% mkVInt(i,actSize))
+          (Hole.which_act_hole t actSize %=% Expr.value (i,actSize))
         %&%
           (Match.test_hole_of_lists t ms)
         %&%

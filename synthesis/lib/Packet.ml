@@ -21,10 +21,10 @@ let get_val (pkt : t) (field : string) : Value.t =
     | None -> failwith ("UseBeforeDef error " ^ field ^ " packet is " ^ to_string pkt)
     | Some v -> v
 
-let rec set_field_of_expr_opt (pkt : t) (field : string) (e : expr) : t option =
+let rec set_field_of_expr_opt (pkt : t) (field : string) (e : Expr.t) : t option =
   let open Option in
-  if has_hole_expr e then
-    failwith @@ Printf.sprintf "[PacketHole] Tried to assign %s <- %s" field (string_of_expr e)
+  if Expr.has_hole e then
+    failwith @@ Printf.sprintf "[PacketHole] Tried to assign %s <- %s" field (Expr.to_string e)
   else
     let binop op e e'=
       set_field_of_expr_opt pkt field e >>= fun pkt ->
@@ -62,7 +62,7 @@ let to_test ?random_fill:(random_fill=false)  ~fvs (pkt : t) =
           match StringMap.find pkt x with
           | None ->
              if random_fill then
-               Var(x,sz) %=% mkVInt(Random.int (pow 2 sz),sz)
+               Var(x,sz) %=% Expr.value (Random.int (pow 2 sz),sz)
              else
                Var(x,sz) %=% Var(x^"_symb", sz)
           | Some v ->
@@ -153,4 +153,4 @@ let diff_vars (pkt : t) (pkt' : t) : string list =
 
 (** inherited from Core.Map *)
 let fold = StringMap.fold
-let to_expr_map = StringMap.map ~f:(fun v -> Value v)
+let to_expr_map = StringMap.map ~f:(fun v -> Expr.Value v)

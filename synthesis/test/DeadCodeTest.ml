@@ -6,21 +6,22 @@ open DeadCode
 
 
 let dc_remove_table _ =
-  let var x = Var(x,32) in
-  let int i = mkVInt(i,32) in
+  let open Expr in
+  let var x = Var (x,32) in
+  let int i = value (i,32) in
   let cmd =
     sequence [
         Apply {name = "tbl";
                keys = [("z",32, None); ("meta",32,None)];
                actions = [ "action", ["port",9], sequence [
-                                           "out" %<-% mkPlus (Var("port",9)) (mkCast 9 @@ var "z");
-                                           "meta" %<-% mkPlus (var "z") (var "z");
+                                           "out" %<-% plus (Var("port",9)) (cast 9 @@ var "z");
+                                           "meta" %<-% plus (var "z") (var "z");
                                          ]
                          ; "action", ["port",9], sequence [
-                                           "out" %<-% mkVInt (0,9);
+                                           "out" %<-% value (0,9);
                                            "meta" %<-% int (2*99);
                          ] ];
-               default = "meta" %<-% mkTimes (var "z") (int 2);
+               default = "meta" %<-% times (var "z") (int 2);
           };
         "addr" %<-% var "meta";
       ]

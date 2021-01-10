@@ -10,148 +10,10 @@ let enable_smart_constructors = true
 
 type size = int
 
-type expr =
-  | Value of Value.t
-  | Var of (string * size)
-  | Hole of (string * size)
-  | Plus of (expr * expr)
-  | SatPlus of (expr * expr)
-  | SatMinus of (expr * expr)
-  | Times of (expr * expr)
-  | Minus of (expr * expr)
-  | Mask of (expr * expr)
-  | Xor of (expr * expr)
-  | BOr of (expr * expr)
-  | Shl of (expr * expr)
-  | Concat of (expr * expr)
-  | Cast of (int * expr)
-  | Slice of {hi : int; lo: int; bits: expr}
-
-let mkVInt i = Value (Value.make i)
-let mkCast i e = Cast(i,e)
-let mkPlus e e' = Plus(e,e')
-let mkMinus e e' = Minus (e, e')
-let mkTimes e e' = Times (e, e')
-let mkSatPlus e e' = SatPlus(e,e')
-let mkSatMinus e e' = SatMinus (e,e')
-let mkMask e e' = Mask(e,e')
-let mkXor e e' = Xor(e,e')
-let mkBOr e e' = BOr (e,e')
-let mkShl e e' = Shl (e,e')
-let mkConcat e e' = Concat(e,e')
-let mkSlice hi lo bits = Slice {hi; lo; bits}
-
-let ctor_for_binexpr =
-  function
-  | Hole _ | Value _ | Var _ | Cast _ | Slice _ -> failwith "[bin_ctor_for_expr] received hole, value, var, cast, or slice"
-  | Plus _ -> mkPlus
-  | Times _ -> mkTimes
-  | Minus _ -> mkMinus
-  | SatPlus _ -> mkSatPlus
-  | SatMinus _ -> mkSatMinus
-  | Mask _ -> mkMask
-  | Xor _ -> mkXor
-  | BOr _ -> mkBOr
-  | Shl _ -> mkShl
-  | Concat _ -> mkConcat
-
-let rec string_of_expr (e : expr) : string =
-  let string_binop e1 op e2 = Printf.sprintf "(%s %s %s)" (string_of_expr e1) op (string_of_expr e2) in
-  match e with
-  | Value v -> Value.to_string v
-  | Var (x,s) -> x ^ "#" ^ string_of_int s
-  | Hole (x,s) -> "?" ^ x ^ "#" ^ string_of_int s
-  | Cast (i,e)    -> Printf.sprintf "((<%d>) %s)" i (string_of_expr e)
-  | Plus (e, e')  -> string_binop e "+" e'
-  | SatPlus (e,e') -> string_binop e "|+|" e'
-  | SatMinus(e,e') -> string_binop e "|-|" e'
-  | Times (e, e') -> string_binop e "*" e'
-  | Minus (e, e') -> string_binop e "-" e'
-  | Mask (e,e')   -> string_binop e "&" e'
-  | Xor (e,e')    -> string_binop e "^" e'
-  | BOr (e,e')    -> string_binop e "|" e'
-  | Shl (e,e')    -> string_binop e "<<" e'
-  | Concat (e,e') -> string_binop e "APPEND" e'
-  | Slice {hi; lo; bits} -> Printf.sprintf "%s[%d:%d]" (string_of_expr bits) hi lo
-
-let rec sexp_string_of_expr (e : expr) =
-  let string_binop ctor (e1, e2) = Printf.sprintf "%s(%s, %s)" ctor (sexp_string_of_expr e1) (sexp_string_of_expr e2) in
-  match e with
-  | Value v -> "Value(" ^ Value.to_sexp_string v ^ ")"
-  | Var (x, s) -> "Var(\"" ^ x ^ "\"," ^ string_of_int s ^ ")"
-  | Hole (x, s) -> "Hole(\"" ^ x ^ "\"," ^ string_of_int s ^ ")"  
-  | Cast (i,e) -> Printf.sprintf "Cast(%d, %s)" i (string_of_expr e)
-  | Plus es -> string_binop "Plus" es
-  | SatPlus es -> string_binop "SatPlus" es
-  | Times es -> string_binop "Times" es
-  | Minus es -> string_binop "Minus" es
-  | SatMinus es -> string_binop "SatMinus" es
-  | Mask es -> string_binop "Mask" es
-  | Xor es -> string_binop "Xor" es
-  | BOr es     -> string_binop "BOr" es
-  | Shl es     -> string_binop "Shl" es
-  | Concat es -> string_binop "Concat" es
-  | Slice {hi;lo;bits} -> Printf.sprintf "Slice {hi=%d;lo=%d;bits=%s}" hi lo (sexp_string_of_expr bits)
-
-let rec size_of_expr (e : expr) : size =
-  match e with
-  | Value v -> Value.size v
-  | Var (_,s) -> s
-  | Hole (_,s) -> s
-  | Cast (i,_) -> i
-  | Concat (e,e') -> size_of_expr e + size_of_expr e'
-  | Plus (e, e') | Minus(e,e') | Times (e,e') | Mask(e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') | SatPlus(e,e') | SatMinus (e,e') ->
-     let s = size_of_expr e in
-     let s' = size_of_expr e' in
-     if s = s' then s
-     else
-       if s = -1 || s' = -1
-       then -1
-       else
-         failwith (Printf.sprintf "size of expressions: %s, and %s differs (%d and %d)"
-                     (string_of_expr e)
-                     (string_of_expr e')
-                     s s')
-  | Slice {hi;lo;_} -> let sz = hi - lo in
-                       if sz < 0 then -1 else sz
-
-let rec num_nodes_in_expr e =
-  match e with
-  | Value _ | Var _ | Hole _ -> 1
-  | Cast (_,e) | Slice {bits=e;_}-> 1 + num_nodes_in_expr e
-  | Plus (e,e') | Minus(e,e') | Times(e,e') | Mask(e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') | Concat (e,e') | SatPlus(e,e') | SatMinus (e,e') ->
-     num_nodes_in_expr e
-     + num_nodes_in_expr e'
-     + 1
-
-
-let sem_for_binexpr =
-  function
-  | Hole _ | Value _ | Var _ | Cast _ | Slice _ -> failwith "[bin_ctor_for_expr] received hole, value, var, cast, or slice"
-  | Plus _ -> Value.add
-  | Times _ -> Value.multiply
-  | Minus _ -> Value.subtract
-  | SatPlus _ -> Value.sat_add
-  | SatMinus _ -> Value.sat_subtract
-  | Mask _ -> Value.mask
-  | Xor _ -> Value.xor
-  | BOr _ -> Value.or_
-  | Shl _ -> Value.shl
-  | Concat _ -> Value.concat
-
-let sem_for_unexpr =
-  function
-  | Cast (s,_) -> Value.cast s
-  | Slice {hi;lo;_} -> Value.slice hi lo
-  | e ->
-     Printf.sprintf "Expected slice or cast, recieved %s" (string_of_expr e)
-     |> failwith
-
-
 type test =
   | True | False
-  | Eq of (expr * expr)
-  | Le of (expr * expr)
+  | Eq of (Expr.t * Expr.t)
+  | Le of (Expr.t * Expr.t)
   | And of (test * test)
   | Or of (test * test)
   | Impl of (test * test)
@@ -162,16 +24,16 @@ let rec string_of_test t =
   match t with
   | True -> "true"
   | False -> "false"
-  | Eq (left, right) -> string_of_expr left ^ " = " ^ string_of_expr right
-  | Le (left, right) -> string_of_expr left ^ " <= " ^ string_of_expr right
+  | Eq (left, right) -> Expr.to_string left ^ " = " ^ Expr.to_string right
+  | Le (left, right) -> Expr.to_string left ^ " <= " ^ Expr.to_string right
   | Impl (assum, conseq) -> "(" ^ string_of_test assum ^ " ==> " ^ string_of_test conseq ^ ")\n"
   | Iff (left, right) -> "(" ^ string_of_test left ^ " <==> " ^ string_of_test right ^ ")\n"
   | Or (left, right) -> "(" ^ string_of_test left ^ " || " ^ string_of_test right ^ ")"
   | And (left, right) -> "(" ^ string_of_test left ^ " && " ^ string_of_test right ^ ")"
   | Neg (Le(left, right)) ->
-     Printf.sprintf "(%s < %s)" (string_of_expr right) (string_of_expr left)
+     Printf.sprintf "(%s < %s)" (Expr.to_string right) (Expr.to_string left)
   | Neg(Eq(left,right)) ->
-     Printf.sprintf "(%s <> %s)" (string_of_expr left) (string_of_expr right)
+     Printf.sprintf "(%s <> %s)" (Expr.to_string left) (Expr.to_string right)
   | Neg t ->
      "~(" ^ string_of_test t ^ ")"
 
@@ -223,33 +85,16 @@ let mkNeg t =
 let (!%) = mkNeg
 
              
-let mkEq (e : expr) (e':expr) =
+let mkEq (e : Expr.t) (e' : Expr.t) =
   if not enable_smart_constructors then Eq(e,e') else 
   if e = e' then
-    ((*Printf.printf "[=] %s and %s are equal, so True\n" (string_of_expr e) (string_of_expr e');*)
+    ((*Printf.printf "[=] %s and %s are equal, so True\n" (Expr.to_string e) (Expr.to_string e');*)
      True)
   else
-    let ord e = match e with
-      | Var _ -> 0
-      | Hole _ -> 1
-      | Cast _ -> 2
-      | Plus _ -> 3
-      | SatPlus _ -> 4
-      | Minus _ -> 5
-      | SatMinus _ -> 6
-      | Times _ -> 7
-      | Value _ -> 8
-      | Mask _ -> 9
-      | Xor _ -> 10
-      | BOr _ -> 11
-      | Shl _ -> 12
-      | Slice _ -> 13
-      | Concat _ -> 14
-    in
     let norm = match e, e' with
     | Value _, Value _
       ->
-       (*Printf.printf "[=] %s and %s are unequal values so False\n" (string_of_expr e) (string_of_expr e');*)
+       (*Printf.printf "[=] %s and %s are unequal values so False\n" (Expr.to_string e) (Expr.to_string e');*)
        False
     | Hole x , Hole x'
     | Var x, Var x'
@@ -257,17 +102,17 @@ let mkEq (e : expr) (e':expr) =
          then Eq (e, e')
          else Eq (e', e)           
     | _, _ ->
-       if ord e < ord e'
-       then Eq (e, e')
+       if Expr.ord e < Expr.ord e'
+       then Eq (e, e')9
        else Eq (e', e)
     in
     match norm with
     | Eq(Value(_), Mask(Var(_,_), Value(m)))
-         when Value.ueq m Bigint.zero -> True
+         when Value.big_eq m Bigint.zero -> True
     | _ -> norm
 
 
-let mkLe (e : expr) (e' : expr) : test =
+let mkLe (e : Expr.t) (e' : Expr.t) : test =
   if not enable_smart_constructors then Le(e,e') else
   match e, e' with
     | Value(first), Value(second) ->
@@ -308,8 +153,8 @@ let rec sexp_string_of_test t =
   match t with
   | True -> "True"
   | False -> "False"
-  | Eq  (left, right) -> binop "Eq" left right sexp_string_of_expr
-  | Le  (left, right) -> binop "Le" left right sexp_string_of_expr
+  | Eq  (left, right) -> binop "Eq" left right Expr.to_sexp_string
+  | Le  (left, right) -> binop "Le" left right Expr.to_sexp_string
   | Impl (assum, conseq) -> binop "Impl" assum conseq sexp_string_of_test
   | Iff (left, right) -> binop "Iff" left right sexp_string_of_test
   | Or  (left, right) -> binop "Or" left right sexp_string_of_test
@@ -319,8 +164,8 @@ let rec sexp_string_of_test t =
 let rec num_nodes_in_test t =
   match t with
   | True | False -> 1
-  | Eq (left, right) -> num_nodes_in_expr left + num_nodes_in_expr right + 1
-  | Le (left, right) -> num_nodes_in_expr left + num_nodes_in_expr right + 1
+  | Eq (left, right) -> Expr.num_nodes left + Expr.num_nodes right + 1
+  | Le (left, right) -> Expr.num_nodes left + Expr.num_nodes right + 1
   | Iff (left, right) | Or (left, right) | And(left, right) | Impl(left, right)
     -> num_nodes_in_test left + 1 + num_nodes_in_test right
   | Neg t -> num_nodes_in_test t + 1
@@ -342,16 +187,6 @@ let rec dedup xs =
      let xs' = remove_dups x xs in
      x :: dedup xs'
 
-let rec free_of_expr typ e : (string * size) list =
-  match e, typ with
-  | Value _, _ -> []
-  | Var (x,sz), `Var  | Hole (x,sz), `Hole -> [x,sz]
-  | Var _ , `Hole -> []
-  | Hole _ , `Var -> []
-  | Cast(_,e),_ | Slice {bits=e;_},_ -> free_of_expr typ e
-  | Plus(e,e'),_ | Times (e,e'),_ | Minus(e,e'),_ | Mask (e,e'), _ | Xor (e,e'), _ | BOr (e,e'), _ | Shl (e,e'), _ | Concat (e,e'),_ | SatPlus (e,e'),_  | SatMinus(e,e'), _ ->
-     free_of_expr typ e @ free_of_expr typ e'
-
 let rec free_of_test typ test : (string * size) list =
   begin match test with
   | True | False -> 
@@ -361,7 +196,7 @@ let rec free_of_test typ test : (string * size) list =
   | Neg t ->
      free_of_test typ t
   | Eq (e, e') | Le (e, e') ->
-     free_of_expr typ e @ free_of_expr typ e'
+     Expr.frees typ e @ Expr.frees typ e'
   end
   |> dedup
 
@@ -372,13 +207,6 @@ let free_vars_of_test t : (string * size) list=
                 
 let holes_of_test = free_of_test `Hole
 
-let rec has_hole_expr = function
-  | Value _ | Var _  -> false
-  | Hole _ -> true
-  | Cast (_,e) | Slice {bits=e;_} -> has_hole_expr e
-  | Plus (e1,e2) | Minus(e1,e2) | Times (e1,e2) | Mask (e1,e2) | Xor (e1,e2) | BOr (e1,e2) | Shl (e1,e2) | Concat (e1,e2)
-    | SatPlus(e1,e2) | SatMinus (e1,e2)
-    -> has_hole_expr e1 || has_hole_expr e2
                                  
 let rec has_hole_test = function
   | True | False -> false
@@ -386,17 +214,8 @@ let rec has_hole_test = function
   | And (a,b) | Or(a,b) | Impl (a,b) | Iff(a,b) ->
      has_hole_test a || has_hole_test b
   | Eq (e1,e2) | Le (e1,e2) ->
-     has_hole_expr e1 || has_hole_expr e2
-                                 
+     Expr.has_hole e1 || Expr.has_hole e2
 
-let rec multi_ints_of_expr e : Value.t list =
-  match e with
-  | Value v -> [v]
-  | Var _ | Hole _ -> []
-  | Cast (_,e) | Slice {bits=e;_} -> multi_ints_of_expr e
-  | Plus (e,e') | Times (e,e') | Minus (e,e')  | Mask (e,e') | Xor (e,e') | BOr (e,e') | Shl (e,e') | Concat (e,e')
-    | SatPlus (e,e') | SatMinus(e,e')
-    -> multi_ints_of_expr e @ multi_ints_of_expr e'
                   
 let rec multi_ints_of_test test : Value.t list =
   begin match test with
@@ -410,7 +229,7 @@ let rec multi_ints_of_test test : Value.t list =
     | Neg t ->
        multi_ints_of_test t
     | Eq (e, e') | Le (e, e') ->
-       multi_ints_of_expr e @ multi_ints_of_expr e'
+       Expr.multi_vals e @ Expr.multi_vals e'
   end
 
 type select_typ =
@@ -429,7 +248,7 @@ let sexp_string_of_select_typ styp =
 
 type cmd =
   | Skip
-  | Assign of (string * expr)
+  | Assign of (string * Expr.t)
   | Assume of test
   | Seq of (cmd * cmd)
   | Select of (select_typ * ((test * cmd) list))
@@ -453,7 +272,7 @@ let (%:%) = mkSeq
 
 let mkAssn f v =
   match v with
-  | Var(x, _) when x = f -> Skip
+  | Expr.Var(x, _) when x = f -> Skip
   | _ -> Assign (f, v)
 let (%<-%)= mkAssn
 
@@ -556,7 +375,7 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
     "assume (" ^ string_of_test t ^ ")"
   | Assign (field, expr) ->
     repeat "\t" depth ^
-    field ^ " := " ^ string_of_expr expr
+    field ^ " := " ^ Expr.to_string expr
   | Select (styp, es) ->
     let modifier = (string_of_select_typ styp) in
     repeat "\t" depth ^
@@ -594,7 +413,7 @@ let rec sexp_string_of_cmd e : string =
   | Skip -> "Skip"
   | Seq (p, q) -> "Seq(" ^ sexp_string_of_cmd p ^ "," ^ sexp_string_of_cmd q ^ ")"
   | Assume t -> "Assume(" ^ sexp_string_of_test t ^ ")"
-  | Assign (f,e) -> "Assign(\"" ^ f ^ "\"," ^ sexp_string_of_expr e ^")"
+  | Assign (f,e) -> "Assign(\"" ^ f ^ "\"," ^ Expr.to_sexp_string e ^")"
   | Select (styp,es) ->
     let cases_string = match es with
       | [] -> "[]"
@@ -629,7 +448,7 @@ let rec num_nodes_in_cmd c =
   1 +
   match c with
   | Skip -> 0
-  | Assign (_, e) -> num_nodes_in_expr e
+  | Assign (_, e) -> Expr.num_nodes e
   | Seq (c1,c2) -> num_nodes_in_cmd c1 + num_nodes_in_cmd c2
   | Assume t -> num_nodes_in_test t
   | Select (_, cases) -> List.fold cases ~init:0 ~f:(fun acc (b, c) -> acc + num_nodes_in_test b + num_nodes_in_cmd c)
@@ -688,8 +507,8 @@ let rec free_of_cmd typ (c:cmd) : (string * size) list =
   | Skip -> []
   | Assign (f, e) ->
      begin match typ with
-     | `Hole -> free_of_expr typ e
-     | `Var -> (f,size_of_expr e) :: free_of_expr typ e
+     | `Hole -> Expr.frees typ e
+     | `Var -> (f,Expr.size e) :: Expr.frees typ e
      end
   | Seq (c, c') ->
      free_of_cmd typ c @ free_of_cmd typ c'
@@ -721,10 +540,8 @@ let holes_of_cmd = free_of_cmd `Hole
 let rec multi_ints_of_cmd c : (Value.t) list =
   match c with
   | Skip -> []
-  (* | Assign (_, Int i) ->
-   *   [i] *)
   (* Only collect _tested_ inputs*)
-  | Assign (_,e) -> multi_ints_of_expr e
+  | Assign (_,e) -> Expr.multi_vals e
   | Seq (c, c') ->
     multi_ints_of_cmd c
     @ multi_ints_of_cmd c'
@@ -739,35 +556,12 @@ let rec multi_ints_of_cmd c : (Value.t) list =
   | Apply t ->
      List.fold t.actions ~init:(multi_ints_of_cmd t.default)
        ~f:(fun rst act -> rst @ multi_ints_of_cmd (trd3 act))
-
-let rec holify_expr ~f holes (e : expr) : expr =
-  let binop ctor (e,e') = ctor (holify_expr ~f holes e) (holify_expr ~f holes e') in
-  match e with
-  | Hole _ | Value _ -> e
-  | Var (x,sz) ->
-     begin match List.find holes ~f:(fun elem -> x = elem)  with
-     | None -> e
-     | Some _ -> Hole (f (x, sz))
-     end
-  | Cast (i,e) -> mkCast i @@ holify_expr ~f holes e
-  | Slice {hi;lo;bits} -> mkSlice hi lo @@ holify_expr ~f holes bits
-  | Plus es
-    | SatPlus es
-    | Times es
-    | Minus es
-    | SatMinus es
-    | Mask es
-    | Xor es
-    | BOr es
-    | Shl es
-    | Concat es
-    -> binop (ctor_for_binexpr e) es
                           
 and holify_test ~f holes b : test =
   match b with
   | True | False -> b
-  | Eq (e, e') -> holify_expr ~f holes  e %=% holify_expr ~f holes  e'
-  | Le (e, e') -> holify_expr ~f holes  e %<=% holify_expr ~f holes  e'
+  | Eq (e, e') -> Expr.holify ~f holes  e %=% Expr.holify ~f holes  e'
+  | Le (e, e') -> Expr.holify ~f holes  e %<=% Expr.holify ~f holes  e'
   | And (b, b') -> holify_test ~f holes b %&% holify_test ~f holes b'
   | Or (b, b')  -> holify_test ~f holes b %+% holify_test ~f holes b'
   | Impl(b,b') -> holify_test ~f holes b %=>% holify_test ~f holes b'
@@ -777,7 +571,7 @@ and holify_test ~f holes b : test =
 and holify_cmd ~f holes c : cmd=
   match c with
   | Skip -> c
-  | Assign (v, e) -> v %<-% holify_expr ~f holes e
+  | Assign (v, e) -> v %<-% Expr.holify ~f holes e
   | Assume t -> Assume (holify_test ~f holes t)
   | Seq (c, c') ->
      holify_cmd ~f holes c %:% holify_cmd ~f holes c'

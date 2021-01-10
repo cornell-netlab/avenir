@@ -21,7 +21,7 @@ val set_field : t -> string -> Value.t -> t
 (** [set_field pkt x e] updates [pkt] by evaluating [e] using [pkt] as a
    valuation to some value [v] and updating [pkt] to map [x] to [v]. If [e]
    cannot be evaluated (e.g. because of an undefined variable), return None*)
-val set_field_of_expr_opt : t -> string -> expr -> t option
+val set_field_of_expr_opt : t -> string -> Expr.t -> t option
 
 (** [get_val_opt pkt s] optionally gets [pkt]'s valuation of [x], returning
    [None] if [pkt] is undefined on [x] *)
@@ -67,7 +67,7 @@ val to_assignment : t -> cmd
 val diff_vars : t -> t -> string list
 
 (** [to_expr_map pkt] produces a map [m] such that if [x |-> v] in [pkt] then [x |-> Value v] in [m]  *)
-val to_expr_map : t -> expr Util.StringMap.t
+val to_expr_map : t -> Expr.t Util.StringMap.t
 
 (** [mk_packet_from_list l] constructs a packet from the association list [l] *)
 val mk_packet_from_list : (string * Value.t) list -> t

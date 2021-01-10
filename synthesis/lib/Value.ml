@@ -32,9 +32,13 @@ let to_sexp_string v = to_string v
 
 let to_smt v = Z3.Smtlib.bbv (Sized.get v) (Sized.size v)
 
-let ueq = Sized.map ~f:Bigint.(=)
+let big_eq = Sized.map ~f:Bigint.(=)
 let eq = Sized.map2 ~f:Bigint.(=)
 let neq v v' = not (eq v v')
+
+let equals = Sized.map2s2 ~f:(fun x1 sz1 x2 sz2 ->
+                 Bigint.(x1 = x2) && sz1 = sz2
+               )
 
 let leq = Sized.map2 ~f:Bigint.(<=)
 

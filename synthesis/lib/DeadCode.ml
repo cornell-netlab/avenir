@@ -11,7 +11,7 @@ let rec eliminate_unused_vars cmd (used : StringSet.t) =
   | Skip -> (Skip,used)
   | Assign(f,e) ->
      if StringSet.mem used f then
-       (f %<-% e, fsts (free_of_expr `Var e)
+       (f %<-% e, fsts (Expr.frees `Var e)
                   |> stringset_add_list (StringSet.remove used f)
        )
      else

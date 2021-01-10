@@ -10,8 +10,8 @@ let rec static_slice_aux (fvs : StringSet.t) (c : cmd) : StringSet.t * cmd  =
   | Assign (f,e) ->
      if StringSet.mem fvs f then
        (StringSet.remove fvs f
-        |> StringSet.(union (fvs_to_set (free_of_expr `Var e)))
-        |> StringSet.(union (fvs_to_set (free_of_expr `Hole e)))
+        |> StringSet.(union (fvs_to_set (Expr.frees `Var e)))
+        |> StringSet.(union (fvs_to_set (Expr.frees `Hole e)))
        , c)
      else
        (fvs,Skip)
@@ -72,7 +72,7 @@ let rec flows_to (vs : StringSet.t) cmd : StringSet.t=
   match cmd with
   | Skip -> vs
   | Assign (f,e) ->
-     let e_vs = fsts @@ free_of_expr `Var e in
+     let e_vs = fsts @@ Expr.frees `Var e in
      if List.exists e_vs ~f:in_vs  then
        (* let () = Printf.printf "tainting %s from %s via %s\n%!" f (string_of_expr e) (string_of_strset vs) in *)
        StringSet.add vs f
@@ -87,7 +87,7 @@ let rec flows_to (vs : StringSet.t) cmd : StringSet.t=
   | Select(_, cs) ->
      concatMap cs ~c:(StringSet.union) ~f:(fun (b, c) ->
          if List.exists (fsts @@ free_of_test `Var b) ~f:in_vs
-            && not (b = (Var("standard_metadata.egress_spec",9) %=% mkVInt(0,9))
+            && not (b = (Var("standard_metadata.egress_spec",9) %=% Expr.value (0,9))
                     && Manip.is_a_sequence_of_zero_assignments c)
          then
            (* let () = Printf.printf "adding lvars of %s to taint analysis\n%!" (string_of_cmd c) in *)
@@ -150,9 +150,9 @@ let edit_slice_table (params : Parameters.t) (name,keys,actions,default) (facts 
   (* if params.debug then Printf.printf "slicing %s to \n%s\n%!" (name) (string_of_cmd table); *)
   table, facts'
 
-let project_to_exprfacts (multifacts : Value.t list StringMap.t) : expr StringMap.t =
+let project_to_exprfacts (multifacts : Value.t list StringMap.t) : Expr.t StringMap.t =
   StringMap.filter_map multifacts ~f:(function
-      | [v] -> Some(Value v)
+      | [v] -> Some(Expr.Value v)
       | _ -> None)
 
 let rec edit_slice_aux (params : Parameters.t) facts inst edits cmd =
@@ -201,7 +201,7 @@ let rec restrict ~dir params inst reads cmd : (StringSet.t * int list StringMap.
      let tvars = free_of_test `Var t |> fvs_to_set in
      tvars |> StringSet.union reads, StringMap.empty
   | Assign (f,e) ->
-     free_of_expr `Var e
+     Expr.frees `Var e
      |> fvs_to_set
      |> StringSet.union @@ StringSet.remove reads f
     , StringMap.empty

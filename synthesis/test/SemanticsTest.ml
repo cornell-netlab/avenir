@@ -4,18 +4,18 @@ open Ast
 open Semantics
 
 let cross_packet =
-  let dst_is x = Var("dst", 2) %=% mkVInt(x,2) in
-  let src_is x = Var("src", 2) %=% mkVInt(x,2) in
+  let dst_is x = Var("dst", 2) %=% Expr.value (x,2) in
+  let src_is x = Var("src", 2) %=% Expr.value (x,2) in
   let prog =
     sequence [
     mkOrdered [
-        src_is 1, "smac" %<-% mkVInt(2,2);
-        src_is 0, "smac" %<-% mkVInt(1,2);
+        src_is 1, "smac" %<-% Expr.value (2,2);
+        src_is 0, "smac" %<-% Expr.value (1,2);
         True, Skip
       ];
       mkOrdered [
-          dst_is 1, "out" %<-% mkVInt(2,2);
-          dst_is 0, "out" %<-% mkVInt(1,2);
+          dst_is 1, "out" %<-% Expr.value (2,2);
+          dst_is 0, "out" %<-% Expr.value (1,2);
           True, Skip ]
       ]
   in

@@ -33,7 +33,7 @@ let rec flows c (st : t) : (t * (string * int) list) list  =
   | Assign (f, e) ->
      let target_vars = StringSet.remove st.target_vars f in
      let target_vars =
-       free_of_expr `Var e
+       Expr.frees `Var e
        |> fsts
        |> stringset_add_list target_vars
      in
@@ -92,7 +92,7 @@ let print t =
       Printf.printf "%s:%!" table;
       List.iter actions ~f:(fun (params, act_id, action) ->
           Printf.printf "\naction[%d] \\%s ->\n%s" act_id
-            (List.fold params ~init:"" ~f:(fun acc x -> Printf.sprintf "%s %s" acc (string_of_expr (Var x))))
+            (List.fold params ~init:"" ~f:(fun acc x -> Printf.sprintf "%s %s" acc (Expr.to_string (Var x))))
             (string_of_cmd action)
         );
       Printf.printf "\n\n%!";
@@ -127,10 +127,10 @@ let positive_actions (params : Parameters.t) (phys : cmd) (fvs : (string * int) 
                             | None -> acc
                             | Some v ->
                                (* every input variable is existentially quantified, unsound but complete *)
-                               let unknowns = fsts @@ free_of_expr `Var data in
-                               let exp = holify_expr ~f:Fn.id unknowns data in
+                               let unknowns = fsts @@ Expr.frees `Var data in
+                               let exp = Expr.holify ~f:Fn.id unknowns data in
                                let test = Value v %=% exp in
-                               Printf.printf "%s.action[%d]\tchecking %s = %s" table act_id (string_of_expr exp) (Value.to_string v);
+                               Printf.printf "%s.action[%d]\tchecking %s = %s" table act_id (Expr.to_string exp) (Value.to_string v);
                                Prover.is_sat params test
                           else
                             acc
@@ -181,7 +181,7 @@ let rec tables_affecting_keys phys (keys : StringSet.t) =
   | Skip | Assume _ -> (keys, empty)
   | Assign (f,e) ->
      if mem keys f
-     then (union (remove keys f) (of_list @@ fsts @@ free_of_expr `Var e), empty)
+     then (union (remove keys f) (of_list @@ fsts @@ Expr.frees `Var e), empty)
      else (keys, empty)
   | Seq (c1,c2) ->
      let keys2, tables2 = tables_affecting_keys c2 keys in
@@ -210,7 +210,7 @@ let rec tables_affected_by_keys phys keys =
   | Skip | Assume _ -> (keys, empty)
   | Assign (f,e) ->
      if mem keys f
-     then (union (remove keys f) (of_list @@ fsts @@ free_of_expr `Var e), empty)
+     then (union (remove keys f) (of_list @@ fsts @@ Expr.frees `Var e), empty)
      else (keys, empty)
   | Seq (c1,c2) ->
      let keys1, tables1 = tables_affected_by_keys c1 keys in

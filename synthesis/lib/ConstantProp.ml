@@ -28,6 +28,7 @@ let rec eval_const_expr e =
     | Some e1', Some e2' -> Some (op e1' e2')
     | _,_ -> None
   in
+  let open Expr in
   match e with
   | Value v -> Some (v)
   | Var _ | Hole _ -> None
@@ -48,10 +49,10 @@ let rec eval_const_expr e =
      let open Option in
      eval_const_expr bits >>| Value.slice hi lo
 
-let rec propogate_expr (map : expr StringMap.t) (e : expr) =
+let rec propogate_expr (map : Expr.t StringMap.t) (e : Expr.t) =
   let eval_if_const e =
     let open Option in
-    (eval_const_expr e >>| fun v -> Value v)
+    (eval_const_expr e >>| fun v -> Expr.Value v)
     |> value ~default:e
   in
   let binop ctor (e1,e2) =
@@ -61,6 +62,7 @@ let rec propogate_expr (map : expr StringMap.t) (e : expr) =
   let unop ctor e =
     eval_if_const @@ ctor @@ propogate_expr map e
   in
+  let open Expr in
   match e with
   | Value _ | Hole _ -> e
   | Var (x,_) ->
@@ -76,13 +78,13 @@ let rec propogate_expr (map : expr StringMap.t) (e : expr) =
   | Concat es
   | SatPlus es
   | SatMinus es ->
-     binop (ctor_for_binexpr e) es
+     binop (bin_ctor e) es
   | Cast (i, e') ->
-     unop (mkCast i) e'
+     unop (cast i) e'
   | Slice {hi;lo;bits} ->
-     unop (mkSlice hi lo) bits
+     unop (slice hi lo) bits
 
-let rec propogate_test (map : expr StringMap.t) (t : test) =
+let rec propogate_test (map : Expr.t StringMap.t) (t : test) =
   let tbinop ctor (t1,t2) =
     ctor (propogate_test map t1) (propogate_test map t2)
   in
@@ -98,7 +100,7 @@ let rec propogate_test (map : expr StringMap.t) (t : test) =
   | Iff ts -> tbinop mkIff ts
   | Neg t -> unop mkNeg t
 
-let rec propogate_cmd (map : expr StringMap.t) (cmd : cmd) =
+let rec propogate_cmd (map : Expr.t StringMap.t) (cmd : cmd) =
   match cmd with
   | Skip -> map, Skip
   | Assign (f,e) ->
@@ -135,8 +137,8 @@ let rec propogate_cmd (map : expr StringMap.t) (cmd : cmd) =
                  | `Both(pre,post) ->
                     Printf.sprintf "got different expressions for %s pre action and post action: %s and %s"
                       key
-                      (string_of_expr pre)
-                      (string_of_expr post)
+                      (Expr.to_string pre)
+                      (Expr.to_string post)
                     |> failwith
                  | `Left pre -> Some pre
                  | `Right post -> Some post
@@ -161,7 +163,7 @@ let rec propogate_cmd (map : expr StringMap.t) (cmd : cmd) =
                  (k,sz, Some v)
               end
            | Some (e) ->
-              Printf.printf "[INFO] could replace key %s in table %s with value %s\n%!" (k) (name) (string_of_expr e);
+              Printf.printf "[INFO] could replace key %s in table %s with value %s\n%!" (k) (name) (Expr.to_string e);
               (k,sz, None)
            | None -> (k,sz, None)
          )
@@ -187,7 +189,7 @@ let propogate_fix cmd =
 
 
 (*known facts is a collection of facts we know*)
-let rec infer (known_facts : expr StringMap.t) (b : test) : (expr StringMap.t * test) =
+let rec infer (known_facts : Expr.t StringMap.t) (b : test) : (Expr.t StringMap.t * test) =
   let open Manip in
   let binop mk f (e1,e2) = mk (f e1) (f e2) in
   match b with
@@ -216,14 +218,14 @@ let rec infer (known_facts : expr StringMap.t) (b : test) : (expr StringMap.t * 
 
   | Neg t -> (known_facts, !%(substitute t known_facts))
 
-let to_value_map (emap : expr StringMap.t) : Value.t StringMap.t =
+let to_value_map (emap : Expr.t StringMap.t) : Value.t StringMap.t =
   StringMap.filter_map emap ~f:(fun data ->
       match data with
       | Value v -> Some v
       | _ -> None)
 
-let to_expr_map (vmap : Value.t StringMap.t) : expr StringMap.t =
-  StringMap.map vmap ~f:(fun v -> Value v)
+let to_expr_map (vmap : Value.t StringMap.t) : Expr.t StringMap.t =
+  StringMap.map vmap ~f:(fun v -> Expr.Value v)
 
 let rec passive_propogate_aux dir map cmd =
   match cmd with
@@ -274,7 +276,7 @@ let passive_propogate_fix map cmd =
   |> snd
 
 
-let rec eval_expr_choices facts (e : expr) : Value.t list option =
+let rec eval_expr_choices facts (e : Expr.t) : Value.t list option =
   let open Option in
   let map_over_product f (e1, e2) =
     let v1s = eval_expr_choices facts e1
@@ -285,6 +287,7 @@ let rec eval_expr_choices facts (e : expr) : Value.t list option =
      >>| List.map ~f:(uncurry f)
   in
   let map f e = (eval_expr_choices facts e) >>| List.map  ~f in
+  let open Expr in
   match e with
   | Value v -> Some [v]
   | Var (x,_) -> StringMap.find facts x
@@ -299,10 +302,10 @@ let rec eval_expr_choices facts (e : expr) : Value.t list option =
     | BOr es
     | Shl es
     | Concat es ->
-     map_over_product (sem_for_binexpr e) es
+     map_over_product (bin_eval e) es
   | Cast (_, bits)
     | Slice {bits;_} ->
-     map (sem_for_unexpr e) bits
+     map (un_eval e) bits
 
 let rec propogate_choices (facts : Value.t list StringMap.t) = function
   | Skip -> facts

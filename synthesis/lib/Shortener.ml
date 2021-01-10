@@ -5,7 +5,8 @@ let namegen = NameGen.make ()
 
 let disable = true
 
-let rec shorten_expr (bht : Bishtbl.t) (e : expr) : expr =
+let rec shorten_expr (bht : Bishtbl.t) (e : Expr.t) : Expr.t =
+  let open Expr in
   if disable  then e else
     let get key = Bishtbl.get bht ~key ~default:(NameGen.get_fresh_name namegen) in
     let unop ?(mk=Fn.id) e = mk (shorten_expr bht e) in
@@ -14,10 +15,10 @@ let rec shorten_expr (bht : Bishtbl.t) (e : expr) : expr =
     | Value _ -> e
     | Var (x, sz) -> Var(get x, sz)
     | Hole (h, sz) -> Hole(get h, sz)
-    | Cast (i,e) -> unop ~mk:(mkCast i) e
-    | Slice {hi;lo;bits} -> unop ~mk:(mkSlice hi lo) bits
+    | Cast (i,e) -> unop ~mk:(cast i) e
+    | Slice {hi;lo;bits} -> unop ~mk:(slice hi lo) bits
     | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
-      -> binop (ctor_for_binexpr e) es
+      -> binop (bin_ctor e) es
 
 let rec shorten (bht : Bishtbl.t) (t : test) : test =
   if disable then t else
@@ -32,7 +33,8 @@ let rec shorten (bht : Bishtbl.t) (t : test) : test =
     | Impl (t1,t2) -> shorten bht t1 %=>% shorten bht t2
     | Neg t1 -> mkNeg @@ shorten bht t1
 
-let rec unshorten_expr (bht : Bishtbl.t) (e : expr) : expr =
+let rec unshorten_expr (bht : Bishtbl.t) (e : Expr.t) : Expr.t =
+  let open Expr in
   if disable then e else
     let unget key = Bishtbl.get_back bht ~key in
     let unop ?(mk=Fn.id) e = mk (unshorten_expr bht e) in
@@ -41,10 +43,10 @@ let rec unshorten_expr (bht : Bishtbl.t) (e : expr) : expr =
     | Value _ -> e
     | Var (x, sz) -> Var(unget x, sz)
     | Hole (h, sz) -> Hole(unget h, sz)
-    | Cast (i,e) -> unop ~mk:(mkCast i) e
-    | Slice {hi;lo;bits} -> unop ~mk:(mkSlice hi lo) bits
+    | Cast (i,e) -> unop ~mk:(cast i) e
+    | Slice {hi;lo;bits} -> unop ~mk:(slice hi lo) bits
     | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
-      -> binop (ctor_for_binexpr e) es
+      -> binop (bin_ctor e) es
 
 let rec unshorten (bht : Bishtbl.t) (t : test) : test =
   if disable then t else
