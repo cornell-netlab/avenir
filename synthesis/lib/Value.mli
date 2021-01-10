@@ -60,6 +60,7 @@ val get_int_exn : t -> int
 
 (** [size v] gets the size of the bitvector*)
 val size : t -> int
+
 (** [same_size v v'] is true when [v] and [v'] have the same size*)
 val same_size : t -> t -> bool
 
