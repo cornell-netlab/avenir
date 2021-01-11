@@ -39,11 +39,11 @@ val eq : t -> t -> bool
 
 (** [equals v v'] is true when [v] and [v] are the same bitvector and when they
  ** have the same size. Does not throw an exception when [v] and [v'] are
- ** differenlty sized, it simple returns false
+ ** differently sized, it simply returns false
  ***)
 val equals : t -> t -> bool
 
-(** [big v i] ignores sizing information when checking that [v] is equivalent
+(** [big_eq v i] ignores sizing information when checking that [v] is equivalent
    to [i] *)
 val big_eq : t -> Bigint.t -> bool
 
@@ -52,7 +52,7 @@ val big_eq : t -> Bigint.t -> bool
 val neq : t -> t -> bool
 
 (** [leq v v'] is true when [v] is less than or equal to [v] and throws an
- ** exception when they have differnt sizes *)
+ ** exception when they have different sizes *)
 val leq : t -> t -> bool
 
 (** [zero sz] is equivalent to [make (0,sz)] *)
