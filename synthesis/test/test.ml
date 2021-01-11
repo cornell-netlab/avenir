@@ -20,4 +20,5 @@ let () =
       "value interface", ValueTest.test;
       "vc generation", VCGenTest.test;
       "random generators", RandomGenTest.test;
+      "vc generation", VCGenTest.test;
     ]

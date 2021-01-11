@@ -1,6 +1,9 @@
 open Core
 open Util
+<<<<<<< HEAD
 open Value 
+=======
+>>>>>>> first pass at deparser equality functionality
 open Expr 
 open Test 
 let freshen v sz i = (v ^ "$" ^ string_of_int i, sz)
