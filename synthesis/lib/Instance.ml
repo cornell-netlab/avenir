@@ -1,6 +1,5 @@
 open Core
 open Util
-open Ast
 open Manip
 
 type t = Row.t list StringMap.t (* Keys are table names, Rows are table rows*)
@@ -9,6 +8,18 @@ type interp =
   | NoHoles
   | OnlyHoles of Hint.t list
   | WithHoles of (string * int) list * Hint.t list
+
+let interp_equal i1 i2 =
+  match i1, i2 with
+  | NoHoles, NoHoles ->
+     true
+  | OnlyHoles hs, OnlyHoles hs' ->
+     List.equal Hint.equal hs hs'
+  | WithHoles (vs,hs), WithHoles (vs',hs') ->
+     List.equal (fun (x,sz) (x',sz') -> String.(x = x') && sz = sz') vs vs'
+     && List.equal Hint.equal hs hs'
+  | _ ->
+     false
 
 let to_string (inst:t) : string =
   StringMap.fold inst ~init:"" ~f:(fun ~key:table_name ~data:rows acc ->
@@ -81,8 +92,8 @@ let rec apply ?no_miss:(no_miss = false)
           (params : Parameters.t)
           (tag : interp) encode_tag
           (inst : t)
-          (prog : cmd)
-        : cmd =
+          (prog : Cmd.t)
+        : Cmd.t =
   match prog with
   | Skip
     | Assign _
@@ -90,7 +101,7 @@ let rec apply ?no_miss:(no_miss = false)
   | Seq (c1,c2) ->
      let c1' = apply ~no_miss ~ghost_edits params tag encode_tag inst c1 in
      let c2' = apply ~no_miss ~ghost_edits params tag encode_tag inst c2 in
-     c1' %:% c2'
+     Cmd.seq c1' c2'
   | Select (typ, ss) ->
      let ss =
        List.fold ss ~init:[]
@@ -98,7 +109,7 @@ let rec apply ?no_miss:(no_miss = false)
            let c' = apply params ~no_miss ~ghost_edits tag encode_tag inst c in
            acc @ [(t,c')]
          ) in
-     mkSelect typ ss
+     Cmd.select typ ss
   | Apply t ->
      let actSize = max (log2(List.length t.actions)) 1 in
      let rows = StringMap.find_multi inst t.name in
@@ -113,9 +124,9 @@ let rec apply ?no_miss:(no_miss = false)
               let instrument action =
                 if List.exists ghosts ~f:((=) i) then
                   let ghost = Printf.sprintf "%s_hits_row_%d" t.name i in
-                  sequence
+                  Cmd.(sequence
                     [ ghost %<-% Expr.value(1,1);
-                      mkOrdered [Test.(Var(ghost,1) %=% Expr.value(1,1)), action; True, Skip]]
+                      ordered [Test.(Var(ghost,1) %=% Expr.value(1,1)), action; True, Skip]])
                 else
                   action in
               let cond =
@@ -123,7 +134,7 @@ let rec apply ?no_miss:(no_miss = false)
                   match tag with
                   | WithHoles (ds,_) ->
                      let i = List.length rows - i - 1 in
-                     if List.exists ds ~f:((=) (t.name, i))
+                     if List.exists ds ~f:(Stdlib.(=) (t.name, i))
                      then Test.(Hole.delete_hole i t.name %=% Expr.value(0,1))
                      else Test.True
                   | _ -> True in
@@ -144,17 +155,17 @@ let rec apply ?no_miss:(no_miss = false)
           List.mapi t.actions
             ~f:(fun i (_, params, act) ->
               (Hole.table_hole encode_tag t.keys t.name i actSize
-              , holify ~f:(fun (h,sz) -> (Hole.action_data t.name i h sz, sz)) (List.map params ~f:fst) act))
+              , Cmd.holify ~f:(fun (h,sz) -> (Hole.action_data t.name i h sz, sz)) (List.map params ~f:fst) act))
      in
      let dflt_row = if no_miss then [] else [(Test.True, t.default)] in
      let tbl_select = (if params.above then holes @ selects else selects @ holes)
                       @ dflt_row
-                      |> mkOrdered in
+                      |> Cmd.ordered in
      tbl_select
 
 
 
-let update_consistently (params:Parameters.t) match_model (phys : cmd) (tbl_name : string) (act_data : Row.action_data option) (act : int) (acc : [`Ok of t | `Conflict of t]) : [`Ok of t | `Conflict of t] =
+let update_consistently (params:Parameters.t) match_model (phys : Cmd.t) (tbl_name : string) (act_data : Row.action_data option) (act : int) (acc : [`Ok of t | `Conflict of t]) : [`Ok of t | `Conflict of t] =
   match acc with
   | `Ok pinst -> begin match StringMap.find pinst tbl_name,
                              Row.mk_new_row match_model phys tbl_name act_data act with
@@ -193,7 +204,7 @@ let remove_deleted_rows (params : Parameters.t) (match_model : Model.t) (pinst :
               | Hole(s,_) ->
                  begin match Model.find match_model s with
                  | None -> true
-                 | Some do_delete when Value.get_bigint do_delete = Bigint.one ->
+                 | Some do_delete when Bigint.(Value.get_bigint do_delete = one) ->
                     if params.interactive then Printf.printf "- %s : row %d\n%!" tbl_name i;
                     false
                  | Some _ -> true
@@ -204,7 +215,7 @@ let remove_deleted_rows (params : Parameters.t) (match_model : Model.t) (pinst :
 
     )
 
-let fixup_edit (params : Parameters.t) (data : ProfData.t ref) match_model (action_map : (Row.action_data * size) StringMap.t option) (phys : cmd) (pinst : t) : [`Ok of t | `Conflict of t] =
+let fixup_edit (params : Parameters.t) (data : ProfData.t ref) match_model (action_map : (Row.action_data * int) StringMap.t option) (phys : Cmd.t) (pinst : t) : [`Ok of t | `Conflict of t] =
   let st = Time.now() in
   match action_map with
   | Some m -> StringMap.fold ~init:(`Ok pinst) m ~f:(fun ~key:tbl_name ~data:(act_data,act) ->
@@ -214,7 +225,7 @@ let fixup_edit (params : Parameters.t) (data : ProfData.t ref) match_model (acti
        Model.fold match_model ~init:[]
          ~f:(fun ~key ~data acc ->
            if String.is_substring key ~substring:"AddRowTo"
-              && data = Value.make (1,1)
+              && Value.(equals data (make (1,1)))
            then (String.substr_replace_all key ~pattern:"?" ~with_:""
                  |> String.substr_replace_first ~pattern:"AddRowTo" ~with_:"")
                 :: acc

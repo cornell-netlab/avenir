@@ -1,7 +1,7 @@
 open Core
 open Async
 module Value = Avenir.Value
-module Ast = Avenir.Ast
+module Cmd = Avenir.Cmd
 module Parser = Avenir.Parser
 module Lexer = Avenir.Lexer
 module Prover = Avenir.Prover
@@ -201,7 +201,7 @@ let encode_cmd : Command.t =
      and p4_file =anon ("p4_file" %: string) in
          fun () ->
          Encode.encode_from_p4 includes p4_file verbose
-         |> Ast.string_of_cmd
+         |> Cmd.to_string
          |> Core.Printf.printf "%s"
     ]
 
@@ -416,7 +416,7 @@ let obt : Command.t =
            else
              Benchmark.parse_file prog_path in
          let obt = OneBigTable.mk_one_big_table prog in
-         Core.printf "%s\n" (Ast.string_of_cmd obt)
+         Core.printf "%s\n" (Cmd.to_string obt)
     ]
 
 

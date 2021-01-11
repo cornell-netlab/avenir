@@ -1,5 +1,3 @@
-open Ast
-
 (** A Packet is a partial map from variables (strings) to values *)
 type t
 
@@ -58,7 +56,7 @@ val to_test : ?random_fill:bool -> fvs:(string * int) list -> t -> Test.t
 
 (** [to_assignment pkt] converts [pkt] to a command [c] that will produce [pkt]
    when run on [empty]. *)
-val to_assignment : t -> cmd
+val to_assignment : t -> Cmd.t
 
 (** [diff_vars pkt pkt'] computes the variables that are different between [pkt]
    and [pkt'], where a variable is different either because it is undefined in

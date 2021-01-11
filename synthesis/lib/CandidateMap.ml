@@ -1,12 +1,12 @@
 open Core
 open Util
-open Ast
 open Manip
 
 type trace = (Row.action_data * int) StringMap.t
 
 
-let rec compute_cand_for_trace (tag : [`Exact | `Mask]) (line: cmd) (pinst : Instance.t) (trace : trace) : cmd =
+let rec compute_cand_for_trace (tag : [`Exact | `Mask]) (line: Cmd.t) (pinst : Instance.t) (trace : trace) : Cmd.t =
+  let open Cmd in
   match line with
   | Skip 
     | Assume _
@@ -16,7 +16,7 @@ let rec compute_cand_for_trace (tag : [`Exact | `Mask]) (line: cmd) (pinst : Ins
                    %:% compute_cand_for_trace tag c2 pinst trace
   | Select(typ, cs) ->
      List.map cs ~f:(fun (b, c) -> (b, compute_cand_for_trace tag c pinst trace))
-     |> mkSelect typ
+     |> select typ
   | Apply t ->
      (*might need to use existing instance to negate prior rules *)
      begin match StringMap.find trace t.name with
@@ -32,8 +32,8 @@ let rec compute_cand_for_trace (tag : [`Exact | `Mask]) (line: cmd) (pinst : Ins
             let open Test in
             List.fold2_exn params data ~init:True
               ~f:(fun acc param arg -> acc %&% (Hole param %=% Value arg)) in
-          mkAssume cond
-          %:% mkAssume args
+          assume cond
+          %:% assume args
           %:% holify List.(params >>| fst) act
      end
 
@@ -44,15 +44,15 @@ let apply_hints
       typ
       (h_opt : (trace -> trace list) option)
       m
-      pline pinst : (cmd * (Row.action_data * int) StringMap.t option) list =
+      pline pinst : (Cmd.t * (Row.action_data * int) StringMap.t option) list =
   match h_opt with
   | None ->
      [Instance.apply params tag typ pinst pline, None]
   | Some h ->
      List.map (h m) ~f:(fun t -> (compute_cand_for_trace typ pline pinst t, Some t))
 
-let rec project_cmd_on_acts c (subst : Expr.t StringMap.t) : cmd list =
-  (* Printf.printf "PROJECTING\n%!"; *)
+let rec project_cmd_on_acts c (subst : Expr.t StringMap.t) : Cmd.t list =
+  let open Cmd in
   let holes = true in
   match c with
   | Skip -> [c]
@@ -73,7 +73,7 @@ let rec project_cmd_on_acts c (subst : Expr.t StringMap.t) : cmd list =
          * end *)
      end
   | Seq (c1,c2) ->
-     liftL2 mkSeq
+     liftL2 seq
        (project_cmd_on_acts c1 subst)
        (project_cmd_on_acts c2 subst)
   | Select (typ, cs) ->
@@ -81,8 +81,8 @@ let rec project_cmd_on_acts c (subst : Expr.t StringMap.t) : cmd list =
      cs >>= (fun (t, a) ->
        project_cmd_on_acts a subst >>= fun act ->
        let t' = substitute ~holes t subst in
-       if t' = False then [] else [(t', act)])
-     |> mkSelect typ
+       if Test.equals t' False then [] else [(t', act)])
+     |> select typ
      |> return 
   | Apply _ -> failwith "Shouldnt have applys at this stage"
 

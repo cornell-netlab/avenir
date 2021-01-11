@@ -1,18 +1,18 @@
 open Core
 open Equality
 open Avenir
-open Ast
 open DeadCode
 
 
 let dc_remove_table _ =
+  let open Cmd in
   let open Expr in
   let var x = Var (x,32) in
   let int i = value (i,32) in
   let cmd =
     sequence [
         Apply {name = "tbl";
-               keys = [("z",32, None); ("meta",32,None)];
+               keys = [Key.make ("z",32); Key.make ("meta",32)];
                actions = [ "action", ["port",9], sequence [
                                            "out" %<-% plus (Var("port",9)) (cast 9 @@ var "z");
                                            "meta" %<-% plus (var "z") (var "z");

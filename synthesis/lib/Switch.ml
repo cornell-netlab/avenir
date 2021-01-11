@@ -1,16 +1,15 @@
 open Core
-open Ast
 
 let new_slicing = true
 
 type t =
   {
-    pipeline : cmd ref;         (* switch program *)
+    pipeline : Cmd.t ref;         (* switch program *)
     inst : Instance.t ref;      (* table rules *)
     edits : Edit.t list;        (* edits to table rules *)
     (* cached stuff *)
-    gcl : cmd option ref;       (* switch program with table rules inlined *)
-    gcl_holes : cmd option ref; (* switch program with table rules inlined and holes added *)
+    gcl : Cmd.t option ref;       (* switch program with table rules inlined *)
+    gcl_holes : Cmd.t option ref; (* switch program with table rules inlined and holes added *)
     dels : Instance.interp option ref;   (* ??? *)
     tag : [`Mask | `Exact] option ref;   (* flag determining whether holes can be masked *)
     edited_inst : Instance.t option ref; (* inst with edits applied *)
@@ -85,7 +84,7 @@ let to_gcl (params : Parameters.t) (_ : (string * int) list) (p : t) =
 
 let to_gcl_holes params (p : t) dels tag =
   match !(p.gcl_holes), !(p.dels), !(p.tag) with
-  | Some i, Some d, Some t when d = dels && t = tag -> i
+  | Some i, Some d, Some t when Instance.interp_equal d dels && Stdlib.(t = tag) -> i
   | _ ->
      let i = Instance.apply params ~no_miss:false dels tag (edited_instance params p) !(p.pipeline) in
      p.gcl_holes := Some i;
@@ -95,10 +94,10 @@ let to_gcl_holes params (p : t) dels tag =
 
 let to_string (_ : Parameters.t) (p : t) =
   Printf.sprintf "%s\n[%s]\n%!"
-    (string_of_cmd !(p.pipeline))
+    (Cmd.to_string !(p.pipeline))
     (List.fold (p.edits) ~init:""
        ~f:(fun acc e ->
-         Printf.sprintf "%s%s%s" acc (if acc = "" then "" else "\n") (Edit.to_string e)
+         Printf.sprintf "%s%s%s" acc (if String.(acc = "") then "" else "\n") (Edit.to_string e)
        ))
 
 let clear_cache (p : t) = {p with
@@ -132,7 +131,7 @@ let slice params =
     slice_old params
 
 
-let replace_pipeline (p : t) (c : cmd) =
+let replace_pipeline (p : t) (c : Cmd.t) =
   {p with pipeline = ref c}
   |> clear_cache
 

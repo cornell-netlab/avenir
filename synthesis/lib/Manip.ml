@@ -1,11 +1,8 @@
 open Core
-open Ast
 open Util
-
 
 let get_val subsMap str default =
   StringMap.find subsMap str |> Option.value ~default
-
 
 let rec substituteE ?holes:(holes = false) substMap e =
   let binop op (e,e') = op (substituteE ~holes substMap e) (substituteE ~holes substMap e') in
@@ -48,21 +45,21 @@ let substV ?holes:(holes = false) ex substMap =
 
 let rec substitute_cmd ?holes:(holes = false) cmd subst =
   match cmd with
-  | Skip -> Skip
-  | Assume t -> substitute ~holes t subst |> mkAssume
-  | Assign (f,e) ->
+  | Cmd.Skip -> Cmd.Skip
+  | Cmd.Assume t -> substitute ~holes t subst |> Cmd.assume
+  | Cmd.Assign (f,e) ->
      begin match StringMap.find subst f with
-     | Some e' -> failwith @@ Printf.sprintf "Tried to substitute %s for %s but it occurs on the right hand side of the assignment %s" f (Expr.to_string e') (string_of_cmd cmd)
+     | Some e' -> failwith @@ Printf.sprintf "Tried to substitute %s for %s but it occurs on the right hand side of the assignment %s" f (Expr.to_string e') (Cmd.to_string cmd)
      | None ->
-        f %<-% substituteE ~holes subst e
+        Cmd.assign f @@ substituteE ~holes subst e
      end
-  | Seq (c1, c2) ->
-     substitute_cmd ~holes c1 subst %:% substitute_cmd ~holes c2 subst
-  | Select (typ, cs) ->
+  | Cmd.Seq (c1, c2) ->
+     Cmd.seq (substitute_cmd ~holes c1 subst) (substitute_cmd ~holes c2 subst)
+  | Cmd.Select (typ, cs) ->
      List.map cs ~f:(fun (b,c) ->
          substitute ~holes b subst, substitute_cmd ~holes c subst)
-     |> mkSelect typ
-  | Apply _ -> failwith "[Manip.substitute_cmd] Don't know how to substitute into table"
+     |> Cmd.select typ
+  | Cmd.Apply _ -> failwith "[Manip.substitute_cmd] Don't know how to substitute into table"
 
 let rec exact_only t =
   let open Test in
@@ -76,19 +73,13 @@ let rec exact_only t =
 let regularize negs cond misses =
   let open Test in
   match negs with
-  | `NoNegs when cond = True -> cond %&% !%(misses)
+  | `NoNegs when equals cond True -> cond %&% !%(misses)
   | `NoNegs ->  cond
   | `Negs -> cond %&% !%misses
 
-  (* if exact_only cond
-   * then if cond = True
-   *      then !%misses
-   *      else cond &
-   * else failwith "Don't know how to regularize anything but equivalences"  *)
-         
-                
 (* computes weakest pre-condition of condition phi w.r.t command c *)
 let rec wp negs c phi =
+  let open Cmd in
   let open Test in
   match c with
   | Skip -> phi
@@ -177,7 +168,8 @@ let rec fill_holes_test t subst =
   | Le   (a, b)   -> binop (%<=%)  fill_holes_expr a b
   | Eq   (a, b)   -> binop (%=%)   fill_holes_expr a b
 
-let rec fill_holes (c : cmd) subst =
+let rec fill_holes (c : Cmd.t) subst =
+  let open Cmd in
   let rec_select = concatMap ~c:(@)
                      ~f:(fun (cond, act) ->
                        [(fill_holes_test cond subst, fill_holes act subst)]) in
@@ -197,13 +189,14 @@ let rec fill_holes (c : cmd) subst =
   | Select (_,[]) | Skip ->
      c
   | Select (styp, cmds) ->
-     rec_select cmds |> mkSelect styp
+     rec_select cmds |> select styp
   | Apply t
     -> Apply { t with
                actions = List.map t.actions ~f:(fun (n, scope, a) -> (n, scope, fill_holes a subst));
                default = fill_holes t.default subst }
 
-let rec wp_paths negs c phi : (cmd * Test.t) list =
+let rec wp_paths negs c phi : (Cmd.t * Test.t) list =
+  let open Cmd in
   let open Test in
   match c with
   | Skip -> [(c, phi)]
@@ -226,7 +219,7 @@ let rec wp_paths negs c phi : (cmd * Test.t) list =
   | Select (Total, []) -> [(Skip, True)]
   | Select (Total, cmds) ->
      let open List in
-     (cmds >>| fun (t,c) -> mkAssume t %:% c)
+     (cmds >>| fun (t,c) -> assume t %:% c)
      >>= flip (wp_paths negs) phi
 
                   
@@ -236,7 +229,7 @@ let rec wp_paths negs c phi : (cmd * Test.t) list =
      List.fold cmds ~init:([]) ~f:(fun wp_so_far (cond, act) ->
           List.fold (wp_paths negs act phi) ~init:wp_so_far
              ~f:(fun acc (trace, act_wp) ->
-               acc @ [(mkAssume cond %:% trace, cond %&% act_wp)]))
+               acc @ [(assume cond %:% trace, cond %&% act_wp)]))
 
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
@@ -251,14 +244,14 @@ let rec wp_paths negs c phi : (cmd * Test.t) list =
                | `NoNegs ->  True
                | `Negs -> !%(prev_conds)
              in
-             (mkAssume (cond %&% misses) %:% trace, cond %&% misses %&% act_wp) :: acc), prev_conds %+% cond)
+             (assume (cond %&% misses) %:% trace, cond %&% misses %&% act_wp) :: acc), prev_conds %+% cond)
      |> fst
 
   | Apply t ->
      let open List in
-     (t.default :: List.map ~f:(fun (_, sc, a) -> Ast.holify (List.map sc ~f:fst) a) t.actions) >>= flip (wp_paths negs) phi
+     (t.default :: List.map ~f:(fun (_, sc, a) -> Cmd.holify (List.map sc ~f:fst) a) t.actions) >>= flip (wp_paths negs) phi
 
-let bind_action_data (vals : Value.t list) (_, scope, cmd) : cmd =
+let bind_action_data (vals : Value.t list) (_, scope, cmd) : Cmd.t =
   let holes = fsts scope in
   let subst =
     List.fold2 holes vals
@@ -275,7 +268,7 @@ let bind_action_data (vals : Value.t list) (_, scope, cmd) : cmd =
         |> Option.value ~default:"")
        (List.reduce holes ~f:(Printf.sprintf "%s,%s")
         |> Option.value ~default:"")
-       (string_of_cmd cmd)
+       (Cmd.to_string cmd)
      |> failwith
 
 let rec fixup_expr (model : Model.t) (e : Expr.t) : Expr.t =
@@ -312,7 +305,7 @@ let rec fixup_test (model : Model.t) (t : Test.t) : Test.t =
   | Eq (v, w) -> binop Test.(%=%)  (fixup_expr model) v w
   | Le (v, w) -> binop Test.(%<=%) (fixup_expr model) v w
 
-let rec fixup_selects (model : Model.t) (es : (Test.t * cmd) list) =
+let rec fixup_selects (model : Model.t) (es : (Test.t * Cmd.t) list) =
   match es with
   | [] -> []
   | (cond, act)::es' ->
@@ -323,29 +316,27 @@ let rec fixup_selects (model : Model.t) (es : (Test.t * cmd) list) =
      * Printf.printf "  [fixup] replacing %s with %s\n%!" *)
       (* (string_of_cmd act) (string_of_cmd act'); *)
     (cond', act') :: (
-      if cond = cond' && act = act' then
+      if Test.equals cond cond' && Cmd.equals act act' then
         fixup_selects model es'
       else
         (cond, act) :: fixup_selects model es'
     )    
-and fixup (real:cmd) (model : Model.t) : cmd =
+and fixup (real:Cmd.t) (model : Model.t) : Cmd.t =
   (* Printf.printf "FIXUP WITH MODEL: %s\n%!\n" (string_of_map model); *)
+  let open Cmd in
   match real with
   | Skip -> Skip
   | Assign (f, v) -> Assign(f, fixup_expr model v)
   | Assume t -> Assume (fixup_test model t)
   | Seq (p, q) -> Seq (fixup p model, fixup q model)
-  | Select (styp,cmds) -> fixup_selects model cmds |> mkSelect styp
+  | Select (styp,cmds) -> fixup_selects model cmds |> select styp
   | Apply t
     -> Apply {t with
               actions = List.map t.actions ~f:(fun (n, data, a) -> (n, data, fixup a model));
               default = fixup t.default model}
 
-
-
-
-
 let rec action_reads (nm, data, cmd) =
+  let open Cmd in
   let to_set = StringSet.of_list %. fsts in
   let data_s = to_set data in
   match cmd with
@@ -376,7 +367,9 @@ let is_zero = function
   | _ -> false
 
 
-let rec is_a_sequence_of_zero_assignments = function
+let rec is_a_sequence_of_zero_assignments =
+  let open Cmd in
+  function
   | Skip | Assume _ -> true
   | Assign (_, e) -> is_zero e
   | Seq(c1,c2) -> is_a_sequence_of_zero_assignments c1

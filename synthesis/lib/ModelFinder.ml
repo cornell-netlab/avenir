@@ -1,5 +1,4 @@
 open Core
-open Ast
 open Manip
 open VCGen
 open Util
@@ -86,9 +85,9 @@ let make_searcher (params : Parameters.t) (_ : ProfData.t ref) (_ : Problem.t) :
   let schedule = make_schedule {
                      injection = params.injection;
                      hints = params.hints;
-                     hint_type = if params.hint_type = "mask" then
+                     hint_type = if String.(params.hint_type = "mask") then
                                    `NoVals
-                                 else if params.hint_type = "exact"
+                                 else if String.(params.hint_type = "exact")
                                  then
                                    `Vals
                                  else
@@ -116,7 +115,7 @@ let reindex_for_dels problem tbl i =
   |>  List.fold ~init:(Some i)
         ~f:(fun cnt edit ->
           match cnt, edit with
-          | Some n, Del (t,j) when t = tbl ->
+          | Some n, Del (t,j) when String.(t = tbl) ->
              if i = j
              then None
              else Some (n-1)
@@ -139,7 +138,7 @@ let well_formed_adds (params : Parameters.t) (problem : Problem.t) encode_tag =
   let open Test in
   let phys_inst = Problem.phys_edited_instance params problem in
   let phys = Problem.phys problem in
-  tables_of_cmd phys
+  Cmd.tables phys
   |> concatMap ~c:(and_) ~init:(Some True)
        ~f:(fun t ->
          let t_rows = Instance.get_rows phys_inst t in
@@ -158,7 +157,7 @@ let adds_are_reachable params (problem : Problem.t) (opts : opts) fvs encode_tag
   if not opts.reachable_adds then True else
     let phys = Problem.phys problem in
     let in_pkt = Problem.cexs problem |> List.hd_exn |> fst in
-    get_tables_keys phys
+    Cmd.get_tables_keys phys
     |> List.fold
       ~init:True
       ~f:(fun acc (tbl_name,keys) ->
@@ -170,7 +169,7 @@ let adds_are_reachable params (problem : Problem.t) (opts : opts) fvs encode_tag
 let non_empty_adds (problem : Problem.t) =
   let open Test in
   Problem.phys problem
-  |> tables_of_cmd
+  |> Cmd.tables
   |> List.fold ~init:None
        ~f:(fun acc tbl ->
          match acc with
@@ -188,7 +187,7 @@ let single problem (opts : opts) query_holes =
           (if Hole.is_add_row_hole h
               && List.exists (Problem.phys_edits problem)
                    ~f:(fun e ->
-                     Edit.table e = String.chop_prefix_exn h ~prefix:Hole.add_row_prefix
+                     String.(Edit.table e = String.chop_prefix_exn h ~prefix:Hole.add_row_prefix)
                    )
            then
              (Hole(h,sz) %=% Expr.value (0,sz))
@@ -218,8 +217,8 @@ let restrict_mask (opts : opts) query_holes =
 let active_domain_restrict params problem opts query_holes : Test.t =
   let open Test in
   if not opts.domain then True else
-    let ints = (multi_ints_of_cmd (Problem.log_gcl_program params problem))
-               @ (multi_ints_of_cmd (Problem.phys_gcl_program params problem))
+    let ints = (Cmd.multi_vals (Problem.log_gcl_program params problem))
+               @ (Cmd.multi_vals (Problem.phys_gcl_program params problem))
                |> List.dedup_and_sort ~compare:(Stdlib.compare)
                |> List.filter ~f:(fun v -> Bigint.(Value.get_bigint v <> zero && Value.get_bigint v <> one)) in
     let test = List.fold query_holes ~init:True
@@ -241,7 +240,7 @@ let active_domain_restrict params problem opts query_holes : Test.t =
                                  %+% (Hole(h,sz) %=% Expr.value (1,szi)))
                            else False)
                    in
-                   if restr = False then acc else (acc %&% restr)
+                   if Test.equals restr False then acc else (acc %&% restr)
                  )
     in
     (* let () = Printf.printf "\n\n\n\nactive domain restr \n %s\n\n\n\n%!" (string_of_test test) in *)
@@ -250,7 +249,7 @@ let active_domain_restrict params problem opts query_holes : Test.t =
 let no_defaults (params : Parameters.t) opts fvs phys =
   let open Test in
   if not opts.no_defaults then True else
-    List.filter (holes_of_cmd phys)
+    List.filter (Cmd.holes phys)
       ~f:(fun (v,_) ->
         List.for_all fvs ~f:(fun (v',_) ->
                 if List.exists [v'; Hole.add_row_prefix; Hole.delete_row_prefix; Hole.which_act_prefix]
@@ -264,6 +263,7 @@ let no_defaults (params : Parameters.t) opts fvs phys =
 
 let rec construct_model_query opts form fvs cexs in_pkt phys out_pkt =
   let open Test in
+  let open Cmd in
   match form with
   | `Passive ->
      let sub, passive_phys = passify fvs ((*Packet.to_assignment in_pkt %:%*) phys) in
@@ -328,13 +328,13 @@ let compute_vc (params : Parameters.t) (data : ProfData.t ref) (problem : Proble
   let phys = Problem.phys_gcl_holes {params with no_defaults = opts.no_defaults} problem hole_protocol hole_type in
   ProfData.update_time !data.model_holes_time st;
   let st = Time.now () in
-  let fvs = List.(free_vars_of_cmd phys
+  let fvs = List.(Cmd.vars phys
                   |> filter ~f:(fun x -> exists (Problem.fvs problem) ~f:(Stdlib.(=) x))) in
   (* let fvs = problem.fvs in *)
   if params.debug then Printf.printf "Constructing Wps \n%!";
   let wp_list =
     if opts.paths then
-      let phys = Packet.to_assignment in_pkt %:% phys |> CompilerOpts.optimize fvs in
+      let phys = Cmd.(Packet.to_assignment in_pkt %:% phys) |> CompilerOpts.optimize fvs in
       wp_paths `NoNegs phys (Packet.to_test ~fvs out_pkt)
     else
       (* let (sub, _(\*passive_phys*\), good_N, _) = good_execs fvs phys in *)
@@ -357,15 +357,15 @@ let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts) (wp_li
   let tests =
     List.filter_map wp_list
       ~f:(fun (cmd, spec) ->
-        if spec = False || not (Test.has_hole spec) then None else
+        if Test.equals spec False || not (Test.has_hole spec) then None else
 
           let () = if params.debug then
-                     Printf.printf "Checking path with hole!\n  %s\n\n%!" (string_of_cmd cmd) in
+                     Printf.printf "Checking path with hole!\n  %s\n\n%!" (Cmd.to_string cmd) in
 
           let () = if false then
                      Printf.printf"TEST:\n%s\n--------\n\n%!" (Test.to_string spec) in
 
-          let wf_holes = List.fold (Problem.phys problem |> get_tables_actsizes) ~init:True
+          let wf_holes = List.fold (Problem.phys problem |> Cmd.get_tables_actsizes) ~init:True
                            ~f:(fun acc (tbl,num_acts) ->
                              acc %&%
                                (Hole(Hole.which_act_hole_name tbl,max (log2 num_acts) 1)
@@ -434,11 +434,12 @@ let compute_queries (params : Parameters.t) (data : ProfData.t ref) (problem : P
   queries
 
 let holes_for_table table phys =
-  match get_schema_of_table table phys with
+  match Cmd.get_schema_of_table table phys with
   | None -> failwith @@ Printf.sprintf "couldn't find schema for %s\n%!" table
   | Some (ks, acts, _) ->
-     List.bind ks ~f:(fun (k,_,v_opt) ->
-         match v_opt with
+     List.bind ks ~f:(fun key ->
+         let k = Cmd.Key.var_name key in
+         match Cmd.Key.value key with
          | Some _ -> []
          | None ->
             let lo,hi = Hole.match_holes_range table k in
@@ -450,7 +451,7 @@ let holes_for_table table phys =
              params >>| fst )
 
 let holes_for_other_actions table phys actId =
-  match get_schema_of_table table phys with
+  match Cmd.get_schema_of_table table phys with
   | None -> failwith @@ Printf.sprintf "couldnt find schema for %s\n%!" table
   | Some (_, acts, _) ->
      List.foldi acts ~init:[]
@@ -498,7 +499,7 @@ let rec search (params : Parameters.t) data problem t : ((Model.t * t) option) =
               Printf.printf "\ncurrent model is %s\n%!" (Model.to_string raw_model);
               Printf.printf "\nmodel_space is %s \n%!" (Test.to_string @@ Problem.model_space problem);
               Printf.printf "\nmodel has already been seen and is allowed? %s"
-                (if Problem.model_space problem |> fixup_test raw_model = True
+                (if Problem.model_space problem |> fixup_test raw_model |> Test.equals True
                  then "yes! thats a contradiction\n%!"
                  else "no, but somehow we synthesized it... a contradiction\n%!"
                 );

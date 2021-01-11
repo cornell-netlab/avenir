@@ -1,19 +1,18 @@
 open Core
-open Ast
 open Manip
 open Prover
 open Parameters
 open Semantics
 open VCGen
 
-let rec one_some (table: string) (lst : ((Test.t * cmd) list)) : Ast.cmd option =
+let rec one_some (table: string) (lst : ((Test.t * Cmd.t) list)) : Cmd.t option =
   let processed = List.map lst ~f:(fun (b, c) -> (b, truncated table c)) in
-  let elim = List.filter processed ~f:(fun (_,c) -> if c = None then false else true) in
+  let elim = List.filter processed ~f:(fun (_,c) -> Option.is_some c) in
   if (List.is_empty elim) then None else match elim with
     | (b, Some c)::[] -> Some (Seq (Assume b, c))
     | _ -> failwith "not well formed"
 
-and truncated (table : string) (program : Ast.cmd) : Ast.cmd option =
+and truncated (table : string) (program : Cmd.t) : Cmd.t option =
   match program with
   | Skip
   | Assign _
@@ -23,7 +22,7 @@ and truncated (table : string) (program : Ast.cmd) : Ast.cmd option =
      | None -> truncated table c1
      | Some c2' -> Some (Seq (c1, c2')))
   | Select (_, lst) -> one_some table lst
-  | Apply t -> if t.name = table then Some Skip else None
+  | Apply t -> if String.(t.name = table) then Some Skip else None
 
 
 let is_reachable encode_tag params problem fvs in_pkt tbl_name keys =
@@ -82,7 +81,7 @@ let make_cex params problem (x : Packet.t) =
      then begin
          if params.debug then
            Printf.printf "-------------------------------------------\n%s \n???====?=====????\n %s\n-------------------------------------\n%!"
-             (string_of_cmd log) (string_of_cmd phys);
+             (Cmd.to_string log) (Cmd.to_string phys);
 
          Printf.printf "LOG :%s -> %s\n" (Packet.to_string in_pkt) (Packet.to_string log_pkt);
          Printf.printf "PHYS:%s -> %s\n" (Packet.to_string in_pkt) (Packet.to_string phys_pkt)

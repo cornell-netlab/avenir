@@ -1,5 +1,4 @@
 open Core
-open Ast
 
 
 let add_row_prefix = "?AddRowTo"
@@ -59,9 +58,10 @@ let match_holes encode_tag tbl x sz =
 let match_holes_table encode_tag tbl keys  =
   let open Test in
   List.fold keys ~init:True
-    ~f:(fun acc (x,sz,v_opt) ->
-      acc %&% match v_opt with
-              | None -> match_holes encode_tag tbl x sz
+    ~f:(fun acc k ->
+      acc %&% match Cmd.Key.value k with
+              | None -> let (x, sz) = Cmd.Key.to_sized k in
+                        match_holes encode_tag tbl x sz
               | Some _ -> True
     )
 
@@ -72,8 +72,7 @@ let action_data_prefix tbl i = Printf.sprintf "%s_%d_" tbl i
 let action_data tbl i v sz = Printf.sprintf "%s%s_%d" (action_data_prefix tbl i) v sz
 let action_data_hole tbl i v sz = Expr.Hole(action_data tbl i v sz, sz)
 
-
-let table_hole encode_tag (keys: (string * size * Value.t option) list) tbl actID actSize =
+let table_hole encode_tag (keys: Cmd.Key.t list) tbl actID actSize =
   let open Test in
   match_holes_table encode_tag tbl keys
   %&% (add_row_hole tbl %=% Expr.value (1,1))

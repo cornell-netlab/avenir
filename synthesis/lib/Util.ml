@@ -378,3 +378,9 @@ let rec dedup xs =
   | x::xs ->
      let xs' = remove_dups x xs in
      x :: dedup xs'
+
+let opt_equals ~f o1 o2 =
+  match o1, o2 with
+  | None, None -> true
+  | Some x1, Some x2 -> f x1 x2
+  | _, _ -> false

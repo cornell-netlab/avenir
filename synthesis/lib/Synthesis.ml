@@ -1,5 +1,4 @@
 open Core
-open Ast
 open Semantics
 open Prover
 open Util
@@ -150,18 +149,15 @@ and try_cache params data problem =
                     do_slice = false  (* dont slice.. I don't remember why not *)
        } in
      cegis_math params data problem
+
   | Some ps ->
      Log.edit_cache_hit params (Problem.phys problem) ps;
-
      (* fastCX's preconditions may be violated, so make sure its turned off*)
      let params_nofastcx = {params with fastcx = false} in
-
      (* add guessed edits to problem*)
      let problem_with_cache_guess = Problem.replace_phys_edits problem ps in
-
      (* try and get a CX to see if the problem works *)
      let did_cache_work = get_cex params_nofastcx data problem_with_cache_guess in
-
      match did_cache_work with
      | None ->
         Interactive.pause params.interactive ~prompt:"Caching succeeded";

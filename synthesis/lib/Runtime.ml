@@ -1,5 +1,4 @@
 open Core
-open Ast
 
 let action_data_of_string ?sep:(sep=';') (data_str : string) : Row.action_data =
   String.split data_str ~on:sep
@@ -38,7 +37,7 @@ let matches_of_string ?sep:(sep=';') (keys : (string * int) list) (data_str : st
               | Some (vals, sz) ->
                  let size = int_of_string sz in
                  let range = String.strip
-                               ~drop:(fun c -> c = '[' || c = ']') vals in
+                               ~drop:(fun c -> Char.(c = '[') || Char.(c = ']')) vals in
                  begin match String.lsplit2 range ~on:':' with
                  | Some (hi, lo) ->
                     Match.between_ key
@@ -101,10 +100,10 @@ let parse program filename : Edit.t list =
   let make_edit (data : string list) : Edit.t =
     match data with
     | ["ADD"; tbl_nm; matches; action_data; action] ->
-       begin match get_schema_of_table tbl_nm program with
+       begin match Cmd.get_schema_of_table tbl_nm program with
        | None -> failwith @@ Printf.sprintf "unrecognized table %s" tbl_nm
        | Some (keys, _,_) ->
-          let keys = List.map keys ~f:(fun (k,sz,_) -> (k,sz)) in
+          let keys = List.map keys ~f:(Cmd.Key.to_sized) in
           Add (tbl_nm,
                (matches_of_string keys matches,
                 action_data_of_string action_data,
@@ -130,10 +129,10 @@ let parse_bmv2_entry cmd string : Edit.t =
   match String.split string ~on:' ' with
   | "table_add" :: tbl_name :: action_name :: cont ->
      let (keys, actions, _) =
-       get_schema_of_table tbl_name cmd
+       Cmd.get_schema_of_table tbl_name cmd
        |> Option.value_exn ~message:(Printf.sprintf "Couldn't find table %s" tbl_name)
      in
-     let keys = List.map keys ~f:(fun (k,sz,_) -> (k,sz)) in
+     let keys = List.map keys ~f:(Cmd.Key.to_sized) in
      let action_id,(_,params,_) =
        List.findi actions ~f:(fun _ (name,_,_) -> String.(name = action_name))
        |> Option.value_exn ~message:(Printf.sprintf "Couldn't find action %s in %s" action_name tbl_name)

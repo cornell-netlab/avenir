@@ -1,5 +1,4 @@
 open Core
-open Ast
 open Util
 
 let freshen v sz i = (v ^ "$" ^ string_of_int i, sz)
@@ -11,7 +10,7 @@ let rec indexVars_expr e (sub : ((int * int) StringMap.t)) =
     let (e2', sub2) = indexVars_expr e2 sub in
     f e1' e2', StringMap.merge sub1 sub2
                  ~f:(fun ~key -> function
-                   | `Both (i1, i2) -> if i1 = i2
+                   | `Both (i1, i2) -> if fst i1 = fst i2 && snd i1 = snd i2
                                        then Some i1
                                        else failwith @@ Printf.sprintf "collision on %s: (%d,%d) <> (%d,%d)"
                                                           key (fst i1) (snd i1) (fst i2) (snd i2)
@@ -63,7 +62,7 @@ let rec indexVars b sub =
 let inits fvs sub =
   StringMap.fold sub ~init:[]
     ~f:(fun ~key:v ~data:(_,sz) vs ->
-      if List.exists fvs ~f:(fun (x,_) -> x = v)
+      if List.exists fvs ~f:(fun (x,_) -> String.(x = v))
       then (freshen v sz 0) :: vs
       else vs)
   |> List.dedup_and_sort ~compare:(fun (u,_) (v,_) -> Stdlib.compare u v)
@@ -106,7 +105,7 @@ let rec apply_init_test t =
 let finals fvs sub =
   StringMap.fold sub ~init:[]
     ~f:(fun ~key:v ~data:(i,sz) vs ->
-      if List.exists fvs ~f:(fun (x,_) -> x = v)
+      if List.exists fvs ~f:(fun (x,_) -> String.(x = v))
       then (freshen v sz i) :: vs
       else vs)
   |> List.sort ~compare:(fun (u,_) (v,_) -> Stdlib.compare u v)
@@ -194,6 +193,7 @@ let rec prepend_test pfx b =
   | Iff (b1,b2) -> prepend_test pfx b1 %<=>% prepend_test pfx b2
 
 let rec prepend pfx c =
+  let open Cmd in
   match c with
   | Skip -> Skip
   | Assign(f,e) -> Assign(prepend_str pfx f, prepend_expr pfx e)
@@ -201,15 +201,16 @@ let rec prepend pfx c =
   | Seq(c1,c2) -> prepend pfx c1 %:% prepend pfx c2
   | Select(typ, cs) ->
      List.map cs ~f:(fun (t,c) -> (prepend_test pfx t, prepend pfx c))
-     |> mkSelect typ
+     |> select typ
   | Apply t ->
      Apply {name = prepend_str pfx t.name;
-            keys = List.map t.keys ~f:(fun (k,sz,v_opt) -> (prepend_str pfx k, sz,v_opt));
+            keys = List.map t.keys ~f:(Key.str_map ~f:(prepend_str pfx));
             actions = List.map t.actions ~f:(fun (n, scope, act) -> (n, List.map scope ~f:(fun (x,sz) -> (prepend_str pfx x, sz)), prepend pfx act));
             default = prepend pfx t.default}
 
-let rec passify_aux sub c : ((int * int) StringMap.t * cmd) =
+let rec passify_aux sub c : ((int * int) StringMap.t * Cmd.t) =
   let open Test in
+  let open Cmd in
   match c with
   | Skip -> (sub, Skip)
   | Assume b ->
@@ -260,7 +261,7 @@ let rec passify_aux sub c : ((int * int) StringMap.t * cmd) =
            Some (t', c' %:% rc)
          )
      in
-     (merged_subst, mkSelect typ ss')
+     (merged_subst, select typ ss')
 
   | Apply _ ->
      failwith "Cannot passify (yet) table applications"
@@ -276,6 +277,7 @@ let passify fvs c =
 
 let rec good_wp c =
   let open Test in
+  let open Cmd in
   match c with
   | Skip -> True
   | Assume b -> b
@@ -297,6 +299,7 @@ let rec good_wp c =
 
 let rec bad_wp c =
   let open Test in
+  let open Cmd in
   match c with
   | Skip -> False
   | Assume _ -> False
@@ -330,18 +333,13 @@ let good_execs fvs c =
 
 
 let equivalent ?neg:(neg = Test.True) (data : ProfData.t ref) eq_fvs l p =
-  (* Printf.printf "assuming %s\n%!" (string_of_test neg); *)
+  let open Cmd in
   let l = Assume neg %:% l in
   let p = Assume neg %:% p in
   let phys_prefix = "phys_" in
   let p' = prepend phys_prefix p in
   let st = Time.now () in
-  let fvs =
-    (* free_of_cmd `Hole l
-     * @ *) free_of_cmd `Var l
-    (* @ free_of_cmd `Hole p *)
-    @ free_of_cmd `Var p
-  in
+  let fvs = vars l @ vars p in
   ProfData.update_time !data.prefixing_time st;
   let prefix_list =  List.map ~f:(fun (x,sz) -> (phys_prefix ^ x, sz)) in
   let fvs_p = prefix_list fvs in

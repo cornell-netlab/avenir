@@ -1,6 +1,5 @@
 open Core
 open Util
-open Ast
 open Petr4
 open Types
 open Manip
@@ -442,7 +441,7 @@ and encode_expression_to_value_with_width width (type_ctx : Declaration.t list) 
      end
   | _ -> unimplemented (ctor_name_expression e)
 
-and get_width (type_ctx : Declaration.t list) (e : Expression.t) : size =
+and get_width (type_ctx : Declaration.t list) (e : Expression.t) : int =
   let module E= Expression in
   match snd e with
     | E.True -> 1
@@ -600,13 +599,13 @@ let get_return_value =
 let rec dispatch prog ctx type_ctx rv members =
   match members with
   | [] -> failwith "[RuntimeException] Tried to Dispatch an empty list of names"
-  | [(_,"mark_to_drop")] -> `Motley ("standard_metadata.egress_spec" %<-% Expr.value (0,9), false, false)
+  | [(_,"mark_to_drop")] -> `Motley Cmd.("standard_metadata.egress_spec" %<-% Expr.value (0,9), false, false)
   | [(_,"clone3")] -> `Motley (Skip, false, false) (* TODO: Anything we can do with this?  Seems out of scope for now... *)
 
-  | _ when Option.map (List.last members) ~f:snd = Some "setInvalid" ->
-    `Motley ((validity_bit members) %<-% Expr.value (0,1), false, false)
-  | _ when Option.map (List.last members) ~f:snd = Some "setValid" ->
-    `Motley ((validity_bit members) %<-% Expr.value (1,1), false, false)
+  | _ when opt_equals ~f:String.(=) (Option.map (List.last members) ~f:snd) (Some "setInvalid") ->
+    `Motley Cmd.((validity_bit members) %<-% Expr.value (0,1), false, false)
+  | _ when opt_equals ~f:String.(=) (Option.map (List.last members) ~f:snd) (Some "setValid") ->
+    `Motley Cmd.((validity_bit members) %<-% Expr.value (1,1), false, false)
 
 
   | [member] ->
@@ -619,7 +618,7 @@ let rec dispatch prog ctx type_ctx rv members =
     let open Declaration in
     match lookup_exn prog ctx member with
     | (_, Table _ ) as tbl ->
-      if List.map ~f:snd members' = ["apply"] then
+      if List.equal String.(=) (List.map ~f:snd members') ["apply"] then
          `Petr4 tbl
       else
         "[UndefinedMethod] Tied to call methods " ^ string_of_memberlist members ^ "() on a table" |> failwith
@@ -629,8 +628,9 @@ let rec dispatch prog ctx type_ctx rv members =
 (* Returns a cmd and two bools. These bits correspond to the return and exit bit's respectively.
 False means that the command does not flip the bit, True means the cmd may or may not flip the bit. 
 If the bit is flipped, we have to either return or exit, and so we must insert an if to ensure this happens. *)
-and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) ((info, stmt) : Statement.t) : cmd * bool * bool =
+and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) ((info, stmt) : Statement.t) : Cmd.t * bool * bool =
   let open Statement in
+  let open Cmd in
   let unimplemented name =
     failwith ("[Unimplemented Statement " ^ name ^"] at " ^ Petr4.Info.to_string info)
   in
@@ -700,21 +700,21 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t l
      in
      let expr_to_test = encode_expression_to_test type_ctx cond in
      let tr_stmt, tr_rb, tr_eb = encode_statement prog ctx type_ctx rv tru in
-     mkOrdered ([ expr_to_test, tr_stmt] @ fls_case), fls_rb || tr_rb, fls_eb || tr_eb
+     ordered ([ expr_to_test, tr_stmt] @ fls_case), fls_rb || tr_rb, fls_eb || tr_eb
   | BlockStatement {block} ->
      encode_block3 prog ctx type_ctx rv block
   | Exit ->
-     mkAssn exit_bit  (Expr.value (1, 1)), false, true
+     assign exit_bit  (Expr.value (1, 1)), false, true
   | EmptyStatement ->
      Skip, false, false
   | Return {expr} ->
      (match expr with
       | None ->
-         mkAssn (return_bit rv) (Expr.value (1, 1)), true, false
+         assign (return_bit rv) (Expr.value (1, 1)), true, false
       | _ -> unimplemented "Return")
   | Switch {expr; cases} ->
      let tbl_apply, cases = encode_switch prog ctx type_ctx expr rv cases in
-     tbl_apply %:% mkOrdered cases, true, true
+     tbl_apply %:% ordered cases, true, true
   | DeclarationStatement _ ->
      unimplemented "DeclarationStatement"
 
@@ -732,14 +732,15 @@ and dispatch_direct_app type_ctx prog ((_, ident) : Type.t) (args : Argument.t l
 
 and dispatch_control (type_ctx : Declaration.t list) (Program(top_decls) as prog : program) (n : name) (args : Argument.t list) =
   let open Declaration in
+  let open Cmd in
   let ident = name_string n in
-  match List.find top_decls ~f:(fun d -> safe_name d = Some ident) with
+  match List.find top_decls ~f:(fun d -> opt_equals ~f:String.(=) (safe_name d) (Some ident)) with
   | None -> failwith ("Could not find module " ^ ident)
   | Some (_, Control c) ->
     (match List.zip (c.params) args with
       | Ok param_args ->
         let rv = get_return_value () in
-        let assign_rv = mkAssn (return_bit rv) (Expr.value (0, 1)) in
+        let assign_rv = assign (return_bit rv) (Expr.value (0, 1)) in
         let new_typ_ctx = get_type_decls top_decls @ type_ctx in
         let b = List.concat_map param_args ~f:(assign_param new_typ_ctx) in
         let new_typ_ctx2 = List.map c.params ~f:(update_typ_ctx_from_param new_typ_ctx) @ new_typ_ctx in
@@ -768,7 +769,7 @@ and get_rel_variables (type_ctx : Declaration.t list) (param : Parameter.t) =
                     ~f:(fun (_, d) ->
                       match d with
                       | Struct {name;_} ->
-                         snd name = name_string(type_name (snd param).typ)
+                         String.(snd name = name_string(type_name (snd param).typ))
                       | _ -> false
                     )
   in
@@ -791,8 +792,9 @@ and assign_param (type_ctx : Declaration.t list) (param_arg : Parameter.t * Argu
         | None -> val_assgn
         | Some (_, Out) -> []
         | Some (_, InOut) ->
+           let open Cmd in
           let n = dispatch_list value in
-          mkAssn(validity_bit_no_removal [param.variable]) (Var(validity_bit_no_removal n, 1)) :: val_assgn
+          assign (validity_bit_no_removal [param.variable]) (Var(validity_bit_no_removal n, 1)) :: val_assgn
       end
     | _ -> failwith "Unhandled argument"
 
@@ -803,7 +805,7 @@ and update_typ_ctx_from_param (type_ctx : Declaration.t list) (param : Parameter
   let p = snd param in
   let v = snd p.variable in
   (* Printf.printf "Adding %s to context\n" v; *)
-  let decl = List.find type_ctx ~f:(fun d -> is_some (safe_name d) && safe_name d = typ_safe_name (snd param).typ) in
+  let decl = List.find type_ctx ~f:(fun d -> is_some (safe_name d) && opt_equals ~f:String.(=) (safe_name d) (typ_safe_name (snd param).typ)) in
   match decl with
   | Some (_, d) -> M v, d
   | None ->
@@ -830,10 +832,11 @@ and return_args (type_ctx : Declaration.t list) (param_arg : Parameter.t * Argum
         | None -> []
         | Some (_, Out) -> []
         | Some (_, InOut) ->
-          let n = dispatch_list value in
-          let flds = get_rel_variables type_ctx (fst param_arg) in
-          let val_assgn = List.concat_map flds ~f:(assign_fields type_ctx param value) in
-          mkAssn (validity_bit_no_removal n) (Var(validity_bit_no_removal [param.variable], 1)) :: val_assgn
+           let open Cmd in
+           let n = dispatch_list value in
+           let flds = get_rel_variables type_ctx (fst param_arg) in
+           let val_assgn = List.concat_map flds ~f:(assign_fields type_ctx param value) in
+           assign (validity_bit_no_removal n) (Var(validity_bit_no_removal [param.variable], 1)) :: val_assgn
       end
     | _ -> failwith "Unhandled argument"
 
@@ -844,13 +847,14 @@ and assign_fields type_ctx param value fld =
     | (i, Name (BareName (ni,n))) -> (i, Name (BareName (ni,n ^ f)))
     | _ -> failwith "HERE" in
   let flds = get_all_fields type_ctx "" fld in
-  List.map flds ~f:(fun f -> mkAssn (snd param.variable ^ f)
-                                    (encode_expression_to_value type_ctx (add_to_expr f value)))
+  List.map flds ~f:(fun f -> Cmd.assign
+                               (snd param.variable ^ f)
+                               (encode_expression_to_value type_ctx (add_to_expr f value)))
 
 and get_all_fields type_ctx h (fld : Declaration.field)  =
   let open Declaration in
   let decl = List.find type_ctx
-                    ~f:(fun d -> is_some (safe_name d) && safe_name d = typ_safe_name (snd fld).typ) in
+                    ~f:(fun d -> is_some (safe_name d) && opt_equals ~f:String.(=) (safe_name d) (typ_safe_name (snd fld).typ)) in
   match decl with
     | Some (_, Header {fields;_})
     | Some (_, Struct {fields;_}) ->
@@ -865,36 +869,37 @@ and encode_control prog (ctx : Declaration.t list) (type_ctx : Declaration.t lis
 and encode_control3 prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv:int) ( body : Block.t ) =
   encode_block3 prog ctx type_ctx rv body
 
-and encode_block (prog : program) (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) (b : Block.t) : cmd =
+and encode_block (prog : program) (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) (b : Block.t) : Cmd.t =
   encode_action prog ctx type_ctx rv b
 
-and encode_block3 (prog : program) (ctx : Declaration.t list) (type_ctx :  Declaration.t list) (rv : int) (b : Block.t) : cmd * bool * bool =
+and encode_block3 (prog : program) (ctx : Declaration.t list) (type_ctx :  Declaration.t list) (rv : int) (b : Block.t) : Cmd.t * bool * bool =
   encode_action3 prog ctx type_ctx rv b
 
-and encode_action prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv:int) ( b : Block.t ) : cmd =
+and encode_action prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv:int) ( b : Block.t ) : Cmd.t =
   fst3 (encode_action3 prog ctx type_ctx rv b)
 
 (** Takes a block representing an action *)
-and encode_action3 prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv:int) ( (_,act) : Block.t ) : cmd * bool * bool =
+and encode_action3 prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv:int) ( (_,act) : Block.t ) : Cmd.t * bool * bool =
   let open Block in
+  let open Cmd in
   let (c, rb, eb) =
     List.fold act.statements ~init:(Skip, false, false)
       ~f:(fun (rst, in_rb, in_eb) stmt ->
         let open Test in
         let tstmt, ret_rb, ret_eb = encode_statement prog ctx type_ctx rv stmt in
         let tstmt2 = if in_rb
-                     then mkOrdered [ eq (Var(return_bit rv, 1)) (Expr.value (0, 1)), tstmt
+                     then ordered [ eq (Var(return_bit rv, 1)) (Expr.value (0, 1)), tstmt
                                     ; True , Skip ]
                      else tstmt in
         let tstmt3 = if in_eb
-                     then mkOrdered [ eq (Var(exit_bit, 1)) (Expr.value (0, 1)), tstmt2
+                     then ordered [ eq (Var(exit_bit, 1)) (Expr.value (0, 1)), tstmt2
                                     ; True, Skip ]
                      else tstmt in
         (rst %:% tstmt3, ret_rb, ret_eb))
   in
   c, rb, eb
 
-and encode_switch prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : Expression.t) (rv : int) ( cases : Statement.switch_case list) : cmd * ((Test.t * cmd) list) =
+and encode_switch prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : Expression.t) (rv : int) ( cases : Statement.switch_case list) : Cmd.t * ((Test.t * Cmd.t) list) =
   let tbl, e, acs = encode_switch_expr prog ctx type_ctx rv expr in
   let rec last_is_only_default =
     let open Statement in
@@ -911,14 +916,14 @@ and encode_switch prog (ctx : Declaration.t list) (type_ctx : Declaration.t list
   tbl,
   (List.filter_map cases ~f:(encode_switch_case prog ctx type_ctx e acs rv))
 
-and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) (e : Expression.t) : cmd * Expr.t * Table.action_ref list =
+and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) (e : Expression.t) : Cmd.t * Expr.t * Table.action_ref list =
   let dispList = dispatch_list e in
   match dispList with
   | [] -> failwith "[RuntimeException] Tried to encode an empty list of names"
   | table :: _->
      let num_disp = List.length dispList in
      let action = List.nth_exn dispList (num_disp - 1) in
-     if snd action = "action_run" then
+     if String.(snd action = "action_run") then
        begin
          (* Printf.printf "Looking for table %s in switch\n" (snd table); *)
          let open Declaration in
@@ -942,7 +947,7 @@ and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t
 
 and encode_switch_case prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : Expr.t)
                       (ts : Table.action_ref list) (rv : int)
-                      (case : Statement.switch_case) : ((Test.t * cmd) option) =
+                      (case : Statement.switch_case) : ((Test.t * Cmd.t) option) =
   let open Statement in
   let c = snd case in
   match c with
@@ -950,7 +955,7 @@ and encode_switch_case prog (ctx : Declaration.t list) (type_ctx : Declaration.t
      begin match snd label with
      | Default -> Some (True, encode_block prog ctx type_ctx rv code)
      | Name lbl_name ->
-        let act_i = List.findi ts ~f:(fun _ a -> name_string (snd a).name = snd lbl_name) in
+        let act_i = List.findi ts ~f:(fun _ a -> String.(name_string (snd a).name = snd lbl_name)) in
         let block = encode_block prog ctx type_ctx rv code in
         begin match act_i with
         | Some (i, _) ->
@@ -966,13 +971,14 @@ and encode_switch_case prog (ctx : Declaration.t list) (type_ctx : Declaration.t
      end
 
 and assign_constants (type_ctx : Declaration.t list) (decl : Declaration.t list) =
+  let open Cmd in
   let es = List.filter_map decl
               ~f:(fun t -> match t with
                               | (_, Constant { name = n; typ = t; value = e;_}) ->
                                   let w = lookup_type_width_exn type_ctx t in
-                                  Some(mkAssn (snd n) (encode_expression_to_value_with_width w type_ctx e))
+                                  Some(assign (snd n) (encode_expression_to_value_with_width w type_ctx e))
                               | _ -> None ) in
-  List.fold es ~f:mkSeq ~init:Skip
+  List.fold es ~f:seq ~init:Skip
 
 and gather_constants (type_ctx : Declaration.t list) (decl : Declaration.t list) =
   let es = List.filter_map decl
@@ -988,7 +994,7 @@ and get_ingress_egress_names (decls : Declaration.t list) : (string * string) op
       begin match d with
       | Instantiation {args;name;_}
         ->
-         if (snd name = "main")
+         if String.(snd name = "main")
          then
            if List.length args < 4
            then failwith "main has unexpected type, expecting V1Switch(<Parser>,<Checksum Verification>,<Ingress>,<Egress>,<ChecksumComputation>, <Deparser>)"
@@ -1031,15 +1037,16 @@ and get_ingress_egress_names (decls : Declaration.t list) : (string * string) op
       end
     )
 
-and encode_program (Program(top_decls) as prog : program ) =
+and encode_program (Program(top_decls) as prog : program) =
+  let open Cmd in
   let type_cxt = get_type_decls top_decls in
   match get_ingress_egress_names top_decls with
   | Some (ingress_name, egress_name) ->
      sequence [
-         mkAssume (Test.(Var("standard_metadata.egress_spec",9) %=% Expr.value (0,9)));
+         assume (Test.(Var("standard_metadata.egress_spec",9) %=% Expr.value (0,9)));
          encode_pipeline type_cxt prog ingress_name;
          "standard_metadata.egress_port" %<-% Var("standard_metadata.egress_spec", 9);
-         mkOrdered [
+         ordered [
              Test.(Var("standard_metadata.egress_spec", 9) %<>% Expr.value (0, 9)),
              sequence [
                  encode_pipeline type_cxt prog egress_name
@@ -1051,16 +1058,17 @@ and encode_program (Program(top_decls) as prog : program ) =
 
 and encode_pipeline (type_cxt : Declaration.t list) (Program(top_decls) as prog:program ) (pn : string) =
   let open Declaration in
+  let open Cmd in
   match List.find top_decls ~f:(fun d -> match snd d with
                                          | Control{name;_} ->
                                             (* Printf.printf "%s =?= %s\n%!" (snd name) pn; *)
-                                            snd name = pn
+                                            String.(snd name = pn)
                                          | _ -> false)
   with
   | None -> failwith ("Could not find control module " ^ pn)
   | Some (_, Control c) ->
     let rv = get_return_value () in
-    let assign_rv = mkAssn (return_bit rv) (Expr.value (0, 1)) in
+    let assign_rv = assign (return_bit rv) (Expr.value (0, 1)) in
     let type_cxt2 = List.map c.params ~f:(update_typ_ctx_from_param type_cxt) @ type_cxt in
     (* let _ = printf "type_cxt\n%s\n" (Sexp.to_string ([%sexp_of: Declaration.t list] type_cxt)) in *)
     (* let assign_consts = assign_constants type_cxt2 top_decls in *)
@@ -1068,8 +1076,9 @@ and encode_pipeline (type_cxt : Declaration.t list) (Program(top_decls) as prog:
     replace_consts consts (assign_rv %:% encode_control prog c.locals type_cxt2 rv c.apply)
   | Some _ -> failwith "Found a module called MyIngress, but it wasn't a control module"
  
-and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) (name : P4String.t) (props : Table.property list) : cmd =
+and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (rv : int) (name : P4String.t) (props : Table.property list) : Cmd.t =
   let open Table in
+  let open Cmd in
   let p4keys, p4actions, p4customs = List.fold_left props ~init:([], [], [])
       ~f:(fun (acc_keys, acc_actions, acc_customs) prop ->
           match snd prop with
@@ -1080,7 +1089,7 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
          ) in
   let str_keys = List.map p4keys ~f:(fun k -> let kn = dispatch_name (snd k).key in
                                               (* Printf.printf "Getting key?\n"; *)
-                                              (kn, lookup_field_width_exn type_ctx kn, None)) in
+                                              Key.make (kn, lookup_field_width_exn type_ctx kn)) in
 
   let action_run_size = log2 (List.length p4actions + 1) in
 
@@ -1091,7 +1100,7 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
     let action_data = List.map ad ~f:(fun (_,p) -> Parameter.(p.variable, p.typ)) in
     (*let action_data_names = List.map action_data ~f:fst in*)
     (* Set up an action run variable so we can use it to figure out which action ran in switch statements *)
-    let set_action_run = mkAssn (snd name ^ action_run_suffix) (Expr.value (i + 1, action_run_size)) in
+    let set_action_run = assign (snd name ^ action_run_suffix) (Expr.value (i + 1, action_run_size)) in
     let add_tctx = List.map ad ~f:(update_typ_ctx_from_param type_ctx) in 
     let type_ctx2 = add_tctx @ type_ctx in
     let out = name_string a.name
@@ -1103,7 +1112,7 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
   let action_cmds = List.mapi p4actions ~f:lookup_and_encode_action in
 
   let def_act = List.find_map p4customs
-        ~f:(fun (n, e) -> if snd n = "default_action" then Some e else None) in
+        ~f:(fun (n, e) -> if String.(snd n = "default_action") then Some e else None) in
   let enc_def_act = match def_act with
                       | Some da ->
                         let da_name = string_of_memberlist (dispatch_list da) in
@@ -1113,14 +1122,14 @@ and encode_table prog (ctx : Declaration.t list) (type_ctx : Declaration.t list)
                         let type_ctx2 = add_tctx @ type_ctx in
                         let args = functioncall_args type_ctx da in
                         let bind = List.map (List.zip_exn action_data args)
-                                   ~f:(fun ((_, n), a) -> mkAssn n a)
+                                   ~f:(fun ((_, n), a) -> assign n a)
                                    |> List.fold ~init:Skip ~f:(%:%)
                         in
                         bind %:% encode_action prog ctx type_ctx2 rv def_act_body(* ~action_data*)
                       | None -> Skip
   in
 
-  let init_action_run = mkAssn (snd name ^ action_run_suffix) (Expr.value (0, action_run_size)) in
+  let init_action_run = assign (snd name ^ action_run_suffix) (Expr.value (0, action_run_size)) in
 
   init_action_run %:% Apply { name = snd name; keys = str_keys; actions =  action_cmds; default =  enc_def_act }
 
@@ -1132,7 +1141,7 @@ and functioncall_args type_ctx (fc : Expression.t) =
                                | _ -> failwith "functioncall_args: bad arg")
   | _ -> []
 
-and replace_consts (consts : (string * Expr.t)  list) (prog : cmd) =
+and replace_consts (consts : (string * Expr.t)  list) (prog : Cmd.t) =
   match prog with
   | Skip -> Skip
   | Assign(v, e) -> Assign(v, replace_consts_expr consts e)
@@ -1150,7 +1159,7 @@ and replace_consts_expr (consts : (string * Expr.t)  list) (e : Expr.t) =
   match e with
   | Value v -> Value v
   | Var(v, w) ->
-    begin match List.find consts ~f:(fun (n, _) -> n = v) with
+    begin match List.find consts ~f:(fun (n, _) -> String.(n = v)) with
     | Some (_, e) -> e
     | None -> Var(v, w)
     end
@@ -1175,7 +1184,7 @@ and replace_consts_test (consts : (string * Expr.t) list) (t : Test.t) =
 let read_lines filename = In_channel.read_lines filename
 
 
-let apply_model_from_file (c : cmd) (model_file : string) : cmd =
+let apply_model_from_file (c : Cmd.t) (model_file : string) : Cmd.t =
   let lines = read_lines model_file in
   let parse_line l =
     let words = String.split_on_chars l ~on:[' '] in
@@ -1234,7 +1243,8 @@ let rec rewrite_test (m : (string * int) StringMap.t) (t : Test.t) : Test.t =
   | Neg (t1) -> !%(rewrite_test m t1)
 
 
-let rec rewrite (m : (string * int) StringMap.t) (c : cmd) : cmd =
+let rec rewrite (m : (string * int) StringMap.t) (c : Cmd.t) : Cmd.t =
+  let open Cmd in
   match c with
   | Skip -> Skip
   | Assign (f,c) ->
@@ -1242,19 +1252,21 @@ let rec rewrite (m : (string * int) StringMap.t) (c : cmd) : cmd =
      StringMap.find m f
      |> Option.map ~f:fst
      |> Option.value ~default:f
-     |> flip mkAssn c'
+     |> flip assign c'
   | Assume t -> Assume (rewrite_test m t)
   | Seq (c1,c2) -> rewrite m c1 %:% rewrite m c2
   | Select (typ, ss) ->
-     mkSelect typ @@ List.map ss ~f:(fun (t,c) -> rewrite_test m t, rewrite m c)
+     select typ @@ List.map ss ~f:(fun (t,c) -> rewrite_test m t, rewrite m c)
   | Apply {name; keys; actions; default} ->
      Apply {name;
             keys = List.map keys
-                     ~f:(fun (x,sz,v_opt) ->
+                     ~f:(fun key ->
+                       let (x,_) = Key.to_sized key in
+                       let vopt = Key.value key in
                        StringMap.find m x
                        |> Option.value_map
-                            ~default:(x,sz,v_opt)
-                            ~f:(fun (x',sz') -> (x',sz', v_opt)));
+                            ~default:key
+                            ~f:(fun (x',sz') -> Key.(set_val_opt (make (x',sz')) vopt)));
             actions = List.map actions
                         ~f:(fun (n, data, action) ->
                           let m' = List.fold data ~init:m
@@ -1267,7 +1279,7 @@ let make_tfx = List.fold ~init:StringMap.empty ~f:(fun acc (abs_var, phys_var) -
 
 
 
-let unify_names (m : ((string * int) * (string * int)) list) (c : cmd) : cmd =
+let unify_names (m : ((string * int) * (string * int)) list) (c : Cmd.t) : Cmd.t =
   rewrite (make_tfx m) c
 
 let parse_p4 include_dirs p4_file verbose =
@@ -1285,7 +1297,7 @@ let parse_p4 include_dirs p4_file verbose =
     `Error (Lexer.info lexbuf, err)
 
 
-let encode_from_p4 include_dirs p4_file verbose : cmd =
+let encode_from_p4 include_dirs p4_file verbose : Cmd.t =
   (* Format.printf "encoding file %s\n%!" p4_file; *)
   match parse_p4 include_dirs p4_file verbose with
   | `Error (info, _) ->

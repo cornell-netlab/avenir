@@ -1,20 +1,20 @@
 open Core
 open Avenir
-open Ast
 open Avenir.Test
 open Semantics
 
 let cross_packet =
+  let open Cmd in
   let dst_is x = Var("dst", 2) %=% Expr.value (x,2) in
   let src_is x = Var("src", 2) %=% Expr.value (x,2) in
   let prog =
     sequence [
-    mkOrdered [
+    ordered [
         src_is 1, "smac" %<-% Expr.value (2,2);
         src_is 0, "smac" %<-% Expr.value (1,2);
         True, Skip
       ];
-      mkOrdered [
+      ordered [
           dst_is 1, "out" %<-% Expr.value (2,2);
           dst_is 0, "out" %<-% Expr.value (1,2);
           True, Skip ]

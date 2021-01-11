@@ -1,7 +1,5 @@
 open Core
 open Util
-open Ast
-(* open Manip *)
 
 (* TYPES *)
 type match_data =
@@ -14,7 +12,7 @@ type t = {key : string; data : match_data}
 let mk_match key data = {key; data}
 let exact_ key v = mk_match key @@ Exact v
 let between_ key lo hi =
-    if lo = hi then
+    if Value.equals lo hi then
       exact_ key lo
     else
       mk_match key @@ Between (lo, hi)
@@ -32,7 +30,7 @@ let equal_data d d' =
   | Mask (v,msk), Mask (v',msk') -> Value.eq v v' && Value.eq msk msk'
   | _,_ -> false
 
-let equal m m' = m.key = m'.key && equal_data m.data m'.data
+let equal m m' = String.equal m.key m'.key && equal_data m.data m'.data
 
 let get_key m = m.key
 
@@ -55,7 +53,7 @@ let to_bmv2_string (m:t) : string =
      Printf.sprintf "[Unimplemented] Don't know how to install range matches"
      |> failwith
 
-let get_size (m : t) : size =
+let get_size (m : t) : int =
   match m.data with
   | Exact v
   | Mask (v,_)
@@ -206,7 +204,7 @@ let mk_ipv6_match key ipv6_str =
       | None -> addr_str
       | Some _ ->
          let rec loop addr =
-           if String.count addr ~f:((=) ':') = 8 then
+           if String.count addr ~f:(Char.(=) ':') = 8 then
              String.substr_replace_all addr  ~pattern:"::" ~with_:":"
            else
              String.substr_replace_all addr ~pattern:("::") ~with_:":0000::"
@@ -256,7 +254,6 @@ let cap (m : t) (m' : t) =
     | Mask _, _ | _, Mask _ ->
      failwith "Dont know how to intersect masks"
 
-
 let rec has_inter_data (d : match_data) (d' : match_data) : bool =
   match d, d' with
   | Exact x, Exact y ->
@@ -264,10 +261,8 @@ let rec has_inter_data (d : match_data) (d' : match_data) : bool =
   | Exact x, Between (lo, hi)
     | Between(lo,hi), Exact(x) ->
     Value.leq lo x && Value.leq x hi
-
-  | Between(lo, hi), Between(lo',hi')
-    -> Stdlib.max lo lo' <= Stdlib.min hi hi'
-
+  | Between(lo, hi), Between(lo',hi') ->
+    Value.leq (Stdlib.max lo lo') (Stdlib.min hi hi')
   | Mask(v,msk), Exact(v')
     | Exact (v'), Mask(v,msk)
     -> Bigint.(Value.get_bigint v land Value.get_bigint msk = Value.get_bigint v' land Value.get_bigint msk)
@@ -278,7 +273,7 @@ let rec has_inter_data (d : match_data) (d' : match_data) : bool =
        else failwith "Cant' tell"
 
 let has_inter (m : t) (m' : t) : bool =
-  m.key = m'.key
+  String.(m.key = m'.key)
   && (is_wildcard m
       || is_wildcard m'
       || has_inter_data m.data m'.data)
@@ -299,7 +294,7 @@ let is_subset_data (d : match_data) (d' : match_data) : bool =
 
 
 let is_subset (m : t) (m': t) : bool =
-  m.key = m'.key && (is_wildcard m' || is_subset_data m.data m'.data)
+  String.(m.key = m'.key) && (is_wildcard m' || is_subset_data m.data m'.data)
 
 
 let get_bitmask mtch =

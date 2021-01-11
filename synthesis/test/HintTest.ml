@@ -1,10 +1,10 @@
 open Equality
 open Avenir
 open Avenir.Test
-open Ast
 open Hint
 
 let hints_injects_keys _ =
+  let open Cmd in
   let matches =
     let open Match in
     [exact_ "x" (Value.make (5,32));
@@ -13,13 +13,13 @@ let hints_injects_keys _ =
     in
   let phys =
     sequence [
-        mkApply ("p1", ["x",32;"y",32], ["action", [],Skip], Skip);
-        mkOrdered [
+        apply  ("p1", ["x",32;"y",32], ["action", [],Skip], Skip);
+        ordered [
             Var("x",32) %=% Expr.value (100,32),
-            mkApply ("p2a", ["y", 32; "q",32], ["action", [], Skip], Skip);
+            apply  ("p2a", ["y", 32; "q",32], ["action", [], Skip], Skip);
 
             True,
-            mkApply("p2b", ["x",32; "q",32; "z", 32], ["action", [], Skip], Skip);
+            apply ("p2b", ["x",32; "q",32; "z", 32], ["action", [], Skip], Skip);
           ]
       ]
   in

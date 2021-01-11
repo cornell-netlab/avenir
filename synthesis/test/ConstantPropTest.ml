@@ -1,11 +1,11 @@
 open Alcotest
 open Avenir
-open Ast
 open ConstantProp
 open Equality
 
 (*Testing Constant Propogation *)
 let cp_wikipedia_ex1 _ =
+  let open Cmd in
   let cmd =
     sequence [
         "x" %<-% Expr.value (14,32);
@@ -24,6 +24,7 @@ let cp_wikipedia_ex1 _ =
 
 let cp_wikipedia_ex2 _ =
   let open Avenir.Test in
+  let open Cmd in
   let int i = Expr.value (i,32) in
   let var a = Expr.Var(a,32) in
   let cmd =
@@ -31,7 +32,7 @@ let cp_wikipedia_ex2 _ =
         "a" %<-% int 30;
         "b" %<-% Expr.(minus (int 9) (minus (var "a") (int 24)));
         "c" %<-% Expr.(times (var "b") (int 4));
-        mkOrdered [
+        ordered [
             var "c" %>% int 10, "c" %<-% Expr.minus (var "c") (int 10);
             True, Skip
           ];
@@ -52,11 +53,12 @@ let cp_wikipedia_ex2 _ =
 
 let cp_only_holes_and_constants _ =
   let open Avenir.Test in
+  let open Cmd in
   let cmd =
     sequence [
         "ipv4.dst" %<-% Expr.value (9999,32);
         "ipv4.ttl" %<-% Expr.value (12,8);
-        mkOrdered [
+        ordered [
             (Hole("?Del_0_fwd_table", 1) %=% Expr.value (0,1)) %&%
               (Var("ipv4.dst",32) %=% Expr.value (3333,32)), "out_port" %<-% Expr.value (45,9);
             (Hole("?AddTo_fwd_table",1) %=% Expr.value (1,1))
@@ -64,7 +66,7 @@ let cp_only_holes_and_constants _ =
             , "out_port" %<-% Hole("?port_0_fwd_table",32);
             True, "out_port" %<-% Expr.value (0,9)
           ];
-        mkOrdered [
+        ordered [
             bigand [
                 Hole("?Del_0_punt_table",1) %=% Expr.value (0,1);
                 Var("ipv4.ttl",8) %=% Expr.value (1,8)
@@ -81,13 +83,13 @@ let cp_only_holes_and_constants _ =
     sequence [
         "ipv4.dst" %<-% Expr.value (9999,32);
         "ipv4.ttl" %<-% Expr.value (12,8);
-        mkOrdered [
+        ordered [
             (Hole("?AddTo_fwd_table",1) %=% Expr.value (1,1))
             %&% (Expr.value (9999,32) %=% Hole("?ipv4.dst_fwd_table", 32))
           , "out_port" %<-% Hole("?port_0_fwd_table",32);
             True, "out_port" %<-% Expr.value (0,9)
           ];
-        mkOrdered [
+        ordered [
             bigand [
                 Hole("?AddTo_punt_table",1) %=% Expr.value (1,1);
                 Expr.value (12,8) %=% Hole("?ipv4.ttl_punt_table",8)
@@ -100,6 +102,7 @@ let cp_only_holes_and_constants _ =
 
 
 let cp_also_props_copies _ =
+  let open Cmd in
   let var x = Expr.Var(x,32) in
   let int i = Expr.value (i,32) in
   let cmd =
@@ -116,6 +119,7 @@ let cp_also_props_copies _ =
 
 
 let cp_affects_actions_and_keys _ =
+  let open Cmd in
   let var x = Expr.Var(x,32) in
   let int i = Expr.value (i,32) in
   let cmd =
@@ -124,7 +128,7 @@ let cp_affects_actions_and_keys _ =
         "out" %<-% int 0;
         "meta" %<-% var "addr";
         Apply {name = "tbl";
-               keys = [("z",32,None); ("meta",32,None)];
+               keys = [Key.make ("z",32); Key.make ("meta",32)];
                actions = [ "action", ["port",9], sequence [
                                            "out" %<-% Expr.(plus (Var("port",9)) (cast 9 @@ var "z"));
                                            "meta" %<-% Expr.plus (var "z") (var "z");
@@ -145,7 +149,8 @@ let cp_affects_actions_and_keys _ =
         "out" %<-% int 0;
         "meta" %<-% var "addr";
         Apply {name = "tbl";
-               keys = [("z",32,Some (Value.make (99,32))); ("addr",32,None)];
+               keys = [Key.(set_val (make ("z",32)) (Value.make (99,32)));
+                       Key.make ("addr",32)];
                actions = [ "action",
                            ["port",9],
                            sequence [
@@ -165,11 +170,12 @@ let cp_affects_actions_and_keys _ =
 
 let opt_bcm_example _ =
   let open Avenir.Test in
+  let open Cmd in
   let bcm =
     sequence [
         "x" %<-% Expr.value (333,32);
         "o" %<-% Expr.value (0,9);
-        mkOrdered [
+        ordered [
             bigand [Hole("?Addtbl",1) %=% Expr.value (1,1);
                     Hole("?x",32) %=% Var("x",32);
                     Hole("?Acttbl",1) %=% Expr.value (0,2)
@@ -190,7 +196,7 @@ let opt_bcm_example _ =
                    ];
             True, Skip
           ];
-        mkOrdered [
+        ordered [
             Var("o", 9) %=% Expr.value (0,9),
             sequence [
                 "o" %<-% Expr.value (0,9);
@@ -205,7 +211,7 @@ let opt_bcm_example _ =
     sequence [
         "x" %<-% Expr.value (333,32);
         "o" %<-% Expr.value (0,9);
-        mkOrdered [
+        ordered [
             bigand [Hole("?Addtbl",1) %=% Expr.value (1,1);
                     Hole("?x",32) %=% Expr.value (333,32);
                     Hole("?Acttbl",1) %=% Expr.value (0,2)
@@ -226,7 +232,7 @@ let opt_bcm_example _ =
                    ];
             True, Skip
           ];
-        mkOrdered [
+        ordered [
             Var("o", 9) %=% Expr.value (0,9),
             sequence [
                 "o" %<-% Expr.value (0,9);
@@ -240,12 +246,13 @@ let opt_bcm_example _ =
   same_cmd expected (propogate bcm)
 
 let passive_propogation_learns_from_tests1 _ =
+  let open Cmd in
   let open Avenir.Test in
   let open Util in
   let cmd =
     sequence [
-        mkAssume(Hole("?dst_addr_0_ipv4_rewrite",48) %=% Expr.value (0,48));
-        mkAssume(Var("standard_metadata.egress_spec$2",9) %=% Expr.value (1,9))
+        assume (Hole("?dst_addr_0_ipv4_rewrite",48) %=% Expr.value (0,48));
+        assume (Var("standard_metadata.egress_spec$2",9) %=% Expr.value (1,9))
       ]
   in
   let map = StringMap.of_alist_exn ["standard_metadata.egress_spec$2", Expr.value (1,9)] in
@@ -256,10 +263,11 @@ let passive_propogation_learns_from_tests1 _ =
      same_expr (Expr.value (1,9)) e
 
 let passive_propogation_learns_from_tests2 _ =
+  let open Cmd in
   let open Avenir.Test in
   let open Util in
   let cmd =
-    mkAssume(Var("standard_metadata.egress_spec$2",9) %=% Expr.value (1,9))
+    assume (Var("standard_metadata.egress_spec$2",9) %=% Expr.value (1,9))
   in
   let (map, _) = ConstantProp.passive_propogate_aux `Rev (StringMap.empty) cmd in
   match StringMap.find map "standard_metadata.egress_spec$2" with
@@ -269,23 +277,24 @@ let passive_propogation_learns_from_tests2 _ =
 
 
 let passive_propogation_learns_disjoint _ =
+  let open Cmd in
   let open Avenir.Test in
   let open Util in
   let cmd =
-    mkOrdered [
+    ordered [
         bigand [
             Hole("?AddRowToipv4_fwd",1) %=% Expr.value (1,1);
             Hole("?hdr.ipv4.dstAddr_ipv4_fwd",32) %=% Expr.value (0,32);
             Hole("?ActInipv4_rewrite",2) %=% Expr.value (0,2)
           ], sequence [
-                 mkAssume(Hole("?dst_addr_0_ipv4_rewrite",48) %=% Expr.value (0,48));
-                 mkAssume(Var("standard_metadata.egress_spec$2",9) %=% Expr.value (1,9));
+                 assume (Hole("?dst_addr_0_ipv4_rewrite",48) %=% Expr.value (0,48));
+                 assume (Var("standard_metadata.egress_spec$2",9) %=% Expr.value (1,9));
                ];
         bigand[
             Hole("?AddRowToipv4_fwd",1) %=% Expr.value (1,1);
             Hole("?hdr.ipv4.dstAddr_ipv4_fwd",32) %=% Expr.value (0,0);
             Hole("?ActInipv4_rewrite",2) %=% Expr.value (1,2)
-          ], mkAssume(Var("standard_metadata.egress_spec$2",9) %=% Expr.value (1,9))
+          ], assume (Var("standard_metadata.egress_spec$2",9) %=% Expr.value (1,9))
       ]
   in
   let (map, _) = ConstantProp.passive_propogate_aux `Rev (StringMap.empty) cmd in

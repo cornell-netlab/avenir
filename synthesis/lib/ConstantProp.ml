@@ -1,7 +1,5 @@
 open Core
 open Util
-open Ast
-
 
 let meet m m' : 'a StringMap.t =
   StringMap.merge m m'
@@ -101,7 +99,8 @@ let rec propogate_test (map : Expr.t StringMap.t) (t : Test.t) =
   | Iff ts -> tbinop iff ts
   | Neg t -> unop neg t
 
-let rec propogate_cmd (map : Expr.t StringMap.t) (cmd : cmd) =
+let rec propogate_cmd (map : Expr.t StringMap.t) (cmd : Cmd.t) =
+  let open Cmd in
   match cmd with
   | Skip -> map, Skip
   | Assign (f,e) ->
@@ -112,17 +111,17 @@ let rec propogate_cmd (map : Expr.t StringMap.t) (cmd : cmd) =
      let map',c1' = propogate_cmd map c1 in
      let map'', c2' = propogate_cmd map' c2 in
      map'', c1' %:% c2'
-  | Assume t -> map, mkAssume (propogate_test map t)
+  | Assume t -> map, assume (propogate_test map t)
   | Select (typ, cases) ->
      let map', cases',_ =
        List.fold cases ~init:(None, [], false)
          ~f:(fun (accMap, cases, _) (b,c) ->
              let b' = propogate_test map b in
              let map',c' = propogate_cmd map c in
-             Some(meet_opt accMap map'), cases @ [b', c'], (b' = True && typ = Ordered)
+             Some(meet_opt accMap map'), cases @ [b', c'], (Test.equals b' True && Cmd.styp_equals typ Ordered)
          )
      in
-     Option.value_exn map', mkSelect typ cases'
+     Option.value_exn map', select typ cases'
 
   | Apply {name;keys;actions;default} ->
      let facts_acts, actions' =
@@ -151,22 +150,24 @@ let rec propogate_cmd (map : Expr.t StringMap.t) (cmd : cmd) =
      let facts_def, default' = propogate_cmd map default in
      let keys' =
        List.map keys
-         ~f:(fun (k,sz,v_opt) ->
+         ~f:(fun key ->
+           let k,sz = Key.to_sized key in
            match StringMap.find map k with
-           | Some (Var(k',_)) -> (k',sz, None)
+           | Some (Var(k',_)) -> Key.make (k',sz) (* should update with [key]'s value? *)
            | Some (Value v) ->
-              begin match v_opt with
+              begin match Key.value key with
               | Some v' when not(Value.eq v v') ->
                  Printf.sprintf "conflicting values for key %s in table %s : have %s inferred %s"
                    k name (Value.to_string v') (Value.to_string v)
                  |> failwith
               | _ ->
-                 (k,sz, Some v)
+                 Key.(set_val (make (k,sz)) v)
               end
            | Some (e) ->
               Printf.printf "[INFO] could replace key %s in table %s with value %s\n%!" (k) (name) (Expr.to_string e);
-              (k,sz, None)
-           | None -> (k,sz, None)
+              Key.make (k,sz)
+           | None ->
+              Key.make (k,sz)
          )
      in
      (meet_opt facts_acts facts_def
@@ -230,13 +231,14 @@ let to_expr_map (vmap : Value.t StringMap.t) : Expr.t StringMap.t =
   StringMap.map vmap ~f:(fun v -> Expr.Value v)
 
 let rec passive_propogate_aux dir map cmd =
+  let open Cmd in
   match cmd with
   | Skip -> map, Skip
   | Assign (_,_) -> failwith "[ERROR] Assumed in passive form but got ASSIGN"
   | Assume t ->
      let t' = Manip.substitute t map in
      let map', t'' = infer map t' in
-     map', mkAssume t''
+     map', assume t''
   | Seq(c1,c2) ->
      let proc_fst, proc_snd =
        match dir with
@@ -263,7 +265,7 @@ let rec passive_propogate_aux dir map cmd =
            map_opt, acc_cases @ [b',c']
          )
      in
-     Option.value_exn map', mkSelect typ cases'
+     Option.value_exn map', select typ cases'
   | Apply _ -> failwith "[Error] assumed tables are applied out"
 
 let passive_propogate (map, cmd) =
@@ -309,7 +311,9 @@ let rec eval_expr_choices facts (e : Expr.t) : Value.t list option =
     | Slice {bits;_} ->
      map (un_eval e) bits
 
-let rec propogate_choices (facts : Value.t list StringMap.t) = function
+let rec propogate_choices (facts : Value.t list StringMap.t) =
+  let open Cmd in
+  function
   | Skip -> facts
   | Assign (f,e) ->
      if false then Printf.printf "Propogating assignment \n%!";

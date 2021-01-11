@@ -1,5 +1,4 @@
 open Core
-open Ast
 
 open Manip
 
@@ -7,7 +6,7 @@ module StringMap = Map.Make (String)
 
 let cross xs ys = List.map xs ~f:(fun x -> List.map ys ~f:(fun y -> (x, y)))
 
-let combine_actions (act1 : string * (string * size) list * cmd) (act2 : string * (string * size) list * cmd) : string * (string * size) list * cmd =
+let combine_actions (act1 : string * (string * int) list * Cmd.t) (act2 : string * (string * int) list * Cmd.t) : string * (string * int) list * Cmd.t =
   let (n1, p1, c1) = act1 in
   let (n2, p2, c2) = act2 in
 
@@ -22,13 +21,14 @@ let combine_actions (act1 : string * (string * size) list * cmd) (act2 : string 
 
   let new_p1' = List.map new_p1 ~f:(fun (_, v, w) -> v, w) in
   let new_p2' = List.map new_p2 ~f:(fun (_, v, w) -> v, w) in
-  n1 ^ "_" ^ n2, new_p1' @ new_p2', new_c1 %:% new_c2
+  n1 ^ "_" ^ n2, new_p1' @ new_p2', Cmd.seq new_c1 new_c2
 
-type only_apply = {keys:(string * size * Value.t option) list;
-                   actions: ((string * (string * size) list * cmd) list);
-                   default: cmd}
+type only_apply = {keys: Cmd.Key.t list;
+                   actions: ((string * (string * int) list * Cmd.t) list);
+                   default: Cmd.t}
 
 let rec mk_one_big_table' (tbl : only_apply) c =
+  let open Cmd in
   match c with
   | Skip -> tbl
   | Assign _ ->
@@ -39,7 +39,7 @@ let rec mk_one_big_table' (tbl : only_apply) c =
   | Seq(c1, c2) -> mk_one_big_table' (mk_one_big_table' tbl c1) c2
   | Select(_, tcl) ->
     let free = List.map tcl
-                ~f:(fun (t, _) -> List.map (Test.vars t) ~f:(fun(f, s) -> (f, s, None)))  |> List.concat in
+                ~f:(fun (t, _) -> List.map (Test.vars t) ~f:(fun(f, s) -> Key.make (f, s)))  |> List.concat in
     let es = List.map tcl ~f:snd in
     
     let tbl_keys = {tbl with keys = Util.dedup (tbl.keys @ free)} in
@@ -55,6 +55,7 @@ let rec mk_one_big_table' (tbl : only_apply) c =
       default = tbl.default %:% app_t.default }
 
 let mk_one_big_table c =
+  let open Cmd in
   let app_t = mk_one_big_table' { keys = []; actions = []; default = Skip } c in
   Apply { name = "OneBigTable";
           keys = app_t.keys;

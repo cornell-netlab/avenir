@@ -1,20 +1,21 @@
 open Core
 open Avenir
 open Avenir.Test
-open Ast
+
 open Equality
 
 (*Edits*)
 let extract_edits_from_model _ =
+  let open Cmd in
   let drop = "standard_metadata.egress_spec" %<-% Expr.value(0,9) in
   let phys =
     sequence [
-        mkApply("ethernet",["hdr.ethernet.dstAddr", 48],["nexthop", ["nexthop",32],"meta.nexthop" %<-% Var("nexthop",32);"drop", [],drop],drop);
-        mkOrdered [
+        apply ("ethernet",["hdr.ethernet.dstAddr", 48],["nexthop", ["nexthop",32],"meta.nexthop" %<-% Var("nexthop",32);"drop", [],drop],drop);
+        ordered [
             Var("hdr.ipv4.isValid",1) %=% Expr.value(1,1),
             sequence [
-                mkApply("ipv4_fib", ["hdr.ipv4.dstAddr", 32], ["nexthop", ["nexthop",32],"meta.nexthop" %<-% Var("nexthop",32);"drop",[],drop], drop);
-                mkApply("ipv4_rewrite",
+                apply ("ipv4_fib", ["hdr.ipv4.dstAddr", 32], ["nexthop", ["nexthop",32],"meta.nexthop" %<-% Var("nexthop",32);"drop",[],drop], drop);
+                apply ("ipv4_rewrite",
                         ["hdr.ipv4.dstAddr", 32],
                         [ "rewrite",
                           ["dstAddr",48],
@@ -28,8 +29,8 @@ let extract_edits_from_model _ =
               ];
             True, Skip
           ];
-        mkApply("nexthop",["meta.nexthop",32],["fwd", ["port",9], "standard_metadata.egress_spec" %<-% Var("port",9); "drop", [],drop],drop);
-        mkApply("punt", ["hdr.ethernet.etherType", 16;
+        apply ("nexthop",["meta.nexthop",32],["fwd", ["port",9], "standard_metadata.egress_spec" %<-% Var("port",9); "drop", [],drop],drop);
+        apply ("punt", ["hdr.ethernet.etherType", 16;
                          "hdr.ipv4.isValid",1;
                          "hdr.ipv4.version",4;
                          "hdr.ipv4.srcAddr",32;
