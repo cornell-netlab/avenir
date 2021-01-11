@@ -129,7 +129,7 @@ let positive_actions (params : Parameters.t) (phys : cmd) (fvs : (string * int) 
                                (* every input variable is existentially quantified, unsound but complete *)
                                let unknowns = fsts @@ Expr.frees `Var data in
                                let exp = Expr.holify ~f:Fn.id unknowns data in
-                               let test = Value v %=% exp in
+                               let test = Test.(Value v %=% exp) in
                                Printf.printf "%s.action[%d]\tchecking %s = %s" table act_id (Expr.to_string exp) (Value.to_string v);
                                Prover.is_sat params test
                           else
@@ -190,7 +190,7 @@ let rec tables_affecting_keys phys (keys : StringSet.t) =
   | Select (_, cases) ->
      List.map cases ~f:(fun (b,c) ->
          let keys', tables' = tables_affecting_keys c keys in
-         union keys' (of_list @@ fsts @@ free_of_test `Var b), tables')
+         union keys' (of_list @@ fsts @@ Test.vars b), tables')
      |> List.fold ~init:(empty,empty)
           ~f:(fun (acc_ks, acc_ts) (ks, ts) ->
             (union acc_ks ks, union acc_ts ts)
@@ -219,7 +219,7 @@ let rec tables_affected_by_keys phys keys =
   | Select (_, cases) ->
      List.map cases ~f:(fun (b,c) ->
          let keys', tables' = tables_affected_by_keys c keys in
-         union keys' (of_list @@ fsts @@ free_of_test `Var b), tables')
+         union keys' (of_list @@ fsts @@ Test.vars b), tables')
      |> List.fold ~init:(empty,empty)
           ~f:(fun (acc_ks, acc_ts) (ks, ts) ->
             (union acc_ks ks, union acc_ts ts)

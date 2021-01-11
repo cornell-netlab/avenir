@@ -10,7 +10,6 @@ type interp =
   | OnlyHoles of Hint.t list
   | WithHoles of (string * int) list * Hint.t list
 
-
 let to_string (inst:t) : string =
   StringMap.fold inst ~init:"" ~f:(fun ~key:table_name ~data:rows acc ->
       Printf.sprintf "%s\n%s\n%s" acc table_name (Row.list_to_string ~tab:"\t" rows)
@@ -44,7 +43,6 @@ let rec update_list params (inst : t) (edits : Edit.t list) =
 
 let of_edits (params : Parameters.t) (edits : Edit.t list) = update_list params empty edits
 
-
 let get_rows inst table : Row.t list = StringMap.find inst table |> Option.value ~default:[]
 
 let get_row (inst : t) (table : string) (idx : int) : Row.t option =
@@ -56,14 +54,13 @@ let get_rows_before (inst : t) (table : string) (idx : int) : Row.t list =
   List.filteri rs ~f:(fun i _ -> i < idx )
   |> List.rev
 
-
 let get_row_exn inst table idx : Row.t =
   match get_row inst table idx with
   | None -> failwith @@ Printf.sprintf "Invalid row %d in table %s" idx table
   | Some row -> row
 
-
 let negate_rows inst tbl =
+  let open Test in
   get_rows inst tbl
   |> List.fold ~init:True
        ~f:(fun acc (matches,_,_) ->
@@ -118,18 +115,18 @@ let rec apply ?no_miss:(no_miss = false)
                   let ghost = Printf.sprintf "%s_hits_row_%d" t.name i in
                   sequence
                     [ ghost %<-% Expr.value(1,1);
-                      mkOrdered [Var(ghost,1) %=% Expr.value(1,1), action; True, Skip]]
+                      mkOrdered [Test.(Var(ghost,1) %=% Expr.value(1,1)), action; True, Skip]]
                 else
                   action in
               let cond =
-                Match.list_to_test matches
-                %&% match tag with
-                    | WithHoles (ds,_) ->
-                       let i = List.length rows - i - 1 in
-                       if List.exists ds ~f:((=) (t.name, i))
-                       then (Hole.delete_hole i t.name %=% Expr.value(0,1))
-                       else True
-                    | _ -> True in
+                Test.and_ (Match.list_to_test matches) @@
+                  match tag with
+                  | WithHoles (ds,_) ->
+                     let i = List.length rows - i - 1 in
+                     if List.exists ds ~f:((=) (t.name, i))
+                     then Test.(Hole.delete_hole i t.name %=% Expr.value(0,1))
+                     else Test.True
+                  | _ -> True in
               if action >= List.length t.actions then
                 acc
               else begin
@@ -149,7 +146,7 @@ let rec apply ?no_miss:(no_miss = false)
               (Hole.table_hole encode_tag t.keys t.name i actSize
               , holify ~f:(fun (h,sz) -> (Hole.action_data t.name i h sz, sz)) (List.map params ~f:fst) act))
      in
-     let dflt_row = if no_miss then [] else [(True, t.default)] in
+     let dflt_row = if no_miss then [] else [(Test.True, t.default)] in
      let tbl_select = (if params.above then holes @ selects else selects @ holes)
                       @ dflt_row
                       |> mkOrdered in

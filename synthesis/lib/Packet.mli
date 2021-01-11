@@ -54,7 +54,7 @@ val fold : t -> init:'a -> f:(key:string -> data:Value.t -> 'a -> 'a) -> 'a
    converts it into the corresponding test. If [random_fill] is [true], then
    variables in [fvs] that do not occur in the domain of [pkt] are replaced with
    random values; otherwise, they are simply omitted. *)
-val to_test : ?random_fill:bool -> fvs:(string * int) list -> t -> test
+val to_test : ?random_fill:bool -> fvs:(string * int) list -> t -> Test.t
 
 (** [to_assignment pkt] converts [pkt] to a command [c] that will produce [pkt]
    when run on [empty]. *)

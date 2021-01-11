@@ -81,28 +81,28 @@ expr :
 
 test :
 | TRUE
-  { Ast.True }
+  { Test.True }
 | FALSE
-  { Ast.False }
+  { Test.False }
 | t = test; OR; tt = test
-  { Ast.Or (t, tt) }
+  { Test.or_ t tt }
 | t = test; AND; tt = test
-  { Ast.And (t, tt) }
+  { Test.and_ t tt }
 | NOT; t = test
-  { Ast.Neg t }
+  { Test.neg t }
 | e = expr; EQ; ee = expr
-  { Ast.Eq (e, ee) }
+  { Test.eq e ee }
 | e = expr; NEQ; ee = expr
-  { Ast.Neg(Ast.Eq (e, ee)) }
+  { Test.(e %<>% ee) }
 | e = expr; LESS; ee = expr
-  { Ast.(e %<% ee) }
+  { Test.(e %<% ee) }
 | e = expr; GREATER; ee = expr
-  { Ast.(e %>% ee) }
+  { Test.(e %>% ee) }
 | e = expr; GEQ; ee = expr
-  { Ast.(e %>=% ee) }
+  { Test.(e %>=% ee) }
 | e = expr; LEQ; ee = expr
-  { Ast.(e %<=% ee) }
+  { Test.(e %<=% ee) }
 | LPAREN; t = test; RPAREN
   { t }
 | t = test; IMPLIES; tt = test
-  { Ast.(t %=>% tt) }
+  { Test.(t %=>% tt) }

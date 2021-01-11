@@ -55,6 +55,7 @@ let rec set_field_of_expr_opt (pkt : t) (field : string) (e : Expr.t) : t option
   | Concat (e,e') -> binop Value.concat e e'
 
 let to_test ?random_fill:(random_fill=false)  ~fvs (pkt : t) =
+  let open Test in
   (* let random_fill = false in *)
   List.fold fvs ~init:True
     ~f:(fun acc (x,sz) ->

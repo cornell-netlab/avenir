@@ -29,11 +29,12 @@ let list_to_string ?tab:(tab="") rs : string =
       Printf.sprintf "%s\n%s%s" acc tab (to_string r)
     )
 
-let test_of_data (tbl : string) (act_id : int) (vars : (string * size) list) (vals : action_data) =
-  List.fold2_exn vars vals ~init:True
+let test_of_data (tbl : string) (act_id : int) (vs : (string * size) list) (vals : action_data) =
+  let open Test in
+  List.fold2_exn vs vals ~init:True
     ~f:(fun acc (x,sz) v ->
       assert (sz = Value.size v);
-      mkAnd acc @@
+      and_ acc @@
         (Hole.action_data_hole tbl act_id x sz %=% Value v)
     )
 

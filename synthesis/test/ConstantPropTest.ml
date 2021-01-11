@@ -4,8 +4,6 @@ open Ast
 open ConstantProp
 open Equality
 
-
-
 (*Testing Constant Propogation *)
 let cp_wikipedia_ex1 _ =
   let cmd =
@@ -25,6 +23,7 @@ let cp_wikipedia_ex1 _ =
   same_cmd exp (propogate_fix cmd)
 
 let cp_wikipedia_ex2 _ =
+  let open Avenir.Test in
   let int i = Expr.value (i,32) in
   let var a = Expr.Var(a,32) in
   let cmd =
@@ -52,6 +51,7 @@ let cp_wikipedia_ex2 _ =
 
 
 let cp_only_holes_and_constants _ =
+  let open Avenir.Test in
   let cmd =
     sequence [
         "ipv4.dst" %<-% Expr.value (9999,32);
@@ -164,6 +164,7 @@ let cp_affects_actions_and_keys _ =
   same_cmd exp @@ propogate cmd
 
 let opt_bcm_example _ =
+  let open Avenir.Test in
   let bcm =
     sequence [
         "x" %<-% Expr.value (333,32);
@@ -239,6 +240,7 @@ let opt_bcm_example _ =
   same_cmd expected (propogate bcm)
 
 let passive_propogation_learns_from_tests1 _ =
+  let open Avenir.Test in
   let open Util in
   let cmd =
     sequence [
@@ -254,6 +256,7 @@ let passive_propogation_learns_from_tests1 _ =
      same_expr (Expr.value (1,9)) e
 
 let passive_propogation_learns_from_tests2 _ =
+  let open Avenir.Test in
   let open Util in
   let cmd =
     mkAssume(Var("standard_metadata.egress_spec$2",9) %=% Expr.value (1,9))
@@ -266,6 +269,7 @@ let passive_propogation_learns_from_tests2 _ =
 
 
 let passive_propogation_learns_disjoint _ =
+  let open Avenir.Test in
   let open Util in
   let cmd =
     mkOrdered [

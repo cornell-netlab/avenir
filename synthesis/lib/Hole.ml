@@ -51,12 +51,13 @@ let match_holes encode_tag tbl x sz =
   match encode_tag with
   | `Mask ->
      let (hv,hm) = match_holes_mask tbl x in
-     Expr.(mask (Var(x, sz)) (Hole (hm,sz))) %=% Hole (hv, sz)
+     Test.(Expr.(mask (Var(x, sz)) (Hole (hm,sz))) %=% Hole (hv, sz))
   | `Exact ->
      let h = match_hole_exact tbl x in
-     Var(x, sz) %=% Hole (h,sz)
+     Test.(Var(x, sz) %=% Hole (h,sz))
 
 let match_holes_table encode_tag tbl keys  =
+  let open Test in
   List.fold keys ~init:True
     ~f:(fun acc (x,sz,v_opt) ->
       acc %&% match v_opt with
@@ -73,6 +74,7 @@ let action_data_hole tbl i v sz = Expr.Hole(action_data tbl i v sz, sz)
 
 
 let table_hole encode_tag (keys: (string * size * Value.t option) list) tbl actID actSize =
+  let open Test in
   match_holes_table encode_tag tbl keys
   %&% (add_row_hole tbl %=% Expr.value (1,1))
   %&% (which_act_hole tbl actSize %=% Expr.value (actID,actSize))

@@ -361,3 +361,20 @@ let get_indices_matching ~f lst =
     ~f:(fun i acc el ->
       acc @ if f el then [i] else []
     )
+
+
+let rec remove_dups y xs =
+  match xs with
+  | [] -> []
+  | x::xs ->
+     if Stdlib.(y = x) then
+       remove_dups y xs
+     else
+       x :: remove_dups y xs
+
+let rec dedup xs =
+  match xs with
+  | [] -> []
+  | x::xs ->
+     let xs' = remove_dups x xs in
+     x :: dedup xs'

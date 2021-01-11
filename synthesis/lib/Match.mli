@@ -1,4 +1,3 @@
-open Ast
 type t
 
 val exact_ : string -> Value.t -> t
@@ -9,16 +8,16 @@ val equal : t -> t -> bool
 val get_key : t -> string
 val to_string : t -> string
 val to_bmv2_string : t -> string
-val to_test : t -> test
+val to_test : t -> Test.t
 val to_model_alist : string -> t -> (string * Value.t) list
 val list_to_model_alist : string -> t list -> (string * Value.t) list
 val list_to_model : string -> t list -> Model.t
 
-val to_test_hole : string -> t -> test
-val test_hole_of_lists : string -> t list -> test
-val to_valuation_test :  string ->  [`Mask | `Exact] -> t -> test
+val to_test_hole : string -> t -> Test.t
+val test_hole_of_lists : string -> t list -> Test.t
+val to_valuation_test :  string ->  [`Mask | `Exact] -> t -> Test.t
 val list_to_string : t list -> string
-val list_to_test : t list -> test
+val list_to_test : t list -> Test.t
 val mk_ipv6_match : string -> string -> t
 val is_wildcard : t -> bool
 val cap : t -> t -> t list

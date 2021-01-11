@@ -84,7 +84,8 @@ let rec propogate_expr (map : Expr.t StringMap.t) (e : Expr.t) =
   | Slice {hi;lo;bits} ->
      unop (slice hi lo) bits
 
-let rec propogate_test (map : Expr.t StringMap.t) (t : test) =
+let rec propogate_test (map : Expr.t StringMap.t) (t : Test.t) =
+  let open Test in
   let tbinop ctor (t1,t2) =
     ctor (propogate_test map t1) (propogate_test map t2)
   in
@@ -92,13 +93,13 @@ let rec propogate_test (map : Expr.t StringMap.t) (t : test) =
   let unop ctor t = ctor @@ propogate_test map t in
   match t with
   | True | False -> t
-  | Eq es -> ebinop mkEq es
-  | Le es -> ebinop mkLe es
-  | And ts -> tbinop mkAnd ts
-  | Or ts -> tbinop mkOr ts
-  | Impl ts -> tbinop mkImplies ts
-  | Iff ts -> tbinop mkIff ts
-  | Neg t -> unop mkNeg t
+  | Eq es -> ebinop eq es
+  | Le es -> ebinop leq es
+  | And ts -> tbinop and_ ts
+  | Or ts -> tbinop or_ ts
+  | Impl ts -> tbinop impl ts
+  | Iff ts -> tbinop iff ts
+  | Neg t -> unop neg t
 
 let rec propogate_cmd (map : Expr.t StringMap.t) (cmd : cmd) =
   match cmd with
@@ -189,8 +190,9 @@ let propogate_fix cmd =
 
 
 (*known facts is a collection of facts we know*)
-let rec infer (known_facts : Expr.t StringMap.t) (b : test) : (Expr.t StringMap.t * test) =
+let rec infer (known_facts : Expr.t StringMap.t) (b : Test.t) : (Expr.t StringMap.t * Test.t) =
   let open Manip in
+  let open Test in
   let binop mk f (e1,e2) = mk (f e1) (f e2) in
   match b with
   | True | False -> (known_facts, b)
@@ -202,8 +204,8 @@ let rec infer (known_facts : Expr.t StringMap.t) (b : test) : (Expr.t StringMap.
      | Some (Value _) -> (known_facts, False)
      | _ -> (known_facts, substitute b known_facts)
      end
-  | Eq es -> (known_facts, binop mkEq (substituteE known_facts) es)
-  | Le es -> (known_facts, binop mkLe (substituteE known_facts) es)
+  | Eq es -> (known_facts, binop eq  (substituteE known_facts) es)
+  | Le es -> (known_facts, binop leq (substituteE known_facts) es)
   | And (t1,t2) ->
      let known_facts2, t2' = infer known_facts t2 in
      let known_facts1, t1' = infer known_facts2 t1 in
@@ -213,8 +215,8 @@ let rec infer (known_facts : Expr.t StringMap.t) (b : test) : (Expr.t StringMap.
      let known_facts1, t1' = infer known_facts t1 in
      meet known_facts2 known_facts1, t1' %+% t2'
 
-  | Impl ts -> (known_facts, binop mkIff (Fn.flip substitute known_facts) ts)
-  | Iff ts -> (known_facts, binop mkIff (Fn.flip substitute  known_facts) ts)
+  | Impl ts -> (known_facts, binop iff (Fn.flip substitute known_facts) ts)
+  | Iff ts -> (known_facts, binop iff (Fn.flip substitute  known_facts) ts)
 
   | Neg t -> (known_facts, !%(substitute t known_facts))
 

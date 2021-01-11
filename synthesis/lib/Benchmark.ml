@@ -234,6 +234,7 @@ and zero_init fvs cmd =
 
 
 and drop_handle fvs cmd =
+  let open Test in
   let c_end = List.map fvs ~f:(fun (v, w) -> mkAssn v (Expr.value (0, w)))
               |> List.fold ~init:Skip ~f:(fun c1 c2 -> c1 %:% c2)
   in
@@ -441,6 +442,7 @@ let generate_out acc  =
 
   
 let rep params data nrules =
+  let open Test in
   let fvs = ["ip_src",32; "ip_dst",32] in
   let cb_fvs = List.map ~f:fst fvs in
   let gen_data : Edit.t list =
@@ -508,6 +510,7 @@ let rep params data nrules =
 
 
 let rep_middle params data nrules =
+  let open Test in
   let fvs = ["ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16] in
   let cb_fvs = List.map ~f:fst fvs in
   let gen_data : Edit.t list =
@@ -582,6 +585,7 @@ let rep_middle params data nrules =
   measure (restart_timer params) None problem (List.(gen_data >>| return))
 
 let rep_of params exactify data nrules =
+  let open Test in
   let fvs = ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16;"vlan", 12; "pcp", 3] in
   let cb_fvs = List.map ~f:fst fvs in
   let gen_data : Edit.t list =
@@ -659,6 +663,7 @@ let rep_of params exactify data nrules =
 
 
 let rep_par params data nrules =
+  let open Test in
   let fvs = ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16] in
   let cb_fvs = List.map ~f:fst fvs in
   let gen_data : Edit.t list =
@@ -898,6 +903,7 @@ let tables params sz max_tables nheaders max_edits =
  ***************************************)
 
 let create_par_bench sz num_tables num_xs num_ms =
+  let open Test in
   let tblsize = max (log2 (num_tables + 2)) 1 in
   sequence [ initialize_ms sz num_ms
            ; mkApply("stage",

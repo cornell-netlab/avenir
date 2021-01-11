@@ -17,8 +17,8 @@ let rec static_slice_aux (fvs : StringSet.t) (c : cmd) : StringSet.t * cmd  =
        (fvs,Skip)
   | Assume t ->
      fvs
-     |> StringSet.union (fvs_to_set @@ free_of_test `Var t)
-     |> StringSet.union (fvs_to_set @@ free_of_test `Hole t)
+     |> StringSet.union (fvs_to_set @@ Test.frees `Var t)
+     |> StringSet.union (fvs_to_set @@ Test.frees `Hole t)
     , c
   | Seq (c1, c2) ->
      let (fvs2', c2') = static_slice_aux fvs c2 in
@@ -34,8 +34,8 @@ let rec static_slice_aux (fvs : StringSet.t) (c : cmd) : StringSet.t * cmd  =
        let (fvs', ss') = List.fold tfx ~init:(StringSet.empty,[])
          ~f:(fun (fvs_acc,ss_acc) (b,c, fvs) ->
            (StringSet.union fvs_acc fvs
-            |> StringSet.union (fvs_to_set @@ free_of_test `Var b)
-            |> StringSet.union (fvs_to_set @@ free_of_test `Hole b)
+            |> StringSet.union (fvs_to_set @@ Test.frees `Var b)
+            |> StringSet.union (fvs_to_set @@ Test.frees `Hole b)
            , ss_acc @ [(b,c)])
          ) in
        (fvs', mkSelect styp ss')
@@ -80,14 +80,14 @@ let rec flows_to (vs : StringSet.t) cmd : StringSet.t=
        StringSet.remove vs f
   | Assume b ->(* TODO:: This might be wrong? *)
      (* Printf.printf "\tassuming %s\n%!" (string_of_test b); *)
-     StringSet.of_list @@ fsts @@ free_of_test `Var b
+     StringSet.of_list @@ fsts @@ Test.frees `Var b
      |> StringSet.union vs
   | Seq (c1,c2) ->
      flows_to (flows_to vs c1) c2
   | Select(_, cs) ->
      concatMap cs ~c:(StringSet.union) ~f:(fun (b, c) ->
-         if List.exists (fsts @@ free_of_test `Var b) ~f:in_vs
-            && not (b = (Var("standard_metadata.egress_spec",9) %=% Expr.value (0,9))
+         if List.exists (fsts @@ Test.frees `Var b) ~f:in_vs
+            && not (b = Test.(Var("standard_metadata.egress_spec",9) %=% Expr.value (0,9))
                     && Manip.is_a_sequence_of_zero_assignments c)
          then
            (* let () = Printf.printf "adding lvars of %s to taint analysis\n%!" (string_of_cmd c) in *)
@@ -198,7 +198,7 @@ let rec restrict ~dir params inst reads cmd : (StringSet.t * int list StringMap.
   match cmd with
   | Skip -> reads, StringMap.empty
   | Assume t ->
-     let tvars = free_of_test `Var t |> fvs_to_set in
+     let tvars = Test.frees `Var t |> fvs_to_set in
      tvars |> StringSet.union reads, StringMap.empty
   | Assign (f,e) ->
      Expr.frees `Var e
@@ -218,7 +218,7 @@ let rec restrict ~dir params inst reads cmd : (StringSet.t * int list StringMap.
      concatMap cs ~c:(fun (r, i) (r', i') -> StringSet.union r r', disjoint_union i i')
        ~f:(fun (b,c) ->
          let reads, inters = restrict ~dir params inst reads c in
-         StringSet.(union (of_list (fsts (free_of_test `Var b))) reads), inters
+         StringSet.(union (of_list (fsts (Test.frees `Var b))) reads), inters
        )
   | Apply t ->
      (* let printall = true in

@@ -95,9 +95,8 @@ val frees : [`Hole | `Var] -> t -> (string * int) list
 (** [has_hole e] is true iff [e] contains a [Hole] AST node*)
 val has_hole : t -> bool
 
-(** [multi_vals e] is the list of values that occur in
-                         [e]. The [multi_] prefix indicates that the list may
-                         contain duplicates *)
+(** [multi_vals e] is the list of values that occur in [e]. The [multi_] prefix
+   indicates that the list may contain duplicates *)
 val multi_vals : t -> Value.t list
 
 (** [holify f vs e] replaces each sized variable [(v,sz)] in [frees e ∩ vs] with

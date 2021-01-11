@@ -22,7 +22,7 @@ let debug term =
 
 let test_str test =
   if false then
-    let res = Ast.string_of_test test in Printf.printf "TEST: %s\n%!"res
+    let res = Test.to_string test in Printf.printf "TEST: %s\n%!"res
   else ()
 
 (* TODO @PYS I commented this out because the compiler was complaining -- is it meant to be used somewhere? *)
@@ -140,6 +140,7 @@ let rec expr_to_term_help expr styp : Smtlib.term =
 
 
 let rec test_to_term_help test styp : Smtlib.term =
+  let open Test in
   match test with
   | True -> Smtlib.bool_to_term true
   | False -> Smtlib.bool_to_term false
@@ -197,7 +198,7 @@ let vars_to_term vars d =
   else List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i))
 
 
-let check_sat (params : Parameters.t) (longtest : Ast.test) =
+let check_sat (params : Parameters.t) (longtest : Test.t) =
   let open Smtlib in
   (* Printf.printf "Finding model for test of size %d\n%!" (num_nodes_in_test test); *)
   (* Printf.printf "\n%s\n\n%!" (string_of_test test); *)
@@ -205,9 +206,9 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
   if longtest = False then (None, Time.Span.zero) else
   let test = Shortener.shorten shortener longtest in
   if params.debug then assert (longtest = Shortener.unshorten shortener test);
-  let vars = vars_to_term (free_vars_of_test test) params.debug in
+  let vars = vars_to_term (Test.vars test) params.debug in
   let st = Time.now() in
-  let holes = holes_of_test test |> List.dedup_and_sort
+  let holes = Test.holes test |> List.dedup_and_sort
                 ~compare:(fun (idx, _) (idy, _) -> Stdlib.compare idx idy) in
   let () = List.iter holes
              ~f:(fun (id, i) ->
@@ -218,7 +219,7 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
   let response =
     if force_print || params.debug && print_debug then debug term;
     assert_ (get sat_prover) term;
-    if force_print || params.debug && print_debug then Printf.printf " Asserted % dnodes!\n%!" (num_nodes_in_test test);
+    if force_print || params.debug && print_debug then Printf.printf " Asserted % dnodes!\n%!" (Test.num_nodes test);
     check_sat(* _using (ParOr (UFBV, SMT)) *) (get sat_prover) in
   let dur = Time.(diff (now()) st) in
   if params.debug && print_debug then Printf.printf "Got a Result\n%!";
@@ -242,13 +243,13 @@ let check_sat (params : Parameters.t) (longtest : Ast.test) =
 let is_sat params test =
   check_sat params test |> fst |> Option.is_some
 
-let check_valid (params : Parameters.t) (longtest : Ast.test)  =
+let check_valid (params : Parameters.t) (longtest : Test.t)  =
   let open Smtlib in
   (* Printf.printf "Checking validity for test of size %d\n%!" (num_nodes_in_test test); *)
   let test = Shortener.shorten shortener longtest in
   if params.debug then assert (longtest = Shortener.unshorten shortener test);
   (* printf.printf "Test:  %s\n %!" (string_of_test test ); *)
-  let vars = free_vars_of_test test
+  let vars = Test.vars test
              |> List.dedup_and_sort
                   ~compare:(fun (idx, _) (idy, _) -> Stdlib.compare idx idy) in
   let () =
@@ -283,12 +284,13 @@ let is_valid params test =
 
 let cache = ref @@ QAbstr.make ()
 
-let rec restriction_cegis ~gas (params : Parameters.t) (restriction : test option) (query : test) quantified_vars : test option option =
+let rec restriction_cegis ~gas (params : Parameters.t) (restriction : Test.t option) (query : Test.t) quantified_vars : Test.t option option =
   if gas <= 0 then
     None
   else
+    let open Test in
     let restr_test = Option.value restriction ~default:True in
-    if params.debug then Printf.printf "RESTRICTION: %s\n%!" (string_of_test restr_test);
+    if params.debug then Printf.printf "RESTRICTION: %s\n%!" (to_string restr_test);
     match check_valid params (restr_test %=>% query) with
     | None, _ -> Some (restriction)
     | Some m, _ ->
@@ -304,7 +306,7 @@ let rec restriction_cegis ~gas (params : Parameters.t) (restriction : test optio
        restriction_cegis ~gas:(gas - 1) params (Some restr_test') query quantified_vars
 
 
-let check_valid_cached (params : Parameters.t) (test : Ast.test) =
+let check_valid_cached (params : Parameters.t) (test : Test.t) =
   (* let params = {params with debug = true} in *)
   let st = Time.now () in
   let (cache', res) = QAbstr.cache_check params !cache test in
@@ -317,8 +319,8 @@ let check_valid_cached (params : Parameters.t) (test : Ast.test) =
   | `Hit _ -> (None, (Time.(diff (now ()) st)))
   | `Miss test ->
      if params.debug then begin
-         Printf.printf "\tCouldn't abstract from %d previous tests : %d nodes!\n%!" (List.length !cache.seen) (num_nodes_in_test test);
-         List.iter !cache.seen ~f:(fun t -> Printf.printf "%d\n%!" (num_nodes_in_test t))
+         Printf.printf "\tCouldn't abstract from %d previous tests : %d nodes!\n%!" (List.length !cache.seen) (Test.num_nodes test);
+         List.iter !cache.seen ~f:(fun t -> Printf.printf "%d\n%!" (Test.num_nodes t))
          end;
      let dur' = Time.(diff (now()) st) in
      if params.debug then Printf.printf "Querying\n%!";

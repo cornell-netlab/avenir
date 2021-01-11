@@ -1,11 +1,11 @@
 open Core
-open Ast
 
 let remove_missed_edits params data problem es =
   List.fold es ~init:[] ~f:(fun acc e ->
       let cex = List.hd_exn (Problem.cexs problem) in
-      let check = Packet.to_test ~fvs:(Problem.fvs problem) (fst cex)
-                  %=>% FastCX.hits_pred params data (Problem.phys problem) (Problem.phys_inst problem) (Problem.phys_edits problem) e in
+      let check = Test.(
+          Packet.to_test ~fvs:(Problem.fvs problem) (fst cex)
+          %=>% FastCX.hits_pred params data (Problem.phys problem) (Problem.phys_inst problem) (Problem.phys_edits problem) e) in
       match Prover.check_valid params check with
       | None,_ ->
          (* Printf.printf "Checked \n%s\n" (string_of_test check); *)

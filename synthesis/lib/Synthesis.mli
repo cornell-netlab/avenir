@@ -1,5 +1,5 @@
 val implements :
-      ?neg:Ast.test ->
+      ?neg:Test.t ->
       Parameters.t ->
       ProfData.t ref ->
       Problem.t -> 

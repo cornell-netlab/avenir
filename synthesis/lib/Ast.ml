@@ -10,228 +10,6 @@ let enable_smart_constructors = true
 
 type size = int
 
-type test =
-  | True | False
-  | Eq of (Expr.t * Expr.t)
-  | Le of (Expr.t * Expr.t)
-  | And of (test * test)
-  | Or of (test * test)
-  | Impl of (test * test)
-  | Iff of (test * test)
-  | Neg of test       
-
-let rec string_of_test t =
-  match t with
-  | True -> "true"
-  | False -> "false"
-  | Eq (left, right) -> Expr.to_string left ^ " = " ^ Expr.to_string right
-  | Le (left, right) -> Expr.to_string left ^ " <= " ^ Expr.to_string right
-  | Impl (assum, conseq) -> "(" ^ string_of_test assum ^ " ==> " ^ string_of_test conseq ^ ")\n"
-  | Iff (left, right) -> "(" ^ string_of_test left ^ " <==> " ^ string_of_test right ^ ")\n"
-  | Or (left, right) -> "(" ^ string_of_test left ^ " || " ^ string_of_test right ^ ")"
-  | And (left, right) -> "(" ^ string_of_test left ^ " && " ^ string_of_test right ^ ")"
-  | Neg (Le(left, right)) ->
-     Printf.sprintf "(%s < %s)" (Expr.to_string right) (Expr.to_string left)
-  | Neg(Eq(left,right)) ->
-     Printf.sprintf "(%s <> %s)" (Expr.to_string left) (Expr.to_string right)
-  | Neg t ->
-     "~(" ^ string_of_test t ^ ")"
-
-let rec mkOr (t : test) (t' : test) : test =
-  if enable_smart_constructors then begin
-      match t, t' with
-      | False, x  | x, False -> x
-      | True, _ | _, True -> True
-      | _, Or (t'', t''') -> (* left-associative *)
-         mkOr (mkOr t t'') t'''
-      | _ -> Or (t, t')
-    end
-  else Or (t,t')
-
-let bigor = List.fold ~init:False ~f:(mkOr)
-
-let (%+%) = mkOr
-
-let rec mkAnd (t : test) (t' : test) =
-  if enable_smart_constructors then begin
-      if t = t' then t else
-        match t, t' with
-        | True, x | x, True -> x
-        | False, _ | _, False -> False
-        | Eq(Var x,u), Neg(Eq(Var y,v)) when x = y
-          -> if u = v then False
-             else Eq(Var x,u)
-        | _, And ( t'', t''') -> (* left-associative *)
-           mkAnd (mkAnd t t'') t'''
-        | _ -> And (t, t')
-    end
-  else And(t,t')
-
-let bigand = List.fold ~init:True ~f:(mkAnd)
-
-let (%&%) = mkAnd
-
-       
-let mkNeg t =
-  if enable_smart_constructors then begin
-      match t with
-      | True -> False
-      | False -> True
-      | Neg t -> t
-      | _ -> Neg t
-    end
-  else Neg t
-
-let (!%) = mkNeg
-
-             
-let mkEq (e : Expr.t) (e' : Expr.t) =
-  if not enable_smart_constructors then Eq(e,e') else 
-  if e = e' then
-    ((*Printf.printf "[=] %s and %s are equal, so True\n" (Expr.to_string e) (Expr.to_string e');*)
-     True)
-  else
-    let norm = match e, e' with
-    | Value _, Value _
-      ->
-       (*Printf.printf "[=] %s and %s are unequal values so False\n" (Expr.to_string e) (Expr.to_string e');*)
-       False
-    | Hole x , Hole x'
-    | Var x, Var x'
-      -> if x < x'
-         then Eq (e, e')
-         else Eq (e', e)           
-    | _, _ ->
-       if Expr.ord e < Expr.ord e'
-       then Eq (e, e')9
-       else Eq (e', e)
-    in
-    match norm with
-    | Eq(Value(_), Mask(Var(_,_), Value(m)))
-         when Value.big_eq m Bigint.zero -> True
-    | _ -> norm
-
-
-let mkLe (e : Expr.t) (e' : Expr.t) : test =
-  if not enable_smart_constructors then Le(e,e') else
-  match e, e' with
-    | Value(first), Value(second) ->
-       if Value.leq first second then True else False
-    | _, _ -> Le(e, e')
-            
-let (%=%) = mkEq
-let (%<>%) v v' = Neg(v %=% v') 
-
-let (%<=%) = mkLe
-let (%>=%) e e' = e' %<=% e
-let (%<%) e e' = !%(e %>=% e')
-let (%>%) e e' = !%(e %<=% e')
-
-let mkImplies assum conseq =
-  if not enable_smart_constructors then Impl(assum, conseq) else
-    if assum = conseq then True else
-    match assum, conseq with
-    | True, _ -> conseq
-    | _, True | False, _ -> True
-    | _, False -> !%(assum)
-    | _, _ -> Impl(assum, conseq)
-
-let mkImpl = mkImplies
-
-let (%=>%) = mkImpl
-
-let mkIff lhs rhs =
-  if enable_smart_constructors
-  then if lhs = rhs then True else Iff(lhs, rhs)
-  else Iff(lhs, rhs)
-let (%<=>%) = mkIff
-
-
-let rec sexp_string_of_test t =
-  let binop opname left right recfun : string=
-    opname ^ "(" ^ recfun left ^ "," ^ recfun right ^ ")" in
-  match t with
-  | True -> "True"
-  | False -> "False"
-  | Eq  (left, right) -> binop "Eq" left right Expr.to_sexp_string
-  | Le  (left, right) -> binop "Le" left right Expr.to_sexp_string
-  | Impl (assum, conseq) -> binop "Impl" assum conseq sexp_string_of_test
-  | Iff (left, right) -> binop "Iff" left right sexp_string_of_test
-  | Or  (left, right) -> binop "Or" left right sexp_string_of_test
-  | And (left, right) -> binop "And" left right sexp_string_of_test
-  | Neg t -> "Neg(" ^ sexp_string_of_test t ^ ")"
-
-let rec num_nodes_in_test t =
-  match t with
-  | True | False -> 1
-  | Eq (left, right) -> Expr.num_nodes left + Expr.num_nodes right + 1
-  | Le (left, right) -> Expr.num_nodes left + Expr.num_nodes right + 1
-  | Iff (left, right) | Or (left, right) | And(left, right) | Impl(left, right)
-    -> num_nodes_in_test left + 1 + num_nodes_in_test right
-  | Neg t -> num_nodes_in_test t + 1
-                          
-           
-let rec remove_dups y xs =
-  match xs with
-  | [] -> []
-  | x::xs ->
-     if y = x then
-       remove_dups y xs
-     else
-       x :: remove_dups y xs
-    
-let rec dedup xs =
-  match xs with
-  | [] -> []
-  | x::xs ->
-     let xs' = remove_dups x xs in
-     x :: dedup xs'
-
-let rec free_of_test typ test : (string * size) list =
-  begin match test with
-  | True | False -> 
-    []
-  | Or (l,r) | And (l, r) | Impl (l,r) | Iff (l, r) ->
-     free_of_test typ l @ free_of_test typ r
-  | Neg t ->
-     free_of_test typ t
-  | Eq (e, e') | Le (e, e') ->
-     Expr.frees typ e @ Expr.frees typ e'
-  end
-  |> dedup
-
-let free_vars_of_test t : (string * size) list=
-  let vs = free_of_test `Var t in
-  vs
-            
-                
-let holes_of_test = free_of_test `Hole
-
-                                 
-let rec has_hole_test = function
-  | True | False -> false
-  | Neg b -> has_hole_test b
-  | And (a,b) | Or(a,b) | Impl (a,b) | Iff(a,b) ->
-     has_hole_test a || has_hole_test b
-  | Eq (e1,e2) | Le (e1,e2) ->
-     Expr.has_hole e1 || Expr.has_hole e2
-
-                  
-let rec multi_ints_of_test test : Value.t list =
-  begin match test with
-    | True | False -> 
-      []
-    | Or (l, r) | And (l, r)
-      | Impl (l, r) | Iff (l,r)
-      ->
-      multi_ints_of_test l
-      @ multi_ints_of_test r
-    | Neg t ->
-       multi_ints_of_test t
-    | Eq (e, e') | Le (e, e') ->
-       Expr.multi_vals e @ Expr.multi_vals e'
-  end
-
 type select_typ =
   | Partial
   | Total
@@ -249,9 +27,9 @@ let sexp_string_of_select_typ styp =
 type cmd =
   | Skip
   | Assign of (string * Expr.t)
-  | Assume of test
+  | Assume of Test.t
   | Seq of (cmd * cmd)
-  | Select of (select_typ * ((test * cmd) list))
+  | Select of (select_typ * ((Test.t * cmd) list))
   | Apply of {name:string;
               keys:(string * size * Value.t option) list;
               actions:((string * (string * size) list * cmd) list);
@@ -278,7 +56,7 @@ let (%<-%)= mkAssn
 
 
 let mkAssume t =
-  if t = True then Skip else Assume t
+  if t = Test.True then Skip else Assume t
 
 let clean_selects_list ss = ss
 
@@ -372,7 +150,7 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
     ^ string_of_cmd ~depth thendo
   | Assume t ->
     repeat "\t" depth ^
-    "assume (" ^ string_of_test t ^ ")"
+    "assume (" ^ Test.to_string t ^ ")"
   | Assign (field, expr) ->
     repeat "\t" depth ^
     field ^ " := " ^ Expr.to_string expr
@@ -383,7 +161,7 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
     List.fold es ~init:"" ~f:(fun str (cond, act)->
         str ^ "\n" ^
         repeat "\t" (depth + 1)
-        ^ string_of_test cond  ^ " ->\n " ^ string_of_cmd ~depth:(depth+2) act ^ " []"
+        ^ Test.to_string cond  ^ " ->\n " ^ string_of_cmd ~depth:(depth+2) act ^ " []"
       )
     ^ "\n" ^ repeat "\t" depth ^ "fi"
   | Apply t ->
@@ -407,12 +185,12 @@ let rec string_of_cmd ?depth:(depth=0) (e : cmd) : string =
   
 let rec sexp_string_of_cmd e : string =
   let string_select = concatMap 
-                        ~f:(fun (cond,act) -> "(" ^ sexp_string_of_test cond ^ "," ^ sexp_string_of_cmd act ^ ")")
+                        ~f:(fun (cond,act) -> "(" ^ Test.to_sexp_string cond ^ "," ^ sexp_string_of_cmd act ^ ")")
                         ~c:(fun acc d -> acc ^ ";" ^ d) in
   match e with
   | Skip -> "Skip"
   | Seq (p, q) -> "Seq(" ^ sexp_string_of_cmd p ^ "," ^ sexp_string_of_cmd q ^ ")"
-  | Assume t -> "Assume(" ^ sexp_string_of_test t ^ ")"
+  | Assume t -> "Assume(" ^ Test.to_sexp_string t ^ ")"
   | Assign (f,e) -> "Assign(\"" ^ f ^ "\"," ^ Expr.to_sexp_string e ^")"
   | Select (styp,es) ->
     let cases_string = match es with
@@ -450,8 +228,8 @@ let rec num_nodes_in_cmd c =
   | Skip -> 0
   | Assign (_, e) -> Expr.num_nodes e
   | Seq (c1,c2) -> num_nodes_in_cmd c1 + num_nodes_in_cmd c2
-  | Assume t -> num_nodes_in_test t
-  | Select (_, cases) -> List.fold cases ~init:0 ~f:(fun acc (b, c) -> acc + num_nodes_in_test b + num_nodes_in_cmd c)
+  | Assume t -> Test.num_nodes t
+  | Select (_, cases) -> List.fold cases ~init:0 ~f:(fun acc (b, c) -> acc + Test.num_nodes b + num_nodes_in_cmd c)
   | Apply {keys;actions;default;_} ->
      List.length keys + num_nodes_in_cmd default
      + List.fold actions ~init:0
@@ -512,10 +290,10 @@ let rec free_of_cmd typ (c:cmd) : (string * size) list =
      end
   | Seq (c, c') ->
      free_of_cmd typ c @ free_of_cmd typ c'
-  | Assume t -> free_of_test typ t
+  | Assume t -> Test.frees typ t
   | Select (_,ss) ->
     List.fold ss ~init:[] ~f:(fun fvs (test, action) ->
-        free_of_test typ test
+        Test.frees typ test
         @ free_of_cmd typ action
         @ fvs
       )
@@ -546,37 +324,26 @@ let rec multi_ints_of_cmd c : (Value.t) list =
     multi_ints_of_cmd c
     @ multi_ints_of_cmd c'
   | Assume t ->
-    multi_ints_of_test t
+    Test.multi_vals t
   | Select (_,ss) ->
     concatMap ss ~init:(Some []) ~c:(@)
       ~f:(fun (test, action) ->
-          multi_ints_of_test test
+          Test.multi_vals test
           @ multi_ints_of_cmd action
       )
   | Apply t ->
      List.fold t.actions ~init:(multi_ints_of_cmd t.default)
        ~f:(fun rst act -> rst @ multi_ints_of_cmd (trd3 act))
-                          
-and holify_test ~f holes b : test =
-  match b with
-  | True | False -> b
-  | Eq (e, e') -> Expr.holify ~f holes  e %=% Expr.holify ~f holes  e'
-  | Le (e, e') -> Expr.holify ~f holes  e %<=% Expr.holify ~f holes  e'
-  | And (b, b') -> holify_test ~f holes b %&% holify_test ~f holes b'
-  | Or (b, b')  -> holify_test ~f holes b %+% holify_test ~f holes b'
-  | Impl(b,b') -> holify_test ~f holes b %=>% holify_test ~f holes b'
-  | Iff(b, b') -> holify_test ~f holes b %=>% holify_test ~f holes b'
-  | Neg b       -> !%(holify_test ~f holes b)
-                     
-and holify_cmd ~f holes c : cmd=
+
+let rec holify_cmd ~f holes c : cmd=
   match c with
   | Skip -> c
   | Assign (v, e) -> v %<-% Expr.holify ~f holes e
-  | Assume t -> Assume (holify_test ~f holes t)
+  | Assume t -> Assume (Test.holify ~f holes t)
   | Seq (c, c') ->
      holify_cmd ~f holes c %:% holify_cmd ~f holes c'
   | Select (styp, cases) ->
-     List.map cases ~f:(fun (t, c) -> holify_test ~f holes t, holify_cmd ~f holes c)
+     List.map cases ~f:(fun (t, c) -> Test.holify ~f holes t, holify_cmd ~f holes c)
      |> mkSelect styp
   | Apply t
     -> Apply {name=t.name;

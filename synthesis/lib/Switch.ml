@@ -15,7 +15,7 @@ type t =
     tag : [`Mask | `Exact] option ref;   (* flag determining whether holes can be masked *)
     edited_inst : Instance.t option ref; (* inst with edits applied *)
     do_slice : bool;
-    drop_spec : test option;             (* dead code? *)
+    drop_spec : Test.t option;             (* dead code? *)
   }
 
 let make ?drop_spec:(drop_spec = None) pipeline inst edits : t =

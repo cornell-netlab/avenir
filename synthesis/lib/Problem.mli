@@ -3,7 +3,7 @@ open Ast
 type t
 
 val make :
-  ?phys_drop_spec:test option ->
+  ?phys_drop_spec:Test.t option ->
   log:cmd -> phys:cmd -> fvs:(string * int) list
   -> log_inst:Instance.t -> phys_inst:Instance.t
   -> log_edits:Edit.t list -> unit -> t
@@ -14,7 +14,7 @@ val to_string : Parameters.t -> t -> string
 
 val fvs : t -> (string * int) list
 val cexs : t -> (Packet.t * Packet.t) list
-val model_space : t -> test
+val model_space : t -> Test.t
 val attempts : t -> Model.t list
 val add_cex : t  -> (Packet.t * Packet.t) -> t
 
@@ -30,7 +30,7 @@ val phys_edits : t -> Edit.t list
 val phys_gcl_program : Parameters.t -> t -> cmd
 val phys_edited_instance : Parameters.t -> t -> Instance.t
 val phys_gcl_holes : Parameters.t -> t -> Instance.interp -> [`Exact | `Mask] -> cmd
-val phys_drop_spec : t -> test option
+val phys_drop_spec : t -> Test.t option
 
 
 val slice : Parameters.t -> t -> t
@@ -56,7 +56,7 @@ val seen_attempt : t -> Model.t -> bool
 
 
 val reset_model_space : t -> t
-val refine_model_space : t -> test -> t
+val refine_model_space : t -> Test.t -> t
 
 val slice_conclusive : Parameters.t -> ProfData.t ref -> t -> bool
 

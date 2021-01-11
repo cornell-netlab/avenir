@@ -1,6 +1,7 @@
 open Core
 open Avenir
 open Ast
+open Avenir.Test
 
 (* Parses real rules *)
 let bmv2_parser_parses_real_rules _ =

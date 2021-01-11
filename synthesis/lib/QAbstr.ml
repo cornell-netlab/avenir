@@ -2,9 +2,9 @@ open Core
 open Ast
 open Util
 
-type gen = {query : test; restriction : test option}
+type gen = {query : Test.t; restriction : Test.t option}
 
-type t = {seen : test list;
+type t = {seen : Test.t list;
           generals: gen list;
          }
 
@@ -53,10 +53,8 @@ let rec abstract_expr (m : string StringMap.t) (e1 : Expr.t) (e2 : Expr.t) : (st
      if false then Printf.printf "\n%s\n doesn't match \n%s\n%!" (to_sexp_string e1) (to_sexp_string e2);
      None
 
-
-
-let rec abstract (m : string StringMap.t) (q1 : test) (q2 : test) : (string StringMap.t * test) option =
-  (* if false then Printf.printf "QUERY SIZE: %d   CACHED TEST SIZE: %d\n" (num_nodes_in_test q1) (num_nodes_in_test q2); *)
+(** TODO:: Rewrite to use Let_Syntax *)
+let rec abstract (m : string StringMap.t) (q1 : Test.t) (q2 : Test.t) : (string StringMap.t * Test.t) option =
   let trecurse f m t11 t12 t21 t22 =
     match abstract m t11 t21 with
     | None -> None
@@ -78,16 +76,16 @@ let rec abstract (m : string StringMap.t) (q1 : test) (q2 : test) : (string Stri
   | False, False -> Some (m, False)
   | Neg t1, Neg t2 -> begin match abstract m t1 t2 with
                       | None -> None
-                      | Some (m', t') -> Some(m', !%(t'))
+                      | Some (m', t') -> Some(m', Test.neg t')
                       end
-  | Eq  (e11,e12), Eq  (e21,e22) -> erecurse (fun e e' -> Eq(e,e'))   m e11 e12 e21 e22
-  | Le  (e11,e12), Le  (e21,e22) -> erecurse (fun e e' -> Le(e,e'))   m e11 e12 e21 e22
-  | And (t11,t12), And (t21,t22) -> trecurse (fun e e' -> And(e,e'))  m t11 t12 t21 t22
-  | Or  (t11,t12), Or  (t21,t22) -> trecurse (fun e e' -> Or(e,e'))   m t11 t12 t21 t22
-  | Impl(t11,t12), Impl(t21,t22) -> trecurse (fun e e' -> Impl(e,e')) m t11 t12 t21 t22
-  | Iff (t11,t12), Iff (t21,t22) -> trecurse (fun e e' -> Iff(e,e'))  m t11 t12 t21 t22
+  | Eq  (e11,e12), Eq  (e21,e22) -> erecurse Test.eq    m e11 e12 e21 e22
+  | Le  (e11,e12), Le  (e21,e22) -> erecurse Test.leq   m e11 e12 e21 e22
+  | And (t11,t12), And (t21,t22) -> trecurse Test.and_  m t11 t12 t21 t22
+  | Or  (t11,t12), Or  (t21,t22) -> trecurse Test.or_   m t11 t12 t21 t22
+  | Impl(t11,t12), Impl(t21,t22) -> trecurse Test.impl  m t11 t12 t21 t22
+  | Iff (t11,t12), Iff (t21,t22) -> trecurse Test.iff   m t11 t12 t21 t22
   | _, _ ->
-     if false then Printf.printf "\n%s\n doesn't match \n%s\n%!" (sexp_string_of_test q1) (sexp_string_of_test q2);
+     if false then Printf.printf "\n%s\n doesn't match \n%s\n%!" (Test.to_sexp_string q1) (Test.to_sexp_string q2);
      None
 
 
@@ -123,7 +121,7 @@ let rec abstracted_expr (e1 : Expr.t) (e2 : Expr.t) (valuation : Value.t StringM
      None
 
 
-let rec abstracted (q1 : test) (q2 : test) (valuation : Value.t StringMap.t) : Value.t StringMap.t option =
+let rec abstracted (q1 : Test.t) (q2 : Test.t) (valuation : Value.t StringMap.t) : Value.t StringMap.t option =
   (* if false then Printf.printf "ABSTRACTED size %d  =?= size %d\n%!" (num_nodes_in_test q1) (num_nodes_in_test q2); *)
   let open Option in
   let trecurse t11 t12 t21 t22 = abstracted t11 t21 valuation >>= abstracted t12 t22 in
@@ -138,7 +136,7 @@ let rec abstracted (q1 : test) (q2 : test) (valuation : Value.t StringMap.t) : V
   | Impl(t11,t12), Impl(t21,t22) -> trecurse t11 t12 t21 t22
   | Iff (t11,t12), Iff (t21,t22) -> trecurse t11 t12 t21 t22
   | _, _ ->
-     if false then Printf.printf "\n\n%s\ndisagrees with\n%s\n\n" (sexp_string_of_test q1) (sexp_string_of_test q2);
+     if false then Printf.printf "\n\n%s\ndisagrees with\n%s\n\n" (Test.to_sexp_string q1) (Test.to_sexp_string q2);
      None
 
 let string_of_map (m : string StringMap.t) =

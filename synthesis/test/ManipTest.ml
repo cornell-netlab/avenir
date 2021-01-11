@@ -1,6 +1,7 @@
 open Alcotest
 open Avenir
 open Ast
+open Avenir.Test
 open Manip
 open Equality
 
@@ -30,7 +31,7 @@ let wp_ordered_eq _ =
     bigand [
         bigand [
             Var ("h",8) %<>% value (2,8);
-            mkNeg @@ bigor [Var("h",8) %=% value (99,8);
+            neg @@ bigor [Var("h",8) %=% value (99,8);
                             Var("h",8) %=% Var("g",8)] ;
           ] %=>% post;
         bigand [

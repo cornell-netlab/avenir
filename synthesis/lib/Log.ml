@@ -1,7 +1,5 @@
 open Core
-open Ast
 (* open ActionGenerator *)
-
 
 let cexs (params : Parameters.t) problem log_out_pkt in_pkt =
   if params.debug then
@@ -35,10 +33,10 @@ let cexs (params : Parameters.t) problem log_out_pkt in_pkt =
 
 let already_explored_error model_space (model : Model.t) =
   Printf.printf "ALREADY EXPLORED\n %s \n\n %s \n%!"
-    (Ast.string_of_test model_space)
+    (Test.to_string model_space)
     (Model.to_string model);
   let res = Manip.fixup_test model model_space in
-  Printf.printf "applied \n\n\n %s\n\n\n" (Ast.string_of_test res)
+  Printf.printf "applied \n\n\n %s\n\n\n" (Test.to_string res)
 
 let print_edits ?tab:(tab=false) (params : Parameters.t) phys es =
   if not params.hot_start then
@@ -67,7 +65,7 @@ let print_search_state (params : Parameters.t) problem es (model : Model.t) =
   if params.debug then begin
       let space = Problem.model_space problem in
       if print_space then
-        Printf.printf "\n\t***Space***\n\t%s\n\t***     ***" (Ast.string_of_test space);
+        Printf.printf "\n\t***Space***\n\t%s\n\t***     ***" (Test.to_string space);
 
       Printf.printf "\n\t***Edits*** (%d CEXs)\n%!" (List.length @@ Problem.cexs problem);
       print_edits params (Problem.phys problem) (Problem.phys_edits problem);
@@ -93,7 +91,7 @@ let print_problem (params : Parameters.t) (problem : Problem.t) =
     end
 
 let print_and_return_test ?(pre="") ?(post="") debug t =
-  if debug then Printf.printf "%s%s%s%!" pre (string_of_test t) post;
+  if debug then Printf.printf "%s%s%s%!" pre (Test.to_string t) post;
   t
 
 
@@ -111,12 +109,13 @@ let edit_cache_hit (params : Parameters.t) prog es =
 let check_attempts do_check problem =
   if do_check then
     match (List.find (Problem.attempts problem)
-             ~f:(fun m -> True = Manip.fixup_test m (Problem.model_space problem))) with
+             ~f:(fun m -> Problem.model_space problem |> Manip.fixup_test m |> Test.equals Test.True))
+    with
     | None -> ()
     | Some model ->
        Printf.printf "Model\n %s \n is allowed by model space:\n%s\n\n There are %d total attempts\n%!"
          (Model.to_string model)
-         (string_of_test (Problem.model_space problem))
+         (Test.to_string (Problem.model_space problem))
          (List.length (Problem.attempts problem));
        failwith "Duplicate model"
 
@@ -125,7 +124,7 @@ let check_attempts do_check problem =
 let check_qe do_check test =
   if do_check then
     let frees =
-      free_of_test `Var test
+      Test.vars test
       |> List.dedup_and_sort ~compare:(fun (x,_) (y,_) -> String.compare x y)
     in
     if List.is_empty frees

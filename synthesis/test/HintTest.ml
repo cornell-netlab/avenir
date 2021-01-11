@@ -1,5 +1,6 @@
 open Equality
 open Avenir
+open Avenir.Test
 open Ast
 open Hint
 

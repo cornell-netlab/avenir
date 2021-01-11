@@ -6,8 +6,7 @@ open Parameters
 open Semantics
 open VCGen
 
-
-let rec one_some (table: string) (lst : ((test * cmd) list)) : Ast.cmd option =
+let rec one_some (table: string) (lst : ((Test.t * cmd) list)) : Ast.cmd option =
   let processed = List.map lst ~f:(fun (b, c) -> (b, truncated table c)) in
   let elim = List.filter processed ~f:(fun (_,c) -> if c = None then false else true) in
   if (List.is_empty elim) then None else match elim with
@@ -39,14 +38,15 @@ let is_reachable encode_tag params problem fvs in_pkt tbl_name keys =
   passive_hoare_triple ~fvs
     (Packet.to_test in_pkt ~fvs)
     trunc
-    (Hole.match_holes_table encode_tag tbl_name keys
-     %&% Instance.negate_rows phys_inst tbl_name)
+    Test.(Hole.match_holes_table encode_tag tbl_name keys
+          %&% Instance.negate_rows phys_inst tbl_name)
 
 
-let hits_pred params (_: ProfData.t ref) prog inst edits e : test =
+let hits_pred params (_: ProfData.t ref) prog inst edits e : Test.t =
+  let open Test in
   match e with
   | Edit.Add (t, (ms, _, _)) ->
-    let phi = Match.list_to_test ms %&% Instance.negate_rows inst t in
+    let phi = Test.(Match.list_to_test ms %&% Instance.negate_rows inst t) in
     (* Printf.printf "Condition: %s\n%!" (string_of_test phi); *)
     let prefix = truncated t prog |> Option.value_exn in
     let pref_gcl = Instance.(apply params NoHoles `Exact (update_list params inst edits) prefix) in
@@ -96,23 +96,19 @@ let make_cex params problem (x : Packet.t) =
        `NoAndCE (in_pkt,log_pkt)
 
 let attempt_model test =
+  let open Test in
   match test with
   | Eq(Hole(x,_), Value(v)) -> Packet.(set_field empty x v) |> Some
   | _ -> None
 
 
-let unreachable params (problem : Problem.t) (test : Ast.test) =
-  (* let drop_spec = (Problem.phys_drop_spec problem >>| fun spec ->
-   *                  (\* Printf.printf "Program %s\n " (string_of_cmd @@ Problem.phys_gcl_program params problem);
-   *                   * Printf.printf "OUT DROPSPEC:%s\n%!" (string_of_test spec); *\)
-   *                  wp (Problem.phys_gcl_program params problem) spec)
-   *                 |> value_exn in *)
-  (* Printf.printf "IN DROP_SPEC%s\n%!" (string_of_test drop_spec); *)
+let unreachable params (problem : Problem.t) (test : Test.t) =
+  let open Test in
   let n = 10 in
   let rec loop i phi =
     let query = !%(test %&% phi) in
     if params.debug then
-      Printf.printf "FAST CX QUERY %d : \n %s\n%!" (n - i) (string_of_test query);
+      Printf.printf "FAST CX QUERY %d : \n %s\n%!" (n - i) (Test.to_string query);
     match attempt_model query with
     | Some in_pkt -> makecexloop params problem i in_pkt phi
     | None ->
@@ -129,15 +125,16 @@ let unreachable params (problem : Problem.t) (test : Ast.test) =
        if i <= 0
        then (* failwith "" *) `NotFound in_pkt
        else Packet.to_test ~fvs:(Problem.fvs problem) full_pkt
-            |> mkNeg
-            |> mkAnd phi
+            |> Test.neg
+            |> Test.and_ phi
             |> loop (i - 1)
   in
   loop n True
 
-let get_cex ?neg:(neg = True) params data (problem : Problem.t) =
+let get_cex ?neg:(neg = Test.True) params data (problem : Problem.t) =
   let open Problem in
   if params.debug then Printf.printf "\t   a fast Cex\n%!";
   let e = log_edits problem |> List.hd_exn in
-  (neg %&% hits_pred params data (log problem) (log_inst problem) (log_edits problem) e)
+  hits_pred params data (log problem) (log_inst problem) (log_edits problem) e
+  |> Test.and_ neg
   |> unreachable params problem

@@ -1,8 +1,8 @@
 open Core
 open Equality
 open Avenir
+open Avenir.Test
 open Ast
-
 
 let slicing_retargeting_metadata_ethernet _ =
   let open Util in

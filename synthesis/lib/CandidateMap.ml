@@ -19,15 +19,6 @@ let rec compute_cand_for_trace (tag : [`Exact | `Mask]) (line: cmd) (pinst : Ins
      |> mkSelect typ
   | Apply t ->
      (*might need to use existing instance to negate prior rules *)
-     (* let misses =
-      *   match StringMap.find pinst name with
-      *   | None -> True
-      *   | Some rows ->
-      *      List.fold rows ~init:True
-      *        ~f:(fun acc (ms, _) ->
-      *          acc %&% !%(List.fold2_exn keys ms ~init:True ~f:(fun acc k m -> acc %&% encode_match k m))
-      *        )
-      * in *)
      begin match StringMap.find trace t.name with
      | None -> Assume False
      | Some (data, act_idx) ->
@@ -37,10 +28,10 @@ let rec compute_cand_for_trace (tag : [`Exact | `Mask]) (line: cmd) (pinst : Ins
           let actSize = max (log2(List.length t.actions)) 1 in
           let cond = Hole.table_hole tag t.keys t.name act_idx actSize in
           let (_, params, act) = List.nth_exn t.actions act_idx in
-          let args = List.fold2_exn params data ~init:True
-                       ~f:(fun acc param arg ->
-                         acc %&% (Hole param %=% Value arg)
-                       ) in
+          let args =
+            let open Test in
+            List.fold2_exn params data ~init:True
+              ~f:(fun acc param arg -> acc %&% (Hole param %=% Value arg)) in
           mkAssume cond
           %:% mkAssume args
           %:% holify List.(params >>| fst) act

@@ -1,5 +1,4 @@
 open Core
-open Ast
 
 let namegen = NameGen.make ()
 
@@ -20,7 +19,8 @@ let rec shorten_expr (bht : Bishtbl.t) (e : Expr.t) : Expr.t =
     | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
       -> binop (bin_ctor e) es
 
-let rec shorten (bht : Bishtbl.t) (t : test) : test =
+let rec shorten (bht : Bishtbl.t) (t : Test.t) : Test.t =
+  let open Test in
   if disable then t else
     match t with
     | True -> True
@@ -31,7 +31,7 @@ let rec shorten (bht : Bishtbl.t) (t : test) : test =
     | Or (t1,t2) -> shorten bht t1 %+% shorten bht t2
     | Iff (t1,t2) -> shorten bht t1 %<=>% shorten bht t2
     | Impl (t1,t2) -> shorten bht t1 %=>% shorten bht t2
-    | Neg t1 -> mkNeg @@ shorten bht t1
+    | Neg t1 -> !%(shorten bht t1)
 
 let rec unshorten_expr (bht : Bishtbl.t) (e : Expr.t) : Expr.t =
   let open Expr in
@@ -48,7 +48,8 @@ let rec unshorten_expr (bht : Bishtbl.t) (e : Expr.t) : Expr.t =
     | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
       -> binop (bin_ctor e) es
 
-let rec unshorten (bht : Bishtbl.t) (t : test) : test =
+let rec unshorten (bht : Bishtbl.t) (t : Test.t) : Test.t =
+  let open Test in
   if disable then t else
     match t with
     | True -> True
@@ -59,7 +60,7 @@ let rec unshorten (bht : Bishtbl.t) (t : test) : test =
     | Or (t1,t2) -> unshorten bht t1 %+% unshorten bht t2
     | Iff (t1,t2) -> unshorten bht t1 %<=>% unshorten bht t2
     | Impl (t1,t2) -> unshorten bht t1 %=>% unshorten bht t2
-    | Neg t1 -> mkNeg @@ unshorten bht t1
+    | Neg t1 -> !%(unshorten bht t1)
 
 
 let unshorten_model (bht : Bishtbl.t) (m : Model.t) : Model.t =

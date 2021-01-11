@@ -1,6 +1,7 @@
 open Core
 open Avenir
 open Ast
+open Avenir.Test
 
 let construct_model_query_PA_is_sat1 _ =
   Prover.make_provers "z3";

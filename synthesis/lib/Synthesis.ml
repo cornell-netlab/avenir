@@ -18,7 +18,7 @@ let check_equivalence neg (params : Parameters.t) data problem =
   else
     check_valid params condition |> fst
 
-let implements ?neg:(neg = True) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t)
+let implements ?neg:(neg = Test.True) (params : Parameters.t) (data : ProfData.t ref) (problem : Problem.t)
     : (Packet.t * Packet.t) option =
   try_in_sequence [
       (fun _ ->
@@ -53,8 +53,7 @@ let handle_sliced_equivalence neg problem params data = function
      else
        implements ~neg params data problem
 
-
-let get_cex ?neg:(neg=True) (params : Parameters.t) (data :  ProfData.t ref) (problem : Problem.t) : (Packet.t * Packet.t) option =
+let get_cex ?neg:(neg=Test.True) (params : Parameters.t) (data :  ProfData.t ref) (problem : Problem.t) : (Packet.t * Packet.t) option =
   if params.fastcx then
     FastCX.get_cex ~neg params data problem
     |> handle_fast_cex neg params data problem

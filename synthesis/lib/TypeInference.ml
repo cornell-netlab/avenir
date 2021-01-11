@@ -54,7 +54,8 @@ let rec infer_expr (e : Expr.t) : Expr.t =
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | SatPlus es | SatMinus es
     -> binop (bin_ctor e) es
 
-let rec infer_test (t : test) : test =
+let rec infer_test t =
+  let open Test in
   let binop_e op e1 e2 =
     let e1' = infer_expr e1 in
     let e2' = infer_expr e2 in

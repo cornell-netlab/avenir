@@ -8,7 +8,7 @@ let testable_string (type a) (f : a -> string) (eq : a -> a -> bool) =
 let expr = testable_string Expr.to_string Expr.equals
 let same_expr = Alcotest.(check expr) "same expr"
 
-let test = testable_string string_of_test Stdlib.(=)
+let test = testable_string Avenir.Test.to_string Avenir.Test.equals
 let same_test = Alcotest.(check test) "same test"
 
 let cmd = testable_string sexp_string_of_cmd Stdlib.(=)

@@ -39,10 +39,10 @@ let rec mk_one_big_table' (tbl : only_apply) c =
   | Seq(c1, c2) -> mk_one_big_table' (mk_one_big_table' tbl c1) c2
   | Select(_, tcl) ->
     let free = List.map tcl
-                ~f:(fun (t, _) -> List.map (free_vars_of_test t) ~f:(fun(f, s) -> (f, s, None)))  |> List.concat in
+                ~f:(fun (t, _) -> List.map (Test.vars t) ~f:(fun(f, s) -> (f, s, None)))  |> List.concat in
     let es = List.map tcl ~f:snd in
     
-    let tbl_keys = {tbl with keys = dedup (tbl.keys @ free)} in
+    let tbl_keys = {tbl with keys = Util.dedup (tbl.keys @ free)} in
     List.fold es ~init:tbl_keys ~f:mk_one_big_table'
   | Apply app_t ->
     let cross_actions = List.map
@@ -50,7 +50,7 @@ let rec mk_one_big_table' (tbl : only_apply) c =
                           ~f:(fun (x, y) -> combine_actions x y) in
     let def_tbl_to_app_t = List.map app_t.actions ~f:(combine_actions ("DEFAULT", [], tbl.default)) in
     let tbl_to_def_app_t = List.map tbl.actions ~f:(fun t -> combine_actions t ("DEFAULT", [], app_t.default)) in
-    { keys = dedup (tbl.keys @ app_t.keys);
+    { keys = Util.dedup (tbl.keys @ app_t.keys);
       actions = def_tbl_to_app_t @ tbl_to_def_app_t @ cross_actions;
       default = tbl.default %:% app_t.default }
 

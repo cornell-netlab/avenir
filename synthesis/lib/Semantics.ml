@@ -25,9 +25,10 @@ let rec eval_expr (pkt : Packet.t) (e : Expr.t) : Value.t option =
   | Concat (e1,e2) -> binop Value.concat e1 e2
   | Slice {hi;lo;bits} -> eval_expr pkt bits >>| Value.slice hi lo
 
-let rec check_test (cond : test) (pkt : Packet.t) : bool option =
+let rec check_test (cond : Test.t) (pkt : Packet.t) : bool option =
   let binopt op a b = oLift2 op (check_test a pkt) (check_test b pkt) in
   let binope op e e' = oLift2 op (eval_expr pkt e) (eval_expr pkt e') in
+  let open Test in
   match cond with
   | True -> Some true
   | False -> Some false
@@ -42,7 +43,7 @@ let rec check_test (cond : test) (pkt : Packet.t) : bool option =
 let ifte_test cond pkt_loc tru fls =
   match check_test cond pkt_loc with
   | None ->
-     Printf.printf "[UseBeforeDefError] in test %s" (string_of_test cond);
+     Printf.printf "[UseBeforeDefError] in test %s" (Test.to_string cond);
      failwith ""
   | Some t when t ->tru ()
   | _ -> fls ()
@@ -143,6 +144,7 @@ let widening_match pkt wide matches =
 *)
 
 let action_to_execute pkt wide (rows : Row.t list ) =
+  let open Test in
   List.fold rows ~init:(True,None,None)
     ~f:(fun rst (matches, data, action) ->
       match rst  with
@@ -194,7 +196,7 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
                Printf.printf "[EVAL (%d)] Skipping selection, no match for %s\n"
                  (gas)
                  (Packet.to_string pkt);
-               (True, Skip, List.length selects)
+               (Test.True, Skip, List.length selects)
           in
           let (test, a, _) = find_match pkt selects ~default in
           let (p,w,cmd,trace) = trace_eval_inst ~gas ~wide a inst pkt in

@@ -1,5 +1,6 @@
 open Core
 open Avenir
+open Avenir.Test
 open Ast
 open Equality
 

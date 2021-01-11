@@ -1,6 +1,7 @@
 open Core
 open Avenir
 open Ast
+open Avenir.Test
 open Semantics
 
 let cross_packet =

@@ -62,7 +62,8 @@ let get_size (m : t) : size =
   | Between (v,_) -> Value.size v
 
 
-let to_test (m : t) : test =
+let to_test (m : t) : Test.t =
+  let open Test in
   let sz = get_size m in
   let k = (m.key, sz) in
   match m.data with
@@ -86,6 +87,7 @@ let to_test (m : t) : test =
 
 (**Assume match is well-typed for tbl*)
 let to_test_hole tbl m =
+  let open Test in
   match m.data with
   | Exact v ->
      Hole (Hole.match_hole_exact tbl m.key,Value.size v) %=% Value v
@@ -110,6 +112,7 @@ let to_model_alist tbl m =
      [vh, vint; mh, mask]
 
 let test_hole_of_lists tbl ms =
+  let open Test in
   List.fold ms ~init:True
     ~f:(fun acc m ->
       acc %&% to_test_hole tbl m)
@@ -148,6 +151,7 @@ let list_to_model tbl ms =
 
 
 let to_valuation_test table hole_typ mtch =
+  let open Test in
   let k = mtch.key in
   let sz = get_size mtch in
   match hole_typ, mtch.data with
@@ -187,6 +191,7 @@ let list_to_string : t list -> string =
   List.fold ~init:"" ~f:(fun acc m -> Printf.sprintf "%s%s" acc (list_el_string m))
 
 let list_to_test (matches : t list) =
+  let open Test in
   List.fold matches ~init:True ~f:(fun acc m -> acc %&% to_test m)
 
 

@@ -17,7 +17,7 @@ let rec eliminate_unused_vars cmd (used : StringSet.t) =
      else
        (Skip, used)
   | Assume t ->
-     (Assume t, stringset_add_list used @@ List.map ~f:fst @@ free_of_test `Var t)
+     (Assume t, stringset_add_list used @@ List.map ~f:fst @@ Test.vars t)
   | Seq (c1,c2) ->
      let c2', used2 = eliminate_unused_vars c2 used in
      let c1', used1 = eliminate_unused_vars c1 used2 in
@@ -26,7 +26,7 @@ let rec eliminate_unused_vars cmd (used : StringSet.t) =
      let cases', used' =
        List.fold cases ~init:([],used)
          ~f:(fun (acc_cases,acc_used) (b,c) ->
-           let b_fvs = free_of_test `Var b in
+           let b_fvs = Test.vars b in
            let c',used' = eliminate_unused_vars c used in
            (acc_cases @ [(b,c')],
             stringset_add_list used' (fsts b_fvs)

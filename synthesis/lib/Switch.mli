@@ -2,12 +2,12 @@ open Ast
 
 type t
 
-val make : ?drop_spec:(test option) -> cmd -> Instance.t ->  Edit.t list -> t
+val make : ?drop_spec:(Test.t option) -> cmd -> Instance.t ->  Edit.t list -> t
 
 val pipeline : t -> cmd
 val inst : t -> Instance.t
 val edits : t -> Edit.t list
-val drop_spec : t -> test option
+val drop_spec : t -> Test.t option
 
 val slice : Parameters.t -> t -> t
 

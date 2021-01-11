@@ -475,12 +475,13 @@ let get_type_decls : Declaration.t list -> Declaration.t list =
   List.filter_map
     ~f:(fun top_decl -> get_type_decl_from_decl top_decl)
 
-let rec encode_expression_to_test (type_ctx : Declaration.t list) (e: Expression.t) : test =
+let rec encode_expression_to_test (type_ctx : Declaration.t list) (e: Expression.t) : Test.t =
   let module E = Expression in
-  let unimplemented (name : string) : test =
+  let open Test in
+  let unimplemented (name : string) : Test.t =
     failwith ("[Unimplemented Expression->Value Encoding for " ^ name ^"] at " ^ Petr4.Info.to_string (fst e))
   in
-  let type_error (got : string) : test =
+  let type_error (got : string) : Test.t =
     failwith ("[TypeError] Expected boolean expression but got " ^ got ^ " at " ^ Petr4.Info.to_string (fst e))
   in
   match snd e with
@@ -493,60 +494,60 @@ let rec encode_expression_to_test (type_ctx : Declaration.t list) (e: Expression
   | E.BitStringAccess _ -> type_error ("a bitstring access")
   | E.List _ -> type_error "a list"
   | E.UnaryOp {op; arg} ->
-    let open Op in
-    let unop x = match snd op with
-      | Not -> !%(x)
-      | BitNot -> type_error ("a bit-operation")
-      | UMinus -> unimplemented ("UMinus")
-    in
-    unop (encode_expression_to_test type_ctx arg)
+     let open Op in
+     let unop x = match snd op with
+       | Not -> Test.neg x
+       | BitNot -> type_error ("a bit-operation")
+       | UMinus -> unimplemented ("UMinus")
+     in
+     unop (encode_expression_to_test type_ctx arg)
   | E.BinaryOp {op; args=(l,r)} ->
-    let open Op in
-    let l_w = get_width type_ctx l in
-    let r_w = get_width type_ctx r in
-    let to_value_l = encode_expression_to_value_with_width r_w type_ctx in
-    let to_value_r = encode_expression_to_value_with_width l_w type_ctx in
-    let to_test = encode_expression_to_test type_ctx in
-    begin match snd op with
-      | Lt -> to_value_l l %<% to_value_r r
-      | Le -> !%(to_value_r r %<% to_value_l l)
-      | Gt -> to_value_r r %<% to_value_l l
-      | Ge -> !%(to_value_l l %<% to_value_r r)
-      | Eq -> to_value_l l %=% to_value_r r
-      | NotEq -> to_value_l l %<>% to_value_r r
-      (* homomorphic cases *)
-      | And -> to_test l %&% to_test r
-      | Or -> to_test l %+% to_test r
-      (* unimplemented cases *)
-      | Plus | PlusSat | Minus
-      | MinusSat | Mul | Div | Mod
-        -> type_error "an arithmetic expression"
-      | Shl | Shr | BitAnd | BitXor | BitOr
-        -> type_error "a bit-shift operation"
-      | PlusPlus
-        -> type_error "an array operation"
-    end
+     let open Op in
+     let l_w = get_width type_ctx l in
+     let r_w = get_width type_ctx r in
+     let to_value_l = encode_expression_to_value_with_width r_w type_ctx in
+     let to_value_r = encode_expression_to_value_with_width l_w type_ctx in
+     let to_test = encode_expression_to_test type_ctx in
+     begin match snd op with
+     | Lt -> to_value_l l %<% to_value_r r
+     | Le -> !%(to_value_r r %<% to_value_l l)
+     | Gt -> to_value_r r %<% to_value_l l
+     | Ge -> !%(to_value_l l %<% to_value_r r)
+     | Eq -> to_value_l l %=% to_value_r r
+     | NotEq -> to_value_l l %<>% to_value_r r
+     (* homomorphic cases *)
+     | And -> to_test l %&% to_test r
+     | Or -> to_test l %+% to_test r
+     (* unimplemented cases *)
+     | Plus | PlusSat | Minus
+       | MinusSat | Mul | Div | Mod
+       -> type_error "an arithmetic expression"
+     | Shl | Shr | BitAnd | BitXor | BitOr
+       -> type_error "a bit-shift operation"
+     | PlusPlus
+       -> type_error "an array operation"
+     end
   | E.FunctionCall {func; type_args=[]; args=[]} ->
      let members = dispatch_list func in
      begin match List.last members with
      | None -> unimplemented "Function Call with nothing to dispatch"
      | Some (_,"isValid") ->
         Var (validity_bit members, 1) %=% Expr.value (1, 1)
-        (* Var (string_of_memberlist members ^ "()", -1) %=% Value(Int (1, 1) ) *)
+     (* Var (string_of_memberlist members ^ "()", -1) %=% Value(Int (1, 1) ) *)
      | Some _ -> unimplemented ("FunctionCall for members " ^ string_of_memberlist members)
      end
   | E.FunctionCall _ ->
      unimplemented ("FunctionCall with (type?) arguments")
   | E.ExpressionMember {expr;name} ->
-    let members = dispatch_list expr in
+     let members = dispatch_list expr in
      begin match name with
      | (_,"hit") ->
         Var (hit_bit members, 1) %=% Expr.value (1, 1)
      | _ ->
         Var (Printf.sprintf "%s.%s" (string_of_memberlist members) (snd name),
              get_width type_ctx e)
-          %<>% Expr.value (0,get_width type_ctx e)
-        (* unimplemented ("ExpressionMember for members " ^ string_of_memberlist members) *)
+        %<>% Expr.value (0,get_width type_ctx e)
+                        (* unimplemented ("ExpressionMember for members " ^ string_of_memberlist members) *)
      end
   | E.TypeMember _ as expr->
      Expression.sexp_of_pre_t expr
@@ -635,16 +636,16 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t l
   in
   match stmt with
   | MethodCall {func; type_args=_; args } ->
-    let dispList = dispatch_list func in 
-    (* unimplemented (concatMap dispList ~f:(fun x -> snd x) ~c:(fun x y -> x ^ "." ^ y) ^ "()") *)
-    begin match dispatch prog ctx type_ctx rv dispList with
-    | `Petr4 (_,Declaration.Table t) ->
-      encode_table prog ctx type_ctx rv t.name t.properties, true, true
-    | `Petr4 (_,Declaration.Instantiation {typ;_}) ->
-       dispatch_direct_app type_ctx prog typ args
-    | `Motley c -> c
-    | _ -> failwith "unimplemented, only know how to resolve table dispatches"
-    end
+     let dispList = dispatch_list func in
+     (* unimplemented (concatMap dispList ~f:(fun x -> snd x) ~c:(fun x y -> x ^ "." ^ y) ^ "()") *)
+     begin match dispatch prog ctx type_ctx rv dispList with
+     | `Petr4 (_,Declaration.Table t) ->
+        encode_table prog ctx type_ctx rv t.name t.properties, true, true
+     | `Petr4 (_,Declaration.Instantiation {typ;_}) ->
+        dispatch_direct_app type_ctx prog typ args
+     | `Motley c -> c
+     | _ -> failwith "unimplemented, only know how to resolve table dispatches"
+     end
   | Assignment {lhs=lhs; rhs=rhs} ->
      begin match get_members type_ctx lhs, get_members type_ctx rhs with
      | Some lmems, Some rmems ->
@@ -674,41 +675,42 @@ and encode_statement prog (ctx : Declaration.t list) (type_ctx : Declaration.t l
                Fn.flip Expr.concat (Expr.slice (lo-1) 0 bits)
              else
                Fn.id
-             in
+           in
            f %<-%(Expr.concat
                     (Expr.slice s hi bits)
                     (encode_expression_to_value_with_width (hi - lo) type_ctx rhs)
                   |> concat_if_necessary)
-          , false
-          , false
+           , false
+           , false
 
         | _ -> failwith ("[TypeError] lhs of assignment must be a field, at " ^ Petr4.Info.to_string info)
         end
      end
   | DirectApplication {typ; args} ->
-        dispatch_direct_app type_ctx prog typ args
-    (* unimplemented ("DirectApplication" ^ Sexp.to_string ([%sexp_of: Statement.pre_t] stmt)) *)
+     dispatch_direct_app type_ctx prog typ args
+  (* unimplemented ("DirectApplication" ^ Sexp.to_string ([%sexp_of: Statement.pre_t] stmt)) *)
   | Conditional {cond; tru; fls} ->
-    let fls_case, fls_rb, fls_eb =
-      match fls with
-        | None -> [ !%(encode_expression_to_test type_ctx cond), Skip ], false, false
-        | Some fls ->
+     let open Test in
+     let fls_case, fls_rb, fls_eb =
+       match fls with
+       | None -> [ !%(encode_expression_to_test type_ctx cond), Skip ], false, false
+       | Some fls ->
           let stmt, rb1, eb1 = encode_statement prog ctx type_ctx rv fls in
           [ !%(encode_expression_to_test type_ctx cond), stmt ], rb1, eb1
-    in
-    let expr_to_test = encode_expression_to_test type_ctx cond in
-    let tr_stmt, tr_rb, tr_eb = encode_statement prog ctx type_ctx rv tru in
-    mkOrdered ([ expr_to_test, tr_stmt] @ fls_case), fls_rb || tr_rb, fls_eb || tr_eb
+     in
+     let expr_to_test = encode_expression_to_test type_ctx cond in
+     let tr_stmt, tr_rb, tr_eb = encode_statement prog ctx type_ctx rv tru in
+     mkOrdered ([ expr_to_test, tr_stmt] @ fls_case), fls_rb || tr_rb, fls_eb || tr_eb
   | BlockStatement {block} ->
-    encode_block3 prog ctx type_ctx rv block
+     encode_block3 prog ctx type_ctx rv block
   | Exit ->
-    mkAssn exit_bit  (Expr.value (1, 1)), false, true
+     mkAssn exit_bit  (Expr.value (1, 1)), false, true
   | EmptyStatement ->
-    Skip, false, false
+     Skip, false, false
   | Return {expr} ->
-    (match expr with
+     (match expr with
       | None ->
-        mkAssn (return_bit rv) (Expr.value (1, 1)), true, false
+         mkAssn (return_bit rv) (Expr.value (1, 1)), true, false
       | _ -> unimplemented "Return")
   | Switch {expr; cases} ->
      let tbl_apply, cases = encode_switch prog ctx type_ctx expr rv cases in
@@ -878,20 +880,21 @@ and encode_action3 prog (ctx : Declaration.t list) (type_ctx : Declaration.t lis
   let (c, rb, eb) =
     List.fold act.statements ~init:(Skip, false, false)
       ~f:(fun (rst, in_rb, in_eb) stmt ->
-            let tstmt, ret_rb, ret_eb = encode_statement prog ctx type_ctx rv stmt in
-            let tstmt2 = if in_rb
-                            then mkOrdered [ mkEq (Var(return_bit rv, 1)) (Expr.value (0, 1)), tstmt
-                                           ; True , Skip ]
-                            else tstmt in
-            let tstmt3 = if in_eb
-                            then mkOrdered [ mkEq (Var(exit_bit, 1)) (Expr.value (0, 1)), tstmt2
-                                           ; True, Skip ]
-                            else tstmt in
-            (rst %:% tstmt3, ret_rb, ret_eb))
+        let open Test in
+        let tstmt, ret_rb, ret_eb = encode_statement prog ctx type_ctx rv stmt in
+        let tstmt2 = if in_rb
+                     then mkOrdered [ eq (Var(return_bit rv, 1)) (Expr.value (0, 1)), tstmt
+                                    ; True , Skip ]
+                     else tstmt in
+        let tstmt3 = if in_eb
+                     then mkOrdered [ eq (Var(exit_bit, 1)) (Expr.value (0, 1)), tstmt2
+                                    ; True, Skip ]
+                     else tstmt in
+        (rst %:% tstmt3, ret_rb, ret_eb))
   in
   c, rb, eb
 
-and encode_switch prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : Expression.t) (rv : int) ( cases : Statement.switch_case list) : cmd * ((test * cmd) list) =
+and encode_switch prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : Expression.t) (rv : int) ( cases : Statement.switch_case list) : cmd * ((Test.t * cmd) list) =
   let tbl, e, acs = encode_switch_expr prog ctx type_ctx rv expr in
   let rec last_is_only_default =
     let open Statement in
@@ -939,7 +942,7 @@ and encode_switch_expr prog (ctx : Declaration.t list) (type_ctx : Declaration.t
 
 and encode_switch_case prog (ctx : Declaration.t list) (type_ctx : Declaration.t list) (expr : Expr.t)
                       (ts : Table.action_ref list) (rv : int)
-                      (case : Statement.switch_case) : ((test * cmd) option) =
+                      (case : Statement.switch_case) : ((Test.t * cmd) option) =
   let open Statement in
   let c = snd case in
   match c with
@@ -951,7 +954,7 @@ and encode_switch_case prog (ctx : Declaration.t list) (type_ctx : Declaration.t
         let block = encode_block prog ctx type_ctx rv code in
         begin match act_i with
         | Some (i, _) ->
-           let test = expr %=% Expr.value (i + 1, -1) in
+           let test = Test.(expr %=% Expr.value (i + 1, -1)) in
            Some (test, block)
         | None -> failwith ("Action not found when encoding switch statement")
         end
@@ -1033,11 +1036,11 @@ and encode_program (Program(top_decls) as prog : program ) =
   match get_ingress_egress_names top_decls with
   | Some (ingress_name, egress_name) ->
      sequence [
-         mkAssume (Var("standard_metadata.egress_spec",9) %=% Expr.value (0,9));
+         mkAssume (Test.(Var("standard_metadata.egress_spec",9) %=% Expr.value (0,9)));
          encode_pipeline type_cxt prog ingress_name;
          "standard_metadata.egress_port" %<-% Var("standard_metadata.egress_spec", 9);
          mkOrdered [
-             Var("standard_metadata.egress_spec", 9) %<>% Expr.value (0, 9),
+             Test.(Var("standard_metadata.egress_spec", 9) %<>% Expr.value (0, 9)),
              sequence [
                  encode_pipeline type_cxt prog egress_name
                ];
@@ -1157,7 +1160,7 @@ and replace_consts_expr (consts : (string * Expr.t)  list) (e : Expr.t) =
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
     -> binop (Expr.bin_ctor e) es
 
-and replace_consts_test (consts : (string * Expr.t) list) (t : test) =
+and replace_consts_test (consts : (string * Expr.t) list) (t : Test.t) =
   match t with
   | True -> True
   | False -> False
@@ -1218,7 +1221,8 @@ let rec rewrite_expr (m : (string * int) StringMap.t) (e : Expr.t) : Expr.t =
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
     -> binop (Expr.bin_ctor e) es
 
-let rec rewrite_test (m : (string * int) StringMap.t) (t : test) : test =
+let rec rewrite_test (m : (string * int) StringMap.t) (t : Test.t) : Test.t =
+  let open Test in
   match t with
   | True | False -> t
   | Eq (e1,e2) -> rewrite_expr m e1 %=% rewrite_expr m e2

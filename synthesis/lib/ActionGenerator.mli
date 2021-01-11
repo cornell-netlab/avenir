@@ -25,4 +25,4 @@ val tables_affected_by_keys : cmd -> StringSet.t -> StringSet.t * StringSet.t
 
 val feasible_tables : cmd -> (string * int) list -> Match.t list -> Packet.t -> Packet.t -> (string * StringSet.t * StringSet.t) list
 
-val reach_positive_actions : Parameters.t -> Problem.t -> Packet.t -> Packet.t -> test list
+val reach_positive_actions : Parameters.t -> Problem.t -> Packet.t -> Packet.t -> Test.t list

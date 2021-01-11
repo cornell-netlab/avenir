@@ -10,7 +10,7 @@ type t =
     (* input-output counterexamples (for logical program) *)
     cexs: (Packet.t * Packet.t) list;
     (* formula encoding search space that has been traversed *)
-    model_space : Ast.test;
+    model_space : Test.t;
     (* previously obtained models *)
     attempts : Model.t list;
     (* variables used to check equality, and their widths *)
@@ -51,7 +51,7 @@ let to_string params (p : t) =
 let fvs (p : t) : (string * int) list = p.fvs
 let cexs (p : t) : (Packet.t * Packet.t) list = p.cexs
 let add_cex (p : t) cex = {p with cexs = cex::p.cexs}
-let model_space (p : t) : test = p.model_space
+let model_space (p : t) : Test.t = p.model_space
 let attempts (p : t) : Model.t list = p.attempts
 
 let log (p : t) : cmd = Switch.pipeline p.log
@@ -67,7 +67,7 @@ let phys_edited_instance params (p : t) : Instance.t = Switch.edited_instance pa
 let phys_gcl_program params (p : t) : cmd = Switch.to_gcl params (fvs p) p.phys
 
 let phys_gcl_holes params (p : t) dels tag : cmd = Switch.to_gcl_holes params p.phys dels tag
-let phys_drop_spec (p : t) : test option = Switch.drop_spec p.phys
+let phys_drop_spec (p : t) : Test.t option = Switch.drop_spec p.phys
 
 let slice params (p : t) : t =
   (* let log_inst_slice = Instance.update_list params Instance.empty (Switch.edits p.log) in
@@ -119,16 +119,17 @@ let add_attempt (p : t) (attempt : Model.t) : t =
 let seen_attempt (p : t)  (attempt : Model.t) : bool =
   List.exists p.attempts ~f:(Model.equal attempt)
 
-let set_model_space (p : t) (model_space : test) : t =
+let set_model_space (p : t) (model_space : Test.t) : t =
   {p with model_space}
 
 let reset_model_space (p : t) : t =
   (* Printf.printf "RESETTING THE MODEL SPACE\n%!"; *)
   set_model_space p True
 
-let refine_model_space (p : t) (b : test) : t =
+let refine_model_space (p : t) (b : Test.t) : t =
   (* Printf.printf "REFINING THE MODEL SPACE\n%!"; *)
-  set_model_space p @@ p.model_space %&% b
+  Test.and_ p.model_space b
+  |> set_model_space p
 
 
 let apply_edits_to_log params (p : t) (es : Edit.t list) : t =

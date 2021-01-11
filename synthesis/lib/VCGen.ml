@@ -41,6 +41,7 @@ let rec indexVars_expr e (sub : ((int * int) StringMap.t)) =
 
 
 let rec indexVars b sub =
+  let open Test in
   let binop_t op a b = op (indexVars a sub) (indexVars b sub) in
   let binop_e f (e1,e2) =
     let (e1',_) = indexVars_expr e1 sub in
@@ -88,18 +89,19 @@ let rec apply_init_expr (e : Expr.t) =
     | SatMinus es -> binop (bin_ctor e) es
 
 let rec apply_init_test t =
+  let open Test in
   let ebinop op (e,e') = op (apply_init_expr e) (apply_init_expr e') in
   let tbinop op (t,t') = op (apply_init_test t) (apply_init_test t') in
   let tunop op t = op @@ apply_init_test t in
   match t with
   | True | False -> t
-  | Eq es -> ebinop mkEq es
-  | Le es -> ebinop mkLe es
-  | And ts -> tbinop mkAnd ts
-  | Or ts -> tbinop mkAnd ts
-  | Impl ts -> tbinop mkAnd ts
-  | Iff ts -> tbinop mkAnd ts
-  | Neg t -> tunop mkNeg t
+  | Eq es -> ebinop eq es
+  | Le es -> ebinop leq es
+  | And ts -> tbinop and_ ts
+  | Or ts -> tbinop or_ ts
+  | Impl ts -> tbinop impl ts
+  | Iff ts -> tbinop iff ts
+  | Neg t -> tunop neg t
 
 let finals fvs sub =
   StringMap.fold sub ~init:[]
@@ -147,20 +149,22 @@ let rec apply_finals_sub_expr e sub =
 
 
 let rec apply_finals_sub_test t sub =
+  let open Test in
   let ebinop op (e,e') = op (apply_finals_sub_expr e sub) (apply_finals_sub_expr e' sub) in
   let tbinop op (t,t') = op (apply_finals_sub_test t sub) (apply_finals_sub_test t' sub) in
   let tunop op t = op @@ apply_finals_sub_test t sub in
   match t with
   | True | False -> t
-  | Eq es -> ebinop mkEq es
-  | Le es -> ebinop mkLe es
-  | And ts -> tbinop mkAnd ts
-  | Or ts -> tbinop mkAnd ts
-  | Impl ts -> tbinop mkAnd ts
-  | Iff ts -> tbinop mkAnd ts
-  | Neg t -> tunop mkNeg t
+  | Eq es -> ebinop eq es
+  | Le es -> ebinop leq es
+  | And ts -> tbinop and_ ts
+  | Or ts -> tbinop or_ ts
+  | Impl ts -> tbinop impl ts
+  | Iff ts -> tbinop iff ts
+  | Neg t -> tunop neg t
 
 let zip_eq_exn xs ys =
+  let open Test in
   List.fold2_exn xs ys ~init:True ~f:(fun acc x y -> acc %&% (Var x %=% Var y) )
 
 let prepend_str = Printf.sprintf "%s%s"
@@ -178,6 +182,7 @@ let rec prepend_expr pfx e =
     -> binop (bin_ctor e) es
 
 let rec prepend_test pfx b =
+  let open Test in
   match b with
   | True | False -> b
   | Neg b -> !%(prepend_test pfx b)
@@ -203,11 +208,8 @@ let rec prepend pfx c =
             actions = List.map t.actions ~f:(fun (n, scope, act) -> (n, List.map scope ~f:(fun (x,sz) -> (prepend_str pfx x, sz)), prepend pfx act));
             default = prepend pfx t.default}
 
-
-
-
-
 let rec passify_aux sub c : ((int * int) StringMap.t * cmd) =
+  let open Test in
   match c with
   | Skip -> (sub, Skip)
   | Assume b ->
@@ -272,10 +274,8 @@ let passify fvs c =
   (* Printf.printf "active : \n %s \n" (string_of_cmd c); *)
   passify_aux init_sub c
 
-
-
-
 let rec good_wp c =
+  let open Test in
   match c with
   | Skip -> True
   | Assume b -> b
@@ -296,6 +296,7 @@ let rec good_wp c =
   | Apply _ -> failwith "Tables should be applied at this stage"
 
 let rec bad_wp c =
+  let open Test in
   match c with
   | Skip -> False
   | Assume _ -> False
@@ -328,7 +329,7 @@ let good_execs fvs c =
   (merged_sub, passive_c, good_wp passive_c, bad_wp passive_c)
 
 
-let equivalent ?neg:(neg = True) (data : ProfData.t ref) eq_fvs l p =
+let equivalent ?neg:(neg = Test.True) (data : ProfData.t ref) eq_fvs l p =
   (* Printf.printf "assuming %s\n%!" (string_of_test neg); *)
   let l = Assume neg %:% l in
   let p = Assume neg %:% p in
@@ -358,11 +359,12 @@ let equivalent ?neg:(neg = True) (data : ProfData.t ref) eq_fvs l p =
   let in_eq = zip_eq_exn lin pin in
   let out_eq = zip_eq_exn lout pout in
   ProfData.update_time !data.ingress_egress_time st;
-  ((gl %&% gp %&% in_eq) %=>% out_eq)
+  Test.((gl %&% gp %&% in_eq) %=>% out_eq)
 
 
 let hoare_triple_passified_relabelled assum good_n conseq =
-  mkImplies assum @@ mkImplies good_n conseq
+  let open Test in
+  impl assum @@ impl good_n conseq
 
 let hoare_triple_passified sub assum good_n conseq =
   hoare_triple_passified_relabelled

@@ -32,16 +32,14 @@ let rec substituteE ?holes:(holes = false) substMap e =
 (** computes ex[xs -> vs], replacing only Vars whenever holes is false, replacing both whenever holes is true *)
 let rec substitute ?holes:(holes = false) ex subsMap =
   match ex with
-  | True | False -> ex
-  (* Homomorphic Rules*)               
-  | Neg e       -> !%(substitute ~holes e subsMap)
-  | Or   (e, e') -> substitute ~holes e subsMap %+% substitute ~holes e' subsMap
-  | And  (e, e') -> substitute ~holes e subsMap %&% substitute ~holes e' subsMap
-  | Impl (e, e') -> substitute ~holes e subsMap %=>% substitute ~holes e' subsMap
-  | Iff  (e, e') -> substitute ~holes e subsMap %<=>% substitute ~holes e' subsMap
-  (* Do the work *)
-  | Eq (e,e') ->  substituteE ~holes subsMap e %=% substituteE ~holes subsMap e'
-  | Le (e,e') ->  substituteE ~holes subsMap e %<=% substituteE ~holes subsMap e'
+  | Test.True | Test.False -> ex
+  | Test.Neg e       -> Test.neg (substitute ~holes e subsMap)
+  | Test.Or   (e, e') -> Test.or_ (substitute ~holes e subsMap) (substitute ~holes e' subsMap)
+  | Test.And  (e, e') -> Test.and_ (substitute ~holes e subsMap) (substitute ~holes e' subsMap)
+  | Test.Impl (e, e') -> Test.impl (substitute ~holes e subsMap) (substitute ~holes e' subsMap)
+  | Test.Iff  (e, e') -> Test.iff (substitute ~holes e subsMap) (substitute ~holes e' subsMap)
+  | Test.Eq (e,e') -> Test.eq (substituteE ~holes subsMap e) (substituteE ~holes subsMap e')
+  | Test.Le (e,e') -> Test.leq (substituteE ~holes subsMap e) (substituteE ~holes subsMap e')
 
 let substV ?holes:(holes = false) ex substMap =
   StringMap.fold substMap ~init:StringMap.empty ~f:(fun ~key ~data acc ->
@@ -67,6 +65,7 @@ let rec substitute_cmd ?holes:(holes = false) cmd subst =
   | Apply _ -> failwith "[Manip.substitute_cmd] Don't know how to substitute into table"
 
 let rec exact_only t =
+  let open Test in
   match t with
   | Le _ -> false
   | True | False | Eq _ -> true
@@ -75,6 +74,7 @@ let rec exact_only t =
     -> exact_only a && exact_only b
 
 let regularize negs cond misses =
+  let open Test in
   match negs with
   | `NoNegs when cond = True -> cond %&% !%(misses)
   | `NoNegs ->  cond
@@ -89,7 +89,7 @@ let regularize negs cond misses =
                 
 (* computes weakest pre-condition of condition phi w.r.t command c *)
 let rec wp negs c phi =
-  (* let guarded_wp (cond, act) = cond %=>% wp ~no_negations act phi in *)
+  let open Test in
   match c with
   | Skip -> phi
   | Seq (firstdo, thendo) ->
@@ -98,7 +98,7 @@ let rec wp negs c phi =
      let phi' = substitute phi @@ StringMap.singleton field value in
      (* Printf.printf "replacing %s with %s in %s \n to get %s \n" field (string_of_expr value) (string_of_test phi) (string_of_test phi'); *)
      phi'
-  | Assume t -> t %=>% phi
+  | Assume t -> Test.(t %=>% phi)
               
   (* requires at least one guard to be true *)
   | Select (Total, []) -> True
@@ -165,10 +165,11 @@ let rec fill_holes_expr e (subst : Model.t) =
 
 (* Fills in first-order holes according to subst  *)                  
 let rec fill_holes_test t subst =
+  let open Test in
   let binop cnstr rcall left right = cnstr (rcall left subst) (rcall right subst) in
   match t with
   | True | False -> t
-  | Neg a -> mkNeg (fill_holes_test a subst)
+  | Neg a -> !%(fill_holes_test a subst)
   | And  (a, b)   -> binop (%&%)   fill_holes_test  a b
   | Or   (a, b)   -> binop (%+%)   fill_holes_test  a b
   | Impl (a, b)   -> binop (%=>%)  fill_holes_test  a b
@@ -202,7 +203,8 @@ let rec fill_holes (c : cmd) subst =
                actions = List.map t.actions ~f:(fun (n, scope, a) -> (n, scope, fill_holes a subst));
                default = fill_holes t.default subst }
 
-let rec wp_paths negs c phi : (cmd * test) list =
+let rec wp_paths negs c phi : (cmd * Test.t) list =
+  let open Test in
   match c with
   | Skip -> [(c, phi)]
   | Seq (c1, c2) ->
@@ -254,7 +256,7 @@ let rec wp_paths negs c phi : (cmd * test) list =
 
   | Apply t ->
      let open List in
-     (t.default :: List.map ~f:(fun (_, sc, a) -> holify (List.map sc ~f:fst) a) t.actions) >>= flip (wp_paths negs) phi
+     (t.default :: List.map ~f:(fun (_, sc, a) -> Ast.holify (List.map sc ~f:fst) a) t.actions) >>= flip (wp_paths negs) phi
 
 let bind_action_data (vals : Value.t list) (_, scope, cmd) : cmd =
   let holes = fsts scope in
@@ -298,19 +300,19 @@ let rec fixup_expr (model : Model.t) (e : Expr.t) : Expr.t =
   | Plus es | Times es | Minus es | Mask es | Xor es | BOr es | Shl es | Concat es  | SatPlus es | SatMinus es
     -> binop (Expr.bin_ctor e) es
 
-let rec fixup_test (model : Model.t) (t : test) : test =
+let rec fixup_test (model : Model.t) (t : Test.t) : Test.t =
   let binop ctor call left right = ctor (call left) (call right) in 
   match t with
   | True | False -> t
-  | Neg p -> mkNeg (fixup_test model p)
-  | And  (p, q) -> binop (%&%)   (fixup_test model) p q
-  | Or   (p, q) -> binop (%+%)   (fixup_test model) p q
-  | Impl (p, q) -> binop (%=>%)  (fixup_test model) p q
-  | Iff  (p, q) -> binop (%<=>%) (fixup_test model) p q
-  | Eq (v, w) -> binop (%=%)  (fixup_expr model) v w
-  | Le (v, w) -> binop (%<=%) (fixup_expr model) v w
+  | Neg p -> Test.neg (fixup_test model p)
+  | And  (p, q) -> binop Test.(%&%)   (fixup_test model) p q
+  | Or   (p, q) -> binop Test.(%+%)   (fixup_test model) p q
+  | Impl (p, q) -> binop Test.(%=>%)  (fixup_test model) p q
+  | Iff  (p, q) -> binop Test.(%<=>%) (fixup_test model) p q
+  | Eq (v, w) -> binop Test.(%=%)  (fixup_expr model) v w
+  | Le (v, w) -> binop Test.(%<=%) (fixup_expr model) v w
 
-let rec fixup_selects (model : Model.t) (es : (test * cmd) list) =
+let rec fixup_selects (model : Model.t) (es : (Test.t * cmd) list) =
   match es with
   | [] -> []
   | (cond, act)::es' ->
@@ -349,7 +351,7 @@ let rec action_reads (nm, data, cmd) =
   match cmd with
   | Skip -> StringSet.empty
   | Assume b -> StringSet.diff
-                  (to_set @@ free_of_test `Var b)
+                  (to_set @@ Test.vars b)
                   (data_s)
   | Assign (_,e) ->
      StringSet.diff
@@ -361,7 +363,7 @@ let rec action_reads (nm, data, cmd) =
   | Select(_,cs) ->
      concatMap cs ~c:StringSet.union
        ~f:(fun (b,c) ->
-         to_set (free_of_test `Var b)
+         to_set (Test.vars b)
          |> StringSet.union @@ action_reads (nm,data,c)
        )
   | Apply t ->

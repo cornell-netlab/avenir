@@ -36,6 +36,7 @@ let get_row_exn = function
   | Del _ -> failwith "[Edit.get_row_exn] tried to get row of a deletion"
 
 let to_test phys e =
+  let open Test in
   match e with
   | Del(t,i) -> Hole.delete_hole i t %=% Expr.value (1,1)
   | Add(t,(ms,ds,i)) ->
@@ -52,6 +53,7 @@ let to_test phys e =
           (Row.test_of_data t i (List.nth_exn actions i |> snd3) ds)
 
 let test_of_list phys es =
+  let open Test in
   List.(map es ~f:(to_test phys) |> reduce_exn ~f:(%&%))
 
 let to_string e =
@@ -147,12 +149,13 @@ let list_to_model phys es =
     the model [m].
     Assume that [Edit.extract phys m]  = [t].
  *)
-let negate phys (model : Model.t) (es : t list) : test =
+let negate phys (model : Model.t) (es : t list) : Test.t =
+  let open Test in
   !%(if List.is_empty es
      then Model.fold model
             ~init:True
             ~f:(fun ~key ~data:v acc ->
-              mkAnd acc @@
+              and_ acc @@
                 Hole(key, Value.size v) %=% Value v)
      else
        test_of_list phys es
