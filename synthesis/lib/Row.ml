@@ -1,5 +1,4 @@
 open Core
-open Ast
 open Manip
 open Util
 
@@ -29,7 +28,7 @@ let list_to_string ?tab:(tab="") rs : string =
       Printf.sprintf "%s\n%s%s" acc tab (to_string r)
     )
 
-let test_of_data (tbl : string) (act_id : int) (vs : (string * size) list) (vals : action_data) =
+let test_of_data (tbl : string) (act_id : int) (vs : (string * int) list) (vals : action_data) =
   let open Test in
   List.fold2_exn vs vals ~init:True
     ~f:(fun acc (x,sz) v ->
@@ -38,14 +37,13 @@ let test_of_data (tbl : string) (act_id : int) (vs : (string * size) list) (vals
         (Hole.action_data_hole tbl act_id x sz %=% Value v)
     )
 
-let model_alist_of_data (tbl : string) (act_id : int) (vars : (string * size) list) (vals : action_data) =
+let model_alist_of_data (tbl : string) (act_id : int) (vars : (string * int) list) (vals : action_data) =
   List.fold2_exn vars vals ~init:[]
     ~f:(fun acc (x,sz) v ->
       assert (sz = Value.size v);
       acc @
         [Hole.action_data tbl act_id x sz, v]
     )
-
 
 let intersects (m1s, _,_ : t) (m2s, _, _ : t) : bool =
   List.fold2_exn m1s m2s ~init:true
@@ -55,38 +53,39 @@ let get_ith_match (i : int) ((ms, _,_) : t) =
   List.nth ms i
 
 let mk_new_row (match_model : Model.t) phys tbl_name data_opt act : t option =
-  match get_schema_of_table tbl_name phys with
+  match Cmd.get_schema_of_table tbl_name phys with
   | None -> failwith ("Couldnt find keys for table " ^ tbl_name)
   | Some (ks, acts, _) ->
      let keys_holes =
        List.fold ks ~init:(Some [])
-         ~f:(fun acc (key, sz, v_opt) ->
-           match v_opt with
+         ~f:(fun acc key ->
+           let k,sz = Cmd.Key.to_sized key in
+           match Cmd.Key.value key with
            | Some _ -> acc
            | None ->
-              let hlo,hhi = Hole.match_holes_range tbl_name key in
+              let hlo,hhi = Hole.match_holes_range tbl_name k in
               match acc,
                     fixup_expr match_model (Hole(hlo, sz)),
                     fixup_expr match_model (Hole(hhi, sz))
               with
               | None, _,_ -> None
               | Some ks, Hole _, Hole _ ->  begin
-                  let h, hm = Hole.match_holes_mask tbl_name key in
+                  let h, hm = Hole.match_holes_mask tbl_name k in
                   match fixup_expr match_model (Hole(h, sz)),
                         fixup_expr match_model (Hole(hm,sz))
                   with
                   | Hole _,_ ->
-                     Some (ks @ [Match.mask_ key (Value.make(0,sz)) (Value.make(0,sz))])
+                     Some (ks @ [Match.mask_ k (Value.make(0,sz)) (Value.make(0,sz))])
                   | Value v,Hole _ ->
-                     Some (ks @ [Match.exact_ key v])
+                     Some (ks @ [Match.exact_ k v])
                   | Value v, Value m ->
-                     Some (ks @ [Match.mask_ key v m])
+                     Some (ks @ [Match.mask_ k v m])
                   | _ -> failwith "Model did something weird"
                 end
               | Some ks, Value lo, Value hi ->
                  let k = if Value.eq hi lo
                          then failwith "Low value greater than high value in model from z3"
-                         else [Match.between_ key lo hi] in
+                         else [Match.between_ k lo hi] in
                  Some (ks @ k)
               | _, _,_ -> failwith "got something that wasn't a model"
          ) in

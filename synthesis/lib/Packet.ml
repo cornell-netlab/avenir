@@ -1,5 +1,4 @@
 open Core
-open Ast
 open Util
 
 type t = Value.t StringMap.t
@@ -73,6 +72,7 @@ let of_smt_model = Z3ModelExtractor.of_smt_model
 
 
 let to_assignment (pkt : t) =
+  let open Cmd in
   StringMap.fold pkt ~init:Skip
     ~f:(fun ~key ~data acc -> (%:%) acc @@ key %<-% Value data)
 
@@ -96,14 +96,15 @@ let remake ?fvs:(fvs = None) (pkt : t) : t =
               ~data:(Value.make (lower + Random.int upper, sz))
        )
 
-let restrict_packet (fvs : (string * size) list) pkt =
-  StringMap.filter_keys pkt ~f:(fun k -> List.exists fvs ~f:(fun (v,_) -> k = v))
+let restrict_packet (fvs : (string * int) list) pkt =
+  StringMap.filter_keys pkt ~f:(fun k -> List.exists fvs ~f:(fun (v,_) -> String.(k = v)))
 
 let equal ?fvs:(fvs = None) (pkt:t) (pkt':t) =
   match fvs with
-  | None -> StringMap.equal (=) pkt pkt'
+  | None ->
+     StringMap.equal Value.equals pkt pkt'
   | Some fvs ->
-     StringMap.equal (=) (restrict_packet fvs pkt) (restrict_packet fvs pkt')
+     StringMap.equal Value.equals (restrict_packet fvs pkt) (restrict_packet fvs pkt')
 
 let extract_inout_ce (model : t) : (t * t) =
   StringMap.fold model
@@ -132,7 +133,7 @@ let mk_packet_from_list (assoc : (string * Value.t) list) : t =
   StringMap.of_alist_exn assoc
 
 let diff_vars (pkt : t) (pkt' : t) : string list =
-  let is_drop pkt = Option.(StringMap.find pkt "standard_metadata.egress_spec" >>| (=) (Value.make (0,9))) in
+  let is_drop pkt = Option.(StringMap.find pkt "standard_metadata.egress_spec" >>| Value.equals (Value.make (0,9))) in
   let alternate_drop =
     match is_drop pkt, is_drop pkt' with
     | Some dropped, Some dropped' ->

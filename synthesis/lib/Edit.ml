@@ -1,6 +1,5 @@
 open Core
 open Util
-open Ast
 open Manip
 
 type t = Add of string * Row.t (* Name of table *)
@@ -40,7 +39,7 @@ let to_test phys e =
   match e with
   | Del(t,i) -> Hole.delete_hole i t %=% Expr.value (1,1)
   | Add(t,(ms,ds,i)) ->
-     match get_schema_of_table t phys with
+     match Cmd.get_schema_of_table t phys with
      | None -> failwith @@ Printf.sprintf "Couldn't find table %s" t
      | Some (_,actions,_) ->
         let actSize = max (log2 (List.length actions)) 1 in
@@ -61,11 +60,11 @@ let to_string e =
   | Add (nm, row) -> Printf.sprintf "ADD,%s,%s" nm (Row.to_string row)
   | Del (nm, idx) -> Printf.sprintf "DEL,%s,%d" nm idx
 
-let to_bmv2_string (cmd : cmd) e =
+let to_bmv2_string (cmd : Cmd.t) e =
   match e with
   | Add (nm, (matches, action_data, action_id)) ->
      let (_,actions,_) =
-       get_schema_of_table nm cmd
+       Cmd.get_schema_of_table nm cmd
        |> Option.value_exn ~message:(Printf.sprintf "Couldn't find %s" nm)
      in
      let (act_name,_,_) = List.nth_exn actions action_id in
@@ -87,8 +86,8 @@ let list_to_string es =
 
 let eq_tests e e' =
   match e, e' with
-  | Add(nm,(m,_,_)), Add(nm',(m',_,_)) when nm = nm'
-    -> m = m'
+  | Add(nm,(m,_,_)), Add(nm',(m',_,_)) when String.(nm = nm') ->
+    List.equal Match.equal m m'
   | _ -> false
 
 let equal e e' = Stdlib.(e = e')
@@ -101,7 +100,7 @@ let get_ith_match ~i (e : t) =
 let read_vars cmd = function
   | Del _ -> failwith "[read_vars] undefined for del"
   | Add (table, (ms, _, aid)) ->
-     match get_schema_of_table table cmd with
+     match Cmd.get_schema_of_table table cmd with
      | None ->
         failwith @@ Printf.sprintf "Couldn't find %s" table
      | Some (keys, actions, _) ->
@@ -109,25 +108,25 @@ let read_vars cmd = function
         Match.relevant_keys ms
         |> StringSet.of_list
         |> StringSet.union reads
-        |> StringSet.(union @@ of_list @@ fsts3 keys)
+        |> StringSet.(union @@ of_list @@ List.map ~f:Cmd.Key.var_name keys)
 
 let write_vars cmd = function
   | Del _ -> failwith "[write_vars] undefined for del"
   | Add (table, (_, _, aid)) ->
-     match get_schema_of_table table cmd with
+     match Cmd.get_schema_of_table table cmd with
      | None ->
         failwith @@ Printf.sprintf "Couldn't find %s" table
      | Some (_, actions,_) ->
         List.nth_exn actions aid
         |> trd3
-        |> assigned_vars
+        |> Cmd.assigned_vars
 
 let to_model_alist phys e =
   match e with
   | Del(t,i) ->
      [Hole.delete_row_hole_name i t, Value.make(1,1)]
   | Add(t,(ms,ds,i)) ->
-     match get_schema_of_table t phys with
+     match Cmd.get_schema_of_table t phys with
      | None -> failwith @@ Printf.sprintf "Couldn't find table %s" t
      | Some (_,actions,_) ->
         let actSize = max (log2 (List.length actions)) 1 in
@@ -168,12 +167,12 @@ let extract_dels_adds phys (m : Model.t) =
       match Hole.find_add_row key with
       | None -> begin
           match Hole.find_delete_row key with
-          | Some (table_name,row_idx) when data |> Value.get_bigint = Bigint.one ->
+          | Some (table_name,row_idx) when Bigint.(Value.get_bigint data = one) ->
              (Del(table_name, row_idx) :: fst acc, snd acc)
           |  _ -> acc
         end
       | Some tbl ->
-         if data |> Value.get_bigint = Bigint.one then
+         if Bigint.(Value.get_bigint data = one) then
            let act = match Model.find m (Hole.which_act_hole_name tbl) with
              | None ->
                 Printf.sprintf "WARNING:: Couldn't find %s even though I found %s to be true\n%!"  (Hole.which_act_hole_name tbl) key

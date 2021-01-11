@@ -1,5 +1,4 @@
 open Core
-open Ast
 open Util
 
 let rec eval_expr (pkt : Packet.t) (e : Expr.t) : Value.t option =
@@ -157,8 +156,8 @@ let action_to_execute pkt wide (rows : Row.t list ) =
     )
 
 
-let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(wide = StringMap.empty) *) (pkt : Packet.t)
-        : (Packet.t * (Value.t * Value.t) StringMap.t * cmd * (Value.t list * int) StringMap.t) =
+let rec trace_eval_inst ?gas:(gas=10) (cmd : Cmd.t) (inst : Instance.t) ~wide(* :(wide = StringMap.empty) *) (pkt : Packet.t)
+        : (Packet.t * (Value.t * Value.t) StringMap.t * Cmd.t * (Value.t list * int) StringMap.t) =
   if gas = 0
   then (failwith "========OUT OF EVAL GAS============\n")
   else match cmd with
@@ -169,7 +168,7 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
             match Packet.set_field_of_expr_opt pkt f e with
             | Some pkt -> pkt
             | None ->
-               Printf.printf "[UseBeforeDefError] on command %s " (string_of_cmd cmd);
+               Printf.printf "[UseBeforeDefError] on command %s " (Cmd.to_string cmd);
                failwith ""
           in
           (pkt,
@@ -182,7 +181,7 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
           let pkt'', wide'', cmd'', trace'' = trace_eval_inst ~gas ~wide:wide' thendo inst pkt' in
           (pkt''
           , wide''
-          , cmd' %:% cmd''
+          , Cmd.seq cmd' cmd''
           , StringMap.merge trace' trace'' ~f:(fun ~key:_ -> function
                 | `Left v -> Some v
                 | `Right v -> Some v
@@ -196,11 +195,11 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
                Printf.printf "[EVAL (%d)] Skipping selection, no match for %s\n"
                  (gas)
                  (Packet.to_string pkt);
-               (Test.True, Skip, List.length selects)
+               (Test.True, Cmd.Skip, List.length selects)
           in
           let (test, a, _) = find_match pkt selects ~default in
           let (p,w,cmd,trace) = trace_eval_inst ~gas ~wide a inst pkt in
-          (p,w,Assume test %:% cmd,trace)
+          (p,w,Cmd.(assume test %:% cmd),trace)
 
        | Apply t ->
           begin match StringMap.find inst t.name with
@@ -212,11 +211,11 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
                | (cond, Some wide, Some (data, aid)) ->
                   (* Printf.printf "HIT A RULE\n%!"; *)
                   let pkt', wide', cmd', trace = trace_eval_inst ~wide (List.nth_exn t.actions aid |> Manip.bind_action_data data) inst pkt in
-                  (pkt', wide', mkAssume cond %:% cmd', StringMap.set ~key:t.name ~data:(data, aid) trace)
+                  (pkt', wide', Cmd.(assume cond %:% cmd'), StringMap.set ~key:t.name ~data:(data, aid) trace)
                | (cond, _, _) ->
                   (* Printf.printf "Missed everything\n%!"; *)
                   let pkt',wide', cmd', trace = trace_eval_inst ~wide t.default inst pkt in
-                  (pkt' , wide', mkAssume cond %:% cmd', StringMap.set ~key:t.name ~data:([],List.length t.actions) trace )
+                  (pkt' , wide', Cmd.(assume cond %:% cmd'), StringMap.set ~key:t.name ~data:([],List.length t.actions) trace )
              end
           end
 
@@ -224,20 +223,20 @@ let rec trace_eval_inst ?gas:(gas=10) (cmd : cmd) (inst : Instance.t) ~wide(* :(
 
 
 
-let eval_act_trace (act : cmd) (pkt : Packet.t) :  (Packet.t * cmd) =
+let eval_act_trace (act : Cmd.t) (pkt : Packet.t) :  (Packet.t * Cmd.t) =
   match trace_eval_inst act Instance.empty ~wide:StringMap.empty pkt with
   | (pkt, _ ,trace ,_) -> (pkt,trace)
 
-let eval_act (act : cmd) (pkt : Packet.t) : Packet.t =
+let eval_act (act : Cmd.t) (pkt : Packet.t) : Packet.t =
   fst @@ eval_act_trace act pkt
 
 
-let eval_cmd (cmd : cmd) (inst : Instance.t) (pkt : Packet.t) : Packet.t =
+let eval_cmd (cmd : Cmd.t) (inst : Instance.t) (pkt : Packet.t) : Packet.t =
   (* Printf.printf "EVALUATING WITH PACKET:\n %s\n%!" (Packet.string__packet pkt); *)
   match trace_eval_inst cmd inst ~wide:StringMap.empty pkt with
   | (pkt, _ ,_ ,_) -> pkt
 
-let rec trace_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : ((string * int) list * Packet.t) list =
+let rec trace_nd_hits (c : Cmd.t) (inst : Instance.t) (pkt : Packet.t) : ((string * int) list * Packet.t) list =
   match c with
   | Skip -> [[], pkt]
   | Assume b ->
@@ -247,7 +246,7 @@ let rec trace_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : ((string 
   | Assign (f,e) ->
      [[],
       match eval_expr pkt e with
-      | None -> Printf.sprintf "[UseBeforeDefError] in assignment %s" (string_of_cmd c)
+      | None -> Printf.sprintf "[UseBeforeDefError] in assignment %s" (Cmd.to_string c)
                 |> failwith
       | Some v ->
          Packet.set_field pkt f v
@@ -289,7 +288,7 @@ let rec trace_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : ((string 
 
   | Select(Total, _ ) -> failwith "Deprecated"
 
-let get_nd_hits (c : cmd) (inst : Instance.t) (pkt : Packet.t) : (string * int) list =
+let get_nd_hits (c : Cmd.t) (inst : Instance.t) (pkt : Packet.t) : (string * int) list =
   let open List in
   dedup_and_sort ~compare:Stdlib.compare (trace_nd_hits c inst pkt >>= fst)
 

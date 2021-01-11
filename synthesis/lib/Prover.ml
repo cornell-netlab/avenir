@@ -1,5 +1,4 @@
 open Core
-open Ast
 open Z3
 
 let force_print = false
@@ -202,10 +201,10 @@ let check_sat (params : Parameters.t) (longtest : Test.t) =
   let open Smtlib in
   (* Printf.printf "Finding model for test of size %d\n%!" (num_nodes_in_test test); *)
   (* Printf.printf "\n%s\n\n%!" (string_of_test test); *)
-  if longtest = True then (Some Model.empty, Time.Span.zero) else
-  if longtest = False then (None, Time.Span.zero) else
+  if Test.equals longtest True then (Some Model.empty, Time.Span.zero) else
+  if Test.equals longtest False then (None, Time.Span.zero) else
   let test = Shortener.shorten shortener longtest in
-  if params.debug then assert (longtest = Shortener.unshorten shortener test);
+  if params.debug then assert (Test.equals longtest @@ Shortener.unshorten shortener test);
   let vars = vars_to_term (Test.vars test) params.debug in
   let st = Time.now() in
   let holes = Test.holes test |> List.dedup_and_sort
@@ -224,7 +223,7 @@ let check_sat (params : Parameters.t) (longtest : Test.t) =
   let dur = Time.(diff (now()) st) in
   if params.debug && print_debug then Printf.printf "Got a Result\n%!";
   let model =
-    if response = Sat then
+    if Stdlib.(response = Sat) then
       (* let () = Printf.printf "Sat\n%!" in *)
       let model =
         get sat_prover
@@ -234,7 +233,7 @@ let check_sat (params : Parameters.t) (longtest : Test.t) =
       if params.debug && print_debug then
         Printf.printf "MODEL: %s\n%!" (Model.to_string model);
       Some model
-      else if response = Unknown then
+      else if Stdlib.(response = Unknown) then
         failwith "UNKNOWN"
       else None
   in reset (get sat_prover);
@@ -247,7 +246,7 @@ let check_valid (params : Parameters.t) (longtest : Test.t)  =
   let open Smtlib in
   (* Printf.printf "Checking validity for test of size %d\n%!" (num_nodes_in_test test); *)
   let test = Shortener.shorten shortener longtest in
-  if params.debug then assert (longtest = Shortener.unshorten shortener test);
+  if params.debug then assert (Test.equals longtest @@ Shortener.unshorten shortener test);
   (* printf.printf "Test:  %s\n %!" (string_of_test test ); *)
   let vars = Test.vars test
              |> List.dedup_and_sort

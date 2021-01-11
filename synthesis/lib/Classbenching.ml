@@ -1,5 +1,4 @@
 open Core
-open Ast
 
 type tuple = {
     in_port : Match.t option;
@@ -75,7 +74,7 @@ let parse_port_range ident str =
   let lo,hi = String.lsplit2_exn str ~on:':' in
   let lo_int = String.strip lo |> Bigint.of_string in
   let hi_int = String.strip hi |> Bigint.of_string in
-  if lo_int = hi_int
+  if Bigint.(lo_int = hi_int)
   then Match.exact_ ident (Value.big_make (lo_int, 16))
   else Match.between_ ident (Value.big_make (lo_int, 16)) (Value.big_make (hi_int, 16))
 
@@ -173,6 +172,7 @@ let parse_classbench_of fp =
          rows @ [cb_row])
 
 let get cb_row h =
+  let open String in
   if h = "in_port" then cb_row.in_port
   else if h = "ip_dst" then cb_row.ip_dst
   else if h = "ip_src" then cb_row.ip_src
@@ -187,6 +187,7 @@ let get cb_row h =
   else failwith @@ Printf.sprintf "Couldn't find header %s" h
 
 let set cb_row h v =
+  let open String in
   if h = "in_port" then {cb_row with in_port = v}
   else if h = "ip_dst" then {cb_row with ip_dst = v}
   else if h = "ip_src" then {cb_row with ip_src = v}

@@ -1,10 +1,8 @@
-open Ast
-
 type t
 
 val make :
   ?phys_drop_spec:Test.t option ->
-  log:cmd -> phys:cmd -> fvs:(string * int) list
+  log:Cmd.t -> phys:Cmd.t -> fvs:(string * int) list
   -> log_inst:Instance.t -> phys_inst:Instance.t
   -> log_edits:Edit.t list -> unit -> t
 
@@ -18,24 +16,24 @@ val model_space : t -> Test.t
 val attempts : t -> Model.t list
 val add_cex : t  -> (Packet.t * Packet.t) -> t
 
-val log : t -> cmd
+val log : t -> Cmd.t
 val log_inst : t -> Instance.t
 val log_edits : t -> Edit.t list
 val log_edited_instance : Parameters.t -> t -> Instance.t
-val log_gcl_program : Parameters.t -> t -> cmd
+val log_gcl_program : Parameters.t -> t -> Cmd.t
 
-val phys : t -> cmd
+val phys : t -> Cmd.t
 val phys_inst : t -> Instance.t
 val phys_edits : t -> Edit.t list
-val phys_gcl_program : Parameters.t -> t -> cmd
+val phys_gcl_program : Parameters.t -> t -> Cmd.t
 val phys_edited_instance : Parameters.t -> t -> Instance.t
-val phys_gcl_holes : Parameters.t -> t -> Instance.interp -> [`Exact | `Mask] -> cmd
+val phys_gcl_holes : Parameters.t -> t -> Instance.interp -> [`Exact | `Mask] -> Cmd.t
 val phys_drop_spec : t -> Test.t option
 
 
 val slice : Parameters.t -> t -> t
-val update_log : t -> cmd -> t
-val update_phys : t -> cmd -> t
+val update_log : t -> Cmd.t -> t
+val update_phys : t -> Cmd.t -> t
 val empty_log_edits : t -> bool
 val empty_phys_edits : t -> bool
 val append_log_edits : t -> Edit.t list -> t

@@ -1,8 +1,7 @@
 open Core
-open Ast
 
 
-let rec relabel (e : Expr.t) (sz : size) : Expr.t =
+let rec relabel (e : Expr.t) (sz : int) : Expr.t =
   let open Expr in
   let binop mk (e,e') = mk (relabel e sz) (relabel e' sz) in
   match e with
@@ -81,14 +80,15 @@ let rec infer_test t =
   | Iff (b1,b2) -> infer_test b1 %<=>% infer_test b2
   | Neg b -> !%(infer_test b)
 
-let rec infer (p : cmd) : cmd =
+let rec infer (p : Cmd.t) : Cmd.t =
+  let open Cmd in
   match p with
   | Skip -> Skip
   | Assign (s, e) -> s %<-% infer_expr e
   | Assume t -> Assume (infer_test t)
   | Seq (c1,c2) -> infer c1 %:% infer c2
   | Select (typ, bs) ->
-     mkSelect typ @@
+     select typ @@
        List.map bs ~f:(fun (t,c) -> infer_test t, infer c)
   | Apply t ->
      let actions' = List.map t.actions ~f:(infer_action) in

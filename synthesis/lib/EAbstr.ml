@@ -1,5 +1,4 @@
 open Core
-open Ast
 open Util
 
 type t = (Edit.t * Edit.t list) list
@@ -10,7 +9,7 @@ let similar (eold : Edit.t) (enew : Edit.t) =
   (* Printf.printf "\tComparing: %s \n\t       to: %s\n%!" (Edit.to_string enew) (Edit.to_string eold); *)
   match eold, enew with
   | Add (ot, (oms, ods, oaid)), Add (nt, (nms, nds, naid))
-       when ot = nt && oaid = naid (*&& ods = nds*) ->
+       when String.(ot = nt) && oaid = naid (*&& ods = nds*) ->
      (* Printf.printf "\t table %s & action %d match \n%!"  ot oaid; *)
      let adata =
        List.fold2 ods nds ~init:(Some StringMap.empty)
@@ -18,13 +17,13 @@ let similar (eold : Edit.t) (enew : Edit.t) =
            match acc with
            | None -> None
            | Some acc ->
-              if od = nd then
+              if Value.equals od nd then
                 (* let () = Printf.printf "\t[DATA] %s identical, moving on\n%!" (string_of_value od) in *)
                 Some acc
               else
                 let od_s = Value.to_string od in
                 match StringMap.find acc od_s with
-                | Some nd' -> if nd' = nd then Some acc else None
+                | Some nd' -> if Value.equals nd' nd then Some acc else None
                 | None -> StringMap.set acc ~key:od_s ~data:nd |> Some
          ) |> or_unequal_lengths_to_option |> Option.join
      in
@@ -33,7 +32,7 @@ let similar (eold : Edit.t) (enew : Edit.t) =
          match acc with
          | None -> None
          | Some acc ->
-            if om = nm then
+            if Match.equal om nm then
               (* let () = Printf.printf "\t[MTCH] %s identical, moving on\n%!" (Match.to_string om) in *)
               Some acc
             else
@@ -42,7 +41,7 @@ let similar (eold : Edit.t) (enew : Edit.t) =
                * else *)
                 let om_s = Match.to_string om in
                 begin match StringMap.find acc om_s with
-                | Some nm' when nm' = nm -> Some acc
+                | Some nm' when Match.equal nm' nm -> Some acc
                 | Some _ -> None
                 | None ->
                    StringMap.set acc ~key:om_s ~data:nm |> Some
@@ -191,7 +190,7 @@ let infer_fresh phys (curr_edits : Edit.t list) substs (old_edits : Edit.t list 
 
 
 
-let infer (params : Parameters.t) (cache : t) (phys : cmd) (e : Edit.t) =
+let infer (params : Parameters.t) (cache : t) (phys : Cmd.t) (e : Edit.t) =
   let open Option in
   let matching_cached_edits =
     List.filter_map cache
@@ -224,6 +223,6 @@ let infer (params : Parameters.t) (cache : t) (phys : cmd) (e : Edit.t) =
 
 let update (cache : t) (log : Edit.t) (physs : Edit.t list) : t =
   (* Printf.printf "Caching %s\n%!" (Edit.to_string log); *)
-  if List.exists cache ~f:(fun (_,ps) ->  ps = physs)
+  if List.exists cache ~f:(fun (_,ps) -> Edit.equal ps physs)
   then cache
   else (log, physs) :: cache

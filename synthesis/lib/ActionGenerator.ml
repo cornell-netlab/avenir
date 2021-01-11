@@ -1,6 +1,5 @@
 open Core
 open Util
-open Ast
 
 
 type t = {
@@ -23,11 +22,11 @@ let partition_on_finished flows =
            else Second flow
          )
 
-
 (* return all traces of tables and actions on which every non_trivial_key flows to the keys in affected vars
  * the traces that have no source_keys are the completely determined ones that we can
 *)
 let rec flows c (st : t) : (t * (string * int) list) list  =
+  let open Cmd in
   match c with
   | Skip | Assume _ -> [st, []]
   | Assign (f, e) ->
@@ -93,19 +92,20 @@ let print t =
       List.iter actions ~f:(fun (params, act_id, action) ->
           Printf.printf "\naction[%d] \\%s ->\n%s" act_id
             (List.fold params ~init:"" ~f:(fun acc x -> Printf.sprintf "%s %s" acc (Expr.to_string (Var x))))
-            (string_of_cmd action)
+            (Cmd.to_string action)
         );
       Printf.printf "\n\n%!";
     );
   Printf.printf "--\n%!";
   t
 
-let positive_actions (params : Parameters.t) (phys : cmd) (fvs : (string * int) list) (inpkt : Packet.t) (outpkt : Packet.t)
-      : (string * ((string * int) list * int * cmd) list) list * StringSet.t =
+let positive_actions (params : Parameters.t) (phys : Cmd.t) (fvs : (string * int) list) (inpkt : Packet.t) (outpkt : Packet.t)
+    : (string * ((string * int) list * int * Cmd.t) list) list * StringSet.t =
+  let open Cmd in
   let phys = Packet.to_assignment inpkt %:% phys
              |> CompilerOpts.optimize fvs in
   let diff_vars = StringSet.(inter (of_list @@ fsts fvs) (of_list @@ Packet.diff_vars inpkt outpkt)) in
-  let table_actions = get_tables_actions phys in
+  let table_actions = Cmd.get_tables_actions phys in
   Printf.printf "diff_vars : %s \n%!" (string_of_strset diff_vars);
   let has acts = not (List.is_empty acts) in
   (List.filter_map table_actions
@@ -155,7 +155,7 @@ let reach_positive_actions params problem in_pkt out_pkt =
       ~f:(fun acc (_,acts) ->
         List.fold acts ~init:acc
           ~f:(fun acc (_,_,a) ->
-            StringSet.union acc @@ assigned_vars a
+            StringSet.union acc @@ Cmd.assigned_vars a
           )
       )
     |> StringSet.inter fvs_set
@@ -164,7 +164,7 @@ let reach_positive_actions params problem in_pkt out_pkt =
       List.bind pos_acts ~f:(fun (table, acts) ->
           List.map acts ~f:(fun a -> (table, a)))
       |> List.map ~f:(fun (table, _) ->
-             match get_schema_of_table table phys with
+             match Cmd.get_schema_of_table table phys with
              | Some (keys,_,_) -> FastCX.is_reachable `Mask params problem fvs in_pkt table keys
              | None -> failwith @@ Printf.sprintf "couldn't find table %s" table
            )
@@ -177,6 +177,7 @@ let reach_positive_actions params problem in_pkt out_pkt =
 
 let rec tables_affecting_keys phys (keys : StringSet.t) =
   let open StringSet in
+  let open Cmd in
   match phys with
   | Skip | Assume _ -> (keys, empty)
   | Assign (f,e) ->
@@ -206,6 +207,7 @@ let rec tables_affecting_keys phys (keys : StringSet.t) =
 
 let rec tables_affected_by_keys phys keys =
   let open StringSet in
+  let open Cmd in
   match phys with
   | Skip | Assume _ -> (keys, empty)
   | Assign (f,e) ->
@@ -251,15 +253,15 @@ let feasible_tables phys fvs matches inpkt outpkt =
   StringSet.inter affected_tables controlable_tables
   |> StringSet.fold ~init:[] ~f:(fun acc t ->
          acc @ List.return @@
-           match get_schema_of_table t phys with
+           match Cmd.get_schema_of_table t phys with
            | None -> failwith @@ Printf.sprintf "table %s not found" t
            | Some (keys, actions, default) ->
               (t
-              , StringSet.of_list @@ fsts @@ free_keys keys
+              , StringSet.of_list @@ fsts @@ Cmd.free_keys keys
               , List.fold actions
-                  ~init:(assigned_vars default)
+                  ~init:(Cmd.assigned_vars default)
                   ~f:(fun acc (_,_,act) ->
-                    assigned_vars act
+                    Cmd.assigned_vars act
                     |> StringSet.union acc)))
 
 

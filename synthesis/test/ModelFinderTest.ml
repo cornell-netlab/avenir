@@ -1,9 +1,9 @@
 open Core
 open Avenir
-open Ast
 open Avenir.Test
 
 let construct_model_query_PA_is_sat1 _ =
+  let open Cmd in
   Prover.make_provers "z3";
   let inpkt = Packet.mk_packet_from_list
                 ["ipv4.dst", Value.make (5,32);
@@ -17,9 +17,9 @@ let construct_model_query_PA_is_sat1 _ =
         "port" %<-% Expr.value (0,9);
         "ipv4_action_run" %<-% Expr.value (0,1);
         "exit" %<-% Expr.value (0,1);
-        mkOrdered [
+        ordered [
             Var("exit",1) %<>% Expr.value (1,1),
-            mkOrdered [
+            ordered [
                 bigand [
                     Hole("?AddRowtoipv4", 1) %=% Expr.value (1,1);
                     Hole("?ipv4.dst_ipv4", 32) %=% Var("ipv4.dst", 32);
@@ -32,7 +32,7 @@ let construct_model_query_PA_is_sat1 _ =
               ];
             True, Skip
           ];
-        mkOrdered [
+        ordered [
             Var("port",9) %=% Expr.value (0,9),
             sequence [
                 "ipv4.dst" %<-% Expr.value (0,0);
@@ -47,6 +47,7 @@ let construct_model_query_PA_is_sat1 _ =
   Alcotest.(check bool) "is true" true res
 
 let construct_model_query_PA_is_sat_hello _ =
+  let open Cmd in
   Prover.make_provers "z3";
   let set_port e = "standard_metadata.egress_spec" %<-% e in
   let drop = set_port @@ Expr.value (0,9) in
@@ -56,7 +57,7 @@ let construct_model_query_PA_is_sat_hello _ =
               %=% Var("hdr.ipv4.dstAddr",32) in
     let act i = Hole("?ActInipv4_fwd",2) %=% Expr.value (i,2) in
     let actrun i = "ipv4_fwd_action_run" %<-% Expr.value (i,3) in
-    mkOrdered [
+    ordered [
         bigand [add;key;act 0],
         sequence [actrun 1; set_port (Hole("?port_0_ipv4_fwd",9))];
         bigand [add;key;act 1],
@@ -72,7 +73,7 @@ let construct_model_query_PA_is_sat_hello _ =
               %=% Var("hdr.ipv4.dstAddr",32) in
     let act i = Hole("?ActInipv4_rewrite",2) %=% Expr.value (i,2) in
     let actrun i = "ipv4_rewrite_action_run" %<-% Expr.value (i,3) in
-    mkOrdered [
+    ordered [
         bigand [add;key;act 0],
         sequence [actrun 1;
                   "hdr.ethernet.srcAddr"
@@ -97,13 +98,13 @@ let construct_model_query_PA_is_sat_hello _ =
         "return4" %<-% Expr.value (0,1);
         "standard_metadata.egress_port" %<-% Expr.value (0,9);
         "return4" %<-% Expr.value (0,1);
-        mkOrdered [
+        ordered [
             Var("hdr.ipv4_valid",1) %=% Expr.value (1,1),
             sequence["ipv4_fwd_action_run"%<-% Expr.value (0,3);
                      ipv4_tbl;
-                     mkOrdered [
+                     ordered [
                          Var("exit",1) %=% Expr.value (0,1),
-                         mkOrdered [
+                         ordered [
                              Var("return4",1) %=% Expr.value (0,1),
                              sequence [
                                  "ipv4_rewrite_action_run" %<-% Expr.value (0,3);
@@ -118,12 +119,12 @@ let construct_model_query_PA_is_sat_hello _ =
           ];
         "standard_metadata.egress_port"
         %<-% Var("standard_metadata.egress_spec",9);
-        mkOrdered [
+        ordered [
             Var("standard_metadata.egress_spec",9) %<>% Expr.value (0,9),
             "return3" %<-% Expr.value (0,1);
             True, Skip
           ];
-        mkOrdered [
+        ordered [
             Var("standard_metadata.egress_spec",9) %=% Expr.value (0,9),
             sequence [
                 "hdr.ipv4.valid" %<-% Expr.value (0,1);
@@ -177,6 +178,7 @@ let construct_model_query_PA_is_sat_hello _ =
   Alcotest.(check bool) "is true" true res
 
 let construct_model_query_PA_is_sat_hello_smaller _ =
+  let open Cmd in
   let set_port e = "standard_metadata.egress_spec" %<-% e in
   let drop = set_port @@ Expr.value (0,9) in
   let ipv4_tbl =
@@ -185,7 +187,7 @@ let construct_model_query_PA_is_sat_hello_smaller _ =
               %=% Var("hdr.ipv4.dstAddr",32) in
     let act i = Hole("?ActInipv4_fwd",2) %=% Expr.value (i,2) in
     let actrun i = "ipv4_fwd_action_run" %<-% Expr.value (i,3) in
-    mkOrdered [
+    ordered [
         bigand [add;key;act 0],
         sequence [actrun 1; set_port (Hole("?port_0_ipv4_fwd",9))];
 
@@ -200,7 +202,7 @@ let construct_model_query_PA_is_sat_hello_smaller _ =
               %=% Var("hdr.ipv4.dstAddr",32) in
     let act i = Hole("?ActInipv4_rewrite",2) %=% Expr.value (i,2) in
     let actrun i = "ipv4_rewrite_action_run" %<-% Expr.value (i,3) in
-    mkOrdered [
+    ordered [
         bigand [add;key;act 0],
         sequence [actrun 1;
                   "hdr.ethernet.srcAddr"
@@ -220,7 +222,7 @@ let construct_model_query_PA_is_sat_hello_smaller _ =
         "standard_metadata.egress_port" %<-% Expr.value (0,9);
         ipv4_tbl;
         ipv4_rewrite_table;
-        mkOrdered [
+        ordered [
             Var("standard_metadata.egress_spec",9) %=% Expr.value (0,9),
             sequence [
                 "hdr.ipv4.valid" %<-% Expr.value (0,1);

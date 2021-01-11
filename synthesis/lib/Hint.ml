@@ -1,11 +1,19 @@
 open Core
 open Util
-open Ast
 
 type t = {table:string;
           match_opt:Match.t list option;
           act_id_opt:Value.t option; (* unused *)
           act_data_opt:Row.action_data option} (* unused *)
+
+let equal h1 h2 =
+  String.(h1.table = h2.table)
+  && opt_equals h1.match_opt h2.match_opt ~f:(List.equal Match.equal)
+  && opt_equals h1.act_id_opt h2.act_id_opt ~f:Value.equals
+  && opt_equals h1.act_data_opt h2.act_data_opt ~f:(List.equal Value.equals)
+
+
+
 
 (* let well_formed (hint : t) : bool =
  *   match hint.match_opt, hint.act_id_opt, hint.act_data_opt with
@@ -114,7 +122,7 @@ let get_poss_injections phys e : string list =
     |> Match.relevant_keys
     |> StringSet.of_list
   in
-  get_tables_vars ~keys_only:true phys
+  Cmd.get_tables_vars ~keys_only:true phys
   |> List.filter_map
        ~f:(fun (t,vars) ->
          if StringSet.is_subset rel_keys ~of_:(fsts vars |> StringSet.of_list)
@@ -148,10 +156,11 @@ let extract_action_data table act_id params (data_opt : Row.action_data option) 
          acc @ [Hole.action_data table act_id param sz, value]
        )
 
-let to_model typ (phys : cmd) (hint : t) : Model.t =
+let to_model typ (phys : Cmd.t) (hint : t) : Model.t =
+  let open Cmd in
   let (keys, actions, _) = get_schema_of_table hint.table phys
                         |> Option.value_exn
-                             ~message:(Printf.sprintf "couldn't find table %s in %s" hint.table (string_of_cmd phys))
+                             ~message:(Printf.sprintf "couldn't find table %s in %s" hint.table (Cmd.to_string phys))
   in
   let action =
     let add_hole = Hole.add_row_hole_name hint.table in
@@ -172,10 +181,11 @@ let to_model typ (phys : cmd) (hint : t) : Model.t =
     | None -> Model.empty
     | Some ms ->
        List.map ms ~f:(Match.to_model ~typ hint.table)
-       @ List.filter_map keys ~f:(fun (k,sz,v_opt) ->
-             if List.exists ms ~f:(Fn.compose ((=) k) Match.get_key)
+       @ List.filter_map keys ~f:(fun key ->
+             let (k,sz) = Key.to_sized key in
+             if List.exists ms ~f:(Fn.compose (String.(=) k) Match.get_key)
              then None
-             else match v_opt with
+             else match Key.value key with
                   | Some _ -> None
                   | None ->
                      let open Match in
@@ -186,6 +196,6 @@ let to_model typ (phys : cmd) (hint : t) : Model.t =
   in
   Model.join matches action
 
-let list_to_model typ (phys : cmd) (hints : t list) : Model.t =
+let list_to_model typ (phys : Cmd.t) (hints : t list) : Model.t =
   let hints = List.map hints ~f:(to_model typ phys) in
   Model.aggregate hints

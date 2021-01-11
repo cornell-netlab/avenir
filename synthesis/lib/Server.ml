@@ -81,10 +81,10 @@ let parse_json body_string =
 let edit_of_op prog op =
   match op with
   | Add (table, matches, actionData, actId) ->
-     begin match Ast.get_schema_of_table table prog with
+     begin match Cmd.get_schema_of_table table prog with
      | None -> failwith @@ Printf.sprintf "unrecognized table %s" table
      | Some (keys,_,_) ->
-        let ks = List.map keys ~f:(fun (k,sz,_) -> (k,sz)) in
+        let ks = List.map keys ~f:(Cmd.Key.to_sized) in
         Edit.Add(table,
                  (matches_of_string ks @@ String.concat ~sep:";" matches,
                   action_data_of_string @@ String.concat ~sep:";" actionData,

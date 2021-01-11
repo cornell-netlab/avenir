@@ -1,6 +1,5 @@
 open Core
 open Avenir
-open Ast
 
 let testable_string (type a) (f : a -> string) (eq : a -> a -> bool) =
   Alcotest.testable (Fmt.of_to_string f) (eq)
@@ -11,7 +10,7 @@ let same_expr = Alcotest.(check expr) "same expr"
 let test = testable_string Avenir.Test.to_string Avenir.Test.equals
 let same_test = Alcotest.(check test) "same test"
 
-let cmd = testable_string sexp_string_of_cmd Stdlib.(=)
+let cmd = testable_string Cmd.to_sexp_string Stdlib.(=)
 let same_cmd = Alcotest.(check cmd) "same cmd"
 
 let packet = testable_string Packet.to_string Packet.equal

@@ -1,10 +1,9 @@
 open Core
-open Ast
 open Util
 
 let fvs_to_set = StringSet.of_list %. fsts
 
-let rec static_slice_aux (fvs : StringSet.t) (c : cmd) : StringSet.t * cmd  =
+let rec static_slice_aux (fvs : StringSet.t) (c : Cmd.t) : StringSet.t * Cmd.t  =
   match c with
   | Skip -> (fvs, Skip)
   | Assign (f,e) ->
@@ -23,14 +22,14 @@ let rec static_slice_aux (fvs : StringSet.t) (c : cmd) : StringSet.t * cmd  =
   | Seq (c1, c2) ->
      let (fvs2', c2') = static_slice_aux fvs c2 in
      let (fvs1', c1') = static_slice_aux fvs2' c1 in
-     fvs1', c1' %:% c2'
+     fvs1', Cmd.seq c1' c2'
   | Select (styp, ss) ->
      let tfx =
        List.map ss ~f:(fun (b,c) ->
            let (fvs',c') = static_slice_aux fvs c in
              (b,c',fvs')
          ) in
-     if List.exists tfx ~f:(fun (_,c,_) -> c <> Skip) then
+     if List.exists tfx ~f:(fun (_,c,_) -> not(Cmd.is_skip c)) then
        let (fvs', ss') = List.fold tfx ~init:(StringSet.empty,[])
          ~f:(fun (fvs_acc,ss_acc) (b,c, fvs) ->
            (StringSet.union fvs_acc fvs
@@ -38,7 +37,7 @@ let rec static_slice_aux (fvs : StringSet.t) (c : cmd) : StringSet.t * cmd  =
             |> StringSet.union (fvs_to_set @@ Test.frees `Hole b)
            , ss_acc @ [(b,c)])
          ) in
-       (fvs', mkSelect styp ss')
+       (fvs', Cmd.select styp ss')
      else
        (fvs, Skip)
   | Apply { name; keys; actions; default;_ } ->
@@ -46,14 +45,14 @@ let rec static_slice_aux (fvs : StringSet.t) (c : cmd) : StringSet.t * cmd  =
      let tfx =
        List.map actions ~f:(fun (n, vars,a) ->
            let (fvs',a') = static_slice_aux fvs a in
-             (n, a',vars, StringSet.filter fvs' ~f:(fun s -> not (List.exists vars ~f:(fun (s',_)-> s = s'))))
+             (n, a',vars, StringSet.filter fvs' ~f:(fun s -> not (List.exists vars ~f:(fun (s',_)-> String.(s = s')))))
          )
      in
      let def_fvs, def' = static_slice_aux fvs default in
-     if List.exists tfx ~f:(fun (_, c,_,_) -> c <> Skip) || (def' <> Skip) then
+     if List.exists tfx ~f:(fun (_, c,_,_) -> not Cmd.(is_skip c && is_skip def')) then
        let fvs =
          List.fold tfx ~init:StringSet.empty ~f:(fun acc (_,_,_,fvs) -> StringSet.union acc fvs )
-         |> StringSet.(union (of_list @@ fsts3 keys))
+         |> StringSet.(union (of_list @@ List.map ~f:Cmd.Key.var_name keys))
          |> StringSet.union def_fvs
        in
        let actions' = List.map tfx ~f:(fun (n, a,vars,_) -> (n, vars,a)) in
@@ -68,6 +67,7 @@ let static_slice fvs cmd = snd @@ static_slice_aux fvs cmd
 
 
 let rec flows_to (vs : StringSet.t) cmd : StringSet.t=
+  let open Cmd in
   let in_vs v = StringSet.mem vs v in
   match cmd with
   | Skip -> vs
@@ -87,7 +87,7 @@ let rec flows_to (vs : StringSet.t) cmd : StringSet.t=
   | Select(_, cs) ->
      concatMap cs ~c:(StringSet.union) ~f:(fun (b, c) ->
          if List.exists (fsts @@ Test.frees `Var b) ~f:in_vs
-            && not (b = Test.(Var("standard_metadata.egress_spec",9) %=% Expr.value (0,9))
+            && not (Test.(equals b (Var("standard_metadata.egress_spec",9) %=% Expr.value (0,9)))
                     && Manip.is_a_sequence_of_zero_assignments c)
          then
            (* let () = Printf.printf "adding lvars of %s to taint analysis\n%!" (string_of_cmd c) in *)
@@ -126,11 +126,11 @@ let size_of_facts =
     )
 
 
-let edit_slice_table (params : Parameters.t) (name,keys,actions,default) (facts : Value.t list StringMap.t) (inst : Instance.t) (edits : Edit.t list) =
-  let eliminable = List.find (fsts3 keys)
+let edit_slice_table (params : Parameters.t) (name,(keys : Cmd.Key.t list),actions,default) (facts : Value.t list StringMap.t) (inst : Instance.t) (edits : Edit.t list) =
+  let eliminable = List.find (List.map ~f:Cmd.Key.var_name keys)
                      ~f:(fun k -> StringMap.find facts k
                                   |> Option.value_map ~f:(Fn.non List.is_empty) ~default:false) in
-  let edits_to_add = List.filter edits ~f:((=) name %. Edit.table) in
+  let edits_to_add = List.filter edits ~f:(String.(=) name %. Edit.table) in
   let sliced_inst =
     if Option.is_none eliminable then
       let () = if params.debug then Printf.printf "We can eliminate extant rows in table %s\n%!" name in
@@ -143,7 +143,7 @@ let edit_slice_table (params : Parameters.t) (name,keys,actions,default) (facts 
       Instance.update_list params relevant_extant_inst edits_to_add
   in
   (* if params.debug then Printf.printf "New %s Instance is:%s\n%!" name (Instance.to_string sliced_inst); *)
-  let table =  Apply {name;keys;actions;default} in
+  let table = Cmd.Apply {name;keys;actions;default} in
   (* if params.debug then Printf.printf "Applying it to table %s\n%!" (string_of_cmd table); *)
   let table = Instance.verify_apply ~no_miss:true params sliced_inst table in
   let facts' = ConstantProp.propogate_choices facts table in
@@ -156,6 +156,7 @@ let project_to_exprfacts (multifacts : Value.t list StringMap.t) : Expr.t String
       | _ -> None)
 
 let rec edit_slice_aux (params : Parameters.t) facts inst edits cmd =
+  let open Cmd in
   if params.debug then Printf.printf "Slice loop with %d facts across %d keys\n%!" (size_of_facts facts) (StringMap.keys facts |> List.length);
   match cmd with
   | Skip | Assume _ -> cmd, facts
@@ -181,7 +182,7 @@ let rec edit_slice_aux (params : Parameters.t) facts inst edits cmd =
            acc_cs@[b',c'], multimap_union acc_facts facts
          )
      in
-     let c' = mkSelect typ cs in
+     let c' = select typ cs in
      if params.debug then Printf.printf "Select processing took %f seconds\n%!" (Time.(Span.(diff (now()) t |> to_ms)));
      c', facts'
   | Apply t ->
@@ -195,6 +196,7 @@ let edit_slice params inst edits cmd =
 
 
 let rec restrict ~dir params inst reads cmd : (StringSet.t * int list StringMap.t) =
+  let open Cmd in
   match cmd with
   | Skip -> reads, StringMap.empty
   | Assume t ->
@@ -244,13 +246,12 @@ let rec restrict ~dir params inst reads cmd : (StringSet.t * int list StringMap.
      let (def_reads, def_inst) = restrict ~dir params inst reads t.default in
      StringSet.union def_reads reads , StringMap.(set def_inst ~key:t.name ~data:rows)
 
-
-
-let rec truncate_opt ?dir:(dir=`Bck) cmd table : cmd option  =
+let rec truncate_opt ?dir:(dir=`Bck) cmd table : Cmd.t option  =
   let open Option in
+  let open Cmd in
   match cmd with
   | Apply t ->
-     if t.name = table then
+     if String.(t.name = table) then
        Some Skip
      else
        None
@@ -266,10 +267,10 @@ let rec truncate_opt ?dir:(dir=`Bck) cmd table : cmd option  =
   | Select (typ, cs) ->
      List.find_map cs ~f:(fun (b,c) ->
          truncate_opt ~dir c table >>| mkPair b)
-     >>| mkSelect typ %. List.return
+     >>| select typ %. List.return
   | Skip | Assign _ | Assume _ -> None
 
-let truncate ?dir:(dir = `Bck) cmd table : cmd =
+let truncate ?dir:(dir = `Bck) cmd table : Cmd.t =
   truncate_opt ~dir cmd table
   |> Option.value_exn ~message:(Printf.sprintf "[StaticSlicing.truncate] Couldn't find table %s in command" table)
 

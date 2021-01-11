@@ -1,11 +1,10 @@
 open Core
 open Avenir
-open Ast
 open Avenir.Test
 
 (* Parses real rules *)
 let bmv2_parser_parses_real_rules _ =
-
+  let open Cmd in
   let entries =
     ["table_add send_frame rewrite_mac 1 => 00:aa:bb:00:00:00";
      "table_add send_frame rewrite_mac 2 => 00:aa:bb:00:00:01";
@@ -16,12 +15,12 @@ let bmv2_parser_parses_real_rules _ =
   let drop = "standard_metadata.egress_spec" %<-% Expr.value (0,9) in
   let phys =
     sequence [
-        mkOrdered[
+        ordered [
             bigand [
                 Var("hdr.ipv4.isValid",1) %=% Expr.value (1,1);
                 Var("hdr.ipv4.ttl",8) %>% Expr.value (0,8)]
           , sequence [
-                mkApply("ipv4_lpm", ["hdr.ipv4.dstAddr",32],
+                apply ("ipv4_lpm", ["hdr.ipv4.dstAddr",32],
                         [("set_nhop", ["nhop_ipv4",32; "port", 9],
                          sequence [
                              "meta.routing_metadata.nhop_ipv4" %<-% Var("nhop_ipv4",32);
@@ -30,7 +29,7 @@ let bmv2_parser_parses_real_rules _ =
                            ]);
                          ("drop", [], drop)
                         ], drop);
-                mkApply("forward",["meta.routing_metadata.nhop_ipv4",32],
+                apply ("forward",["meta.routing_metadata.nhop_ipv4",32],
                         ["set_dmac", ["dmac",48], "hdr.ethernet.dstAddr" %<-% Var("dmac",48);
                          "drop", [], drop;
                         ], drop
@@ -38,7 +37,7 @@ let bmv2_parser_parses_real_rules _ =
               ] ;
             True, Skip
           ];
-        mkApply("send_frame", ["standard_metadata.egress_port",9],
+        apply ("send_frame", ["standard_metadata.egress_port",9],
                 ["rewrite_mac", ["smac",48], "hdr.ipv4.srcAddr" %<-% Var("smac",48);
                  "drop", [], drop
                 ], drop

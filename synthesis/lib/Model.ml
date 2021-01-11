@@ -1,10 +1,14 @@
 open Core
 open Util
-open Ast
 
 type t = Value.t StringMap.t
 
-let to_string = string_of_map
+let to_string m =
+  StringMap.fold m ~init:""
+    ~f:(fun ~key ~data acc ->
+      Printf.sprintf "%s\n\t%s |---> %s" acc key (Value.to_string data)
+    )
+  |> Printf.sprintf "{%s\n}"
 
 let of_smt_model = Z3ModelExtractor.of_smt_model
 

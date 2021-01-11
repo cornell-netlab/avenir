@@ -1,5 +1,4 @@
 open Core
-open Ast
 open Util
 
 type gen = {query : Test.t; restriction : Test.t option}
@@ -34,7 +33,7 @@ let rec abstract_expr (m : string StringMap.t) (e1 : Expr.t) (e2 : Expr.t) : (st
        let v1_str = Value.to_string v1 in
        let v2_str = Value.to_string v2 in
        match StringMap.find m v1_str, StringMap.find m v2_str with
-       | Some abstr1, Some abstr2 when abstr1 = abstr2 ->
+       | Some abstr1, Some abstr2 when String.(abstr1 = abstr2) ->
           Some(m, Var(abstr1,Value.size v1))
        | None, None ->
           let x = NameGen.get_fresh_name gen () in
@@ -155,7 +154,7 @@ let exists_matching_abstraction test generals =
       match abstracted test query StringMap.empty, restriction with
       | Some _, None -> true
       | Some m, Some r ->
-         Manip.substV r m = True
+         Test.equals (Manip.substV r m) True
       |  _ -> false)
 
 let cache_check (params : Parameters.t) ({seen;generals} : t) test =
@@ -170,7 +169,7 @@ let cache_check (params : Parameters.t) ({seen;generals} : t) test =
   | None ->
      if params.debug then Printf.printf "No match\n%!";
      ({seen = seen; generals}, `Miss test)
-  | Some (_,q) when q = test ->
+  | Some (_,q) when Test.equals q test ->
      if params.debug then Printf.printf "Queries were identical\n%!";
      ({seen; generals}, `Hit test)
   | Some (m,q) ->

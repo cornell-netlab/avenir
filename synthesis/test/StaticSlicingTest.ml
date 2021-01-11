@@ -2,7 +2,7 @@ open Core
 open Equality
 open Avenir
 open Avenir.Test
-open Ast
+open Cmd
 
 let slicing_retargeting_metadata_ethernet _ =
   let open Util in
@@ -49,16 +49,16 @@ let slicing_retargeting_metadata_ethernet _ =
       ["set_port",["port", 9], Expr.Var("port",9) |> set_port ; _drop]
     in
     sequence [
-        mkApply("ethernet",["hdr.ethernet.dstAddr",48],classify_actions,drop);
-        mkApply("ipv4",["hdr.ipv4.dstAddr",32],classify_actions,drop);
-        mkApply("nexthop",["meta.nhop",32],fwd_actions,drop);
+        apply ("ethernet",["hdr.ethernet.dstAddr",48],classify_actions,drop);
+        apply ("ipv4",["hdr.ipv4.dstAddr",32],classify_actions,drop);
+        apply ("nexthop",["meta.nhop",32],fwd_actions,drop);
       ]
   in
   let expected =
     sequence [
-        mkAssume (Var("hdr.ethernet.dstAddr",48) %=% Expr.value (11,48));
+        assume (Var("hdr.ethernet.dstAddr",48) %=% Expr.value (11,48));
         "meta.nhop" %<-% Expr.value (3,32);
-        mkAssume (Var("meta.nhop",32) %=% Expr.value (3,32));
+        assume (Var("meta.nhop",32) %=% Expr.value (3,32));
         set_port (Expr.value (11,9));
       ]
   in
@@ -111,16 +111,16 @@ let slicing_retargeting_metadata_ipv4 _ =
       ["set_port",["port", 9], Expr.Var("port",9) |> set_port ; _drop]
     in
     sequence [
-        mkApply("ethernet",["hdr.ethernet.dstAddr",48],classify_actions,drop);
-        mkApply("ipv4",["hdr.ipv4.dstAddr",32],classify_actions,drop);
-        mkApply("nexthop",["meta.nhop",32],fwd_actions,drop);
+        apply ("ethernet",["hdr.ethernet.dstAddr",48],classify_actions,drop);
+        apply ("ipv4",["hdr.ipv4.dstAddr",32],classify_actions,drop);
+        apply ("nexthop",["meta.nhop",32],fwd_actions,drop);
       ]
   in
   let expected =
     sequence [
-        mkAssume (Var("hdr.ipv4.dstAddr",32) %=% Expr.value (11,32));
+        assume (Var("hdr.ipv4.dstAddr",32) %=% Expr.value (11,32));
         "meta.nhop" %<-% Expr.value (3,32);
-        mkAssume (Var("meta.nhop",32) %=% Expr.value (3,32));
+        assume (Var("meta.nhop",32) %=% Expr.value (3,32));
         set_port (Expr.value (11,9));
       ]
   in
@@ -154,15 +154,15 @@ let slicing_fabric_example _ =
       ["set_port",["port", 9], Expr.Var("port",9) |> set_port ; _drop]
     in
     sequence [
-        mkApply("ethernet",["hdr.ethernet.dstAddr",48],classify_actions,drop);
-        mkApply("nexthop",["meta.nhop",32],fwd_actions,drop);
+        apply ("ethernet",["hdr.ethernet.dstAddr",48],classify_actions,drop);
+        apply ("nexthop",["meta.nhop",32],fwd_actions,drop);
       ]
   in
   let expected =
     sequence [
-        mkAssume (Var("hdr.ethernet.dstAddr",48) %=% Expr.value (11,48));
+        assume (Var("hdr.ethernet.dstAddr",48) %=% Expr.value (11,48));
         "meta.nhop" %<-% Expr.value (1,32);
-        mkAssume (Var("meta.nhop",32) %=% Expr.value (1,32));
+        assume (Var("meta.nhop",32) %=% Expr.value (1,32));
         set_port (Expr.value (11,9));
       ]
   in

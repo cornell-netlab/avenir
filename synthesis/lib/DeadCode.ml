@@ -1,12 +1,12 @@
 open Core
 open Util
-open Ast
 
 
 (* post-order traversal, eliminating variable assignments that are unused
  * best if run after constant propogation
  *)
 let rec eliminate_unused_vars cmd (used : StringSet.t) =
+  let open Cmd in
   match cmd with
   | Skip -> (Skip,used)
   | Assign(f,e) ->
@@ -33,7 +33,7 @@ let rec eliminate_unused_vars cmd (used : StringSet.t) =
             |> StringSet.union acc_used
            )
          ) in
-     (mkSelect typ cases', used')
+     (select typ cases', used')
   | Apply {name;keys;actions;default} ->
      let default', def_used = eliminate_unused_vars default used in
      let actions', used' =
@@ -44,7 +44,7 @@ let rec eliminate_unused_vars cmd (used : StringSet.t) =
            (acc_acts @ [n, data,act'], StringSet.union acc_used used_sans_data)
          )
      in
-     if List.for_all actions' ~f:(fun (_, _,act) -> act = Skip) && default' = Skip
+     if List.for_all actions' ~f:(fun (_, _,act) -> equals act Skip) && equals default' Skip
      then (Skip, used)
      else (Apply {name;
                   keys;

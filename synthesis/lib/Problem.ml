@@ -1,5 +1,4 @@
 open Core
-open Ast
 
 type t =
   {
@@ -42,9 +41,9 @@ let to_string params (p : t) =
     (List.map p.fvs ~f:(fun (x,sz) -> "(" ^ x ^ "#" ^ string_of_int sz ^ ")")
      |> List.reduce ~f:(fun x y -> x ^","^ y)
      |> Option.value ~default:"")
-    (Bigint.to_string @@ num_table_paths @@ Switch.pipeline p.phys)
-    (List.length @@ get_actions @@ Switch.pipeline p.phys)
-    (List.length @@ tables_of_cmd @@ Switch.pipeline p.phys)
+    (Bigint.to_string @@ Cmd.num_table_paths @@ Switch.pipeline p.phys)
+    (List.length @@ Cmd.get_actions @@ Switch.pipeline p.phys)
+    (List.length @@ Cmd.tables @@ Switch.pipeline p.phys)
 
 
 
@@ -54,19 +53,19 @@ let add_cex (p : t) cex = {p with cexs = cex::p.cexs}
 let model_space (p : t) : Test.t = p.model_space
 let attempts (p : t) : Model.t list = p.attempts
 
-let log (p : t) : cmd = Switch.pipeline p.log
+let log (p : t) : Cmd.t = Switch.pipeline p.log
 let log_inst (p : t) : Instance.t = Switch.inst p.log
 let log_edits (p : t) : Edit.t list = Switch.edits p.log
 let log_edited_instance params (p : t) : Instance.t = Switch.edited_instance params p.log
-let log_gcl_program params (p : t) : cmd = Switch.to_gcl params (fvs p) p.log
+let log_gcl_program params (p : t) : Cmd.t = Switch.to_gcl params (fvs p) p.log
 
-let phys (p : t) : cmd = Switch.pipeline p.phys
+let phys (p : t) : Cmd.t = Switch.pipeline p.phys
 let phys_inst (p : t) : Instance.t = Switch.inst p.phys
 let phys_edits (p : t) : Edit.t list = Switch.edits p.phys
 let phys_edited_instance params (p : t) : Instance.t = Switch.edited_instance params p.phys
-let phys_gcl_program params (p : t) : cmd = Switch.to_gcl params (fvs p) p.phys
+let phys_gcl_program params (p : t) : Cmd.t = Switch.to_gcl params (fvs p) p.phys
 
-let phys_gcl_holes params (p : t) dels tag : cmd = Switch.to_gcl_holes params p.phys dels tag
+let phys_gcl_holes params (p : t) dels tag : Cmd.t = Switch.to_gcl_holes params p.phys dels tag
 let phys_drop_spec (p : t) : Test.t option = Switch.drop_spec p.phys
 
 let slice params (p : t) : t =
@@ -138,10 +137,10 @@ let apply_edits_to_log params (p : t) (es : Edit.t list) : t =
 let apply_edits_to_phys params (p : t) (es : Edit.t list) : t =
   {p with phys = Switch.update_inst params p.phys es}
 
-let update_phys (p : t) (phys_cmd : cmd) : t =
+let update_phys (p : t) (phys_cmd : Cmd.t) : t =
   {p with phys = Switch.replace_pipeline p.phys phys_cmd}
 
-let update_log (p : t) (log_cmd : cmd) : t =
+let update_log (p : t) (log_cmd : Cmd.t) : t =
   {p with log = Switch.replace_pipeline p.log log_cmd}
 
 
@@ -152,12 +151,12 @@ let attempts_to_string (p : t) : string =
 let num_attempts (p : t) : int = List.length p.attempts
 
 
-let unique_in_table params (_ (*prog*) : cmd) inst edits e =
+let unique_in_table params (_ (*prog*) : Cmd.t) inst edits e =
   let open Edit in
   match e with
   | Del _ -> false
   | Add (tbl, (ms, _,_)) ->
-     let index_of_e = List.findi edits ~f:(fun _ e' -> e = e') |> Option.value_exn |> fst in
+     let index_of_e = List.findi edits ~f:(fun _ e' -> Edit.equal e e') |> Option.value_exn |> fst in
      let earlier_edits = List.filteri edits ~f:(fun i _ -> i < index_of_e) in
      let inst' = Instance.update_list params inst earlier_edits in
      let earlier_rows = Instance.get_rows inst' tbl in
@@ -166,12 +165,12 @@ let unique_in_table params (_ (*prog*) : cmd) inst edits e =
        )
 
 
-let exists_in_table params (_ (*prog*) : cmd) inst edits e =
+let exists_in_table params (_ (*prog*) : Cmd.t) inst edits e =
   let open Edit in
   match e with
   | Del _ -> false
   | Add (tbl, (ms, ad, aid)) ->
-     let index_of_e = List.findi edits ~f:(fun _ e' -> e = e') |> Option.value_exn |> fst in
+     let index_of_e = List.findi edits ~f:(fun _ e' -> Edit.equal e e') |> Option.value_exn |> fst in
      let earlier_edits = List.filteri edits ~f:(fun i _ -> i < index_of_e) in
      let inst' = Instance.update_list params inst earlier_edits in
      let earlier_rows = Instance.get_rows inst' tbl in

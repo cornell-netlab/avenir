@@ -1,16 +1,15 @@
 open Core
-open Ast
 open Synthesis
 open Util
 open Classbenching
 module IntMap = Map.Make(Int)
 
-let parse_file (filename : string) : Ast.cmd =
+let parse_file (filename : string) : Cmd.t =
   let cts = In_channel.read_all filename in
   let lexbuf = Lexing.from_string cts in
   Parser.main Lexer.tokens lexbuf
 
-let parse_fvs fp =
+let parse_fvs fp : ((string * int) * (string * int)) list =
   In_channel.read_lines fp
   |> List.map ~f:(fun line ->
          match String.lsplit2 line ~on:',' with
@@ -77,8 +76,8 @@ let permute l =
               
 let tbl = Printf.sprintf "tbl%d"
     
-let rec mk_pipeline varsize =
-  fun n ->
+let rec mk_pipeline varsize n =
+  let open Cmd in
   if n = 0 then [] else
     (tbl n
     , [("k_" ^tbl n, varsize)]
@@ -91,13 +90,13 @@ let rec generate_n_insertions varsize length n avail_tables maxes : Edit.t list 
   if n = 0 then
     let _ : unit = Printf.printf "--generated--\n%!"in
     []
-  else if avail_tables = [] then
+  else if List.is_empty avail_tables then
     let _ : unit = Printf.printf "--filled up --\n%!" in
     []
   else
     let _ : unit = Printf.printf "generating %d \n%!" n in
     let rec loop_free_match avail_tables =
-      if avail_tables = []
+      if List.is_empty avail_tables
       then None
       else
         let i = Random.int (List.length avail_tables) |> List.nth_exn avail_tables in
@@ -133,13 +132,14 @@ let rec generate_n_insertions varsize length n avail_tables maxes : Edit.t list 
        :: generate_n_insertions varsize length (n-1) avail_tables' maxes'
                                   
 let reorder_benchmark varsize length max_inserts params =
+  let open Cmd in
   Random.init 99;
   let logical_pipeline = mk_pipeline varsize length in
   let physical_pipeline = permute logical_pipeline in
   let mk_empty_inst acc (name,_,_,_) = Map.set acc ~key:name ~data:[]  in
   let log_inst = List.fold logical_pipeline ~init:StringMap.empty ~f:mk_empty_inst in
   let phys_inst = List.fold logical_pipeline ~init:StringMap.empty ~f:mk_empty_inst in
-  let to_cmd line =  List.((line >>| fun t -> mkApply t)
+  let to_cmd line =  List.((line >>| fun t -> apply t)
                            |> reduce_exn ~f:(%:%)) in
   let log = to_cmd logical_pipeline in
   let phys = to_cmd physical_pipeline in
@@ -163,12 +163,12 @@ let reorder_benchmark varsize length max_inserts params =
             
 (** ONF BENCHMARK **)
 
-let translate_key var_mapping key =
-  match List.find_map var_mapping ~f:(fun ((k,_),(k',_)) -> Option.some_if (k = key) k') with
+let translate_key (var_mapping : ((string * int) * (string * int)) list) (key : string) =
+  match List.find_map var_mapping ~f:(fun ((k,_),(k',_)) -> Option.some_if String.(k = key) k') with
   | Some key -> key
   | None -> key
 
-let onos_to_edits var_mapping filename tbl_nm key =
+let onos_to_edits (var_mapping : ((string * int) * (string * int)) list) filename tbl_nm (key : string) =
   let key = translate_key var_mapping key in
   let lines = In_channel.read_lines filename in
   let make_edit data : Edit.t =
@@ -192,18 +192,17 @@ let onos_to_edits var_mapping filename tbl_nm key =
 
 let (%>) c c' = ignore c; c'
 
-
 let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_edits_file fvs_file assume_file log_inc phys_inc =
   let var_mapping = parse_fvs fvs_file in
   let fvs = List.map var_mapping ~f:snd in
-  let assume = parse_file assume_file in
+  let assm = parse_file assume_file in
 
   (* let print_fvs = printf "fvs = %s" (Sexp.to_string ([%sexp_of: (string * int) list] fvs)) in *)
 
-  let log = (assume %:% Encode.encode_from_p4 log_inc log_p4 false)
+  let log = Cmd.(assm %:% Encode.encode_from_p4 log_inc log_p4 false)
             |> Encode.unify_names var_mapping |> zero_init fvs |> drop_handle fvs in
 
-  let phys = (assume %:% Encode.encode_from_p4 phys_inc phys_p4 false)
+  let phys = Cmd.(assm %:% Encode.encode_from_p4 phys_inc phys_p4 false)
              |> Encode.unify_names var_mapping |> zero_init fvs |> drop_handle fvs
              (* |> CompilerOpts.optimize fvs *)
   in
@@ -225,23 +224,25 @@ let rec basic_onf_ipv4_real params data_file log_p4 phys_p4 log_edits_file phys_
 
 and zero_init fvs cmd =
   let fvs = StringSet.of_list @@ fsts @@ fvs in
-  let vs = free_of_cmd `Var cmd
+  let vs = Cmd.vars cmd
            |> List.dedup_and_sort ~compare:(fun (v1, _) (v2, _) -> String.compare v1 v2) in
   let zi = List.filter vs ~f:(fun (v,_) -> StringSet.(mem fvs v) |> not) in
-  sequence @@
+  Cmd.(sequence @@
     List.map zi ~f:(fun (v, w) -> v %<-% Expr.value (0, w))
-    @ [cmd]
+    @ [cmd])
 
 
 and drop_handle fvs cmd =
   let open Test in
-  let c_end = List.map fvs ~f:(fun (v, w) -> mkAssn v (Expr.value (0, w)))
+  let open Cmd in
+  let c_end = List.map fvs ~f:(fun (v, w) -> v %<-% Expr.value (0, w))
               |> List.fold ~init:Skip ~f:(fun c1 c2 -> c1 %:% c2)
   in
-  cmd %:% mkOrdered [ Var("standard_metadata.egress_spec", 9) %=% Expr.value (0, 9), c_end;
+  cmd %:% ordered [ Var("standard_metadata.egress_spec", 9) %=% Expr.value (0, 9), c_end;
                       True, Skip]
 
 and variables cmd =
+  let open Cmd in
   match cmd with
   | Skip -> []
   | Assign(s, e) -> (s, get_width e) :: variables_expr e
@@ -315,8 +316,9 @@ let mk_ith_keys sz num_xs ith_meta =
 
 
 let mk_ith_table sz num_tables tbl_idx num_xs num_ms =
+  let open Cmd in
   let idx_of_min_mtbl = num_tables - num_ms -1 in
-  mkApply(Printf.sprintf "physical%d" tbl_idx,
+  apply (Printf.sprintf "physical%d" tbl_idx,
           (if tbl_idx > idx_of_min_mtbl then
              mk_ith_keys sz num_xs (tbl_idx - idx_of_min_mtbl - 1)
           else
@@ -329,6 +331,7 @@ let mk_ith_table sz num_tables tbl_idx num_xs num_ms =
 
 
 let initialize_ms sz num_ms =
+  let open Cmd in
   if num_ms = 0 then Skip else
   List.map (range_ex 0 num_ms)
     ~f:(fun i -> mk_ith_meta i %<-% Expr.value (0,sz))
@@ -336,6 +339,7 @@ let initialize_ms sz num_ms =
 
 
 let create_bench sz num_tables num_xs num_ms =
+  let open Cmd in
   sequence [ initialize_ms sz num_ms
            ; sequence @@
                List.map (range_ex 0 num_tables)
@@ -379,21 +383,22 @@ let rec create_log_edits sz i max_edits num_xs =
     :: create_log_edits sz (i + 1) max_edits num_xs
 
 let square_bench params sz n max_edits =
+  let open Cmd in
   let fvs = ("out",9) :: mk_normal_keys sz n in
   let logical_table =
-    mkApply("logical",
+    apply ("logical",
             mk_normal_keys sz n,
             ["action", ["o", 9], "out" %<-% Var("o", 9)],
             Skip)
   in
-  Printf.printf "Logical table: \n %s\n\n" (string_of_cmd logical_table);
+  Printf.printf "Logical table: \n %s\n\n" (Cmd.to_string logical_table);
   let physical_tables =
     List.fold (range_ex 0 n) ~init:[]
     ~f:(fun init num_xs ->
       List.fold(range_ex 0 n) ~init
         ~f:(fun acc num_ms ->
           let p = create_bench sz n num_xs num_ms in
-          Printf.printf "\n\n-------%d---%d----------\n%s\n--------------\n\n%!"num_xs num_ms (string_of_cmd p);
+          Printf.printf "\n\n-------%d---%d----------\n%s\n--------------\n\n%!"num_xs num_ms (Cmd.to_string p);
           acc @ [(num_xs, num_ms), p]))
   in
   let log_edits =
@@ -440,9 +445,9 @@ let generate_out acc  =
           then biggest + one + one
           else biggest + one)
 
-  
 let rep params data nrules =
   let open Test in
+  let open Cmd in
   let fvs = ["ip_src",32; "ip_dst",32] in
   let cb_fvs = List.map ~f:fst fvs in
   let gen_data : Edit.t list =
@@ -453,7 +458,7 @@ let rep params data nrules =
            let fields = cb_fvs in
            let matches = project cb_row fields |> (cb_to_matches fvs) in
            if List.exists acc ~f:(function
-                  | Add (_,(ms,_,_)) -> ms = matches
+                  | Add (_,(ms,_,_)) -> List.equal Match.equal ms matches
                   | _ -> false)
               || List.for_all matches ~f:(Match.is_wildcard)
            then acc
@@ -468,11 +473,11 @@ let rep params data nrules =
   let log =
     sequence [
         "out" %<-% Expr.value (0,9);
-        mkApply ("obt",
+        apply ("obt",
                  ["ip_src",32;"ip_dst",32],
                  ["action", ["o",9], "out" %<-% Var("o",9)],
                  Skip);
-        mkOrdered [
+        ordered [
             Var("out",9) %=% Expr.value (0,9),
             List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
                 acc %:% (fv %<-% Expr.value (0,sz))
@@ -484,19 +489,19 @@ let rep params data nrules =
   let phys =
     sequence [
         "out" %<-% Expr.value (0,9);
-        mkApply("validation",
+        apply ("validation",
                 ["ip_src",32],
                 ["action", ["ov",9], "out" %<-% Var("ov",9)],
                 Skip) ;
-        mkApply("fwd",
+        apply ("fwd",
                 ["ip_dst",32],
                 ["action", ["of",9], "out" %<-% Var("of",9) ],
                 Skip);
-        mkApply("acl",
+        apply ("acl",
                 ["ip_src",32; "ip_dst",32],
                 ["action", ["oa",9], "out" %<-% Var("oa", 9)],
                 Skip);
-        mkOrdered [
+        ordered [
             Var("out",9) %=% Expr.value (0,9),
             List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
                 acc %:% (fv %<-% Expr.value (0,sz))
@@ -511,6 +516,7 @@ let rep params data nrules =
 
 let rep_middle params data nrules =
   let open Test in
+  let open Cmd in
   let fvs = ["ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16] in
   let cb_fvs = List.map ~f:fst fvs in
   let gen_data : Edit.t list =
@@ -521,7 +527,7 @@ let rep_middle params data nrules =
            let fields = cb_fvs in
            let matches = project cb_row fields |> (cb_to_matches fvs) in
            if List.exists acc ~f:(function
-                  | Add (_,(ms,_,_)) -> ms = matches
+                  | Add (_,(ms,_,_)) -> List.equal Match.equal ms matches
                   | _ -> false)
               || List.for_all matches ~f:(Match.is_wildcard)
            then acc
@@ -536,11 +542,11 @@ let rep_middle params data nrules =
   let log =
     sequence [
         "out" %<-% Expr.value (0,9);
-        mkApply ("obt",
+        apply ("obt",
                  ["ip_src",32;"ip_dst",32; "proto",8; "tcp_sport", 16; "tcp_dport", 16],
                  ["action", ["o",9], "out" %<-% Var("o",9)],
                  Skip);
-        mkOrdered [
+        ordered [
             Var("out",9) %=% Expr.value (0,9),
             List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
                 acc %:% (fv %<-% Expr.value (0,sz))
@@ -560,19 +566,19 @@ let rep_middle params data nrules =
          *       ];
          *     True , Skip
          *   ]; *)
-        mkApply("validation",
+        apply ("validation",
                 ["ip_src",32],
                 ["action", ["ov",9], "out" %<-% Var("ov",9)],
                 Skip) ;
-        mkApply("fwd",
+        apply ("fwd",
                 ["ip_dst",32; "proto",8; "tcp_dport",16],
                 ["action", ["of",9], "out" %<-% Var("of",9) ],
                 Skip);
-        mkApply("acl",
+        apply ("acl",
                 ["ip_src",32; "ip_dst",32; "proto",8; "tcp_sport", 16; "tcp_dport", 16],
                 ["action", ["oa",9], "out" %<-% Var("oa", 9)],
                 Skip);
-        mkOrdered [
+        ordered [
             Var("out",9) %=% Expr.value (0,9),
             List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
                 acc %:% (fv %<-% Expr.value (0,sz))
@@ -586,6 +592,7 @@ let rep_middle params data nrules =
 
 let rep_of params exactify data nrules =
   let open Test in
+  let open Cmd in
   let fvs = ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16;"vlan", 12; "pcp", 3] in
   let cb_fvs = List.map ~f:fst fvs in
   let gen_data : Edit.t list =
@@ -601,7 +608,7 @@ let rep_of params exactify data nrules =
                          else
                            matches in
            if List.exists acc ~f:(function
-                  | Add (_,(ms,_,_)) -> ms = matches
+                  | Add (_,(ms,_,_)) -> List.equal Match.equal ms matches
                   | _ -> false)
               || List.for_all matches ~f:(Match.is_wildcard)
            then
@@ -620,11 +627,11 @@ let rep_of params exactify data nrules =
   let log =
     sequence [
         "out" %<-% Expr.value (0,9);
-        mkApply ("obt",
+        apply ("obt",
                  ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16; "vlan", 12; "pcp", 3],
                  ["action", ["o",9], "out" %<-% Var("o",9)],
                  Skip);
-        mkOrdered [
+        ordered [
             Var("out",9) %=% Expr.value (0,9),
             List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
                 acc %:% (fv %<-% Expr.value (0,sz))
@@ -636,19 +643,19 @@ let rep_of params exactify data nrules =
   let phys =
     sequence [
         "out" %<-% Expr.value (0,9);
-        mkApply("validation",
+        apply ("validation",
                 ["in_port", 9;"eth_src",48;"eth_typ",16;"ip_src",32],
                 ["action", ["ov",9], "out" %<-% Var("ov",9)],
                 Skip) ;
-        mkApply("fwd",
+        apply ("fwd",
                 ["eth_dst",48;"ip_dst",32; "proto",8; "tcp_dport",16],
                 ["action", ["of",9], "out" %<-% Var("of",9) ],
                 Skip);
-        mkApply("acl",
+        apply ("acl",
                 ["in_port", 9;"eth_src",48; "eth_dst",48; "eth_typ",16; "ip_src",32; "ip_dst",32; "proto",8; "tcp_sport", 16; "tcp_dport", 16; "vlan", 12; "pcp", 3],
                 ["action", ["oa",9], "out" %<-% Var("oa", 9)],
                 Skip);
-        mkOrdered [
+        ordered [
             Var("out",9) %=% Expr.value (0,9),
             List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
                 acc %:% (fv %<-% Expr.value (0,sz))
@@ -663,6 +670,7 @@ let rep_of params exactify data nrules =
 
 
 let rep_par params data nrules =
+  let open Cmd in
   let open Test in
   let fvs = ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16] in
   let cb_fvs = List.map ~f:fst fvs in
@@ -675,7 +683,7 @@ let rep_par params data nrules =
         let fields = cb_fvs in
         let matches = project cb_row fields |> (cb_to_matches fvs) in
         if List.exists acc ~f:(function
-               | Add (_,(ms,_,_)) -> ms = matches
+               | Add (_,(ms,_,_)) -> List.equal Match.equal ms matches
                | _ -> false)
            || List.for_all matches ~f:(Match.is_wildcard)
         then
@@ -694,11 +702,11 @@ let rep_par params data nrules =
   let log =
     sequence [
         "out" %<-% Expr.value (0,9);
-        mkApply ("obt",
+        apply ("obt",
                  ["in_port",9;"eth_src",48;"eth_dst",48;"eth_typ",16;"ip_src",32; "ip_dst",32; "proto",8; "tcp_sport",16; "tcp_dport",16],
                  ["action", ["o",9], "out" %<-% Var("o",9)],
                  Skip);
-        mkOrdered [
+        ordered [
             Var("out",9) %=% Expr.value (0,9),
             List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
                 acc %:% (fv %<-% Expr.value (0,sz))
@@ -710,31 +718,31 @@ let rep_par params data nrules =
   let phys =
     sequence [
         "out" %<-% Expr.value (0,9);
-        mkApply("station",
+        apply ("station",
                 ["in_port", 9;"eth_src",48],
                 ["action", ["n",9], "next_tbl" %<-% Var("ov",2)],
                 "next_tbl" %<-% Expr.value (0,2)) ;
-        mkOrdered [
-            Var("next_tbl",2) %=% Expr.value (1,2), mkApply("l3",
+        ordered [
+            Var("next_tbl",2) %=% Expr.value (1,2), apply("l3",
                                                        ["ip_dst",32],
                                                        ["action", ["of",9], "out" %<-% Var("of",9) ],
                                                        Skip);
-            Var("next_tbl",2) %=% Expr.value (2,2), mkApply("l2",
+            Var("next_tbl",2) %=% Expr.value (2,2), apply("l2",
                                                        ["eth_dst",32],
                                                        ["action", ["o2",9], "out" %<-% Var("o2",9) ],
                                                        Skip);
 
-            Var("next_tbl",2) %=% Expr.value (3,2), mkApply("l4",
+            Var("next_tbl",2) %=% Expr.value (3,2), apply("l4",
                                                        ["tcp_dst",32],
                                                        ["action", ["o4",9], "out" %<-% Var("o4",9)],
                                                        Skip);
             True , Skip
           ];
-        mkApply("acl",
+        apply("acl",
                 ["in_port", 9;"eth_src",48; "eth_dst",48; "eth_typ",16; "ip_src",32; "ip_dst",32; "proto",8; "tcp_sport", 16; "tcp_dport", 16],
                 ["action", ["oa",9], "out" %<-% Var("oa", 9)],
                 Skip);
-        mkOrdered [
+        ordered [
             Var("out",9) %=% Expr.value (0,9),
             List.fold fvs ~init:Skip ~f:(fun acc (fv,sz) ->
                 acc %:% (fv %<-% Expr.value (0,sz))
@@ -753,12 +761,13 @@ let rep_par params data nrules =
  *********************************)
 
 let headers params sz ntables max_headers max_edits =
+  let open Cmd in
   let physical_tables =
     List.fold (range_ex 0 max_headers) ~init:[]
       ~f:(fun acc num_xs ->
         let fvs = ("out",9) :: mk_normal_keys sz ntables in
         let logical_table =
-          mkApply("logical",
+          apply("logical",
                   mk_normal_keys sz ntables,
                   ["action", ["o", 9], "out" %<-% Var("o", 9)],
                   Skip)
@@ -792,6 +801,7 @@ let headers params sz ntables max_headers max_edits =
  ***************************************)
 
 let metadata params sz nmeta nedits =
+  let open Cmd in
   let problems =
     List.fold (range_ex 0 nmeta) ~init:[]
       ~f:(fun acc num_ms ->
@@ -799,7 +809,7 @@ let metadata params sz nmeta nedits =
         let logical_table =
           sequence [
               "out" %<-% Expr.value (0,9);
-              mkApply("logical",
+              apply ("logical",
                       ["x", sz],
                       ["action", ["o", 9], "out" %<-% Var("o", 9)],
                       Skip)
@@ -813,16 +823,16 @@ let metadata params sz nmeta nedits =
           List.map (range_ex 0 nmeta)
             ~f:(fun table_idx ->
               if table_idx = 0 then
-                mkApply("phys0", ["x",sz], ["action", ["d0",sz], "m0" %<-% Var("d0",sz) ], Skip)
+                apply ("phys0", ["x",sz], ["action", ["d0",sz], "m0" %<-% Var("d0",sz) ], Skip)
               else if table_idx + 1 = nmeta then
-                  mkApply(Printf.sprintf "phys%d"  table_idx,
+                  apply (Printf.sprintf "phys%d"  table_idx,
                           [Printf.sprintf "m%d" (table_idx - 1), sz],
                           ["action", [Printf.sprintf "d%d" table_idx, 9],
                            "out" %<-% Var(Printf.sprintf "d%d" table_idx, 9)
                           ],
                           Skip)
               else
-                mkApply(Printf.sprintf "phys%d"  table_idx,
+                apply (Printf.sprintf "phys%d"  table_idx,
                         [Printf.sprintf "m%d" (table_idx - 1), sz],
                         ["action", [Printf.sprintf "d%d" table_idx, sz],
                          Printf.sprintf "m%d" table_idx %<-% Var(Printf.sprintf "d%d" table_idx, sz)
@@ -837,8 +847,8 @@ let metadata params sz nmeta nedits =
               [Edit.Add("logical", ([Match.exact_ "x" (Value.make (i,sz))], [Value.make (i,9)],0)) ]
             )
         in
-        Printf.printf "Log:\n%s\n%!" (string_of_cmd logical_table);
-        Printf.printf "Phys:\n%s\n%!" (string_of_cmd phys);
+        Printf.printf "Log:\n%s\n%!" (to_string logical_table);
+        Printf.printf "Phys:\n%s\n%!" (to_string phys);
         let problem = Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[] ~log_inst:Instance.empty ~phys_inst:Instance.empty in
         acc @ [ num_ms, problem, log_edits ])
   in
@@ -863,18 +873,19 @@ let metadata params sz nmeta nedits =
  ***************************************)
 
 let tables params sz max_tables nheaders max_edits =
+  let open Cmd in
   let physical_tables =
     List.fold (range_ex 1 max_tables) ~init:[]
       ~f:(fun acc ntables ->
         let fvs = ("out",9) :: mk_normal_keys sz nheaders in
         let logical_table =
-          mkApply("logical",
+          apply ("logical",
                   mk_normal_keys sz nheaders,
                   ["action", ["o", 9], "out" %<-% Var("o", 9)],
                   Skip)
         in
         let phys = create_bench sz ntables nheaders 0   in
-        Printf.printf "phys \n%s\n%!" (string_of_cmd phys);
+        Printf.printf "phys \n%s\n%!" (to_string phys);
         let log_edits =
           create_log_edits 32 0 max_edits nheaders |> List.map ~f:(List.return)
         in
@@ -904,13 +915,14 @@ let tables params sz max_tables nheaders max_edits =
 
 let create_par_bench sz num_tables num_xs num_ms =
   let open Test in
+  let open Cmd in
   let tblsize = max (log2 (num_tables + 2)) 1 in
   sequence [ initialize_ms sz num_ms
-           ; mkApply("stage",
+           ; apply ("stage",
                      mk_normal_keys sz num_xs,
                      ["action", ["stg",tblsize], "table_id" %<-% Var("stg",tblsize)],
                      "table_id" %<-% Expr.value (num_tables + 1, tblsize))
-           ; mkOrdered @@
+           ; ordered @@
                List.map (range_ex 0 num_tables)
                  ~f:(fun tbl_idx ->
                    Expr.value (tbl_idx,tblsize) %=% Var("table_id",tblsize),
@@ -920,18 +932,19 @@ let create_par_bench sz num_tables num_xs num_ms =
 
 
 let breadth params sz max_tables nheaders max_edits =
+  let open Cmd in
   let physical_tables =
     List.fold (range_ex 1 max_tables) ~init:[]
       ~f:(fun acc ntables ->
         let fvs = ("out",9) :: mk_normal_keys sz nheaders in
         let logical_table =
-          mkApply("logical",
+          apply ("logical",
                   mk_normal_keys sz nheaders,
                   ["action", ["o", 9], "out" %<-% Var("o", 9)],
                   Skip)
         in
         let phys = create_par_bench sz ntables nheaders 0 in
-        Printf.printf "phys \n%s\n%!" (string_of_cmd phys);
+        Printf.printf "phys \n%s\n%!" (Cmd.to_string phys);
         let log_edits =
           create_log_edits 32 0 max_edits nheaders |> List.map ~f:(List.return)
         in
