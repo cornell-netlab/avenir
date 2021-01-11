@@ -18,4 +18,5 @@ let () =
       "slicing", StaticSlicingTest.test;
       "model interface", ModelTest.test;
       "value interface", ValueTest.test;
+      "vc generation", VCGenTest.test;
     ]

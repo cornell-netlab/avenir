@@ -1,7 +1,8 @@
 open Core
 open Ast
 open Util
-
+open Expr 
+open Test 
 let freshen v sz i = (v ^ "$" ^ string_of_int i, sz)
 
 let rec indexVars_expr e (sub : ((int * int) StringMap.t)) =
@@ -10,32 +11,32 @@ let rec indexVars_expr e (sub : ((int * int) StringMap.t)) =
     let (e1', sub1) = indexVars_expr e1 sub in
     let (e2', sub2) = indexVars_expr e2 sub in
     f e1' e2', StringMap.merge sub1 sub2
-                 ~f:(fun ~key -> function
-                   | `Both (i1, i2) -> if i1 = i2
-                                       then Some i1
-                                       else failwith @@ Printf.sprintf "collision on %s: (%d,%d) <> (%d,%d)"
-                                                          key (fst i1) (snd i1) (fst i2) (snd i2)
-                   | `Left i | `Right i -> Some i
-                 )
+      ~f:(fun ~key -> function
+          | `Both (i1, i2) -> if i1 = i2
+            then Some i1
+            else failwith @@ Printf.sprintf "collision on %s: (%d,%d) <> (%d,%d)"
+                key (fst i1) (snd i1) (fst i2) (snd i2)
+          | `Left i | `Right i -> Some i
+        )
   in
   match e with
   | Value _ -> (e, sub)
   | Var (x,sz) ->
-     begin match StringMap.find sub x with
-     | None  -> (Var (freshen x sz 0), StringMap.set sub ~key:x ~data:(0,sz))
-     | Some (i,_) ->  (Var (freshen x sz i), sub)
-     end
+    begin match StringMap.find sub x with
+      | None  -> (Var (freshen x sz 0), StringMap.set sub ~key:x ~data:(0,sz))
+      | Some (i,_) ->  (Var (freshen x sz i), sub)
+    end
   | Hole (x, sz) ->
-     begin match StringMap.find sub x with
-     | None  -> (Hole (x,sz), sub) (*"couldn't find "^x^" in substitution map " |> failwith*)
-     | Some (i,_) ->  (Hole (freshen x sz i), sub)
-     end
+    begin match StringMap.find sub x with
+      | None  -> (Hole (x,sz), sub) (*"couldn't find "^x^" in substitution map " |> failwith*)
+      | Some (i,_) ->  (Hole (freshen x sz i), sub)
+    end
   | Cast (i,e) ->
-     let e', sub' = indexVars_expr e sub in
-     cast i e', sub'
+    let e', sub' = indexVars_expr e sub in
+    cast i e', sub'
   | Slice {hi;lo;bits} ->
-     let e', sub' = indexVars_expr bits sub in
-     slice hi lo e', sub'
+    let e', sub' = indexVars_expr bits sub in
+    slice hi lo e', sub'
   | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
     -> binop (bin_ctor e) es
 
@@ -63,9 +64,9 @@ let rec indexVars b sub =
 let inits fvs sub =
   StringMap.fold sub ~init:[]
     ~f:(fun ~key:v ~data:(_,sz) vs ->
-      if List.exists fvs ~f:(fun (x,_) -> x = v)
-      then (freshen v sz 0) :: vs
-      else vs)
+        if List.exists fvs ~f:(fun (x,_) -> x = v)
+        then (freshen v sz 0) :: vs
+        else vs)
   |> List.dedup_and_sort ~compare:(fun (u,_) (v,_) -> Stdlib.compare u v)
 
 let rec apply_init_expr (e : Expr.t) =
@@ -78,15 +79,15 @@ let rec apply_init_expr (e : Expr.t) =
   | Cast (sz, e) -> unop (cast sz) e
   | Slice {hi;lo;bits} -> unop (slice hi lo) bits
   | Plus es
-    | Times es
-    | Minus es
-    | Mask es
-    | Xor es
-    | BOr es
-    | Shl es
-    | Concat es
-    | SatPlus es
-    | SatMinus es -> binop (bin_ctor e) es
+  | Times es
+  | Minus es
+  | Mask es
+  | Xor es
+  | BOr es
+  | Shl es
+  | Concat es
+  | SatPlus es
+  | SatMinus es -> binop (bin_ctor e) es
 
 let rec apply_init_test t =
   let open Test in
@@ -106,21 +107,21 @@ let rec apply_init_test t =
 let finals fvs sub =
   StringMap.fold sub ~init:[]
     ~f:(fun ~key:v ~data:(i,sz) vs ->
-      if List.exists fvs ~f:(fun (x,_) -> x = v)
-      then (freshen v sz i) :: vs
-      else vs)
+        if List.exists fvs ~f:(fun (x,_) -> x = v)
+        then (freshen v sz i) :: vs
+        else vs)
   |> List.sort ~compare:(fun (u,_) (v,_) -> Stdlib.compare u v)
 
 let apply_finals_sub_packet (pkt : Packet.t) sub : Packet.t =
   Packet.fold pkt ~init:Packet.empty
     ~f:(fun ~key ~data acc ->
-      let key =
-        match StringMap.find sub key with
-        | Some (i,_) -> fst (freshen key (Value.size data) i)
-        | None -> key
-      in
-      Packet.set_field acc key data
-    )
+        let key =
+          match StringMap.find sub key with
+          | Some (i,_) -> fst (freshen key (Value.size data) i)
+          | None -> key
+        in
+        Packet.set_field acc key data
+      )
 
 
 let rec apply_finals_sub_expr e sub =
@@ -130,22 +131,22 @@ let rec apply_finals_sub_expr e sub =
   match e with
   | Value _ | Hole _ -> e
   | Var (v, sz) ->
-     begin match StringMap.find sub v with
-     | Some (i,_) -> Var (freshen v sz i)
-     | None -> Var (v,sz)
-     end
+    begin match StringMap.find sub v with
+      | Some (i,_) -> Var (freshen v sz i)
+      | None -> Var (v,sz)
+    end
   | Cast (sz, e) -> unop (cast sz) e
   | Slice {hi;lo;bits} -> unop (slice hi lo) bits
   | Plus es
-    | Times es
-    | Minus es
-    | Mask es
-    | Xor es
-    | BOr es
-    | Shl es
-    | Concat es
-    | SatPlus es
-    | SatMinus es -> binop (bin_ctor e) es
+  | Times es
+  | Minus es
+  | Mask es
+  | Xor es
+  | BOr es
+  | Shl es
+  | Concat es
+  | SatPlus es
+  | SatMinus es -> binop (bin_ctor e) es
 
 
 let rec apply_finals_sub_test t sub =
@@ -166,6 +167,180 @@ let rec apply_finals_sub_test t sub =
 let zip_eq_exn xs ys =
   let open Test in
   List.fold2_exn xs ys ~init:True ~f:(fun acc x y -> acc %&% (Var x %=% Var y) )
+
+(* Deparser Equality methods *)
+
+let print_perms perms = 
+  Printf.printf "BEGINNING PRINT PERMS \n %!";
+  List.map perms ~f:(fun (meta, test) -> 
+      Printf.printf "TEST: %s \n %!" (test |> to_string);
+      List.map meta ~f:(fun (name, valid, size) -> 
+          Printf.printf "HDR: %s VALID: %b SIZE: %i\n %!" name valid size))
+
+let rec perms lst smap = 
+  match lst with 
+  | [] -> []
+  | hd :: [] -> 
+    let sz = Hashtbl.find_exn smap hd in 
+    [[hd, true, sz], (eq (Var (hd ^ ".isValid", 1)) (value (1, 1)));
+     [hd, false, sz], (eq (Var (hd ^ ".isValid", 1)) (value (0, 1)))]
+  | hd :: tl ->
+    let sz = Hashtbl.find_exn smap hd in 
+    let p = perms tl smap in
+    List.map p
+      ~f:(fun x -> 
+          ((hd, true, sz):: fst x), 
+          (and_ (snd x) 
+             (eq (Var (hd ^ ".isValid", 1)) 
+                (value (1, 1)))))
+    @ List.map p
+      ~f:(fun x -> 
+          ((hd, false, sz):: fst x), 
+          (and_ (snd x)
+             (eq (Var (hd ^ ".isValid", 1)) 
+                (value (0, 1)))))
+let make_zero sz = value (0, sz) 
+
+let rec concat_fields hdr = function
+  | [] -> failwith "should have gotten fields"
+  | hd :: [] -> 
+    Var ((hdr ^ "." ^ (fst hd)), snd hd)
+  | hd :: tl -> 
+    concat (Var ((hdr ^ "." ^ (fst hd)), snd hd)) (concat_fields hdr tl)
+
+let rec concatenate lst fmap smap = 
+  match lst with 
+  | [] -> failwith "should have gotten fields"
+  | (hd, valid, _) :: [] -> 
+    let fields = Hashtbl.find_exn fmap hd in 
+    if valid 
+    then concat_fields hd fields 
+    else make_zero (Hashtbl.find_exn smap hd)
+  | (hd, valid, _) :: tl -> 
+    let fields = Hashtbl.find_exn fmap hd in 
+    if valid
+    then concat
+        (concat_fields hd fields)
+        (concatenate tl fmap smap)
+    else concat
+        (make_zero (Hashtbl.find_exn smap hd))
+        (concatenate tl fmap smap)
+
+let total meta = List.fold meta 
+    ~f:(fun acc (_, valid, sz) -> if valid then acc + sz else acc) ~init:0
+
+let rec all_invalid perms = 
+  let invalid_test valid = if valid then False else True in 
+  match perms with 
+  | [] -> True 
+  | (_, valid, _) :: [] -> invalid_test valid 
+  | (_, valid, _) :: tl -> bigand [invalid_test valid; all_invalid tl]
+
+let deparse_equality headers1 map1 headers2 map2 = 
+  let sizes1 = Hashtbl.to_alist map1 
+               |> List.map ~f:(fun (hdr, flst) -> 
+                   let szs = List.map flst ~f:snd in 
+                   let sz = List.fold szs ~init:0 ~f:(+) in 
+                   (hdr, sz)) in 
+  let bv01 = make_zero (List.fold (List.map sizes1 ~f:snd) ~init:0 ~f:(+)) in 
+  let smap1 = Hashtbl.of_alist_exn (module String) sizes1 in 
+  let valid_perms1 = perms headers1 smap1 in 
+  let _ : unit list list  = print_perms valid_perms1 in 
+  let sizes2 = Hashtbl.to_alist map2 
+               |> List.map ~f:(fun (hdr, flst) -> 
+                   let szs = List.map flst ~f:snd in 
+                   let sz = List.fold szs ~init:0 ~f:(+) in 
+                   (hdr, sz)) in 
+  let bv02 = make_zero (List.fold (List.map sizes2 ~f:snd) ~init:0 ~f:(+)) in 
+  let smap2 = Hashtbl.of_alist_exn (module String) sizes2 in 
+  let valid_perms2 = perms headers2 smap2 in 
+  let _ : unit list list  = print_perms valid_perms2 in 
+  let rec help lst1 fmap1 lst2 fmap2 = 
+    match lst1, lst2 with 
+    | [], [] -> True 
+    | [], _ -> all_invalid (List.concat_map lst2 ~f:fst)
+    | _, [] -> all_invalid (List.concat_map lst1 ~f:fst)
+    | (meta1, test1) :: [], (meta2, test2) :: [] -> 
+      let total1 = total meta1 in 
+      let total2 = total meta2 in 
+      bigand [(neg (test1 %&% test2)) 
+              %=>% (bv01 %=% bv02); 
+              ((neg  test1) %&% test2) 
+              %=>% (((value (total1, total1)) 
+                     %=% (value (total2, total2)) 
+                     %&% ((concatenate meta1 fmap1 smap1) %=% bv02))); 
+              (test1 %&% (neg  test2))
+              %=>% (((value (total1, total1)) 
+                     %=% (value (total2, total2)) 
+                     %&% ((concatenate meta2 fmap2 smap2) %=% bv01)));
+              (test1 %&% test2) 
+              %=>% (concatenate meta1 fmap1 smap1
+                    %=% concatenate meta2 fmap2 smap2)]
+    | (meta1, test1) :: [], (meta2, test2) :: tl2 -> 
+      let total1 = total meta1 in 
+      let total2 = total meta2 in 
+      bigand [(neg (test1 %&% test2)) 
+              %=>% ((bv01 %=% bv02) 
+                    %+% help lst1 map1 tl2 map2); 
+              ((neg  test1) %&% test2) 
+              %=>% (((value (total1, total1)) 
+                     %=% (value (total2, total2)) 
+                     %&% ((concatenate meta2 fmap2 smap2) %=% bv02))
+                    %+% help lst1 map1 tl2 map2); 
+              (test1 %&% (neg  test2))
+              %=>% (((value (total1, total1)) 
+                     %=% (value (total2, total2)) 
+                     %&% ((concatenate meta1 fmap1 smap1) %=% bv01))
+                    %+% help lst1 map1 tl2 map2);
+              (test1 %&% test2) 
+              %=>% ((concatenate meta1 fmap1 smap1 
+                     %=% concatenate meta2 fmap2 smap2)
+                    %+% help lst1 map1 tl2 map2)]      
+    | (meta1, test1) :: tl1, (meta2, test2) :: [] -> 
+      let total1 = total meta1 in 
+      let total2 = total meta2 in 
+      bigand [(neg (test1 %&% test2)) 
+              %=>% ((bv01 %=% bv02) 
+                    %+% help tl1 map1 lst2 map2); 
+              ((neg  test1) %&% test2) 
+              %=>% (((value (total1, total1)) 
+                     %=% (value (total2, total2)) 
+                     %&% ((concatenate meta2 fmap2 smap2) %=% bv02))
+                    %+% help tl1 map1 lst2 map2); 
+              (test1 %&% (neg  test2))
+              %=>% (((value (total1, total1)) 
+                     %=% (value (total2, total2)) 
+                     %&% ((concatenate meta1 fmap1 smap1) %=% bv01))
+                    %+% help tl1 map1 lst2 map2);
+              (test1 %&% test2) 
+              %=>% ((concatenate meta1 fmap1 smap1 
+                     %=% concatenate meta2 fmap2 smap2)
+                    %+% help tl1 map1 lst2 map2)]   
+    | (meta1, test1) :: tl1, (meta2, test2) :: tl2 -> 
+      let total1 = total meta1 in 
+      let total2 = total meta2 in 
+      bigand [(neg (test1 %&% test2)) 
+              %=>% ((bv01 %=% bv02) 
+                    %+% help tl1 map1 lst2 map2
+                    %+% help lst1 map1 tl2 map2); 
+              ((neg  test1) %&% test2) 
+              %=>% (((value (total1, total1)) 
+                     %=% (value (total2, total2)) 
+                     %&% ((concatenate meta2 fmap2 smap2) %=% bv02))
+                    %+% help tl1 map1 lst2 map2
+                    %+% help lst1 map1 tl2 map2); 
+              (test1 %&% (neg  test2))
+              %=>% (((value (total1, total1)) 
+                     %=% (value (total2, total2)) 
+                     %&% ((concatenate meta1 fmap1 smap1) %=% bv01))
+                    %+% help tl1 map1 lst2 map2
+                    %+% help lst1 map1 tl2 map2);
+              (test1 %&% test2) 
+              %=>% ((concatenate meta1 fmap1 smap1 
+                     %=% concatenate meta2 fmap2 smap2)
+                    %+% help tl1 map1 lst2 map2
+                    %+% help lst1 map1 tl2 map2)] 
+  in help valid_perms1 map1 valid_perms2 map2
 
 let prepend_str = Printf.sprintf "%s%s"
 
@@ -200,70 +375,70 @@ let rec prepend pfx c =
   | Assume b -> prepend_test pfx b |> Assume
   | Seq(c1,c2) -> prepend pfx c1 %:% prepend pfx c2
   | Select(typ, cs) ->
-     List.map cs ~f:(fun (t,c) -> (prepend_test pfx t, prepend pfx c))
-     |> mkSelect typ
+    List.map cs ~f:(fun (t,c) -> (prepend_test pfx t, prepend pfx c))
+    |> mkSelect typ
   | Apply t ->
-     Apply {name = prepend_str pfx t.name;
-            keys = List.map t.keys ~f:(fun (k,sz,v_opt) -> (prepend_str pfx k, sz,v_opt));
-            actions = List.map t.actions ~f:(fun (n, scope, act) -> (n, List.map scope ~f:(fun (x,sz) -> (prepend_str pfx x, sz)), prepend pfx act));
-            default = prepend pfx t.default}
+    Apply {name = prepend_str pfx t.name;
+           keys = List.map t.keys ~f:(fun (k,sz,v_opt) -> (prepend_str pfx k, sz,v_opt));
+           actions = List.map t.actions ~f:(fun (n, scope, act) -> (n, List.map scope ~f:(fun (x,sz) -> (prepend_str pfx x, sz)), prepend pfx act));
+           default = prepend pfx t.default}
 
 let rec passify_aux sub c : ((int * int) StringMap.t * cmd) =
   let open Test in
   match c with
   | Skip -> (sub, Skip)
   | Assume b ->
-     (sub, Assume (indexVars b sub))
+    (sub, Assume (indexVars b sub))
   | Assign (f,e) ->
-     begin match StringMap.find sub f with
-     | None ->
+    begin match StringMap.find sub f with
+      | None ->
         let sz = Expr.size e in
         (StringMap.set sub ~key:f ~data:(1, sz)
         , Assume (Var (freshen f sz 1) %=% fst(indexVars_expr e sub)))
-     | Some (idx, sz) ->
+      | Some (idx, sz) ->
         (StringMap.set sub ~key:f ~data:(idx + 1,sz)
         , Assume (Var (freshen f sz (idx + 1)) %=% fst(indexVars_expr e sub)))
-     end
+    end
   | Seq (c1, c2) ->
-     let (sub1, c1') = passify_aux sub  c1 in
-     let (sub2, c2') = passify_aux sub1 c2 in
-     (sub2, c1' %:% c2')
+    let (sub1, c1') = passify_aux sub  c1 in
+    let (sub2, c2') = passify_aux sub1 c2 in
+    (sub2, c1' %:% c2')
   | Select (Total, _) -> failwith "Don't know what to do for if total"
   | Select (typ, ss) ->
-     let sub_lst = List.map ss ~f:(fun (t,c) ->
-                       let sub', c' = passify_aux sub c in
-                       (sub', (indexVars t sub, c'))) in
-     let merged_subst =
-       List.fold sub_lst ~init:StringMap.empty
-         ~f:(fun acc (sub', _) ->
-           StringMap.merge acc sub'
-             ~f:(fun ~key:_ ->
-               function
-               | `Left i -> Some i
-               | `Right i -> Some i
-               | `Both ((i,sz),(j,_)) -> Some (max i j, sz)))
-     in
-     let rewriting sub =
-       StringMap.fold sub ~init:Skip
-         ~f:(fun ~key:v ~data:(idx,_) acc ->
-           let merged_idx,sz = StringMap.find_exn merged_subst v in
-           if merged_idx > idx then
-             Assume (Var(freshen v sz merged_idx)
-                     %=% Var(freshen v sz idx))
-             %:% acc
-           else acc
-         )
-     in
-     let ss' =
-       List.filter_map sub_lst ~f:(fun (sub', (t', c')) ->
-           let rc = rewriting sub' in
-           Some (t', c' %:% rc)
-         )
-     in
-     (merged_subst, mkSelect typ ss')
+    let sub_lst = List.map ss ~f:(fun (t,c) ->
+        let sub', c' = passify_aux sub c in
+        (sub', (indexVars t sub, c'))) in
+    let merged_subst =
+      List.fold sub_lst ~init:StringMap.empty
+        ~f:(fun acc (sub', _) ->
+            StringMap.merge acc sub'
+              ~f:(fun ~key:_ ->
+                  function
+                  | `Left i -> Some i
+                  | `Right i -> Some i
+                  | `Both ((i,sz),(j,_)) -> Some (max i j, sz)))
+    in
+    let rewriting sub =
+      StringMap.fold sub ~init:Skip
+        ~f:(fun ~key:v ~data:(idx,_) acc ->
+            let merged_idx,sz = StringMap.find_exn merged_subst v in
+            if merged_idx > idx then
+              Assume (Var(freshen v sz merged_idx)
+                      %=% Var(freshen v sz idx))
+              %:% acc
+            else acc
+          )
+    in
+    let ss' =
+      List.filter_map sub_lst ~f:(fun (sub', (t', c')) ->
+          let rc = rewriting sub' in
+          Some (t', c' %:% rc)
+        )
+    in
+    (merged_subst, mkSelect typ ss')
 
   | Apply _ ->
-     failwith "Cannot passify (yet) table applications"
+    failwith "Cannot passify (yet) table applications"
 
 let passify fvs c =
   let init_sub =
@@ -282,16 +457,16 @@ let rec good_wp c =
   | Seq (c1,c2) -> good_wp c1 %&% good_wp c2
   | Select(Total, _) -> failwith "Totality eludes me"
   | Select(Partial, ss) ->
-     List.fold ss ~init:False
-       ~f:(fun cond (t,c) -> cond %+% (t %&% good_wp (c)))
+    List.fold ss ~init:False
+      ~f:(fun cond (t,c) -> cond %+% (t %&% good_wp (c)))
   | Select(Ordered,  ss) ->
-     List.fold ss ~init:(False,False)
-       ~f:(fun (cond, misses) (t,c) ->
-         (cond %+% (
-            t %&% !%(misses) %&% good_wp c
-          )
-         , t %+% misses))
-     |> fst
+    List.fold ss ~init:(False,False)
+      ~f:(fun (cond, misses) (t,c) ->
+          (cond %+% (
+              t %&% !%(misses) %&% good_wp c
+            )
+          , t %+% misses))
+    |> fst
   | Assign _ -> failwith "ERROR: PROGRAM NOT IN PASSIVE FORM! Assignments should have been removed"
   | Apply _ -> failwith "Tables should be applied at this stage"
 
@@ -303,16 +478,16 @@ let rec bad_wp c =
   | Seq(c1,c2) -> bad_wp c1 %+% (good_wp c1 %&% bad_wp c2)
   | Select (Total, _) -> failwith "totality eludes me "
   | Select (Partial, ss) ->
-     List.fold ss ~init:(True)
-       ~f:(fun acc (t,c) -> acc %+% (t %&% bad_wp (c)))
+    List.fold ss ~init:(True)
+      ~f:(fun acc (t,c) -> acc %+% (t %&% bad_wp (c)))
   | Select(Ordered,  ss) ->
-     List.fold ss ~init:(False,False)
-       ~f:(fun (cond, misses) (t,c) ->
-         (cond %+% (
-            t %&% !%(misses) %&% bad_wp c
-          )
-         , t %+% misses))
-     |> fst
+    List.fold ss ~init:(False,False)
+      ~f:(fun (cond, misses) (t,c) ->
+          (cond %+% (
+              t %&% !%(misses) %&% bad_wp c
+            )
+          , t %+% misses))
+    |> fst
   | Assign _ -> failwith "ERROR: PROGRAM NOT IN PASSIVE FORM! Assignments should have been removed"
   | Apply _ -> failwith "Tables should be applied at this stage"
 
@@ -339,8 +514,8 @@ let equivalent ?neg:(neg = Test.True) (data : ProfData.t ref) eq_fvs l p =
   let fvs =
     (* free_of_cmd `Hole l
      * @ *) free_of_cmd `Var l
-    (* @ free_of_cmd `Hole p *)
-    @ free_of_cmd `Var p
+            (* @ free_of_cmd `Hole p *)
+            @ free_of_cmd `Var p
   in
   ProfData.update_time !data.prefixing_time st;
   let prefix_list =  List.map ~f:(fun (x,sz) -> (phys_prefix ^ x, sz)) in
