@@ -10,4 +10,4 @@ let open Avenir.Test in
   Printf.printf "%s" (res |> to_string)
 
 let test : unit Alcotest.test_case list = [
-    Alcotest.test_case "Printing VC example" `Quick demo;]
+  Alcotest.test_case "Printing VC example" `Quick demo;]
