@@ -19,4 +19,5 @@ let () =
       "model interface", ModelTest.test;
       "value interface", ValueTest.test;
       "vc generation", VCGenTest.test;
+      "random generators", RandomGenTest.test;
     ]
