@@ -3,6 +3,10 @@ open Util
 open Value 
 open Expr 
 open Test 
+<<<<<<< HEAD
+=======
+
+>>>>>>> simplified tests
 let freshen v sz i = (v ^ "$" ^ string_of_int i, sz)
 
 let rec indexVars_expr e (sub : ((int * int) StringMap.t)) =
@@ -21,6 +25,7 @@ let rec indexVars_expr e (sub : ((int * int) StringMap.t)) =
   in
   match e with
   | Value _ -> (e, sub)
+<<<<<<< HEAD
   | Var (x,sz) ->
     begin match StringMap.find sub x with
       | None  -> (Var (freshen x sz 0), StringMap.set sub ~key:x ~data:(0,sz))
@@ -40,6 +45,34 @@ let rec indexVars_expr e (sub : ((int * int) StringMap.t)) =
   | Plus es | Minus es | Times es | Mask es | Xor es | BOr es | Shl es | Concat es | SatPlus es | SatMinus es
     -> binop (bin_ctor e) es
 
+=======
+  | Var (x, sz) -> (
+    match StringMap.find sub x with
+    | None -> (Var (freshen x sz 0), StringMap.set sub ~key:x ~data:(0, sz))
+    | Some (i, _) -> (Var (freshen x sz i), sub) )
+  | Hole (x, sz) -> (
+    match StringMap.find sub x with
+    | None -> (Hole (x, sz), sub)
+    (*"couldn't find "^x^" in substitution map " |> failwith*)
+    | Some (i, _) -> (Hole (freshen x sz i), sub) )
+  | Cast (i, e) ->
+      let e', sub' = indexVars_expr e sub in
+      (cast i e', sub')
+  | Slice {hi; lo; bits} ->
+      let e', sub' = indexVars_expr bits sub in
+      (slice hi lo e', sub')
+  | Plus es
+   |Minus es
+   |Times es
+   |Mask es
+   |Xor es
+   |BOr es
+   |Shl es
+   |Concat es
+   |SatPlus es
+   |SatMinus es ->
+      binop (bin_ctor e) es
+>>>>>>> simplified tests
 
 let rec indexVars b sub =
   let open Test in
@@ -291,6 +324,133 @@ let deparse_equality h1 h2 =
   | None -> (field, sz) :: []));
   cross_product hd1 map1 hd2 map2
 
+
+(* Deparser Equality functions *)
+
+let print_perms perms num =
+  Printf.printf "BEGINNING PRINT PERMS %d \n %!" num ;
+  List.iter perms ~f:(fun (meta, test) ->
+      Printf.printf "TEST: %s \n %!" (test |> to_string) ;
+      List.iter meta ~f:(fun (name, valid, size) ->
+          Printf.printf "HDR: %s VALID: %b SIZE: %i\n %!" name valid size))
+
+let rec perms lst smap =
+  match lst with
+  | [] -> []
+  | [hd] ->
+      let sz = Hashtbl.find_exn smap hd in
+      [ ([(hd, true, sz)], eq (Var (hd ^ ".isValid", 1)) (value (1, 1)))
+      ; ([(hd, false, sz)], eq (Var (hd ^ ".isValid", 1)) (value (0, 1))) ]
+  | hd :: tl ->
+      let sz = Hashtbl.find_exn smap hd in
+      let p = perms tl smap in
+      List.map p ~f:(fun x ->
+          ( (hd, true, sz) :: fst x
+          , and_ (snd x) (eq (Var (hd ^ ".isValid", 1)) (value (1, 1))) ))
+      @ List.map p ~f:(fun x ->
+            ( (hd, false, sz) :: fst x
+            , and_ (snd x) (eq (Var (hd ^ ".isValid", 1)) (value (0, 1))) ))
+
+let concat_fields hdr lst =
+  match lst with
+  | (field, sz) :: tl ->
+      List.fold tl
+        ~init:(Var (hdr ^ "." ^ field, sz))
+        ~f:(fun acc (field, sz) -> concat (Var (hdr ^ "." ^ field, sz)) acc)
+  | _ -> failwith "expected at least one field"
+
+let concatenate lst fmap smap =
+  match lst with
+  | (hdr, _, _) :: tl ->
+      let fields = Hashtbl.find_exn fmap hdr in
+      List.fold tl ~init:(concat_fields hdr fields)
+        ~f:(fun acc (hdr, valid, _) ->
+          let fields = Hashtbl.find_exn fmap hdr in
+          if valid then concat_fields hdr fields |> concat acc
+          else Value (zero (Hashtbl.find_exn smap hdr)) |> concat acc)
+  | _ -> failwith "expected at least one field"
+
+let total meta =
+  List.fold meta ~init:0 ~f:(fun acc (_, valid, sz) ->
+      if valid then acc + sz else acc)
+
+let all_invalid perms =
+  let invalid_test valid = if valid then False else True in
+  List.fold perms ~init:True ~f:(fun acc (_, valid, _) ->
+      and_ (invalid_test valid) acc)
+
+let cross_product headers1 map1 headers2 map2 =
+  let sizes1 =
+    Hashtbl.to_alist map1
+    |> List.map ~f:(fun (hdr, flst) ->
+           let szs = List.map flst ~f:snd in
+           let sz = List.fold szs ~init:0 ~f:( + ) in
+           (hdr, sz))
+  in
+  let bv01 =
+    Value (zero (List.fold (List.map sizes1 ~f:snd) ~init:0 ~f:( + )))
+  in
+  let smap1 = Hashtbl.of_alist_exn (module String) sizes1 in
+  let valid_perms1 = perms headers1 smap1 in
+  let sizes2 =
+    Hashtbl.to_alist map2
+    |> List.map ~f:(fun (hdr, flst) ->
+           let szs = List.map flst ~f:snd in
+           let sz = List.fold szs ~init:0 ~f:( + ) in
+           (hdr, sz))
+  in
+  let bv02 =
+    Value (zero (List.fold (List.map sizes2 ~f:snd) ~init:0 ~f:( + )))
+  in
+  let smap2 = Hashtbl.of_alist_exn (module String) sizes2 in
+  let valid_perms2 = perms headers2 smap2 in
+  let help (meta1, test1) fmap1 (meta2, test2) fmap2 =
+    let total1 = total meta1 in
+    let total2 = total meta2 in
+    bigand
+      [ neg (test1 %&% test2) %=>% (bv01 %=% bv02)
+      ; neg test1 %&% test2
+        %=>% ( value (total1, total1)
+             %=% value (total2, total2)
+             %&% (concatenate meta1 fmap1 smap1 %=% bv02) )
+      ; test1 %&% neg test2
+        %=>% ( value (total1, total1)
+             %=% value (total2, total2)
+             %&% (concatenate meta2 fmap2 smap2 %=% bv01) )
+      ; test1 %&% test2
+        %=>% (concatenate meta1 fmap1 smap1 %=% concatenate meta2 fmap2 smap2)
+      ]
+  in
+  List.cartesian_product valid_perms1 valid_perms2
+  |> List.fold ~init:True ~f:(fun acc (v1, v2) ->
+         and_ acc @@ help v1 map1 v2 map2)
+
+let deparse_equality h1 h2 =
+  let l1 =
+    List.map h1 ~f:(fun (hdr, sz) ->
+        let name = String.split hdr ~on:'.' |> List.hd_exn in
+        let field = String.chop_prefix_exn hdr ~prefix:(name ^ ".") in
+        (name, (field, sz)))
+  in
+  let l2 =
+    List.map h2 ~f:(fun (hdr, sz) ->
+        let name = String.split hdr ~on:'.' |> List.hd_exn in
+        let field = String.chop_prefix_exn hdr ~prefix:(name ^ ".") in
+        (name, (field, sz)))
+  in
+  let hd1 = List.map l1 ~f:(fun (name, _) -> name) in
+  let hd2 = List.map l2 ~f:(fun (name, _) -> name) in
+  let map1 = Hashtbl.create (module String) in
+  let map2 = Hashtbl.create (module String) in
+  List.iter l1 ~f:(fun (name, (field, sz)) ->
+      Hashtbl.update map1 name ~f:(function
+        | Some lst -> (field, sz) :: lst
+        | None -> [(field, sz)])) ;
+  List.iter l2 ~f:(fun (name, (field, sz)) ->
+      Hashtbl.update map2 name ~f:(function
+        | Some lst -> (field, sz) :: lst
+        | None -> [(field, sz)])) ;
+  cross_product hd1 map1 hd2 map2
 
 let prepend_str = Printf.sprintf "%s%s"
 
