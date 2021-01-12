@@ -168,7 +168,7 @@ let zip_eq_exn xs ys =
   let open Test in
   List.fold2_exn xs ys ~init:True ~f:(fun acc x y -> acc %&% (Var x %=% Var y) )
 
-(* Deparser Equality methods *)
+(* Deparser Equality functions *)
 
 let print_perms perms num = 
   Printf.printf "BEGINNING PRINT PERMS %d \n %!" num;
