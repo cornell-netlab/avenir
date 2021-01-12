@@ -1,6 +1,7 @@
 open Core
 open Ast
 open Util
+open Value 
 open Expr 
 open Test 
 let freshen v sz i = (v ^ "$" ^ string_of_int i, sz)
@@ -112,6 +113,14 @@ let finals fvs sub =
         else vs)
   |> List.sort ~compare:(fun (u,_) (v,_) -> Stdlib.compare u v)
 
+let finals_test fvs sub =
+  StringMap.fold sub ~init:[]
+    ~f:(fun ~key:v ~data:(i,sz) vs ->
+        if List.exists fvs ~f:(fun (x,_) -> x = v)
+        then (freshen v sz i) :: vs
+        else vs)
+  |> List.sort ~compare:(fun (u,_) (v,_) -> Stdlib.compare u v)
+
 let apply_finals_sub_packet (pkt : Packet.t) sub : Packet.t =
   Packet.fold pkt ~init:Packet.empty
     ~f:(fun ~key ~data acc ->
@@ -170,11 +179,11 @@ let zip_eq_exn xs ys =
 
 (* Deparser Equality methods *)
 
-let print_perms perms = 
-  Printf.printf "BEGINNING PRINT PERMS \n %!";
-  List.map perms ~f:(fun (meta, test) -> 
+let print_perms perms num = 
+  Printf.printf "BEGINNING PRINT PERMS %d \n %!" num;
+  List.iter perms ~f:(fun (meta, test) -> 
       Printf.printf "TEST: %s \n %!" (test |> to_string);
-      List.map meta ~f:(fun (name, valid, size) -> 
+      List.iter meta ~f:(fun (name, valid, size) -> 
           Printf.printf "HDR: %s VALID: %b SIZE: %i\n %!" name valid size))
 
 let rec perms lst smap = 
@@ -199,7 +208,6 @@ let rec perms lst smap =
           (and_ (snd x)
              (eq (Var (hd ^ ".isValid", 1)) 
                 (value (0, 1)))))
-let make_zero sz = value (0, sz) 
 
 let rec concat_fields hdr = function
   | [] -> failwith "should have gotten fields"
@@ -215,7 +223,7 @@ let rec concatenate lst fmap smap =
     let fields = Hashtbl.find_exn fmap hd in 
     if valid 
     then concat_fields hd fields 
-    else make_zero (Hashtbl.find_exn smap hd)
+    else Value (zero (Hashtbl.find_exn smap hd))
   | (hd, valid, _) :: tl -> 
     let fields = Hashtbl.find_exn fmap hd in 
     if valid
@@ -223,7 +231,7 @@ let rec concatenate lst fmap smap =
         (concat_fields hd fields)
         (concatenate tl fmap smap)
     else concat
-        (make_zero (Hashtbl.find_exn smap hd))
+        (Value (zero (Hashtbl.find_exn smap hd)))
         (concatenate tl fmap smap)
 
 let total meta = List.fold meta 
@@ -236,111 +244,62 @@ let rec all_invalid perms =
   | (_, valid, _) :: [] -> invalid_test valid 
   | (_, valid, _) :: tl -> bigand [invalid_test valid; all_invalid tl]
 
-let deparse_equality headers1 map1 headers2 map2 = 
+let cross_product headers1 map1 headers2 map2 = 
   let sizes1 = Hashtbl.to_alist map1 
                |> List.map ~f:(fun (hdr, flst) -> 
                    let szs = List.map flst ~f:snd in 
                    let sz = List.fold szs ~init:0 ~f:(+) in 
                    (hdr, sz)) in 
-  let bv01 = make_zero (List.fold (List.map sizes1 ~f:snd) ~init:0 ~f:(+)) in 
+  let bv01 = Value (zero (List.fold (List.map sizes1 ~f:snd) ~init:0 ~f:(+))) in 
   let smap1 = Hashtbl.of_alist_exn (module String) sizes1 in 
   let valid_perms1 = perms headers1 smap1 in 
-  let _ : unit list list  = print_perms valid_perms1 in 
   let sizes2 = Hashtbl.to_alist map2 
                |> List.map ~f:(fun (hdr, flst) -> 
                    let szs = List.map flst ~f:snd in 
                    let sz = List.fold szs ~init:0 ~f:(+) in 
                    (hdr, sz)) in 
-  let bv02 = make_zero (List.fold (List.map sizes2 ~f:snd) ~init:0 ~f:(+)) in 
+  let bv02 = Value (zero (List.fold (List.map sizes2 ~f:snd) ~init:0 ~f:(+))) in 
   let smap2 = Hashtbl.of_alist_exn (module String) sizes2 in 
   let valid_perms2 = perms headers2 smap2 in 
-  let _ : unit list list  = print_perms valid_perms2 in 
-  let rec help lst1 fmap1 lst2 fmap2 = 
-    match lst1, lst2 with 
-    | [], [] -> True 
-    | [], _ -> all_invalid (List.concat_map lst2 ~f:fst)
-    | _, [] -> all_invalid (List.concat_map lst1 ~f:fst)
-    | (meta1, test1) :: [], (meta2, test2) :: [] -> 
-      let total1 = total meta1 in 
-      let total2 = total meta2 in 
-      bigand [(neg (test1 %&% test2)) 
-              %=>% (bv01 %=% bv02); 
-              ((neg  test1) %&% test2) 
-              %=>% (((value (total1, total1)) 
-                     %=% (value (total2, total2)) 
-                     %&% ((concatenate meta1 fmap1 smap1) %=% bv02))); 
-              (test1 %&% (neg  test2))
-              %=>% (((value (total1, total1)) 
-                     %=% (value (total2, total2)) 
-                     %&% ((concatenate meta2 fmap2 smap2) %=% bv01)));
-              (test1 %&% test2) 
-              %=>% (concatenate meta1 fmap1 smap1
-                    %=% concatenate meta2 fmap2 smap2)]
-    | (meta1, test1) :: [], (meta2, test2) :: tl2 -> 
-      let total1 = total meta1 in 
-      let total2 = total meta2 in 
-      bigand [(neg (test1 %&% test2)) 
-              %=>% ((bv01 %=% bv02) 
-                    %+% help lst1 map1 tl2 map2); 
-              ((neg  test1) %&% test2) 
-              %=>% (((value (total1, total1)) 
-                     %=% (value (total2, total2)) 
-                     %&% ((concatenate meta2 fmap2 smap2) %=% bv02))
-                    %+% help lst1 map1 tl2 map2); 
-              (test1 %&% (neg  test2))
-              %=>% (((value (total1, total1)) 
-                     %=% (value (total2, total2)) 
-                     %&% ((concatenate meta1 fmap1 smap1) %=% bv01))
-                    %+% help lst1 map1 tl2 map2);
-              (test1 %&% test2) 
-              %=>% ((concatenate meta1 fmap1 smap1 
-                     %=% concatenate meta2 fmap2 smap2)
-                    %+% help lst1 map1 tl2 map2)]      
-    | (meta1, test1) :: tl1, (meta2, test2) :: [] -> 
-      let total1 = total meta1 in 
-      let total2 = total meta2 in 
-      bigand [(neg (test1 %&% test2)) 
-              %=>% ((bv01 %=% bv02) 
-                    %+% help tl1 map1 lst2 map2); 
-              ((neg  test1) %&% test2) 
-              %=>% (((value (total1, total1)) 
-                     %=% (value (total2, total2)) 
-                     %&% ((concatenate meta2 fmap2 smap2) %=% bv02))
-                    %+% help tl1 map1 lst2 map2); 
-              (test1 %&% (neg  test2))
-              %=>% (((value (total1, total1)) 
-                     %=% (value (total2, total2)) 
-                     %&% ((concatenate meta1 fmap1 smap1) %=% bv01))
-                    %+% help tl1 map1 lst2 map2);
-              (test1 %&% test2) 
-              %=>% ((concatenate meta1 fmap1 smap1 
-                     %=% concatenate meta2 fmap2 smap2)
-                    %+% help tl1 map1 lst2 map2)]   
-    | (meta1, test1) :: tl1, (meta2, test2) :: tl2 -> 
-      let total1 = total meta1 in 
-      let total2 = total meta2 in 
-      bigand [(neg (test1 %&% test2)) 
-              %=>% ((bv01 %=% bv02) 
-                    %+% help tl1 map1 lst2 map2
-                    %+% help lst1 map1 tl2 map2); 
-              ((neg  test1) %&% test2) 
-              %=>% (((value (total1, total1)) 
-                     %=% (value (total2, total2)) 
-                     %&% ((concatenate meta2 fmap2 smap2) %=% bv02))
-                    %+% help tl1 map1 lst2 map2
-                    %+% help lst1 map1 tl2 map2); 
-              (test1 %&% (neg  test2))
-              %=>% (((value (total1, total1)) 
-                     %=% (value (total2, total2)) 
-                     %&% ((concatenate meta1 fmap1 smap1) %=% bv01))
-                    %+% help tl1 map1 lst2 map2
-                    %+% help lst1 map1 tl2 map2);
-              (test1 %&% test2) 
-              %=>% ((concatenate meta1 fmap1 smap1 
-                     %=% concatenate meta2 fmap2 smap2)
-                    %+% help tl1 map1 lst2 map2
-                    %+% help lst1 map1 tl2 map2)] 
-  in help valid_perms1 map1 valid_perms2 map2
+  let help (meta1, test1) fmap1 (meta2, test2) fmap2 = 
+    let total1 = total meta1 in 
+    let total2 = total meta2 in 
+    bigand [(neg (test1 %&% test2)) 
+            %=>% (bv01 %=% bv02); 
+            ((neg test1) %&% test2) 
+            %=>% (((value (total1, total1)) 
+                   %=% (value (total2, total2)) 
+                   %&% ((concatenate meta1 fmap1 smap1) %=% bv02))); 
+            (test1 %&% (neg test2))
+            %=>% (((value (total1, total1)) 
+                   %=% (value (total2, total2)) 
+                   %&% ((concatenate meta2 fmap2 smap2) %=% bv01)));
+            (test1 %&% test2) 
+            %=>% (concatenate meta1 fmap1 smap1
+                  %=% concatenate meta2 fmap2 smap2)]
+  in 
+  List.cartesian_product valid_perms1 valid_perms2 
+  |> List.fold ~init:True ~f:(fun acc (v1, v2) -> and_ acc @@ (help v1 map1 v2 map2))
+
+let deparse_equality h1 h2 = 
+  let l1 = List.map h1 ~f:(fun (hdr, sz) -> let name = String.split hdr ~on:'.' |> List.hd_exn in 
+                            let field = String.chop_prefix_exn hdr ~prefix:(name ^ ".") in 
+                            (name, (field, sz))) in 
+  let l2 = List.map h2 ~f:(fun (hdr, sz) -> let name = String.split hdr ~on:'.' |> List.hd_exn in 
+                            let field = String.chop_prefix_exn hdr ~prefix:(name ^ ".") in 
+                            (name, (field, sz))) in 
+  let hd1 = List.map l1 ~f:(fun (name, _) -> name) in 
+  let hd2 = List.map l2 ~f:(fun (name, _) -> name) in 
+  let map1 = Hashtbl.create (module String) in 
+  let map2 = Hashtbl.create (module String) in 
+  List.iter l1 ~f:(fun (name, (field, sz)) -> Hashtbl.update map1 name ~f:(function 
+  | Some lst -> (field, sz) :: lst 
+  | None -> (field, sz) :: []));
+  List.iter l2 ~f:(fun (name, (field, sz)) -> Hashtbl.update map2 name ~f:(function 
+  | Some lst -> (field, sz) :: lst 
+  | None -> (field, sz) :: []));
+  cross_product hd1 map1 hd2 map2
+
 
 let prepend_str = Printf.sprintf "%s%s"
 
@@ -532,7 +491,7 @@ let equivalent ?neg:(neg = Test.True) (data : ProfData.t ref) eq_fvs l p =
   let lout = finals eq_fvs sub_l in
   let pout = finals eq_fvs_p sub_p in
   let in_eq = zip_eq_exn lin pin in
-  let out_eq = zip_eq_exn lout pout in
+  let out_eq = deparse_equality lout pout in
   ProfData.update_time !data.ingress_egress_time st;
   Test.((gl %&% gp %&% in_eq) %=>% out_eq)
 
