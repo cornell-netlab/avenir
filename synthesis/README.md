@@ -20,7 +20,7 @@ sudo apt-get install m4
 + Now, install a few things to get you started
 
 ```
-opam install merlin dune utop core
+opam install merlin dune utop core ocamlformat
 opam user-setup install
 ```
 
@@ -185,10 +185,10 @@ data files in `*.csv`.
 To run the bmv2/mininet emulation experiment, there is a bunch of setup to do first.
 
 ### Setup
-first you will need to install
-bmv2 [from
+First, you will need to install
+bmv2 1.14.0 [from
 source](https://github.com/p4lang/behavioral-model#building-the-code). The
-following commands worked on Ubuntu 20.04 in January 2021.
+following guide worked on Ubuntu 20.04 in January 2021.
 
 First, install toplevel dependencies.
 ``` bash
@@ -251,6 +251,7 @@ Finally, we can download and install Bmv2:
 
 ``` bash
 git clone git@github.com:p4lang/behavioral-model.git
+git checkout 1.14.0
 cd behavioral-model
 ./autogen.sh
 ./configure
@@ -259,28 +260,25 @@ sudo make install
 cd ..
 ```
 
-Now return to the Avenir `synthesis` directory. And execute the following commands
-
-``` bash
-cd benchmarks/bmv2
-cp <path to bmv2>/targets/simple_router .
-cp <path to bmv2>/tools/runtime_CLI.py ./simple_router
-```
-
 ### Running the BMV2 experiment
 
 Now to run the experiment, execute the following commads
 
+<!-- sudo -E python 1sw_demo.py --behavioral-exe ~/behavioral-model/targets/simple_router/simple_router --json ~/behavioral-model/targets/simple_router/simple_router.json --loc ~/avenir/synthesis --rules rules64 --num-hosts 64 -->
+
 ``` bash
 cd mininet
 sudo -E python2 1sw_demo.py \
-    --behavioral-exe ../simple_router/simple_router \
-    --json ../simple_router/simple_router.json \ 
+    --behavioral-exe <bmv2path>/targets/simple_router/simple_router \
+    --json <bmv2path>/targets/simple_router/simple_router.json \ 
     --thrift-port 9000 \
     --num-hosts 64 \
-    --rules rules64.txt \
+    --rules rules64 \
     --loc ~/avenir/synthesis
 ```
+
+Alternately, if `<bmv2path>` is `$HOME/behavioral-model`, you can just run the
+script at `synthesis/benchmarks/bmv2/mininet/bmv2.sh`.
 
 # Running Tests
 
@@ -308,3 +306,9 @@ chmod +x .git/hooks/pre-push
 Now, whenever you run `git push`, the tests will be run. If the tests fail, you
 can run `git push --no-verify`
 
+# Formatting Code 
+
+There is a pre-commit hook that runs ocamlformat before each commit with the intent of minimizing messy diffs. 
+
+To modify the formatting style of the code, revise the `.ocamlformat` file in the `synthesis` directory. 
+See [the ocamlformat repository](https://github.com/ocaml-ppx/ocamlformat) for various options.  

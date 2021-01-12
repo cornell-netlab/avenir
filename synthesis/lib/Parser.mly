@@ -21,7 +21,7 @@
 %nonassoc NOT
 
 
-%start <Ast.cmd> main
+%start <Cmd.t> main
 %%
 
 main :
@@ -29,21 +29,21 @@ main :
 
 command :
 | SKIP
-  { Ast.Skip }
+  { Cmd.Skip }
 | c = command; SEMICOLON; cs = command
-  { Ast.Seq (c, cs) }
+  { Cmd.seq c cs }
 | f = ID; ASSIGN; e = expr
-  { Ast.Assign (f, e) }
+  { Cmd.assign f e }
 | ASSUME; LPAREN; t = test; RPAREN
-  { Ast.mkAssume (t) }
+  { Cmd.assume (t) }
 | IF; TOTAL; s = select; FI
-  { Ast.(Select (Total, s)) }
+  { Cmd.(total s) }
 | IF; PARTIAL; s = select; FI
-  { Ast.(Select (Partial, s)) }
+  { Cmd.(partial s) }
 | IF; ORDERED; s = select; FI
-  { Ast.(Select (Ordered, s)) }
+  { Cmd.(ordered s) }
 | APPLY; LPAREN; s = ID; COMMA; LPAREN; ks = keys; RPAREN; COMMA; LPAREN; a = actions; RPAREN; COMMA; LBRACE; d = command; RBRACE; RPAREN
-  { Ast.(mkApply(s,ks,a,d)) }
+  { Cmd.(apply (s,ks,a,d)) }
 
 keys :
   | { [] }
@@ -70,39 +70,39 @@ select :
   { (t, c) :: s }
 
 expr :
-| i = INT; POUND; size = INT { Ast.(Value (Int (Bigint.of_string i, int_of_string size))) }
-| x = ID; POUND; size = INT  { Ast.Var (x, int_of_string size) }
-| e = expr; PLUS; e1 = expr { Ast.(mkPlus e e1) }
-| e = expr; MINUS; e1 = expr { Ast.(mkMinus e e1) }
-| e = expr; TIMES; e1 = expr { Ast.(mkTimes e e1) }
-| e = expr; LAND; e1 = expr { Ast.(mkMask e e1) }
+| i = INT; POUND; size = INT { Expr.Value (Value.big_make (Bigint.of_string i, int_of_string size)) }
+| x = ID; POUND; size = INT  { Expr.Var (x, int_of_string size) }
+| e = expr; PLUS; e1 = expr { Expr.(plus e e1) }
+| e = expr; MINUS; e1 = expr { Expr.(minus e e1) }
+| e = expr; TIMES; e1 = expr { Expr.(times e e1) }
+| e = expr; LAND; e1 = expr { Expr.(mask e e1) }
 | LPAREN; e = expr; RPAREN { e }
-| QUESTION; x = ID; POUND; size = INT { Ast.Hole (x, int_of_string size) }
+| QUESTION; x = ID; POUND; size = INT { Expr.Hole (x, int_of_string size) }
 
 test :
 | TRUE
-  { Ast.True }
+  { Test.True }
 | FALSE
-  { Ast.False }
+  { Test.False }
 | t = test; OR; tt = test
-  { Ast.Or (t, tt) }
+  { Test.or_ t tt }
 | t = test; AND; tt = test
-  { Ast.And (t, tt) }
+  { Test.and_ t tt }
 | NOT; t = test
-  { Ast.Neg t }
+  { Test.neg t }
 | e = expr; EQ; ee = expr
-  { Ast.Eq (e, ee) }
+  { Test.eq e ee }
 | e = expr; NEQ; ee = expr
-  { Ast.Neg(Ast.Eq (e, ee)) }
+  { Test.(e %<>% ee) }
 | e = expr; LESS; ee = expr
-  { Ast.(e %<% ee) }
+  { Test.(e %<% ee) }
 | e = expr; GREATER; ee = expr
-  { Ast.(e %>% ee) }
+  { Test.(e %>% ee) }
 | e = expr; GEQ; ee = expr
-  { Ast.(e %>=% ee) }
+  { Test.(e %>=% ee) }
 | e = expr; LEQ; ee = expr
-  { Ast.(e %<=% ee) }
+  { Test.(e %<=% ee) }
 | LPAREN; t = test; RPAREN
   { t }
 | t = test; IMPLIES; tt = test
-  { Ast.(t %=>% tt) }
+  { Test.(t %=>% tt) }
