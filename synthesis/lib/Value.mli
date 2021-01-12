@@ -113,3 +113,6 @@ val slice : int -> int -> t -> t
 (** [concat v v'] constructs a value of size [size v + size v'] that contains
  ** all the bits of [v] followed by all the bits of [v']*)
 val concat : t -> t -> t
+
+(** [random sz] generates a random [Value.t] of size [sz] *)
+val random : int -> t

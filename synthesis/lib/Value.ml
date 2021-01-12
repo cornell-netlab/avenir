@@ -118,3 +118,7 @@ let concat =
         Bigint.((shift_left lx rsz) + rx)
         (lsz + rsz))
 
+
+let random sz =
+  let r = Random.int (Bigint.to_int_exn (max_int sz)) in
+  make (r, sz)
