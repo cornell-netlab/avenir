@@ -16,5 +16,5 @@ let () =
       "edits", EditTest.test;
       "bmv2_parser", RuntimeTest.test_bmv2;
       "slicing", StaticSlicingTest.test;
-
+      "edit cache serialization", EAbstrTest.test
     ]

@@ -61,6 +61,8 @@ let mkInt (i,sz) =
     failwith @@ Printf.sprintf "int %d larger than 2^%d-1" i sz
   else
     Int (Bigint.of_int_exn i, sz)
+let mkHexInt (s, sz) = Int (Bigint.Hex.of_string s, sz)
+
 let mkVInt i = Value (mkInt i)
 let mkCast i e = Cast(i,e)
 let mkPlus e e' = Plus(e,e')

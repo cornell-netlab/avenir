@@ -5,8 +5,23 @@ open Util
 
 type t = (Edit.t * Edit.t list) list [@@deriving yojson]
 
-
 let make () : t = []
+
+let cache_eq (c: t) (c': t) : bool =
+  let entry_eq entry entry' =
+    match entry, entry' with
+    | (edit, edits), (edit', edits') when (Edit.equal edit edit') -> List.equal Edit.equal edits edits'
+    | _ -> false in
+  List.equal entry_eq c c'
+
+let string_of_cache (c: t) : string =
+  let string_of_entry (e: Edit.t * Edit.t list) : string =
+    let (x, y) = e in
+    let init1 = (Edit.to_string x) ^ ":" in
+    let fun1 = (fun a b -> a ^ "|" ^ (Edit.to_string b)) in
+    List.fold y ~init: init1 ~f:fun1 in
+  (List.map ~f:string_of_entry c) |> (String.concat ~sep:",")
+
 
 let similar (eold : Edit.t) (enew : Edit.t) =
   (* Printf.printf "\tComparing: %s \n\t       to: %s\n%!" (Edit.to_string enew) (Edit.to_string eold); *)
@@ -237,8 +252,7 @@ let infer (params : Parameters.t) (cache : t) (phys : cmd) (e : Edit.t) =
       )
 
 let update (cache : t) (log : Edit.t) (physs : Edit.t list) : t =
-  (* Printf.printf "Caching %s\n%!" (Edit.to_string log); *)
-  Printf.printf "%s\n" (Yojson.Safe.to_string (to_yojson cache));
+  Printf.printf "Caching %s\n%!" (Edit.to_string log);
   if List.exists cache ~f:(fun (_,ps) ->  ps = physs)
   then cache
   else (log, physs) :: cache

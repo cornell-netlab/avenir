@@ -251,7 +251,11 @@ module Edit = struct
       -> m = m'
     | _ -> false
 
-  let equal e e' = Stdlib.(e = e')
+  let equal e e' =
+    match e, e' with
+    | Add (name, row), Add (name', row') when name = name' -> (Row.equals row row')
+    | Del (name, i), Del (name', i') when name = name' -> i = i'
+    | _ -> false
 
   let get_ith_match ~i (e : t) =
     match e with

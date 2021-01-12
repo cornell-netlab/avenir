@@ -26,6 +26,12 @@ let same_stringlist = Alcotest.(check stringlist) "same string list"
 let stringset = testable_string (Util.string_of_strset) (Util.StringSet.equal)
 let same_stringset = Alcotest.(check stringset) "same string set"
 
+let edit = testable_string Tables.Edit.to_string Tables.Edit.equal
+let same_edit = Alcotest.(check edit) "same edit"
+
+let cache = testable_string EAbstr.string_of_cache EAbstr.cache_eq
+let same_cache = Alcotest.(check cache) "same cache"
+
 let edits =
   let open Tables in
   testable_string
