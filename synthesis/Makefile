@@ -1,5 +1,9 @@
 all: avenir
 
+format: 
+	opam install ocamlformat || true
+	dune build @fmt --auto-promote
+
 _build/default/bin/main.exe:
 	dune build bin/main.exe 
 
