@@ -3,23 +3,30 @@ open Util
 
 type t = (Edit.t * Edit.t list) list [@@deriving yojson]
 
-let make () : t = []
+let make ?(filename="") : t =
+  if (String.length filename) > 0 then
+    match of_yojson (Yojson.Safe.from_file filename) with
+    | Ok cache -> cache
+    | Error _ -> failwith (Printf.sprintf "Could not read cache from file %s" filename)
+  else []
 
-let equal (c: t) (c': t) : bool =
+let equal (c : t) (c' : t) : bool =
   let entry_eq entry entry' =
     match entry, entry' with
     | (edit, edits), (edit', edits') when (Edit.equal edit edit') -> List.equal Edit.equal edits edits'
     | _ -> false in
   List.equal entry_eq c c'
 
-let string_of_cache (c: t) : string =
-  let string_of_entry (e: Edit.t * Edit.t list) : string =
+let string_of_cache (c : t) : string =
+  let string_of_entry (e : Edit.t * Edit.t list) : string =
     let (x, y) = e in
     let init1 = (Edit.to_string x) ^ ":" in
     let fun1 = (fun a b -> a ^ "|" ^ (Edit.to_string b)) in
     List.fold y ~init: init1 ~f:fun1 in
   (List.map ~f:string_of_entry c) |> (String.concat ~sep:",")
 
+let dump_yojson (cache : t) (filename : string) : unit =
+  cache |> to_yojson |> Yojson.Safe.to_file filename
 
 let similar (eold : Edit.t) (enew : Edit.t) =
   (* Printf.printf "\tComparing: %s \n\t to: %s\n%!" (Edit.to_string enew)
