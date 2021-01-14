@@ -240,12 +240,6 @@ let infer (params : Parameters.t) (cache : t) (phys : Cmd.t) (e : Edit.t) =
         else return phys_edits')
 
 let update (cache : t) (log : Edit.t) (physs : Edit.t list) : t =
-<<<<<<< HEAD
-  Printf.printf "Caching %s\n%!" (Edit.to_string log);
-  if List.exists cache ~f:(fun (_,ps) ->  ps = physs)
-  then cache
-=======
   (* Printf.printf "Caching %s\n%!" (Edit.to_string log); *)
   if List.exists cache ~f:(fun (_, ps) -> Edit.equal ps physs) then cache
->>>>>>> master
   else (log, physs) :: cache

@@ -2,10 +2,10 @@ open Core
 open Manip
 open Util
 
-type action_data = Value.t list
+type action_data = Value.t list [@@deriving yojson]
 
 (* Match expressions, action data, action index*)
-type t = Match.t list * action_data * int
+type t = Match.t list * action_data * int [@@deriving yojson]
 
 let equals (ms, ad, i) (ms', ad', i') =
   List.equal Match.equal ms ms' && List.equal Stdlib.( = ) ad ad' && i = i'

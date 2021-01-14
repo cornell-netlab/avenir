@@ -3,9 +3,9 @@ open Util
 
 (* TYPES *)
 type match_data =
-  | Exact of value
-  | Between of value * value
-  | Mask of value * value
+  | Exact of Value.t
+  | Between of Value.t * Value.t
+  | Mask of Value.t * Value.t
   [@@deriving yojson]
 
 type t = {key : string; data : match_data} [@@deriving yojson]

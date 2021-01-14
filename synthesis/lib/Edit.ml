@@ -6,6 +6,7 @@ type t =
   | Add of string * Row.t
   (* Name of table *)
   | Del of string * int
+  [@@deriving yojson]
 
 let table = function Add (name, _) | Del (name, _) -> name
 

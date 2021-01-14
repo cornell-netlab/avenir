@@ -1,4 +1,4 @@
-type 'a t = 'a * int
+type 'a t = 'a * int [@@deriving yojson]
 
 let make x size = (x, size)
 
