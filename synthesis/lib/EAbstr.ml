@@ -5,7 +5,7 @@ type t = (Edit.t * Edit.t list) list [@@deriving yojson]
 
 let make () : t = []
 
-let cache_eq (c: t) (c': t) : bool =
+let equal (c: t) (c': t) : bool =
   let entry_eq entry entry' =
     match entry, entry' with
     | (edit, edits), (edit', edits') when (Edit.equal edit edit') -> List.equal Edit.equal edits edits'

@@ -7,6 +7,7 @@ type action_data = Value.t list [@@deriving yojson]
 (* Match expressions, action data, action index*)
 type t = Match.t list * action_data * int [@@deriving yojson]
 
+(* TODO rename to equal *)
 let equals (ms, ad, i) (ms', ad', i') =
   List.equal Match.equal ms ms' && List.equal Stdlib.( = ) ad ad' && i = i'
 

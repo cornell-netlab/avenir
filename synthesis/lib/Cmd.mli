@@ -15,6 +15,7 @@ module Key : sig
 
   val set_val_opt : t -> Value.t option -> t
 
+  (* TODO rename to equal *)
   val equals : t -> t -> bool
 
   val to_string : t -> string

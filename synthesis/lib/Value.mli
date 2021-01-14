@@ -35,6 +35,7 @@ val eq : t -> t -> bool
 (** [eq v v'] is true when [v] and [v] are the same bitvector. It throws an
     ** exception if [v] and [v'] have different sizes ***)
 
+(* TODO rename to equal *)
 val equals : t -> t -> bool
 (** [equals v v'] is true when [v] and [v] are the same bitvector and when
     they ** have the same size. Does not throw an exception when [v] and [v']
