@@ -41,7 +41,7 @@ let rand_match width curr =
 
 let rec rand_matches width curr num_keys =
   if curr >= num_keys then []
-  else if curr <= 1 then
+  else if curr < 0 then
     failwith
     @@ Printf.sprintf "cannot generate negatively indexed key %i" curr
   else rand_match width curr :: rand_matches width (curr + 1) num_keys

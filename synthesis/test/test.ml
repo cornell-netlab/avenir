@@ -16,4 +16,6 @@ let () =
     ; ("slicing", StaticSlicingTest.test)
     ; ("model interface", ModelTest.test)
     ; ("value interface", ValueTest.test)
-    ; ("random generators", RandomGenTest.test) ]
+    ; ("random generators", RandomGenTest.test)
+    ; ("equivalence", SynthesisTest.equivs)
+    ]

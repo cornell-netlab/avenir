@@ -314,3 +314,5 @@ let opt_equals ~f o1 o2 =
   | None, None -> true
   | Some x1, Some x2 -> f x1 x2
   | _, _ -> false
+
+let pair_map ~f (a,b) = (f a, f b)              

@@ -1,7 +1,7 @@
 open Core
 open Z3
 
-let force_print = false
+let force_print = true
 
 let print_debug = false
 

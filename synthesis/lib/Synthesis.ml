@@ -23,7 +23,8 @@ let implements ?(neg = Test.True) (params : Parameters.t)
     [ (fun _ -> fails_on_some_example params problem)
     ; (fun _ ->
         let open Option in
-        check_equivalence neg params data problem >>| Packet.extract_inout_ce)
+        check_equivalence neg params data problem
+        >>| Packet.extract_inout_ce)
     ]
 
 let handle_fast_cex neg (params : Parameters.t) data problem = function
@@ -46,17 +47,25 @@ let handle_sliced_equivalence neg problem params data = function
       if Problem.slice_conclusive params data problem then None
       else implements ~neg params data problem
 
+let normalize_cex (problem : Problem.t) =
+  Util.pair_map ~f:(Packet.restrict (Problem.fvs problem))
+    
 let get_cex ?(neg = Test.True) (params : Parameters.t)
     (data : ProfData.t ref) (problem : Problem.t) :
-    (Packet.t * Packet.t) option =
+      (Packet.t * Packet.t) option =
+  let open Option in
   if params.fastcx then
     FastCX.get_cex ~neg params data problem
     |> handle_fast_cex neg params data problem
+    >>| normalize_cex problem 
   else if params.do_slice && slice_ok problem then
     Problem.slice params problem
     |> implements ~neg params data
     |> handle_sliced_equivalence neg problem params data
-  else implements ~neg params data problem
+    >>| normalize_cex problem 
+  else
+    implements ~neg params data problem
+    >>| normalize_cex problem 
 
 let rec minimize_edits params data problem certain uncertain =
   match uncertain with
@@ -87,7 +96,7 @@ let update_edit_cache (params : Parameters.t) problem : unit =
 
 let rec cegis_math (params : Parameters.t) (data : ProfData.t ref)
     (problem : Problem.t) : Edit.t list option =
-  Log.log params.debug "entering cegis\n%!" ;
+  Log.log params.debug "entering cegis\n" ;
   if Timeout.timed_out params.timeout then None
   else if Option.is_some params.ecache then
     let () = Log.log params.debug "\ttrying cache \n%!" in
@@ -107,12 +116,19 @@ let rec cegis_math (params : Parameters.t) (data : ProfData.t ref)
 
 and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref)
     (problem : Problem.t) =
-  Log.log params.debug "solve_math\n%!" ;
+  Log.log params.debug "solve_math\n" ;
   if
     Timeout.timed_out params.timeout
     || i = 0
     || List.length (Problem.phys_edits problem) > params.edits_depth
-  then None
+  then
+    let () =
+      Printf.printf "fail early %b %b %b\n%!"
+        (Timeout.timed_out params.timeout)
+        (i = 0)
+        (List.length (Problem.phys_edits problem) > params.edits_depth)
+    in
+    None
   else if Option.is_some params.ecache then try_cache params data problem
   else
     ModelFinder.make_searcher params data problem
@@ -143,6 +159,7 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref)
         (* backtrack *) ]
 
 and try_cache params data problem =
+  Log.log params.debug "try_cache" ;
   match
     EAbstr.infer params !edit_cache (Problem.phys problem)
       (Problem.log_edits problem |> List.hd_exn)

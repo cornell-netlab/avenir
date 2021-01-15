@@ -11,26 +11,6 @@ let cexs (params : Parameters.t) problem log_out_pkt in_pkt =
       (Packet.to_string in_pkt)
       (Packet.to_string log_out_pkt)
       (Packet.to_string phy_out_pkt) ;
-    (* let pos_acts = ActionGenerator.positive_actions params (Problem.phys problem) fvs in_pkt log_out_pkt in
-     * Printf.printf "There are %d positive actions across %d tables\n%!"
-     *   (List.length @@ List.bind pos_acts ~f:snd)
-     *   (List.length pos_acts); *)
-    (* let log_matches = List.hd_exn (Problem.log_edits problem) |>
-       Edit.get_matches_exn in *)
-    (* let traces =
-     *   ActionGenerator.traces log_edit fvs (Problem.phys problem) in_pkt log_out_pkt
-     * in *)
-    (* let ftables = feasible_tables (Problem.phys problem) fvs log_matches in_pkt log_out_pkt in
-     * Printf.printf "There are %d feasible tables:\n\n%!" (List.length ftables);
-     * List.iter ftables ~f:(fun (t,keys,vars) ->
-     *     Printf.printf "%s : %s -> %s\n%!" t (string_of_strset keys) (string_of_strset vars)
-     *   ); *)
-    (* let reach_pos_acts = reach_positive_actions params problem in_pkt
-       log_out_pkt in *)
-    (* Printf.printf "There are %d queries of sizes: %s\n%!"
-     *   (List.length reach_pos_acts)
-     *   (List.map reach_pos_acts ~f:num_nodes_in_test |> string_of_intlist)
-     * ; *)
     Interactive.pause params.interactive )
 
 let already_explored_error model_space (model : Model.t) =

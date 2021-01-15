@@ -66,7 +66,6 @@ let rec set_field_of_expr_opt (pkt : t) (field : string) (e : Expr.t) :
 
 let to_test ?(random_fill = false) ~fvs (pkt : t) =
   let open Test in
-  (* let random_fill = false in *)
   List.fold fvs ~init:True ~f:(fun acc (x, sz) ->
       acc
       %&%
@@ -74,7 +73,7 @@ let to_test ?(random_fill = false) ~fvs (pkt : t) =
       | None ->
           if random_fill then
             Var (x, sz) %=% Expr.value (Random.int (pow 2 sz), sz)
-          else Var (x, sz) %=% Var (x ^ "_symb", sz)
+          else True
       | Some v -> Var (x, sz) %=% Value v)
 
 let of_smt_model = Z3ModelExtractor.of_smt_model
@@ -104,7 +103,7 @@ let remake ?(fvs = None) (pkt : t) : t =
               StringMap.set acc ~key:var_nm
                 ~data:(Value.make (lower + Random.int upper, sz)))
 
-let restrict_packet (fvs : (string * int) list) pkt =
+let restrict (fvs : (string * int) list) (pkt : t) =
   StringMap.filter_keys pkt ~f:(fun k ->
       List.exists fvs ~f:(fun (v, _) -> String.(k = v)))
 
@@ -112,8 +111,8 @@ let equal ?(fvs = None) (pkt : t) (pkt' : t) =
   match fvs with
   | None -> StringMap.equal Value.equals pkt pkt'
   | Some fvs ->
-      StringMap.equal Value.equals (restrict_packet fvs pkt)
-        (restrict_packet fvs pkt')
+      StringMap.equal Value.equals (restrict fvs pkt)
+        (restrict fvs pkt')
 
 let extract_inout_ce (model : t) : t * t =
   StringMap.fold model
@@ -122,7 +121,8 @@ let extract_inout_ce (model : t) : t * t =
       if String.is_substring key ~substring:"phys_" then acc
       else
         match String.rsplit2 key ~on:'$' with
-        | None -> Printf.sprintf "Couldn't find index for %s" key |> failwith
+        | None ->
+            Printf.sprintf "Couldn't find index for %s" key |> failwith
         | Some (v, idx_s) ->
             let idx = int_of_string idx_s in
             let in_pkt' =
