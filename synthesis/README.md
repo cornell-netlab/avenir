@@ -20,7 +20,7 @@ sudo apt-get install m4
 + Now, install a few things to get you started
 
 ```
-opam install merlin dune utop core
+opam install merlin dune utop core ocamlformat
 opam user-setup install
 ```
 
@@ -306,3 +306,9 @@ chmod +x .git/hooks/pre-push
 Now, whenever you run `git push`, the tests will be run. If the tests fail, you
 can run `git push --no-verify`
 
+# Formatting Code 
+
+There is a pre-commit hook that runs ocamlformat before each commit with the intent of minimizing messy diffs. 
+
+To modify the formatting style of the code, revise the `.ocamlformat` file in the `synthesis` directory. 
+See [the ocamlformat repository](https://github.com/ocaml-ppx/ocamlformat) for various options.  

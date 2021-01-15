@@ -13,8 +13,7 @@ let extract_value = function
   | _ -> raise (Failure "not a supported value")
 
 let of_smt_model (lst : (Z3.Smtlib.identifier * Z3.Smtlib.term) list) =
-  List.fold lst ~init:StringMap.empty
-    ~f:(fun model (Z3.Smtlib.Id id, x) ->
+  List.fold lst ~init:StringMap.empty ~f:(fun model (Z3.Smtlib.Id id, x) ->
       let id = normalize_id id in
       let v = extract_value x in
       StringMap.set model ~key:id ~data:v)
