@@ -399,8 +399,6 @@ let rec holify_cmd ~f holes c : t =
                             (n, data, holify_cmd ~f holes' act));
              default = holify_cmd ~f holes t.default}
               
-    
-(** replace all vars in cmd that are also in holes with holes having the same name*)
 let holify ?(f=Fn.id) holes c =  holify_cmd ~f holes c
         
 let sequence = List.reduce_exn ~f:seq
