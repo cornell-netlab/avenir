@@ -41,7 +41,7 @@ let pipe_generator_422 _ =
 
 let random_test_422 _ =
   Random.init 101 ;
-  let edits = Obt.rand_edits 4 2 2 20 in
+  let edits = Obt.rand_edits 4 2 2 10 in
   let obt, fvs = Obt.gen 4 2 2 in
   let pip = Pipe.gen 4 2 2 in
   let problem_mkr =

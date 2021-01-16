@@ -298,6 +298,43 @@ let use_past_cexs opts fvs sub good cexs =
     hoare_triple_passified sub in_test good out_test
   else True
 
+let apply_heurs params problem opts phys query_test partial_model =
+  let open Test in
+  let hole_type = get_hole_type opts in
+  let fvs = Problem.fvs problem in    
+  let query_holes =
+    Test.holes query_test |> List.dedup_and_sort ~compare:Stdlib.compare
+  in  
+  bigand
+    [ query_test |> fixup_test partial_model
+    ; adds_are_reachable params problem opts fvs hole_type
+      |> fixup_test partial_model
+    ; restrict_mask opts query_holes
+      |> fixup_test partial_model
+    ; no_defaults params opts fvs phys
+      |> fixup_test partial_model
+    ; single problem opts query_holes
+      |> fixup_test partial_model
+    ; active_domain_restrict params problem opts query_holes
+      |> fixup_test partial_model
+    ; (* well_formed_adds params problem hole_type
+       * |> fixup_test partial_model
+       * |> Log.print_and_return_test params.debug  ~pre:"Well-Formed Additions:\n" ~post:"\n--------\n\n"; *)
+      non_empty_adds problem |> fixup_test partial_model
+    ]
+
+
+let action_hole_valid tbl num_acts =
+  let open Test in
+ (Hole.which_act_hole tbl (max (log2 num_acts) 1)
+  %<=% Expr.value (num_acts - 1, max (log2 num_acts) 1) )  
+  
+let well_formed_actions problem =
+  let open Test in
+  Problem.phys problem |> Cmd.get_tables_actsizes
+  |> List.fold ~init:True ~f:(fun acc (tbl, num_acts) ->
+         acc %&% action_hole_valid tbl num_acts)
+  
 (* [construct_model_query opts fvs cexs in_pkt phys out_pkt] constructs a
    verification condition on an instrumented program [phys] to ensure that
    [phys(in_pkt|_fvs)|_fvs = outpkt|_fvs]. if [opts.double] is true, then it
@@ -335,167 +372,57 @@ let compute_vc (params : Parameters.t) (_ : ProfData.t ref)
   let hints, phys = instr_phys params problem opts in
   let fvs = inter (Cmd.vars phys) (Problem.fvs problem) ~f:Stdlib.( = ) in
   let query =
-    construct_model_query opts fvs (Problem.cexs problem) in_pkt phys out_pkt
+    Test.bigand [
+        construct_model_query opts fvs (Problem.cexs problem) in_pkt phys out_pkt
+      ]
   in
   (query, phys, hints)
-
+  
 let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts)
     (query, phys, hints) : (Test.t * Model.t) list =
   let open Test in
-  let hole_type = if opts.mask then `Mask else `Exact in
-  let fvs = Problem.fvs problem in
   if Test.equals query False || not (Test.has_hole query) then []
   else
-    let wf_holes =
-      List.fold
-        (Problem.phys problem |> Cmd.get_tables_actsizes)
-        ~init:True
-        ~f:(fun acc (tbl, num_acts) ->
-          acc
-          %&% ( Hole (Hole.which_act_hole_name tbl, max (log2 num_acts) 1)
-              %<=% Expr.value (num_acts - 1, max (log2 num_acts) 1) ))
-      |> Log.print_and_return_test params.debug ~pre:"WF holes:\n"
-           ~post:"\n--------\n\n"
-    in
-    let pre_condition =
-      Problem.model_space problem %&% wf_holes %&% query
+    let wf_acts = well_formed_actions problem in
+    let query_test =
+      Problem.model_space problem
+      |> and_ query 
       |> Injection.optimization
            {params with injection= opts.injection}
            problem
+      |> and_ wf_acts 
     in
-    let query_test = wf_holes %&% pre_condition in
-    let query_holes =
-      Test.holes query_test |> List.dedup_and_sort ~compare:Stdlib.compare
-    in
-    if params.debug then
-      Printf.printf "There are %d hints in ModelFinder\n%!"
-        (List.length hints) ;
-    Log.print_hints params.debug hints ;
     let partial_model =
       Hint.list_to_model opts.hint_type (Problem.phys problem) hints
     in
-    Log.print_hints_map params.debug partial_model ;
-    Interactive.pause params.interactive ;
     let out_test =
-      bigand
-        [ query_test |> fixup_test partial_model
-          |> Log.print_and_return_test params.debug ~pre:"The Query:\n"
-               ~post:"\n--------\n\n"
-        ; adds_are_reachable params problem opts fvs hole_type
-          |> fixup_test partial_model
-          |> Log.print_and_return_test params.debug
-               ~pre:"Adds_are_reachable:\n" ~post:"\n--------\n\n "
-        ; restrict_mask opts query_holes
-          |> fixup_test partial_model
-          |> Log.print_and_return_test params.debug
-               ~pre:"Restricting Masks:\n" ~post:"\n--------\n\n"
-        ; no_defaults params opts fvs phys
-          |> fixup_test partial_model
-          |> Log.print_and_return_test params.debug ~pre:"No Defaults:\n"
-               ~post:"\n--------\n\n"
-        ; single problem opts query_holes
-          |> fixup_test partial_model
-          |> Log.print_and_return_test params.debug ~pre:"Single:\n"
-               ~post:"\n--------\n\n"
-        ; active_domain_restrict params problem opts query_holes
-          |> fixup_test partial_model
-          |> Log.print_and_return_test params.debug
-               ~pre:"Active Domain Restriction:\n" ~post:"\n--------\n\n"
-        ; (* well_formed_adds params problem hole_type
-           * |> fixup_test partial_model
-           * |> Log.print_and_return_test params.debug  ~pre:"Well-Formed Additions:\n" ~post:"\n--------\n\n"; *)
-          non_empty_adds problem |> fixup_test partial_model
-          |> Log.print_and_return_test params.debug
-               ~pre:"Non-Empty Additions:\n" ~post:"\n--------\n\n" ]
+      apply_heurs params problem opts phys query_test partial_model
     in
     [(out_test, partial_model)]
 
 let compute_query (params : Parameters.t) (data : ProfData.t ref)
     (problem : Problem.t) (opts : opts) : (Test.t * Model.t) list =
-  let queries =
-    compute_vc params data problem opts |> with_opts params problem opts
-  in
-  queries
+  compute_vc params data problem opts
+  |> with_opts params problem opts
 
-let holes_for_table table phys =
-  match Cmd.get_schema_of_table table phys with
-  | None ->
-      failwith @@ Printf.sprintf "couldn't find schema for %s\n%!" table
-  | Some (ks, acts, _) ->
-      List.bind ks ~f:(fun key ->
-          let k = Cmd.Key.var_name key in
-          match Cmd.Key.value key with
-          | Some _ -> []
-          | None ->
-              let lo, hi = Hole.match_holes_range table k in
-              let v, m = Hole.match_holes_mask table k in
-              [Hole.match_hole_exact table k; lo; hi; v; m]
-              |> List.dedup_and_sort ~compare:String.compare)
-      @ List.(acts >>= fun (_, params, _) -> params >>| fst)
-
-let holes_for_other_actions table phys actId =
-  match Cmd.get_schema_of_table table phys with
-  | None -> failwith @@ Printf.sprintf "couldnt find schema for %s\n%!" table
-  | Some (_, acts, _) ->
-      List.foldi acts ~init:[] ~f:(fun i acc (_, params, _) ->
-          acc
-          @
-          if i = Bigint.to_int_exn actId then [] else List.map params ~f:fst)
-
-let rec search (params : Parameters.t) data problem t : (Model.t * t) option
-    =
+let rec search (params : Parameters.t) data problem t =
   if Timeout.timed_out params.timeout then None
   else
     match (t.search_space, t.schedule) with
     | [], [] ->
-        if params.debug then Printf.printf "Search failed\n%!" ;
         None
     | [], opts :: schedule ->
-        let () =
-          if params.debug then
-            Printf.printf "trying heuristics |%s|\n\n%!"
-              (string_of_opts opts)
-        in
         let search_space = compute_query params data problem opts in
-        (* Printf.printf "search space rebuild, recursing!\n%!"; *)
         search params data problem {schedule; search_space}
     | (test, partial_model) :: search_space, schedule -> (
-        Log.check_attempts params.debug problem ;
-        Log.print_hints_map params.debug partial_model ;
-        if params.debug then Printf.printf "Sending query to Z3\n%!" ;
-        let model_opt, dur =
-          check_sat params @@ fixup_test partial_model
-          @@ Test.bigand [Problem.model_space problem; test]
+      let model_opt, _ =
+        Problem.model_space problem
+        |> Test.and_ test 
+        |> fixup_test partial_model
+        |> check_sat params
         in
-        ProfData.incr !data.model_z3_calls ;
-        ProfData.update_time_val !data.model_z3_time dur ;
-        if params.debug then Printf.printf "Sat Checked\n%!\n" ;
         match model_opt with
         | Some raw_model ->
-            if params.debug then Printf.printf "Found a model, done \n%!" ;
-            if Problem.seen_attempt problem raw_model then (
-              Printf.printf "%s\n%!" (Problem.attempts_to_string problem) ;
-              Printf.printf "\ncurrent model is %s\n%!"
-                (Model.to_string raw_model) ;
-              Printf.printf "\nmodel_space is %s \n%!"
-                (Test.to_string @@ Problem.model_space problem) ;
-              Printf.printf
-                "\nmodel has already been seen and is allowed? %s"
-                ( if
-                  Problem.model_space problem
-                  |> fixup_test raw_model |> Test.equals True
-                then "yes! thats a contradiction\n%!"
-                else
-                  "no, but somehow we synthesized it... a contradiction\n%!"
-                ) ;
-              failwith "" )
-            else (
-              Printf.sprintf "IsNOVEL??? \n    %s \n"
-                ( Problem.model_space problem
-                |> fixup_test raw_model |> Test.to_string )
-              |> Log.log params.debug ;
-              Some (Model.join partial_model raw_model, t) )
+            Some (Model.join partial_model raw_model, t)
         | _ ->
-            (* Printf.printf "No model, keep searching with %d opts and %d
-               paths \n%!" (List.length schedule) (List.length search_space); *)
             search params data problem {schedule; search_space} )
