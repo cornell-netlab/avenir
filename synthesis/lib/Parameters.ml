@@ -72,6 +72,8 @@ let default =
   ; domain= false
   ; timeout= Timeout.start None }
 
+let restart_timer p = {p with timeout= Timeout.restart p.timeout}
+
 let ecache_union ec1 ec2 =
   match (ec1, ec2) with
   | None, None -> None

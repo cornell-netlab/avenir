@@ -19,10 +19,6 @@ let gen_arg width curr = (gen_argname curr, width)
 
 let gen_outname curr = Printf.sprintf "y%d" curr
 
-let gen_argvar width curr =
-  let x, sz = gen_arg width curr in
-  Expr.Var (x, sz)
-
 let gen_act width curr =
   ( gen_actname curr
   , [gen_arg width curr]
@@ -74,7 +70,14 @@ module Obt = struct
     let keys = gen_keys bitwidth 0 num_keys in
     let actions = gen_acts bitwidth 0 num_acts in
     let default = "meta" %<-% Value (Value.zero bitwidth) in
-    Cmd.Apply {name; keys; actions; default}
+    let obt = Cmd.Apply {name; keys; actions; default} in
+    let fvs =
+      List.filter (Cmd.vars obt) ~f:(fun (x, _) -> String.(x <> "meta"))
+    in
+    Printf.printf "There are %d fvs %d keys and %d acts" (List.length fvs)
+      num_keys num_acts ;
+    assert (List.length fvs = num_keys + num_acts) ;
+    (obt, fvs)
 end
 
 (* GENERATE ALIASED PIPELINE *)

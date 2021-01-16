@@ -40,15 +40,15 @@ val of_smt_model : (Z3.Smtlib.identifier * Z3.Smtlib.term) list -> t
 
 val restrict : (string * int) list -> t -> t
 (** [restrict fvs pkt] restricts [pkt] to only those fields in [fvs], (c.f.
-   [remake]) *)  
-  
+    [remake]) *)
+
 val extract_inout_ce : t -> t * t
 (** [extract_inout_ce fvs pkt] converts a passive packet [pkt] with indexed
     variables (e.g. [x$0],[x$1], etc) into a pair of packets [pktin] and
     [pktout], where [pktin] represents the input variables (e.g. [x$0]) and
     [pktout] represents the output variables (e.g. [x$n] where [n > i] for
     every [x$i] in the domain of [pkt]).*)
-  
+
 val fold : t -> init:'a -> f:(key:string -> data:Value.t -> 'a -> 'a) -> 'a
 (** [fold] Folds over the packet as a specialization of [Core.Map.fold] *)
 

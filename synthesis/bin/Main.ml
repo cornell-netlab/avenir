@@ -455,6 +455,64 @@ let ntbls_cmd : Command.t =
         if breadth then Benchmark.breadth params sz ntables nheaders nrules
         else Benchmark.tables params sz ntables nheaders nrules]
 
+let random_bench : Command.t =
+  let open Command.Let_syntax in
+  Command.basic ~summary:"benchmarks random insertions into OBT -> Pipe"
+    [%map_open
+      let opt = opt_params
+      and mng = mng_params
+      and file =
+        flag "-output" (required string)
+          ~doc:"The file to which to write the experimental data"
+      and lobits =
+        flag "-lb" (required int) ~doc:"b The lowest bitwidth in the space"
+      and hibits =
+        flag "-hb" (optional int)
+          ~doc:
+            "B The highest bitwidth in the space. If omitted taken to be b"
+      and lokeys =
+        flag "-lk" (required int)
+          ~doc:"k The lowest number of keys in the space"
+      and hikeys =
+        flag "-hk" (optional int)
+          ~doc:
+            "K The highest number of keys in the space. If omitted taken to \
+             be k"
+      and loouts =
+        flag "-lo" (required int)
+          ~doc:"o The lowest number of writable variables in the space"
+      and hiouts =
+        flag "-ho" (optional int)
+          ~doc:
+            "O The highest number of writable varaibles in the space. If \
+             omitted taken to be o"
+      and loedts =
+        flag "-le" (required int)
+          ~doc:"e The lowest number of writable edits in the space"
+      and hiedts =
+        flag "-he" (optional int)
+          ~doc:
+            "E The highest number of writable edits in the space. If \
+             omitted taken to be E"
+      in
+      fun () ->
+        let open Avenir.MicroBench in
+        let params = Parameters.union opt mng in
+        let lo = {bits= lobits; keys= lokeys; outs= loouts; edts= loedts} in
+        let hi =
+          { bits= Option.value hibits ~default:lobits
+          ; keys= Option.value hikeys ~default:lokeys
+          ; outs= Option.value hiouts ~default:loouts
+          ; edts= Option.value hiedts ~default:loedts }
+        in
+        (hi.bits - lo.bits + 1)
+        * (hi.keys - lo.keys + 1)
+        * (hi.outs - lo.outs + 1)
+        * (hi.edts - lo.edts + 1)
+        |> Core.Printf.printf "Starting Experiments with %d cases\n%!" ;
+        run_experiment params file lo hi ;
+        Core.Printf.printf "Finished\n%!"]
+
 let obt : Command.t =
   let open Command.Let_syntax in
   Command.basic ~summary:"Convert a program to one big table"
@@ -489,6 +547,7 @@ let main : Command.t =
     [ ("synth", synthesize)
     ; ("server", server_cmd)
     ; ("encode-p4", encode_cmd)
+    ; ("random", random_bench)
     ; ("bench", benchmark)
     ; ("square", sqbench)
     ; ("headers", nhdrs_cmd)

@@ -111,8 +111,7 @@ let equal ?(fvs = None) (pkt : t) (pkt' : t) =
   match fvs with
   | None -> StringMap.equal Value.equals pkt pkt'
   | Some fvs ->
-      StringMap.equal Value.equals (restrict fvs pkt)
-        (restrict fvs pkt')
+      StringMap.equal Value.equals (restrict fvs pkt) (restrict fvs pkt')
 
 let extract_inout_ce (model : t) : t * t =
   StringMap.fold model
@@ -121,8 +120,7 @@ let extract_inout_ce (model : t) : t * t =
       if String.is_substring key ~substring:"phys_" then acc
       else
         match String.rsplit2 key ~on:'$' with
-        | None ->
-            Printf.sprintf "Couldn't find index for %s" key |> failwith
+        | None -> Printf.sprintf "Couldn't find index for %s" key |> failwith
         | Some (v, idx_s) ->
             let idx = int_of_string idx_s in
             let in_pkt' =

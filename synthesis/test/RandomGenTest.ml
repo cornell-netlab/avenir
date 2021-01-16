@@ -11,7 +11,7 @@ let obt_generator_422 _ =
            , [ ("action0", [("arg0", 4)], "y0" %<-% Var ("arg0", 4))
              ; ("action1", [("arg1", 4)], "y1" %<-% Var ("arg1", 4)) ]
            , "meta" %<-% Value (Value.zero 4) ) ])
-    (Obt.gen 4 2 2)
+    (Obt.gen 4 2 2 |> fst)
 
 let pipe_generator_422 _ =
   let open Cmd in
@@ -40,13 +40,13 @@ let pipe_generator_422 _ =
     (Pipe.gen 4 2 3)
 
 let random_test_422 _ =
-  Random.init 101;
+  Random.init 101 ;
   let edits = Obt.rand_edits 4 2 2 20 in
-  let obt = Obt.gen 4 2 2 in
+  let obt, fvs = Obt.gen 4 2 2 in
   let pip = Pipe.gen 4 2 2 in
   let problem_mkr =
-    Problem.make ~log:obt ~phys:pip ~fvs:["x0",4; "x1",4; "y0",4; "y1",4]
-      ~log_inst:Instance.empty ~phys_inst:Instance.empty ~log_edits:edits
+    Problem.make ~log:obt ~phys:pip ~fvs ~log_edits:edits
+      ~log_inst:Instance.empty ~phys_inst:Instance.empty
   in
   let es =
     Synthesis.cegis_math_sequence
@@ -59,8 +59,7 @@ let random_test_422 _ =
         ; hint_type= "exact"
         ; no_defaults= true
         ; no_deletes= true
-        ; ecache= Some 1
-        }
+        ; ecache= Some 1 }
       (ProfData.zero ()) problem_mkr
   in
   Alcotest.(check bool) "synthesis finds an answer" true (Option.is_some es)

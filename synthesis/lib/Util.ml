@@ -77,7 +77,9 @@ let mkCons x xs = x :: xs
 
 let rec repeat i a = if i <= 0 then [] else a :: repeat (i - 1) a
 
-let rec range_ex lo hi = if lo = hi then [] else lo :: range_ex (lo + 1) hi
+let rec range_ex lo hi = if lo >= hi then [] else lo :: range_ex (lo + 1) hi
+
+let rec range_inc lo hi = if lo > hi then [] else lo :: range_inc (lo + 1) hi
 
 let inj_l x y = (y, x)
 
@@ -315,4 +317,4 @@ let opt_equals ~f o1 o2 =
   | Some x1, Some x2 -> f x1 x2
   | _, _ -> false
 
-let pair_map ~f (a,b) = (f a, f b)              
+let pair_map ~f (a, b) = (f a, f b)
