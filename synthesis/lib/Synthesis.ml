@@ -121,7 +121,7 @@ and solve_math (i : int) (params : Parameters.t) (data : ProfData.t ref)
   then None
   else if Option.is_some params.ecache then try_cache params data problem
   else
-    ModelFinder.make_searcher params data problem
+    ModelFinder.make_searcher params
     |> drive_search params.search_width params data problem
 
 and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref)

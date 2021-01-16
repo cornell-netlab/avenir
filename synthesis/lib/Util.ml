@@ -193,6 +193,8 @@ let uncurry f (x, y) = f x y
 
 let liftPair ~f ~combine (x1, x2) (y1, y2) = combine (f x1 x2) (f y1 y2)
 
+let inter ~f xs ys = List.(filter xs ~f:(fun x -> exists ys ~f:(f x)))
+
 let nonempty_inter (xs : (string * int) list) (ys : (string * int) list) =
   List.exists xs ~f:(fun (v, _) ->
       List.exists ys ~f:(fun (v', _) -> Stdlib.(v = v')))

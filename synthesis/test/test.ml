@@ -1,4 +1,5 @@
 let () =
+  Avenir.Prover.make_provers "z3" ;
   let open Alcotest in
   run "Tests"
     [ ("smart_constructors", AstTest.smart_constructors)
@@ -8,7 +9,7 @@ let () =
     ; ("dead code elimination", DeadCodeTest.test)
     ; ("passive propogation", ConstantPropTest.test_passive_prop)
     ; ("meet", ConstantPropTest.test_meet)
-    ; ("quantifier elimination", ModelFinderTest.qe_test)
+    ; ("construct sat queries", ModelFinderTest.test)
     ; ("hints", HintTest.test)
     ; ("packets", PacketTest.diff_test)
     ; ("edits", EditTest.test)
