@@ -1,10 +1,6 @@
 open Core
 open Z3
 
-let force_print = false
-
-let print_debug = false
-
 let valid_prover = ref None
 
 let sat_prover = ref None
@@ -18,15 +14,10 @@ let make_provers loc =
   valid_prover := !sat_prover
 
 let debug term =
-  if force_print || print_debug then
-    let res = Smtlib.term_to_sexp term |> Smtlib.sexp_to_string in
-    Printf.eprintf "(assert %s)\n%!" res
-
-let test_str test =
-  if false then
-    let res = Test.to_string test in
-    Printf.printf "TEST: %s\n%!" res
-  else ()
+  lazy
+    ( Smtlib.term_to_sexp term |> Smtlib.sexp_to_string
+    |> Printf.sprintf "(assert %s)\n%!" )
+  |> Log.z3
 
 (* TODO @PYS I commented this out because the compiler was complaining -- is
    it meant to be used somewhere? *)
@@ -40,6 +31,14 @@ let quantify expr etyp styp =
   | `Var, `Valid -> Smtlib.const expr
   | `Hole, `Valid -> failwith "holes not allowed in valid queries"
   | _, `Sat -> Smtlib.const expr
+
+let check_size e1 e2 =
+  let open Expr in
+  if size e1 <> size e2 then
+    Log.warn
+    @@ lazy
+         (Printf.sprintf "%s and %s are differently sized\n%!" (to_string e1)
+            (to_string e2))
 
 let rec expr_to_term_help expr styp : Smtlib.term =
   let open Expr in
@@ -58,14 +57,10 @@ let rec expr_to_term_help expr styp : Smtlib.term =
       let term = expr_to_term_help bits styp in
       Smtlib.extract (hi - 1) lo term
   | Plus (e1, e2) ->
-      if size e1 <> size e2 then
-        Printf.printf "%s and %s are differently sized\n%!" (to_string e1)
-          (to_string e2) ;
+      check_size e1 e2 ;
       Smtlib.bvadd (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
   | SatPlus (e1, e2) ->
-      if size e1 <> size e2 then
-        Printf.printf "%s and %s are differently sized\n%!" (to_string e1)
-          (to_string e2) ;
+      check_size e1 e2 ;
       let t1 = expr_to_term_help e1 styp in
       let t2 = expr_to_term_help e2 styp in
       let sz = size e1 in
@@ -75,19 +70,13 @@ let rec expr_to_term_help expr styp : Smtlib.term =
       let bad = Smtlib.(bvugt t2 (bvsub maxt t1)) in
       Smtlib.(ite bad maxt (bvadd t1 t2))
   | Times (e1, e2) ->
-      if size e1 <> size e2 then
-        Printf.printf "%s and %s are differently sized\n%!" (to_string e1)
-          (to_string e2) ;
+      check_size e1 e2 ;
       Smtlib.bvmul (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
   | Minus (e1, e2) ->
-      if size e1 <> size e2 then
-        Printf.printf "%s and %s are differently sized\n%!" (to_string e1)
-          (to_string e2) ;
+      check_size e1 e2 ;
       Smtlib.bvsub (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
   | SatMinus (e1, e2) ->
-      if size e1 <> size e2 then
-        Printf.printf "%s and %s are differently sized\n%!" (to_string e1)
-          (to_string e2) ;
+      check_size e1 e2 ;
       let t1 = expr_to_term_help e1 styp in
       let t2 = expr_to_term_help e2 styp in
       let sz = size e1 in
@@ -95,77 +84,43 @@ let rec expr_to_term_help expr styp : Smtlib.term =
       let bad = Smtlib.(bvult t1 t2) in
       Smtlib.(ite bad zero (bvsub t1 t2))
   | Mask (e1, e2) ->
-      if size e1 <> size e2 then
-        Printf.printf "%s and %s are differently sized\n%!" (to_string e1)
-          (to_string e2) ;
-      let sexp =
-        Smtlib.bvand (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
-      in
-      (* expr_str expr;
-       * debug sexp; *)
-      sexp
+      check_size e1 e2 ;
+      Smtlib.bvand (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
   | Xor (e1, e2) ->
-      if size e1 <> size e2 then
-        Printf.printf "%s and %s are differently sized\n%!" (to_string e1)
-          (to_string e2) ;
-      let sexp =
-        Smtlib.bvneg
-        @@ Smtlib.bvxnor
-             (expr_to_term_help e1 styp)
-             (expr_to_term_help e2 styp)
-      in
-      (* expr_str expr;
-       * debug sexp; *)
-      sexp
+      check_size e1 e2 ;
+      Smtlib.bvneg
+      @@ Smtlib.bvxnor
+           (expr_to_term_help e1 styp)
+           (expr_to_term_help e2 styp)
   | BOr (e1, e2) ->
-      if size e1 <> size e2 then
-        Printf.printf "%s and %s are differently sized\n%!" (to_string e1)
-          (to_string e2) ;
-      let sexp =
-        Smtlib.bvor (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
-      in
-      (* expr_str expr;
-       * debug sexp; *)
-      sexp
+      check_size e1 e2 ;
+      Smtlib.bvor (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
   | Shl (e1, e2) ->
-      let sexp =
-        Smtlib.bvshl (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
-      in
-      (* expr_str expr;
-       * debug sexp; *)
-      sexp
+      Smtlib.bvshl (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
   | Concat (e1, e2) ->
       Smtlib.concat (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
 
-let rec test_to_term_help test styp : Smtlib.term =
+let rec test_to_term test styp : Smtlib.term =
   let open Test in
   match test with
   | True -> Smtlib.bool_to_term true
   | False -> Smtlib.bool_to_term false
   | Eq (e1, e2) ->
-      let open Expr in
-      if size e1 <> size e2 then
-        Printf.printf "%s and %s are differently sized\n%!" (to_string e1)
-          (to_string e2) ;
+      check_size e1 e2 ;
       Smtlib.equals (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
   | Le (e1, e2) ->
-      let open Expr in
-      if size e1 <> size e2 then
-        Printf.printf "%s and %s are differently sized\n%!" (to_string e1)
-          (to_string e2) ;
+      check_size e1 e2 ;
       Smtlib.bvule (expr_to_term_help e1 styp) (expr_to_term_help e2 styp)
-  | And (t1, t2) ->
-      Smtlib.and_ (test_to_term_help t1 styp) (test_to_term_help t2 styp)
-  | Or (t1, t2) ->
-      Smtlib.or_ (test_to_term_help t1 styp) (test_to_term_help t2 styp)
+  | And (t1, t2) -> Smtlib.and_ (test_to_term t1 styp) (test_to_term t2 styp)
+  | Or (t1, t2) -> Smtlib.or_ (test_to_term t1 styp) (test_to_term t2 styp)
   | Impl (t1, t2) ->
-      Smtlib.implies (test_to_term_help t1 styp) (test_to_term_help t2 styp)
+      Smtlib.implies (test_to_term t1 styp) (test_to_term t2 styp)
   | Iff (t1, t2) ->
-      Smtlib.equals (test_to_term_help t2 styp) (test_to_term_help t1 styp)
-  | Neg t -> Smtlib.not_ (test_to_term_help t styp)
+      Smtlib.equals (test_to_term t2 styp) (test_to_term t1 styp)
+  | Neg t -> Smtlib.not_ (test_to_term t styp)
 
 let toZ3String test =
-  test_to_term_help test `Sat |> Smtlib.term_to_sexp |> Smtlib.sexp_to_string
+  test_to_term test `Sat |> Smtlib.term_to_sexp |> Smtlib.sexp_to_string
 
 (* TODO @PYS I commented this out because the compiler was complaining -- is
    it meant to be used somewhere?*)
@@ -174,33 +129,17 @@ let toZ3String test =
  *   then (expr_str e; let res = expr_to_term_help e styp in (\*debug res;*\) res)
  *   else expr_to_term_help e styp *)
 
-let test_to_term test styp d =
-  if force_print || d then (
-    test_str test ;
-    let res = test_to_term_help test styp in
-    (*debug res;*) res )
-  else test_to_term_help test styp
-
-let vars_to_term vars d =
+let vars_to_term vars =
   let open Smtlib in
-  if force_print || (d && print_debug) then (
-    let open List in
-    iter vars ~f:(fun (id, i) -> Printf.printf "VAR: %s %d\n%!" id i) ;
-    map vars ~f:(fun (id, i) -> (Id id, BitVecSort i)) )
-  else List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i))
+  List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i))
 
-let check_sat (params : Parameters.t) (longtest : Test.t) =
+let check_sat (_ : Parameters.t) (longtest : Test.t) =
   let open Smtlib in
-  (* Printf.printf "Finding model for test of size %d\n%!" (num_nodes_in_test
-     test); *)
-  (* Printf.printf "\n%s\n\n%!" (string_of_test test); *)
   if Test.equals longtest True then (Some Model.empty, Time.Span.zero)
   else if Test.equals longtest False then (None, Time.Span.zero)
   else
     let test = Shortener.shorten shortener longtest in
-    if params.debug then
-      assert (Test.equals longtest @@ Shortener.unshorten shortener test) ;
-    let vars = vars_to_term (Test.vars test) params.debug in
+    let vars = vars_to_term (Test.vars test) in
     let st = Time.now () in
     let holes =
       Test.holes test
@@ -209,29 +148,28 @@ let check_sat (params : Parameters.t) (longtest : Test.t) =
     in
     let () =
       List.iter holes ~f:(fun (id, i) ->
-          if force_print || (params.debug && print_debug) then
-            Printf.eprintf "(declare-const %s (_ BitVec %d))\n%!" id i ;
+          lazy (Printf.sprintf "(declare-const %s (_ BitVec %d))\n%!" id i)
+          |> Log.z3 ;
           declare_const (get sat_prover) (Id id) (BitVecSort i))
     in
-    let term = forall_ vars (test_to_term test `Sat params.debug) in
+    let term = forall_ vars (test_to_term test `Sat) in
     let response =
-      if force_print || (params.debug && print_debug) then debug term ;
+      debug term ;
       assert_ (get sat_prover) term ;
-      if force_print || (params.debug && print_debug) then
-        Printf.printf " Asserted % dnodes!\n%!" (Test.num_nodes test) ;
+      lazy (Printf.sprintf " Asserted % dnodes!\n%!" (Test.num_nodes test))
+      |> Log.z3 ;
       check_sat (* _using (ParOr (UFBV, SMT)) *) (get sat_prover)
     in
     let dur = Time.(diff (now ()) st) in
-    if params.debug && print_debug then Printf.printf "Got a Result\n%!" ;
+    Log.debug @@ lazy "Got a Result" ;
     let model =
       if Stdlib.(response = Sat) then (
-        (* let () = Printf.printf "Sat\n%!" in *)
         let model =
           get sat_prover |> get_model |> Model.of_smt_model
           |> Shortener.unshorten_model shortener
         in
-        if params.debug && print_debug then
-          Printf.printf "MODEL: %s\n%!" (Model.to_string model) ;
+        Log.debug
+        @@ lazy (Printf.sprintf "MODEL: %s\n%!" (Model.to_string model)) ;
         Some model )
       else if Stdlib.(response = Unknown) then failwith "UNKNOWN"
       else None
@@ -241,14 +179,9 @@ let check_sat (params : Parameters.t) (longtest : Test.t) =
 
 let is_sat params test = check_sat params test |> fst |> Option.is_some
 
-let check_valid (params : Parameters.t) (longtest : Test.t) =
+let check_valid (_ : Parameters.t) (longtest : Test.t) =
   let open Smtlib in
-  (* Printf.printf "Checking validity for test of size %d\n%!"
-     (num_nodes_in_test test); *)
   let test = Shortener.shorten shortener longtest in
-  if params.debug then
-    assert (Test.equals longtest @@ Shortener.unshorten shortener test) ;
-  (* printf.printf "Test: %s\n %!" (string_of_test test ); *)
   let vars =
     Test.vars test
     |> List.dedup_and_sort ~compare:(fun (idx, _) (idy, _) ->
@@ -256,14 +189,14 @@ let check_valid (params : Parameters.t) (longtest : Test.t) =
   in
   let () =
     List.iter vars ~f:(fun (id, i) ->
-        if force_print || (params.debug && print_debug) then
-          Printf.printf "(declare-const %s (_ BitVec %d))\n%!" id i ;
+        Log.z3
+        @@ lazy (Printf.sprintf "(declare-const %s (_ BitVec %d))\n%!" id i) ;
         declare_const (get valid_prover) (Id id) (BitVecSort i))
   in
   let st = Time.now () in
-  let term = not_ (test_to_term test `Valid params.debug) in
+  let term = not_ (test_to_term test `Valid) in
   let response =
-    if force_print || (params.debug && print_debug) then debug term ;
+    debug term ;
     assert_ (get valid_prover) term ;
     check_sat_using QFBV (get valid_prover)
   in
@@ -291,8 +224,6 @@ let rec restriction_cegis ~gas (params : Parameters.t)
   else
     let open Test in
     let restr_test = Option.value restriction ~default:True in
-    if params.debug then
-      Printf.printf "RESTRICTION: %s\n%!" (to_string restr_test) ;
     match check_valid params (restr_test %=>% query) with
     | None, _ -> Some restriction
     | Some m, _ ->
@@ -301,10 +232,7 @@ let rec restriction_cegis ~gas (params : Parameters.t)
               acc
               %&%
               match Packet.get_val_opt m var with
-              | None ->
-                  if params.debug then
-                    Printf.printf "Couldn't find %s in model\n%!" var ;
-                  True
+              | None -> True
               | Some v -> Var (var, Value.size v) %<>% Value v)
         in
         restriction_cegis ~gas:(gas - 1) params (Some restr_test') query
@@ -317,34 +245,36 @@ let check_valid_cached (params : Parameters.t) (test : Test.t) =
   cache := cache' ;
   match res with
   | `HitAbs ->
-      if params.debug then
-        Printf.printf "\tCache_hit after %fms!\n%!"
-          Time.(diff (now ()) st |> Span.to_ms) ;
+      Log.info
+      @@ lazy
+           (Printf.sprintf "\tCache_hit after %fms!\n%!"
+              Time.(diff (now ()) st |> Span.to_ms)) ;
       (None, Time.(diff (now ()) st))
   | `Hit _ -> (None, Time.(diff (now ()) st))
   | `Miss test ->
-      if params.debug then (
-        Printf.printf
-          "\tCouldn't abstract from %d previous tests : %d nodes!\n%!"
-          (List.length !cache.seen) (Test.num_nodes test) ;
-        List.iter !cache.seen ~f:(fun t ->
-            Printf.printf "%d\n%!" (Test.num_nodes t)) ) ;
+      Log.info
+      @@ lazy
+           (Printf.sprintf
+              "\tCouldn't abstract from %d previous tests : %d nodes!\n%!"
+              (List.length !cache.seen) (Test.num_nodes test)) ;
       let dur' = Time.(diff (now ()) st) in
-      if params.debug then Printf.printf "Querying\n%!" ;
+      Log.debug @@ lazy "Querying" ;
       let m, dur = check_valid params test in
-      if params.debug then Printf.printf "Queried\n%!" ;
-      if Option.is_none m then
-        let () = if params.debug then Printf.printf "successfully!\n%!" in
-        cache := QAbstr.add_test test !cache
-      else if params.debug then Printf.printf "Unsuccessfully\n%!" ;
+      Log.debug @@ lazy "Queried" ;
+      if Option.is_none m then (
+        Log.debug @@ lazy "successfully!" ;
+        cache := QAbstr.add_test test !cache )
+      else Log.debug @@ lazy "Unsuccessfully" ;
       (m, Time.Span.(dur + dur'))
   | `AddAbs (qvars, query) -> (
-      if params.debug then
-        Printf.printf
-          "\tChecking abstraction from %d previous tests and %d abstractions!\n\
-           %!"
-          (List.length !cache.seen)
-          (List.length !cache.generals) ;
+      Log.info
+      @@ lazy
+           (Printf.sprintf
+              "Checking abstraction from %d previous tests and %d \
+               abstractions!\n\
+               %!"
+              (List.length !cache.seen)
+              (List.length !cache.generals)) ;
       (* if params.debug then Printf.printf "ABSTRACTION: %s\n"
          (string_of_test query); *)
       let m = restriction_cegis ~gas:2 params None query qvars in
@@ -352,7 +282,7 @@ let check_valid_cached (params : Parameters.t) (test : Test.t) =
       match m with
       | None ->
           (*Couldn't find a restriction to make it valid *)
-          if params.debug then Printf.printf "\tAbstraction Failed\n%!" ;
+          Log.info @@ lazy "Abstraction Failed" ;
           Interactive.pause params.interactive ;
           (* if params.debug then Printf.printf "\t%s\n%!" (string_of_test
              q); *)
@@ -361,7 +291,7 @@ let check_valid_cached (params : Parameters.t) (test : Test.t) =
           (m, dur')
       | Some restriction ->
           (*FOund a restriction to make it valid*)
-          if params.debug then Printf.printf "\tAbstraction successful\n%!" ;
+          Log.info @@ lazy "Abstraction successful" ;
           Interactive.pause params.interactive ;
           cache := QAbstr.add_abs ~query ~restriction test !cache ;
           (None, dur') )

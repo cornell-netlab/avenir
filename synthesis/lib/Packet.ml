@@ -11,6 +11,9 @@ let to_string (p : t) =
     p ~init:"("
   ^ ")\n"
 
+let cex_to_string (inp, outp) =
+  Printf.sprintf "%s -> %s" (to_string inp) (to_string outp)
+
 let set_field (pkt : t) (field : string) (v : Value.t) : t =
   (* Printf.printf "Setting %s to %s;\n" (field) (string_of_value v); *)
   StringMap.set pkt ~key:field ~data:v
@@ -66,7 +69,6 @@ let rec set_field_of_expr_opt (pkt : t) (field : string) (e : Expr.t) :
 
 let to_test ?(random_fill = false) ~fvs (pkt : t) =
   let open Test in
-  (* let random_fill = false in *)
   List.fold fvs ~init:True ~f:(fun acc (x, sz) ->
       acc
       %&%
@@ -74,7 +76,7 @@ let to_test ?(random_fill = false) ~fvs (pkt : t) =
       | None ->
           if random_fill then
             Var (x, sz) %=% Expr.value (Random.int (pow 2 sz), sz)
-          else Var (x, sz) %=% Var (x ^ "_symb", sz)
+          else True
       | Some v -> Var (x, sz) %=% Value v)
 
 let of_smt_model = Z3ModelExtractor.of_smt_model
@@ -104,7 +106,7 @@ let remake ?(fvs = None) (pkt : t) : t =
               StringMap.set acc ~key:var_nm
                 ~data:(Value.make (lower + Random.int upper, sz)))
 
-let restrict_packet (fvs : (string * int) list) pkt =
+let restrict (fvs : (string * int) list) (pkt : t) =
   StringMap.filter_keys pkt ~f:(fun k ->
       List.exists fvs ~f:(fun (v, _) -> String.(k = v)))
 
@@ -112,8 +114,7 @@ let equal ?(fvs = None) (pkt : t) (pkt' : t) =
   match fvs with
   | None -> StringMap.equal Value.equals pkt pkt'
   | Some fvs ->
-      StringMap.equal Value.equals (restrict_packet fvs pkt)
-        (restrict_packet fvs pkt')
+      StringMap.equal Value.equals (restrict fvs pkt) (restrict fvs pkt')
 
 let extract_inout_ce (model : t) : t * t =
   StringMap.fold model

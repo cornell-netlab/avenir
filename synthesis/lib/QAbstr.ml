@@ -156,7 +156,7 @@ let exists_matching_abstraction test generals =
       | Some m, Some r -> Test.equals (Manip.substV r m) True
       | _ -> false)
 
-let cache_check (params : Parameters.t) ({seen; generals} : t) test =
+let cache_check (_ : Parameters.t) ({seen; generals} : t) test =
   if disable then ({seen= []; generals= []}, `Miss test)
   else
     let f phi =
@@ -168,29 +168,23 @@ let cache_check (params : Parameters.t) ({seen; generals} : t) test =
        (sexp_string_of_test test); *)
     match List.find_map seen ~f with
     | None ->
-        if params.debug then Printf.printf "No match\n%!" ;
+        Log.debug @@ lazy "No match" ;
         ({seen; generals}, `Miss test)
     | Some (_, q) when Test.equals q test ->
-        if params.debug then Printf.printf "Queries were identical\n%!" ;
+        Log.debug @@ lazy "Queries were identical\n%!" ;
         ({seen; generals}, `Hit test)
     | Some (m, q) ->
-        if params.debug then Printf.printf "Found a match\n%!" ;
-        if exists_matching_abstraction test generals then
-          let () =
-            if params.debug then
-              Printf.printf "Found an existing generalization\n%!"
-          in
-          ({seen; generals}, `HitAbs)
-        else
-          let () =
-            if params.debug then
-              Printf.printf
-                "No Existing generalization --- generalizing!\n%!"
-          in
+        Log.debug @@ lazy "Found a match\n%!" ;
+        if exists_matching_abstraction test generals then (
+          Log.debug @@ lazy "Found an existing generalization" ;
+          ({seen; generals}, `HitAbs) )
+        else (
+          Log.debug
+          @@ lazy "No Existing generalization --- generalizing!\n%!" ;
           let qvars =
             StringMap.data m |> List.dedup_and_sort ~compare:String.compare
           in
-          ({seen; generals}, `AddAbs (qvars, q))
+          ({seen; generals}, `AddAbs (qvars, q)) )
 
 let add_abs ~query ~restriction tst (c : t) =
   {seen= tst :: c.seen; generals= {query; restriction} :: c.generals}

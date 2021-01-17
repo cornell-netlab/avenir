@@ -138,7 +138,6 @@ let negate phys (model : Model.t) (es : t list) : Test.t =
 let extract_dels_adds phys (m : Model.t) =
   Model.fold m ~init:([], []) (*Deletions, additions*)
     ~f:(fun ~key ~data acc ->
-      (* Printf.printf "%s\n" (string_of_map m); *)
       match Hole.find_add_row key with
       | None -> (
         match Hole.find_delete_row key with
@@ -151,21 +150,24 @@ let extract_dels_adds phys (m : Model.t) =
             let act =
               match Model.find m (Hole.which_act_hole_name tbl) with
               | None ->
-                  Printf.sprintf
-                    "WARNING:: Couldn't find %s even though I found %s to \
-                     be true\n\
-                     %!"
-                    (Hole.which_act_hole_name tbl)
-                    key
-                  |> failwith
+                  Log.warn
+                  @@ lazy
+                       (Printf.sprintf
+                          "WARNING:: Couldn't find %s even though I found \
+                           %s to be true\n\
+                           %!"
+                          (Hole.which_act_hole_name tbl)
+                          key) ;
+                  failwith ""
               | Some v -> Value.get_int_exn v
             in
-            (* Printf.printf "Making new row from \n %s \n in tbl %s and
-               action %d \n%!" (string_of_map m) tbl act; *)
             match Row.mk_new_row m phys tbl None act with
             | None ->
-                failwith
-                  (Printf.sprintf "Couldn't make new row in table %s\n" tbl)
+                Log.warn
+                @@ lazy
+                     (Printf.sprintf "Couldn't make new row in table %s\n"
+                        tbl) ;
+                failwith ""
             | Some row -> (fst acc, Add (tbl, row) :: snd acc)
           else acc)
 

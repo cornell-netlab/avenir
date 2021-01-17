@@ -8,7 +8,7 @@ type opts =
   { injection: bool
   ; hints: bool
   ; hint_type: [`Vals | `NoVals]
-  ; paths: bool
+  ; paths: bool (* DEPRECATED *)
   ; only_holes: bool
   ; mask: bool
   ; restrict_mask: bool
@@ -23,23 +23,24 @@ type opts =
 
 type t = {schedule: opts list; search_space: (Test.t * Model.t) list}
 
-let condcat b app s = if b then Printf.sprintf "%s %s" s app else s
-
-let string_of_opts opts : string =
-  condcat opts.injection "injection" " "
-  |> condcat opts.hints "hints"
-  |> condcat opts.paths "paths"
-  |> condcat opts.only_holes "only_holes"
-  |> condcat opts.mask "mask"
-  |> condcat opts.restrict_mask "restrict_mask"
-  |> condcat opts.nlp "NLP"
-  |> condcat opts.annot "annotations"
-  |> condcat opts.single "single"
-  |> condcat opts.domain "domain"
-  |> condcat opts.no_defaults "no_defaults"
-  |> condcat opts.double "double"
-  |> condcat opts.reachable_adds "reachable_adds "
-  |> condcat opts.no_deletes "no_deletes"
+(* TODO (EHC) Will need for logging *)
+(* let condcat b app s = if b then Printf.sprintf "%s %s" s app else s
+ * 
+ * let string_of_opts opts : string =
+ *   condcat opts.injection "injection" " "
+ *   |> condcat opts.hints "hints"
+ *   |> condcat opts.paths "paths"
+ *   |> condcat opts.only_holes "only_holes"
+ *   |> condcat opts.mask "mask"
+ *   |> condcat opts.restrict_mask "restrict_mask"
+ *   |> condcat opts.nlp "NLP"
+ *   |> condcat opts.annot "annotations"
+ *   |> condcat opts.single "single"
+ *   |> condcat opts.domain "domain"
+ *   |> condcat opts.no_defaults "no_defaults"
+ *   |> condcat opts.double "double"
+ *   |> condcat opts.reachable_adds "reachable_adds "
+ *   |> condcat opts.no_deletes "no_deletes" *)
 
 let no_opts =
   { injection= false
@@ -84,20 +85,21 @@ then
     make_schedule opt'
   else [] )
 
-let make_searcher (params : Parameters.t) (_ : ProfData.t ref)
-    (_ : Problem.t) : t =
+let extract_hint_type (params : Parameters.t) =
+  if String.(params.hint_type = "mask") then `NoVals
+  else if String.(params.hint_type = "exact") then `Vals
+  else
+    Printf.sprintf
+      "Unrecognized hint type %s, expected \"mask\" or \"exact\""
+      params.hint_type
+    |> failwith
+
+let make_searcher (params : Parameters.t) : t =
   let schedule =
     make_schedule
       { injection= params.injection
       ; hints= params.hints
-      ; hint_type=
-          ( if String.(params.hint_type = "mask") then `NoVals
-          else if String.(params.hint_type = "exact") then `Vals
-          else
-            Printf.sprintf
-              "Unrecognized hint type %s, expected \"mask\" or \"exact\""
-              params.hint_type
-            |> failwith )
+      ; hint_type= extract_hint_type params
       ; paths= params.monotonic
       ; only_holes= params.only_holes
       ; mask= params.widening
@@ -113,6 +115,10 @@ let make_searcher (params : Parameters.t) (_ : ProfData.t ref)
   in
   {schedule; search_space= []}
 
+(** [reindex_for_dels problem tbl i] adjusts a deletion index for row [i] of
+    table [tbl] in [Problem.phys_inst problem], adjusting for any deletion
+    operations in [Problem.phys_edits problem]. If the deletion indices
+    conflict, returns [None] .*)
 let reindex_for_dels problem tbl i =
   Problem.phys_edits problem
   |> List.fold ~init:(Some i) ~f:(fun cnt edit ->
@@ -121,7 +127,10 @@ let reindex_for_dels problem tbl i =
              if i = j then None else Some (n - 1)
          | _ -> cnt)
 
-let compute_deletions opts (problem : Problem.t) =
+(** [get_deletes opts problem] constructs a list of [(x,idx)], where [x] is a
+    table name and [i] is a row to delete. If [opts.no_deletes] is [true],
+    returns [\[\]]. *)
+let get_deletes opts (problem : Problem.t) =
   if opts.no_deletes then []
   else
     let phys_inst = Problem.phys_inst problem in
@@ -133,21 +142,43 @@ let compute_deletions opts (problem : Problem.t) =
               | None -> None
               | Some i' -> Some (table_name, i')))
 
-let well_formed_adds (params : Parameters.t) (problem : Problem.t) encode_tag
-    =
-  let open Test in
-  let phys_inst = Problem.phys_edited_instance params problem in
-  let phys = Problem.phys problem in
-  Cmd.tables phys
-  |> concatMap ~c:and_ ~init:(Some True) ~f:(fun t ->
-         let t_rows = Instance.get_rows phys_inst t in
-         Hole.add_row_hole t
-         %=% Expr.value (1, 1)
-         %=>% concatMap t_rows ~init:(Some True) ~c:( %&% )
-                ~f:(fun (ms, _, _) ->
-                  !%(concatMap ms ~init:(Some False) ~c:( %&% )
-                       ~f:(Match.to_valuation_test t encode_tag))))
+(** [get_hints opts problem] constructs a list of [Hint.t]s to apply to the
+    problem. Returns the empty list if [opts.hints] is [false]*)
+let get_hints opts problem =
+  if opts.hints then
+    let open Problem in
+    (* Log.print_edits (log_edits problem); *)
+    Hint.construct (phys problem) (log_edits problem |> List.hd_exn)
+  else []
 
+(** [get_hole_protocol opts dels hints] constructs the hole-instrumentation
+    protocol identifier (c.f. [Instance.interp]) *)
+let get_hole_protocol opts deletions hints =
+  if opts.only_holes then Instance.OnlyHoles hints
+  else Instance.WithHoles (deletions, hints)
+
+(** [get_hole_type opts] extracts the type of holes from [opts]*)
+let get_hole_type opts = if opts.mask then `Mask else `Exact
+
+(* TODO Commented out because slowed things down, why? *)
+(* let well_formed_adds (params : Parameters.t) problem encode_tag =
+ *   let open Test in
+ *   let phys_inst = Problem.phys_edited_instance params problem in
+ *   let phys = Problem.phys problem in
+ *   Cmd.tables phys
+ *   |> concatMap ~c:and_ ~init:(Some True) ~f:(fun t ->
+ *          let t_rows = Instance.get_rows phys_inst t in
+ *          Hole.add_row_hole t
+ *          %=% Expr.value (1, 1)
+ *          %=>% concatMap t_rows ~init:(Some True) ~c:( %&% )
+ *                 ~f:(fun (ms, _, _) ->
+ *                   !%(concatMap ms ~init:(Some False) ~c:( %&% )
+ *                        ~f:(Match.to_valuation_test t encode_tag)))) *)
+
+(** [adds_are_reachable params problem opts fvs encode_tag] computes a
+    condition that ensures that all synthesized insertions into any table are
+    reachable by some packet, if [opts.reachable_adds] is [true]. Otherwise
+    it returns [Test.True] *)
 let adds_are_reachable params (problem : Problem.t) (opts : opts) fvs
     encode_tag =
   let open Test in
@@ -162,6 +193,8 @@ let adds_are_reachable params (problem : Problem.t) (opts : opts) fvs
            @@ FastCX.is_reachable encode_tag params problem fvs in_pkt
                 tbl_name keys)
 
+(** [non_empty_adds problem] computes a condition ensuring that at least one
+    table in [Problem.phys problem] is added to *)
 let non_empty_adds (problem : Problem.t) =
   let open Test in
   Problem.phys problem |> Cmd.tables
@@ -172,6 +205,11 @@ let non_empty_adds (problem : Problem.t) =
              Some (acc %+% (Hole.add_row_hole tbl %=% Expr.value (1, 1))))
   |> Option.value ~default:True
 
+(** [single problem opts query_holes] computes, if [opts.single] is [true], a
+    condition that only one row may be added to a table in
+    [Problem.phys problem], including already-added rows in
+    [Problem.phys_edits problem], otherwise, if [opts.single] is [false], is
+    [Test.true] *)
 let single problem (opts : opts) query_holes =
   let open Test in
   if not opts.single then True
@@ -187,6 +225,9 @@ let single problem (opts : opts) query_holes =
           then Hole (h, sz) %=% Expr.value (0, sz)
           else acc ))
 
+(** [restrict_mask opts query_holes] computes, if [opts.restrict_mask] is
+    [true], a condition enforcing that every mask hole in [query_holes] is
+    [0] or all [1]s *)
 let restrict_mask (opts : opts) query_holes =
   let open Test in
   if not opts.restrict_mask then True
@@ -205,6 +246,12 @@ let restrict_mask (opts : opts) query_holes =
                    ; Hole (h, sz) %=% Expr.value (0, sz) ] ]
         else True)
 
+(** [active_domain_restrict params problem opts query_holes] computes, if
+    [opts.restrict_mask] is [true], a condition enforcing that every data
+    hole in [query_holes] can be found as an equally-sized value in
+    [Problem.log_gcl_program program] or [Problem.phys_gcl_program program],
+    or is [0] or [1], Otherwise, if [opts.restrict_mask] is false, it returns
+    [true]*)
 let active_domain_restrict params problem opts query_holes : Test.t =
   let open Test in
   if not opts.domain then True
@@ -216,346 +263,191 @@ let active_domain_restrict params problem opts query_holes : Test.t =
       |> List.filter ~f:(fun v ->
              Bigint.(Value.get_bigint v <> zero && Value.get_bigint v <> one))
     in
-    let test =
-      List.fold query_holes ~init:True ~f:(fun acc (h, sz) ->
-          let restr =
-            List.fold ints ~init:False ~f:(fun acci v ->
-                let szi = Value.size v in
-                let i = Value.get_bigint v in
-                or_ acci
-                @@
-                if
-                  sz = szi
-                  && (not (String.is_suffix h ~suffix:"_mask"))
-                  && (not (Hole.is_add_row_hole h))
-                  && (not (Hole.is_delete_hole h))
-                  && not (Hole.is_which_act_hole h)
-                then
-                  Hole (h, sz)
-                  %=% Value (Value.big_make (i, szi))
-                  %+% (Hole (h, sz) %=% Expr.value (0, szi))
-                  %+% (Hole (h, sz) %=% Expr.value (1, szi))
-                else False)
-          in
-          if Test.equals restr False then acc else acc %&% restr)
-    in
-    (* let () = Printf.printf "\n\n\n\nactive domain restr \n %s\n\n\n\n%!"
-       (string_of_test test) in *)
-    test
+    List.fold query_holes ~init:True ~f:(fun acc (h, sz) ->
+        let restr =
+          List.fold ints ~init:False ~f:(fun acci v ->
+              let szi = Value.size v in
+              let i = Value.get_bigint v in
+              or_ acci
+              @@
+              if
+                sz = szi
+                && (not (String.is_suffix h ~suffix:"_mask"))
+                && (not (Hole.is_add_row_hole h))
+                && (not (Hole.is_delete_hole h))
+                && not (Hole.is_which_act_hole h)
+              then
+                Hole (h, sz)
+                %=% Value (Value.big_make (i, szi))
+                %+% (Hole (h, sz) %=% Expr.value (0, szi))
+                %+% (Hole (h, sz) %=% Expr.value (1, szi))
+              else False)
+        in
+        if Test.equals restr False then acc else acc %&% restr)
 
-let no_defaults (params : Parameters.t) opts fvs phys =
+(** [no_defaults problem opts fvs phys] computes a condition that is [True]
+    if [opt.no_defaults] is [False], and otherwise ensures that no data hole
+    in [phys] (i.e. key or action data) is [0] *)
+let no_defaults (_ : Parameters.t) opts fvs phys =
   let open Test in
   if not opts.no_defaults then True
   else
     List.filter (Cmd.holes phys) ~f:(fun (v, _) ->
         List.for_all fvs ~f:(fun (v', _) ->
-            if
-              List.exists
-                [ v'
-                ; Hole.add_row_prefix
-                ; Hole.delete_row_prefix
-                ; Hole.which_act_prefix ] ~f:(fun substring ->
-                  String.is_substring v ~substring)
-            then (
-              if params.debug then
-                Printf.printf "%s matches %s, so skipped\n%!" v v' ;
-              false )
-            else (
-              if params.debug then
-                Printf.printf "%s misses  %s, so kept\n%!" v v' ;
-              true )))
+            List.exists
+              [ v'
+              ; Hole.add_row_prefix
+              ; Hole.delete_row_prefix
+              ; Hole.which_act_prefix ] ~f:(fun substring ->
+                String.is_substring v ~substring)
+            |> not))
     |> List.fold ~init:True ~f:(fun acc (v, sz) ->
            acc %&% (Hole (v, sz) %<>% Expr.value (0, sz)))
 
-let rec construct_model_query opts form fvs cexs in_pkt phys out_pkt =
+(** [test_of_cexs fvs cex] aggregates an input-output list of
+    counterexamples, into a pair [(intest, outest)], where [intest] is the
+    disjunction of the input packets in [cexs] and [outest] is the
+    disjunction of the output packets *)
+let tests_of_cexs fvs cexs =
   let open Test in
-  let open Cmd in
-  match form with
-  | `Passive ->
-      let sub, passive_phys =
-        passify fvs (*Packet.to_assignment in_pkt %:%*) phys
-      in
-      let phys' = CompilerOpts.optimize fvs passive_phys in
-      (* let () = Printf.printf "Optimized passive program\n%s\n\n%!"
-         (string_of_cmd phys'); in *)
-      let good =
-        good_wp phys'
-        |> Log.print_and_return_test ~pre:"normal executions:\n"
-             ~post:"\n---------------------\n" false
-      in
-      let testify = Packet.to_test ~fvs in
-      let ensure_cexs =
-        if opts.double then
-          let in_test = concatMap (fsts cexs) ~f:testify ~c:( %+% ) in
-          let out_test = concatMap (snds cexs) ~f:testify ~c:( %+% ) in
-          hoare_triple_passified sub in_test good out_test
-        else True
-      in
-      ensure_cexs
-      %&% hoare_triple_passified sub (testify in_pkt) good (testify out_pkt)
-      |> Log.print_and_return_test ~pre:"Passive optimized query:\n"
-           ~post:"\n---------------------\n" false
-  | `PassiveAggressive ->
-      let sub, passive_phys =
-        passify fvs
-          (Packet.to_assignment in_pkt %:% phys |> CompilerOpts.optimize fvs)
-      in
-      let phys' = CompilerOpts.optimize fvs passive_phys in
-      (* let () = Printf.printf "optimized physical program \n%s\n---\n%!"
-         (string_of_cmd phys') in *)
-      let phys' =
-        CompilerOpts.passive_optimize
-          (apply_finals_sub_packet out_pkt sub)
-          phys'
-      in
-      (* let () = Printf.printf "passive optimized physical program
-         \n%s\n---\n%!" (string_of_cmd phys') in *)
-      let out_test =
-        good_wp phys'
-        |> Log.print_and_return_test true ~pre:"PassiveAggressive formula \n"
-             ~post:"\n------\n"
-      in
-      if List.is_empty @@ Test.vars out_test then out_test
-      else
-        (* let () = Printf.printf "Manual QE failed, letting Z3 do it" in *)
-        construct_model_query opts `Passive fvs cexs in_pkt phys out_pkt
-      (* Log.check_qe true out_test;
-       * out_test *)
-  | `WP ->
-      let phys' = Packet.to_assignment in_pkt %:% phys in
-      let opt_phys = CompilerOpts.optimize fvs phys' in
-      let out_pkt_form = Packet.to_test ~fvs out_pkt in
-      wp `Negs opt_phys out_pkt_form
+  List.fold cexs ~init:(False, False) ~f:(fun (ins, outs) (inp, outp) ->
+      (ins %+% Packet.to_test ~fvs inp, outs %+% Packet.to_test ~fvs outp))
 
-let compute_vc (params : Parameters.t) (data : ProfData.t ref)
+(** [no_defaults problem fvs sub good cexs] is [True] when [opts.double] is
+    [false] and otherwise is a computes a hoare triple on the passive program
+    [good], using the varible indexer [sub] such that leverages every
+    counterexample packet, restricted to the variables [fvs]. *)
+let use_past_cexs opts fvs sub good cexs =
+  if opts.double then
+    let in_test, out_test = tests_of_cexs fvs cexs in
+    hoare_triple_passified sub in_test good out_test
+  else True
+
+(** [apply_heurs params problem opts phys query_test partial_model]
+    conditionally applies the heuristics (as determined by [opts]), on the
+    test [query_test] constructed from the instrumented program [phys],
+    applying [partial_model] to each optimization *)
+let apply_heurs params problem opts phys query_test partial_model =
+  let open Test in
+  let hole_type = get_hole_type opts in
+  let fvs = Problem.fvs problem in
+  let query_holes =
+    Test.holes query_test |> List.dedup_and_sort ~compare:Stdlib.compare
+  in
+  (* TODO (ehc) :: can we just call fixup_test partial_model after?*)
+  bigand
+    [ query_test |> fixup_test partial_model
+    ; adds_are_reachable params problem opts fvs hole_type
+      |> fixup_test partial_model
+    ; restrict_mask opts query_holes |> fixup_test partial_model
+    ; no_defaults params opts fvs phys |> fixup_test partial_model
+    ; single problem opts query_holes |> fixup_test partial_model
+    ; active_domain_restrict params problem opts query_holes
+      |> fixup_test partial_model
+    ; (* well_formed_adds params problem hole_type
+       * |> fixup_test partial_model
+       * |> Log.print_and_return_test params.debug  ~pre:"Well-Formed Additions:\n" ~post:"\n--------\n\n"; *)
+      non_empty_adds problem |> fixup_test partial_model ]
+
+(** [action_hole_valid tbl num_acts] ensures that the hole index for table
+    [tb] doesn't surpass [num_acts] *)
+let action_hole_valid tbl num_acts =
+  let open Test in
+  Hole.which_act_hole tbl (max (log2 num_acts) 1)
+  %<=% Expr.value (num_acts - 1, max (log2 num_acts) 1)
+
+(** [well_formed_actions problem] ensures that the hole index for each table
+    in [Problem.phys problem] doesn't surpass the number of actions defined
+    for the table*)
+let well_formed_actions problem =
+  let open Test in
+  Problem.phys problem |> Cmd.get_tables_actsizes
+  |> List.fold ~init:True ~f:(fun acc (tbl, num_acts) ->
+         acc %&% action_hole_valid tbl num_acts)
+
+let construct_model_query opts fvs cexs in_pkt phys out_pkt =
+  let open Test in
+  let sub, passive_phys = passify fvs phys in
+  let phys' = CompilerOpts.optimize fvs passive_phys in
+  let good = good_wp phys' in
+  let past = use_past_cexs opts fvs sub good cexs in
+  let intest, outest = pair_map ~f:(Packet.to_test ~fvs) (in_pkt, out_pkt) in
+  let curr = hoare_triple_passified sub intest good outest in
+  past %&% curr
+
+(** [instr_phys params problem opts] is [hints, iphys] where [iphys] is the
+    [Problem.phys_gcl_program problem] instrumented with holes according to
+    the strategy specified by [opts], and [hints] are the hints used in the
+    instrumenation.*)
+let instr_phys (params : Parameters.t) problem opts =
+  let hints = get_hints opts problem in
+  let deletes = get_deletes opts problem in
+  let hole_protocol = get_hole_protocol opts deletes hints in
+  let hole_type = get_hole_type opts in
+  (* TODO (EHC) Why is this here? *)
+  let params = {params with no_defaults= opts.no_defaults} in
+  (hints, Problem.phys_gcl_holes params problem hole_protocol hole_type)
+
+(** [compute_vs params data problem opts] computes the verification condition
+    for the (most-recent) counterexample(s) in [Problem.cexs params]
+    according to *)
+let compute_vc (params : Parameters.t) (_ : ProfData.t ref)
     (problem : Problem.t) (opts : opts) =
   let in_pkt, out_pkt = Problem.cexs problem |> List.hd_exn in
-  let st = Time.now () in
-  let deletions = compute_deletions opts problem in
-  let hints =
-    if opts.hints then
-      let open Problem in
-      (* Log.print_edits (log_edits problem); *)
-      Hint.construct (phys problem) (log_edits problem |> List.hd_exn)
-    else []
+  let hints, phys = instr_phys params problem opts in
+  let fvs = inter (Cmd.vars phys) (Problem.fvs problem) ~f:Stdlib.( = ) in
+  let query =
+    Test.bigand
+      [ construct_model_query opts fvs (Problem.cexs problem) in_pkt phys
+          out_pkt ]
   in
-  let hole_protocol =
-    if opts.only_holes then Instance.OnlyHoles hints
-    else Instance.WithHoles (deletions, hints)
-  in
-  let hole_type = if opts.mask then `Mask else `Exact in
-  let phys =
-    Problem.phys_gcl_holes
-      {params with no_defaults= opts.no_defaults}
-      problem hole_protocol hole_type
-  in
-  ProfData.update_time !data.model_holes_time st ;
-  let st = Time.now () in
-  let fvs =
-    List.(
-      Cmd.vars phys
-      |> filter ~f:(fun x ->
-             exists (Problem.fvs problem) ~f:(Stdlib.( = ) x)))
-  in
-  (* let fvs = problem.fvs in *)
-  if params.debug then Printf.printf "Constructing Wps \n%!" ;
-  let wp_list =
-    if opts.paths then
-      let phys =
-        Cmd.(Packet.to_assignment in_pkt %:% phys)
-        |> CompilerOpts.optimize fvs
-      in
-      wp_paths `NoNegs phys (Packet.to_test ~fvs out_pkt)
-    else
-      (* let (sub, _(\*passive_phys*\), good_N, _) = good_execs fvs phys in *)
-      let test =
-        construct_model_query opts `Passive fvs (Problem.cexs problem) in_pkt
-          phys out_pkt
-      in
-      Log.check_qe false test ;
-      (* Printf.printf "--------------%s---------------\n%!" (string_of_test
-         test); *)
-      [(phys, test)]
-  in
-  (* Printf.printf "Constructed WPS\n%!"; *)
-  ProfData.update_time !data.search_wp_time st ;
-  (wp_list, phys, hints)
+  (query, phys, hints)
 
+(** [with_opts params problems opts (query,phys,hints)] applies the
+    optimizations indicated by [opts], and the [hints] to the query [query],
+    such that [query] and [hints] are derived from [phys] *)
 let with_opts (params : Parameters.t) (problem : Problem.t) (opts : opts)
-    (wp_list, phys, hints) : (Test.t * Model.t) list =
+    (query, phys, hints) : (Test.t * Model.t) list =
   let open Test in
-  let hole_type = if opts.mask then `Mask else `Exact in
-  let fvs = Problem.fvs problem in
-  let tests =
-    List.filter_map wp_list ~f:(fun (cmd, spec) ->
-        if Test.equals spec False || not (Test.has_hole spec) then None
-        else
-          let () =
-            if params.debug then
-              Printf.printf "Checking path with hole!\n  %s\n\n%!"
-                (Cmd.to_string cmd)
-          in
-          let () =
-            if false then
-              Printf.printf "TEST:\n%s\n--------\n\n%!" (Test.to_string spec)
-          in
-          let wf_holes =
-            List.fold
-              (Problem.phys problem |> Cmd.get_tables_actsizes)
-              ~init:True
-              ~f:(fun acc (tbl, num_acts) ->
-                acc
-                %&% ( Hole
-                        (Hole.which_act_hole_name tbl, max (log2 num_acts) 1)
-                    %<=% Expr.value (num_acts - 1, max (log2 num_acts) 1) ))
-            |> Log.print_and_return_test params.debug ~pre:"WF holes:\n"
-                 ~post:"\n--------\n\n"
-          in
-          let pre_condition =
-            Problem.model_space problem %&% wf_holes %&% spec
-            |> Injection.optimization
-                 {params with injection= opts.injection}
-                 problem
-          in
-          let query_test = wf_holes %&% pre_condition in
-          let query_holes =
-            Test.holes query_test
-            |> List.dedup_and_sort ~compare:Stdlib.compare
-          in
-          if params.debug then
-            Printf.printf "There are %d hints in ModelFinder\n%!"
-              (List.length hints) ;
-          Log.print_hints params.debug hints ;
-          let partial_model =
-            Hint.list_to_model opts.hint_type (Problem.phys problem) hints
-          in
-          Log.print_hints_map params.debug partial_model ;
-          Interactive.pause params.interactive ;
-          let out_test =
-            bigand
-              [ query_test |> fixup_test partial_model
-                |> Log.print_and_return_test params.debug ~pre:"The Query:\n"
-                     ~post:"\n--------\n\n"
-              ; adds_are_reachable params problem opts fvs hole_type
-                |> fixup_test partial_model
-                |> Log.print_and_return_test params.debug
-                     ~pre:"Adds_are_reachable:\n" ~post:"\n--------\n\n "
-              ; restrict_mask opts query_holes
-                |> fixup_test partial_model
-                |> Log.print_and_return_test params.debug
-                     ~pre:"Restricting Masks:\n" ~post:"\n--------\n\n"
-              ; no_defaults params opts fvs phys
-                |> fixup_test partial_model
-                |> Log.print_and_return_test params.debug
-                     ~pre:"No Defaults:\n" ~post:"\n--------\n\n"
-              ; single problem opts query_holes
-                |> fixup_test partial_model
-                |> Log.print_and_return_test params.debug ~pre:"Single:\n"
-                     ~post:"\n--------\n\n"
-              ; active_domain_restrict params problem opts query_holes
-                |> fixup_test partial_model
-                |> Log.print_and_return_test params.debug
-                     ~pre:"Active Domain Restriction:\n"
-                     ~post:"\n--------\n\n"
-              ; (* well_formed_adds params problem hole_type
-                 * |> fixup_test partial_model
-                 * |> Log.print_and_return_test params.debug  ~pre:"Well-Formed Additions:\n" ~post:"\n--------\n\n"; *)
-                non_empty_adds problem |> fixup_test partial_model
-                |> Log.print_and_return_test params.debug
-                     ~pre:"Non-Empty Additions:\n" ~post:"\n--------\n\n" ]
-          in
-          Some (out_test, partial_model))
-  in
-  tests
+  if Test.equals query False || not (Test.has_hole query) then []
+  else
+    let wf_acts = well_formed_actions problem in
+    let query_test =
+      Problem.model_space problem
+      |> and_ query
+      |> Injection.optimization
+           {params with injection= opts.injection}
+           problem
+      |> and_ wf_acts
+    in
+    let partial_model =
+      Hint.list_to_model opts.hint_type (Problem.phys problem) hints
+    in
+    let out_test =
+      apply_heurs params problem opts phys query_test partial_model
+    in
+    [(out_test, partial_model)]
 
-let compute_queries (params : Parameters.t) (data : ProfData.t ref)
+(** [compute_queryd params data problems opts] computes the a list of
+    optimized (accdg to [opts]) queries & the partial models corresponding to
+    the hints in optimizing the query *)
+let compute_query (params : Parameters.t) (data : ProfData.t ref)
     (problem : Problem.t) (opts : opts) : (Test.t * Model.t) list =
-  let st = Time.now () in
-  let queries =
-    compute_vc params data problem opts |> with_opts params problem opts
-  in
-  ProfData.update_time !data.search_wp_time st ;
-  queries
+  compute_vc params data problem opts |> with_opts params problem opts
 
-let holes_for_table table phys =
-  match Cmd.get_schema_of_table table phys with
-  | None ->
-      failwith @@ Printf.sprintf "couldn't find schema for %s\n%!" table
-  | Some (ks, acts, _) ->
-      List.bind ks ~f:(fun key ->
-          let k = Cmd.Key.var_name key in
-          match Cmd.Key.value key with
-          | Some _ -> []
-          | None ->
-              let lo, hi = Hole.match_holes_range table k in
-              let v, m = Hole.match_holes_mask table k in
-              [Hole.match_hole_exact table k; lo; hi; v; m]
-              |> List.dedup_and_sort ~compare:String.compare)
-      @ List.(acts >>= fun (_, params, _) -> params >>| fst)
-
-let holes_for_other_actions table phys actId =
-  match Cmd.get_schema_of_table table phys with
-  | None -> failwith @@ Printf.sprintf "couldnt find schema for %s\n%!" table
-  | Some (_, acts, _) ->
-      List.foldi acts ~init:[] ~f:(fun i acc (_, params, _) ->
-          acc
-          @
-          if i = Bigint.to_int_exn actId then [] else List.map params ~f:fst)
-
-let rec search (params : Parameters.t) data problem t : (Model.t * t) option
-    =
+let rec search (params : Parameters.t) data problem t =
   if Timeout.timed_out params.timeout then None
   else
     match (t.search_space, t.schedule) with
-    | [], [] ->
-        if params.debug then Printf.printf "Search failed\n%!" ;
-        None
+    | [], [] -> None
     | [], opts :: schedule ->
-        let () =
-          if params.debug then
-            Printf.printf "trying heuristics |%s|\n\n%!"
-              (string_of_opts opts)
-        in
-        let search_space = compute_queries params data problem opts in
-        (* Printf.printf "search space rebuild, recursing!\n%!"; *)
+        let search_space = compute_query params data problem opts in
         search params data problem {schedule; search_space}
     | (test, partial_model) :: search_space, schedule -> (
-        Log.check_attempts params.debug problem ;
-        Log.print_hints_map params.debug partial_model ;
-        if params.debug then Printf.printf "Sending query to Z3\n%!" ;
-        let model_opt, dur =
-          check_sat params @@ fixup_test partial_model
-          @@ Test.bigand [Problem.model_space problem; test]
+        let model_opt, _ =
+          Problem.model_space problem
+          |> Test.and_ test |> fixup_test partial_model |> check_sat params
         in
-        ProfData.incr !data.model_z3_calls ;
-        ProfData.update_time_val !data.model_z3_time dur ;
-        if params.debug then Printf.printf "Sat Checked\n%!\n" ;
         match model_opt with
-        | Some raw_model ->
-            if params.debug then Printf.printf "Found a model, done \n%!" ;
-            if Problem.seen_attempt problem raw_model then (
-              Printf.printf "%s\n%!" (Problem.attempts_to_string problem) ;
-              Printf.printf "\ncurrent model is %s\n%!"
-                (Model.to_string raw_model) ;
-              Printf.printf "\nmodel_space is %s \n%!"
-                (Test.to_string @@ Problem.model_space problem) ;
-              Printf.printf
-                "\nmodel has already been seen and is allowed? %s"
-                ( if
-                  Problem.model_space problem
-                  |> fixup_test raw_model |> Test.equals True
-                then "yes! thats a contradiction\n%!"
-                else
-                  "no, but somehow we synthesized it... a contradiction\n%!"
-                ) ;
-              failwith "" )
-            else (
-              Printf.sprintf "IsNOVEL??? \n    %s \n"
-                ( Problem.model_space problem
-                |> fixup_test raw_model |> Test.to_string )
-              |> Log.log params.debug ;
-              Some (Model.join partial_model raw_model, t) )
-        | _ ->
-            (* Printf.printf "No model, keep searching with %d opts and %d
-               paths \n%!" (List.length schedule) (List.length search_space); *)
-            search params data problem {schedule; search_space} )
+        | Some raw_model -> Some (Model.join partial_model raw_model, t)
+        | _ -> search params data problem {schedule; search_space} )

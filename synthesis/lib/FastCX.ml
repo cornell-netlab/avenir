@@ -1,7 +1,6 @@
 open Core
 open Manip
 open Prover
-open Parameters
 open Semantics
 open VCGen
 
@@ -51,7 +50,6 @@ let hits_pred params (_ : ProfData.t ref) prog inst edits e : Test.t =
       let phi =
         Test.(Match.list_to_test ms %&% Instance.negate_rows inst t)
       in
-      (* Printf.printf "Condition: %s\n%!" (string_of_test phi); *)
       let prefix = truncated t prog |> Option.value_exn in
       let pref_gcl =
         Instance.(
@@ -64,11 +62,8 @@ let hits_pred params (_ : ProfData.t ref) prog inst edits e : Test.t =
         Match.list_to_test ms
         %&% List.fold (Instance.get_rows_before inst t i) ~init:True
               ~f:(fun acc (matches, _, _) ->
-                (* Printf.printf "combining %s\n%!" (Match.list_to_test ks
-                   matches |> string_of_test); *)
                 acc %&% !%(Match.list_to_test matches))
       in
-      (* Printf.printf "Condition: %s\n%!" (string_of_test phi); *)
       let prefix = truncated t prog |> Option.value_exn in
       let pref_gcl =
         Instance.(
@@ -77,7 +72,6 @@ let hits_pred params (_ : ProfData.t ref) prog inst edits e : Test.t =
       wp `Negs pref_gcl phi
 
 let hits_list_pred params (data : ProfData.t ref) prog inst edits =
-  (* Printf.printf "\tThere are %d edits to check\n" (List.length edits); *)
   List.fold edits ~init:[] ~f:(fun acc e ->
       hits_pred params data prog inst edits e :: acc)
 
@@ -88,26 +82,9 @@ let make_cex params problem (x : Packet.t) =
   let phys = phys_gcl_program params problem in
   let log_pkt = eval_act log in_pkt in
   let phys_pkt = eval_act phys in_pkt in
-  if params.debug then (
-    if params.debug then
-      Printf.printf
-        "-------------------------------------------\n\
-         %s \n\
-         ???====?=====????\n\
-        \ %s\n\
-         -------------------------------------\n\
-         %!"
-        (Cmd.to_string log) (Cmd.to_string phys) ;
-    Printf.printf "LOG :%s -> %s\n" (Packet.to_string in_pkt)
-      (Packet.to_string log_pkt) ;
-    Printf.printf "PHYS:%s -> %s\n" (Packet.to_string in_pkt)
-      (Packet.to_string phys_pkt) ) ;
   if Packet.equal ~fvs:(fvs problem |> Some) log_pkt phys_pkt then
-    (* let () = Printf.printf "PACKETS EQUAL\n%!" in *)
     `NotFound in_pkt
-  else
-    (* let () = Printf.printf "PACKETS NEQ\n%!" in *)
-    `NoAndCE (in_pkt, log_pkt)
+  else `NoAndCE (in_pkt, log_pkt)
 
 let attempt_model test =
   let open Test in
@@ -120,9 +97,10 @@ let unreachable params (problem : Problem.t) (test : Test.t) =
   let n = 10 in
   let rec loop i phi =
     let query = !%(test %&% phi) in
-    if params.debug then
-      Printf.printf "FAST CX QUERY %d : \n %s\n%!" (n - i)
-        (Test.to_string query) ;
+    Log.debug
+    @@ lazy
+         (Printf.sprintf "FAST CX QUERY %d : \n %s\n%!" (n - i)
+            (Test.to_string query)) ;
     match attempt_model query with
     | Some in_pkt -> makecexloop params problem i in_pkt phi
     | None -> (
@@ -132,12 +110,9 @@ let unreachable params (problem : Problem.t) (test : Test.t) =
       | None, _ -> `NotFound Packet.empty )
   and makecexloop params problem i in_pkt phi =
     match make_cex params problem in_pkt with
-    | (`NoAndCE _ as counter) | (`Yes as counter) ->
-        (* Printf.printf
-           "****************************************************\n%!"; *)
-        counter
+    | (`NoAndCE _ as counter) | (`Yes as counter) -> counter
     | `NotFound full_pkt ->
-        if i <= 0 then (* failwith "" *) `NotFound in_pkt
+        if i <= 0 then `NotFound in_pkt
         else
           Packet.to_test ~fvs:(Problem.fvs problem) full_pkt
           |> Test.neg |> Test.and_ phi
@@ -147,7 +122,7 @@ let unreachable params (problem : Problem.t) (test : Test.t) =
 
 let get_cex ?(neg = Test.True) params data (problem : Problem.t) =
   let open Problem in
-  if params.debug then Printf.printf "\t   a fast Cex\n%!" ;
+  Log.debug @@ lazy (Printf.sprintf "\t   a fast Cex\n%!") ;
   let e = log_edits problem |> List.hd_exn in
   hits_pred params data (log problem) (log_inst problem) (log_edits problem)
     e

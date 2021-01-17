@@ -77,7 +77,9 @@ let mkCons x xs = x :: xs
 
 let rec repeat i a = if i <= 0 then [] else a :: repeat (i - 1) a
 
-let rec range_ex lo hi = if lo = hi then [] else lo :: range_ex (lo + 1) hi
+let rec range_ex lo hi = if lo >= hi then [] else lo :: range_ex (lo + 1) hi
+
+let rec range_inc lo hi = if lo > hi then [] else lo :: range_inc (lo + 1) hi
 
 let inj_l x y = (y, x)
 
@@ -190,6 +192,8 @@ let bit_string_to_decimal bs =
 let uncurry f (x, y) = f x y
 
 let liftPair ~f ~combine (x1, x2) (y1, y2) = combine (f x1 x2) (f y1 y2)
+
+let inter ~f xs ys = List.(filter xs ~f:(fun x -> exists ys ~f:(f x)))
 
 let nonempty_inter (xs : (string * int) list) (ys : (string * int) list) =
   List.exists xs ~f:(fun (v, _) ->
@@ -314,3 +318,5 @@ let opt_equals ~f o1 o2 =
   | None, None -> true
   | Some x1, Some x2 -> f x1 x2
   | _, _ -> false
+
+let pair_map ~f (a, b) = (f a, f b)

@@ -51,7 +51,7 @@ let same_stringset = Alcotest.(check stringset) "same string set"
 let edit = testable_string Edit.to_string Edit.equal
 let same_edit = Alcotest.(check edit) "same edit"
 
-let cache = testable_string EAbstr.string_of_cache EAbstr.cache_eq
+let cache = testable_string EAbstr.string_of_cache EAbstr.equal
 let same_cache = Alcotest.(check cache) "same cache"
 
 let edits =
