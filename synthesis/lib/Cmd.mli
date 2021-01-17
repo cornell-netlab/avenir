@@ -94,6 +94,8 @@ val seq : t -> t -> t
 val ( %:% ) : t -> t -> t
 
 val sequence : t list -> t
+(** [sequence cs] sequentially composes a list of [c1::...::cn::[]] in order.
+   Equivalent to [c1 %:% ... %:% cn %:% Skip] *)
 
 val assign : string -> Expr.t -> t
 (** [assign f e] constructs an assignment command, assigning the expression
