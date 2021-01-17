@@ -43,4 +43,4 @@ let info s = if !level.info then print (blue "[INFO] ") s
 
 let debug s = if !level.debug then print (red "[DEBUG] ") s
 
-let z3 s = if !level.debug then print (blue "[Z3] ") s
+let z3 s = if !level.z3 then print (blue "[Z3] ") s
