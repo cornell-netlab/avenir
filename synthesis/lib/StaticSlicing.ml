@@ -139,20 +139,19 @@ let edit_slice_table (params : Parameters.t)
     List.filter edits ~f:(String.( = ) name %. Edit.table)
   in
   let sliced_inst =
-    if Option.is_none eliminable then
-      let () =
-        if params.debug then
-          Printf.printf "We can eliminate extant rows in table %s\n%!" name
-      in
-      Instance.of_edits params edits_to_add
-    else
-      let () =
-        if params.debug then
-          Printf.printf
-            "we know about %s, so we can't eliminate extant rows in %s\n%!"
-            (Option.value_exn eliminable)
-            name
-      in
+    if Option.is_none eliminable then (
+      Log.debug
+      @@ lazy
+           (Printf.sprintf "We can eliminate extant rows in table %s\n%!"
+              name) ;
+      Instance.of_edits params edits_to_add )
+    else (
+      Log.debug
+      @@ lazy
+           (Printf.sprintf
+              "we know about %s, so we can't eliminate extant rows in %s\n%!"
+              (Option.value_exn eliminable)
+              name) ;
       let extant_rows =
         Instance.get_rows (Instance.update_list params inst edits) name
       in
@@ -162,7 +161,7 @@ let edit_slice_table (params : Parameters.t)
       let relevant_extant_inst =
         StringMap.(set empty ~key:name ~data:relevant_extant_rows)
       in
-      Instance.update_list params relevant_extant_inst edits_to_add
+      Instance.update_list params relevant_extant_inst edits_to_add )
   in
   (* if params.debug then Printf.printf "New %s Instance is:%s\n%!" name
      (Instance.to_string sliced_inst); *)
@@ -183,26 +182,20 @@ let project_to_exprfacts (multifacts : Value.t list StringMap.t) :
 
 let rec edit_slice_aux (params : Parameters.t) facts inst edits cmd =
   let open Cmd in
-  if params.debug then
-    Printf.printf "Slice loop with %d facts across %d keys\n%!"
-      (size_of_facts facts)
-      (StringMap.keys facts |> List.length) ;
+  Log.debug
+  @@ lazy
+       (Printf.sprintf "Slice loop with %d facts across %d keys\n%!"
+          (size_of_facts facts)
+          (StringMap.keys facts |> List.length)) ;
   match cmd with
   | Skip | Assume _ -> (cmd, facts)
-  | Assign _ ->
-      if params.debug then Printf.printf "ConstantProp\n%!" ;
-      (cmd, ConstantProp.propogate_choices facts cmd)
+  | Assign _ -> (cmd, ConstantProp.propogate_choices facts cmd)
   | Seq (c1, c2) ->
-      if params.debug then Printf.printf "Seq\n%!" ;
       let c1', facts1 = edit_slice_aux params facts inst edits c1 in
       let c2', facts2 = edit_slice_aux params facts1 inst edits c2 in
-      if params.debug then Printf.printf "Normalizing seq\n%!" ;
       let c' = c1' %:% c2' in
-      if params.debug then Printf.printf "---done with seq\n%!" ;
       (c', facts2)
   | Select (typ, cs) ->
-      if params.debug then Printf.printf "select\n%!" ;
-      let t = Time.now () in
       let cs, facts' =
         List.fold cs ~init:([], StringMap.empty)
           ~f:(fun (acc_cs, acc_facts) (b, c) ->
@@ -213,12 +206,8 @@ let rec edit_slice_aux (params : Parameters.t) facts inst edits cmd =
             (acc_cs @ [(b', c')], multimap_union acc_facts facts))
       in
       let c' = select typ cs in
-      if params.debug then
-        Printf.printf "Select processing took %f seconds\n%!"
-          Time.(Span.(diff (now ()) t |> to_ms)) ;
       (c', facts')
   | Apply t ->
-      if params.debug then Printf.printf "Edit Slice table %s\n%!" t.name ;
       edit_slice_table params
         (t.name, t.keys, t.actions, t.default)
         facts inst edits

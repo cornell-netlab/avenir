@@ -52,8 +52,7 @@ let random_test_422 _ =
     Synthesis.cegis_math_sequence
       Parameters.
         { default with
-          debug= true
-        ; edits_depth= 2
+          edits_depth= 2
         ; fastcx= true
         ; hints= true
         ; hint_type= "exact"

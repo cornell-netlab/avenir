@@ -7,6 +7,10 @@ val empty : t
 val to_string : t -> string
 (** [to_string pkt] produces a string representation of p*)
 
+val cex_to_string : t * t -> string
+(** [to_string (p1, p2)] produces a string representation of [p1], [p2],
+    where [p1] is displayed as the input packet and [p2] as the ouptu *)
+
 val equal : ?fvs:(string * int) list option -> t -> t -> bool
 (** [equal ~fvs pkt pkt'] is true when [pkt] and [pkt'] are equivalent on the
     fields in [fvs]. If [fvs] us omitted or [None], then [equal pkt pkt'] is

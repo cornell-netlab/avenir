@@ -53,13 +53,7 @@ let rec project_cmd_on_acts c (subst : Expr.t StringMap.t) : Cmd.t list =
   | Assign (v, e) -> (
     match StringMap.find subst v with
     | None -> [v %<-% e]
-    | Some _ ->
-        [v %<-% e]
-        (* Printf.printf "Replacing Assignment in %s with %s " v (string_of_expr ev);
-         * begin match ev %=% e with
-         * | False -> []
-         * | t -> [Assume t]
-         * end *) )
+    | Some _ -> [v %<-% e] )
   | Seq (c1, c2) ->
       liftL2 seq
         (project_cmd_on_acts c1 subst)
@@ -79,12 +73,10 @@ let compute_candidates h pkt phys =
   match h with
   | None -> [phys]
   | Some f ->
-      (* Printf.printf "Compute the candidates\n%!"; *)
       let action_mapping =
         let p =
           StringMap.filter_keys pkt ~f:(String.is_prefix ~prefix:"?ActIn")
         in
-        (* Printf.printf "action mapping is %s" (Packet.string__packet p); *)
         p |> StringMap.map ~f:(fun v -> Expr.Value v)
       in
       List.(f action_mapping >>= project_cmd_on_acts phys)

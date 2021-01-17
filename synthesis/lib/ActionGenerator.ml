@@ -45,39 +45,20 @@ let rec flows c (st : t) : (t * (string * int) list) list =
   | Select (_, cs) -> List.bind cs ~f:(fun (_, c) -> flows c st)
   | Apply t ->
       let open StringSet in
-      Printf.printf "\nTable %s\n\tsource keys: %s\n\t target_keys: %s"
-        t.name
-        (string_of_strset st.source_keys)
-        (string_of_strset st.target_vars) ;
       let keys = of_list @@ fsts @@ free_keys t.keys in
       List.filter_mapi t.actions ~f:(fun act_id (_, params, act) ->
           let act_vars = assigned_vars act in
-          Printf.printf "act vars are %s\n%!" (string_of_strset act_vars) ;
-          Printf.printf "tgt vars are %s\n%!"
-            (string_of_strset st.target_vars) ;
           let isect = inter act_vars st.target_vars in
-          if is_empty isect then (
-            Printf.printf "%s.action[%d] is empty\n%!" t.name act_id ;
-            None )
+          if is_empty isect then None
           else
-            let () =
-              Printf.printf "%s.action[%d] is not empty\n%!" t.name act_id
-            in
             let st, _ = flows act st |> List.hd_exn in
             let params = of_list @@ fsts params in
             let source_keys = diff st.source_keys keys in
             let targetable_keys = diff keys st.source_keys in
             (* remove usable keys, what remains are the targetable keys *)
-            Printf.printf "\ttargetable keys: %s\n"
-              (string_of_strset targetable_keys) ;
             let unbound_targets = diff st.target_vars params in
             (* remove parameters *)
-            Printf.printf "\tunbound targets: %s\n"
-              (string_of_strset unbound_targets) ;
             let target_vars = union unbound_targets targetable_keys in
-            Printf.printf "  new invariant: %s -> %s\n%!"
-              (string_of_strset source_keys)
-              (string_of_strset target_vars) ;
             Some (mkstate source_keys target_vars, [(t.name, act_id)]))
       @ flows t.default st
 
@@ -105,23 +86,19 @@ let positive_actions (params : Parameters.t) (phys : Cmd.t)
       inter (of_list @@ fsts fvs) (of_list @@ Packet.diff_vars inpkt outpkt))
   in
   let table_actions = Cmd.get_tables_actions phys in
-  Printf.printf "diff_vars : %s \n%!" (string_of_strset diff_vars) ;
   let has acts = not (List.is_empty acts) in
   ( List.filter_map table_actions ~f:(fun (table, acts) ->
         let positives =
           List.filter_mapi acts ~f:(fun act_id (_, act_params, act) ->
               let act_vars = assigned_vars act in
               let t =
-                if StringSet.are_disjoint diff_vars act_vars then (
-                  Printf.printf "%s.action[%d] sets vars %s\n%!" table act_id
-                    (string_of_strset act_vars) ;
-                  false )
+                if StringSet.are_disjoint diff_vars act_vars then false
                 else
                   let map, _ =
                     ConstantProp.propogate_cmd StringMap.empty act
                   in
                   StringMap.fold map ~init:true ~f:(fun ~key ~data acc ->
-                      if acc then (
+                      if acc then
                         match Packet.get_val_opt outpkt key with
                         | None -> acc
                         | Some v ->
@@ -130,13 +107,9 @@ let positive_actions (params : Parameters.t) (phys : Cmd.t)
                             let unknowns = fsts @@ Expr.frees `Var data in
                             let exp = Expr.holify ~f:Fn.id unknowns data in
                             let test = Test.(Value v %=% exp) in
-                            Printf.printf "%s.action[%d]\tchecking %s = %s"
-                              table act_id (Expr.to_string exp)
-                              (Value.to_string v) ;
-                            Prover.is_sat params test )
+                            Prover.is_sat params test
                       else acc)
               in
-              Printf.printf "\tkeep action? %s\n" (if t then "yes" else "no") ;
               Option.some_if t (act_params, act_id, act))
         in
         Option.some_if (has positives) (table, positives))

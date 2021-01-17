@@ -6,21 +6,15 @@ type t = (Edit.t * Edit.t list) list
 let make () : t = []
 
 let similar (eold : Edit.t) (enew : Edit.t) =
-  (* Printf.printf "\tComparing: %s \n\t to: %s\n%!" (Edit.to_string enew)
-     (Edit.to_string eold); *)
   match (eold, enew) with
   | Add (ot, (oms, ods, oaid)), Add (nt, (nms, nds, naid))
     when String.(ot = nt) && oaid = naid (*&& ods = nds*) -> (
-      (* Printf.printf "\t table %s & action %d match \n%!" ot oaid; *)
       let adata =
         List.fold2 ods nds ~init:(Some StringMap.empty) ~f:(fun acc od nd ->
             match acc with
             | None -> None
             | Some acc -> (
-                if Value.equals od nd then
-                  (* let () = Printf.printf "\t[DATA] %s identical, moving
-                     on\n%!" (string_of_value od) in *)
-                  Some acc
+                if Value.equals od nd then Some acc
                 else
                   let od_s = Value.to_string od in
                   match StringMap.find acc od_s with
@@ -34,14 +28,8 @@ let similar (eold : Edit.t) (enew : Edit.t) =
             match acc with
             | None -> None
             | Some acc -> (
-                if Match.equal om nm then
-                  (* let () = Printf.printf "\t[MTCH] %s identical, moving
-                     on\n%!" (Match.to_string om) in *)
-                  Some acc
+                if Match.equal om nm then Some acc
                 else
-                  (* if Match.is_wildcard om || Match.is_wildcard nm then
-                   *   None
-                   * else *)
                   let om_s = Match.to_string om in
                   match StringMap.find acc om_s with
                   | Some nm' when Match.equal nm' nm -> Some acc
@@ -49,16 +37,8 @@ let similar (eold : Edit.t) (enew : Edit.t) =
                   | None -> StringMap.set acc ~key:om_s ~data:nm |> Some ))
         |> or_unequal_lengths_to_option |> Option.join
       in
-      match matches with
-      | None ->
-          (* Printf.printf "but... values are used differently\n%!";*)
-          None
-      | Some m ->
-          (*Printf.printf "success!\n%!";*)
-          Some (adata, m) )
-  | _, _ ->
-      (*Printf.printf "but... edits don't match\n%!";*)
-      None
+      match matches with None -> None | Some m -> Some (adata, m) )
+  | _, _ -> None
 
 let sub_consts (adata : Value.t StringMap.t option)
     (map : Match.t StringMap.t) (e : Edit.t) : Edit.t option =
@@ -116,17 +96,8 @@ let equivalences diffmap : StringSet.t list =
       else
         StringMap.fold diffmap ~init:(StringSet.singleton key)
           ~f:(fun ~key:key_inner ~data:data_inner acc ->
-            (* Printf.printf "Checking whether (%s,%s) = (%s,%s)%!\n"
-             *   (string_of_value (fst data)) (string_of_value (snd data))
-             *   (string_of_value (snd data_inner)) (string_of_value (snd data_inner)); *)
-            if Stdlib.(data = data_inner) then
-              (* let () = Printf.printf "\t it does, so concluding %s == %s
-                 \n%!" key_inner key in *)
-              StringSet.add acc key_inner
-            else
-              (* let () = Printf.printf "\t it doesn't, concluding %s <> %s
-                 \n%!" key_inner key in *)
-              acc)
+            if Stdlib.(data = data_inner) then StringSet.add acc key_inner
+            else acc)
         :: eq_classes)
 
 let infer_fresh phys (curr_edits : Edit.t list) substs
@@ -142,21 +113,10 @@ let infer_fresh phys (curr_edits : Edit.t list) substs
       if Model.equal curr_edit_model old_model then None
       else
         let diff_map = Model.diff curr_edit_model old_model in
-        (* let () =
-         *   List.iter (StringMap.keys curr_edit_model) ~f:(fun key ->
-         *       let l_opt = StringMap.find curr_edit_model key in
-         *       let r_opt = StringMap.find old_model key in
-         *       let string_of_opt_value = Option.value_map ~f:string_of_value ~default:"??" in
-         *       Printf.printf "%s |-->  %s <> %s\n%!" key
-         *         (string_of_opt_value l_opt) (string_of_opt_value r_opt)
-         *     )
-         * in *)
         let eqs =
           equivalences diff_map
           |> List.filter ~f:(fun s -> StringSet.length s > 1)
         in
-        (* if List.is_empty eqs then Printf.printf "Couldn't conclude any
-           equivalences\n%!"; *)
         Option.some_if (not (List.is_empty eqs)) eqs)
   |> Option.map ~f:(fun eqs ->
          (*characteristic elements *)
@@ -177,8 +137,6 @@ let infer_fresh phys (curr_edits : Edit.t list) substs
                  ~data:
                    (Value.make (random_x, Value.size (List.hd_exn prohibs))))
          in
-         (* Printf.printf "generating free vars : %s\n%!" (string_of_map
-            valuation); *)
          let expanded_valuation =
            Model.fold valuation ~init:Model.empty ~f:(fun ~key ~data acc ->
                match List.find eqs ~f:(Fn.flip StringSet.mem key) with
@@ -211,19 +169,10 @@ let infer (params : Parameters.t) (cache : t) (phys : Cmd.t) (e : Edit.t) =
           match
             infer_fresh phys phys_edits' (adata, subst) matching_cached_edits
           with
-          | Some edits ->
-              (* Printf.printf "fresh inference succeeded\n%!"; *)
-              (* Log.print_edits ~tab:true {Parameters.default with debug =
-                 true; thrift_mode = true} phys edits; *)
-              return edits
-          | None ->
-              (* Printf.printf "fresh inference failed\n%!"; *)
-              (* Log.print_edits ~tab:true {Parameters.default with debug =
-                 true; thrift_mode = true} phys phys_edits'; *)
-              return phys_edits'
+          | Some edits -> return edits
+          | None -> return phys_edits'
         else return phys_edits')
 
 let update (cache : t) (log : Edit.t) (physs : Edit.t list) : t =
-  (* Printf.printf "Caching %s\n%!" (Edit.to_string log); *)
   if List.exists cache ~f:(fun (_, ps) -> Edit.equal ps physs) then cache
   else (log, physs) :: cache

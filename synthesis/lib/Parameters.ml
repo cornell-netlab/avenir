@@ -3,8 +3,7 @@ open Util
 
 type t =
   { (* interaction *)
-    debug: bool
-  ; interactive: bool
+    interactive: bool
   ; thrift_mode: bool
   ; hot_start: bool
   ; (*bounded search*)
@@ -49,7 +48,6 @@ let default =
   ; shortening= false
   ; edits_depth= -1
   ; search_width= -1
-  ; debug= false
   ; thrift_mode= false
   ; monotonic= false
   ; injection= false
@@ -96,7 +94,6 @@ let union p1 p2 =
   ; shortening= p1.shortening || p2.shortening
   ; edits_depth= max p1.edits_depth p2.edits_depth
   ; search_width= max p1.search_width p2.search_width
-  ; debug= p1.debug || p2.debug
   ; thrift_mode= p1.thrift_mode || p2.thrift_mode
   ; monotonic= p1.monotonic || p2.monotonic
   ; injection= p1.injection || p2.injection

@@ -11,6 +11,9 @@ let to_string (p : t) =
     p ~init:"("
   ^ ")\n"
 
+let cex_to_string (inp, outp) =
+  Printf.sprintf "%s -> %s" (to_string inp) (to_string outp)
+
 let set_field (pkt : t) (field : string) (v : Value.t) : t =
   (* Printf.printf "Setting %s to %s;\n" (field) (string_of_value v); *)
   StringMap.set pkt ~key:field ~data:v

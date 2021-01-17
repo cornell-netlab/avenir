@@ -113,7 +113,7 @@ let opt_params : Parameters.t Command.Param.t =
 let mng_params =
   let open Command.Let_syntax in
   [%map_open
-    let debug = flag "-DEBUG" no_arg ~doc:"Print Debugging commands"
+    let verbosity = flag "-v" (listed string) ~doc:"Set Verbosity Level"
     and thrift_mode =
       flag "--thrift" no_arg ~doc:"parse & write bmv2/thrift commands"
     and interactive = flag "-i" no_arg ~doc:"interactive mode"
@@ -124,10 +124,10 @@ let mng_params =
         ~doc:"<fp> Path to SMTLIB location, defaults to /usr/bin/z3"
     in
     Option.value prover_loc ~default:"/usr/bin/z3" |> Prover.make_provers ;
+    Avenir.Log.set_level verbosity ;
     Parameters.
       { default with
-        debug
-      ; thrift_mode
+        thrift_mode
       ; interactive
       ; timeout= Avenir.Timeout.start timeout }]
 
@@ -228,9 +228,10 @@ let synthesize =
               ~phys_drop_spec:(phys_drop_spec prob)
           in
           let prob = mk_prob () in
-          if params.debug then
-            Core.Printf.printf "PROBLEM: %s \n"
-              (Problem.to_string params prob) ;
+          Avenir.Log.debug
+          @@ lazy
+               (Core.Printf.sprintf "PROBLEM: %s \n"
+                  (Problem.to_string params prob)) ;
           match
             Synthesis.cegis_math_sequence params (ProfData.zero ()) mk_prob
           with

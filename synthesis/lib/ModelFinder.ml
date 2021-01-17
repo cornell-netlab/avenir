@@ -288,27 +288,19 @@ let active_domain_restrict params problem opts query_holes : Test.t =
 (** [no_defaults problem opts fvs phys] computes a condition that is [True]
     if [opt.no_defaults] is [False], and otherwise ensures that no data hole
     in [phys] (i.e. key or action data) is [0] *)
-let no_defaults (params : Parameters.t) opts fvs phys =
+let no_defaults (_ : Parameters.t) opts fvs phys =
   let open Test in
   if not opts.no_defaults then True
   else
     List.filter (Cmd.holes phys) ~f:(fun (v, _) ->
         List.for_all fvs ~f:(fun (v', _) ->
-            if
-              List.exists
-                [ v'
-                ; Hole.add_row_prefix
-                ; Hole.delete_row_prefix
-                ; Hole.which_act_prefix ] ~f:(fun substring ->
-                  String.is_substring v ~substring)
-            then (
-              if params.debug then
-                Printf.printf "%s matches %s, so skipped\n%!" v v' ;
-              false )
-            else (
-              if params.debug then
-                Printf.printf "%s misses  %s, so kept\n%!" v v' ;
-              true )))
+            List.exists
+              [ v'
+              ; Hole.add_row_prefix
+              ; Hole.delete_row_prefix
+              ; Hole.which_act_prefix ] ~f:(fun substring ->
+                String.is_substring v ~substring)
+            |> not))
     |> List.fold ~init:True ~f:(fun acc (v, sz) ->
            acc %&% (Hole (v, sz) %<>% Expr.value (0, sz)))
 
