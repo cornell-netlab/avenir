@@ -79,6 +79,11 @@ let opt_params : Parameters.t Command.Param.t =
         ~doc:
           "process all the insertions to populate the caches, then rerun, \
            and measure the second run"
+    and solve_strat =
+      flag "--using" (listed string)
+        ~doc:
+          "STRAT The Z3 strategy to use -- listed names are combined using \
+           Z3's or-else combinator"
     in
     Parameters.
       { default with
@@ -108,7 +113,8 @@ let opt_params : Parameters.t Command.Param.t =
       ; use_all_cexs
       ; reach_restrict
       ; reach_filter
-      ; hot_start }]
+      ; hot_start
+      ; solve_strat }]
 
 let mng_params =
   let open Command.Let_syntax in

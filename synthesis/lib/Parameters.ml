@@ -18,6 +18,7 @@ type t =
   ; do_slice: bool
   ; semantic_slicing: bool
   ; shortening: bool
+  ; solve_strat: string list
   ; (*Model finding*)
     widening: bool
   ; monotonic: bool
@@ -68,7 +69,8 @@ let default =
   ; nlp= false
   ; unique_edits= false
   ; domain= false
-  ; timeout= Timeout.start None }
+  ; timeout= Timeout.start None
+  ; solve_strat= [] }
 
 let restart_timer p = {p with timeout= Timeout.restart p.timeout}
 
@@ -114,7 +116,8 @@ let union p1 p2 =
   ; nlp= p1.nlp || p2.nlp
   ; unique_edits= p1.unique_edits || p2.unique_edits
   ; domain= p1.domain || p2.domain
-  ; timeout= Timeout.union p1.timeout p2.timeout }
+  ; timeout= Timeout.union p1.timeout p2.timeout
+  ; solve_strat= p1.solve_strat @ p2.solve_strat }
 
 let to_string params =
   let s = if params.widening then "w_" else "" in
