@@ -74,8 +74,8 @@ module Obt = struct
     let fvs =
       List.filter (Cmd.vars obt) ~f:(fun (x, _) -> String.(x <> "meta"))
     in
-    Printf.printf "There are %d fvs %d keys and %d acts\n%!" (List.length fvs)
-      num_keys num_acts ;
+    Printf.printf "There are %d fvs %d keys and %d acts\n%!"
+      (List.length fvs) num_keys num_acts ;
     assert (List.length fvs = num_keys + num_acts) ;
     (obt, fvs)
 end

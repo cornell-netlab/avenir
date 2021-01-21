@@ -131,12 +131,12 @@ let rec generate_n_insertions varsize length n avail_tables maxes :
     in
     match loop_free_match avail_tables with
     | None ->
-       let () = Printf.printf "--filled up --\n%!" in
-       []
+        let () = Printf.printf "--filled up --\n%!" in
+        []
     | Some (maxes', avail_tables', name, row) ->
-       let () = Printf.printf "Inserting\n%!" in
-       Add (name, row)
-       :: generate_n_insertions varsize length (n - 1) avail_tables' maxes'
+        let () = Printf.printf "Inserting\n%!" in
+        Add (name, row)
+        :: generate_n_insertions varsize length (n - 1) avail_tables' maxes'
 
 let reorder_benchmark varsize length max_inserts params =
   let open Cmd in

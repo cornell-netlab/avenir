@@ -4,8 +4,8 @@ let make x size = (x, size)
 
 let get (x, _) = x
 
-let size (_, size) = size                   
-                   
+let size (_, size) = size
+
 let to_string ~f (x, sz) = Printf.sprintf "%s#%d" (f x) sz
 
 let map ~f (x, _) = f x

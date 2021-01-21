@@ -48,7 +48,7 @@ let product bs ks os es =
   {bits; keys; outs; edts}
 
 let run_experiment params file (lo : args) (hi : args) =
-  Random.init 4153;
+  Random.init 4153 ;
   log_header file ;
   (* compute inclusive ranges for all arguments*)
   let bitrange = Util.range_inc lo.bits hi.bits in

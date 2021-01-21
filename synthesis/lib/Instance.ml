@@ -69,7 +69,7 @@ let get_row_exn inst table idx : Row.t =
   | Some row -> row
 
 let set_rows inst table rows = StringMap.set inst ~key:table ~data:rows
-              
+
 let negate_rows inst tbl =
   let open Test in
   get_rows inst tbl
@@ -167,7 +167,6 @@ let verify_apply ?(no_miss = false) params inst cmd =
   (*TODO the `Exact tag is unused, should fold into the tag type*)
   apply ~no_miss params NoHoles `Exact inst cmd
 
-
 let project slice inst =
   StringMap.merge slice inst ~f:(fun ~key -> function
     | `Left [] -> None
@@ -179,8 +178,7 @@ let project slice inst =
     | `Both (slice, rows) ->
         List.fold slice ~init:[] ~f:(fun acc n ->
             acc @ [List.nth_exn rows n])
-        |> Some)                       
+        |> Some)
 
 let fold inst ~init ~f =
-  StringMap.fold inst ~init
-    ~f:(fun ~key ~data -> f ~table:key ~rows:data)
+  StringMap.fold inst ~init ~f:(fun ~key ~data -> f ~table:key ~rows:data)
