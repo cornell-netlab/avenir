@@ -134,13 +134,13 @@ let get_deletes opts (problem : Problem.t) =
   if opts.no_deletes then []
   else
     let phys_inst = Problem.phys_inst problem in
-    StringMap.fold phys_inst ~init:[]
-      ~f:(fun ~key:table_name ~data:rows dels ->
+    Instance.fold phys_inst ~init:[]
+      ~f:(fun ~table ~rows dels ->
         dels
         @ List.filter_mapi rows ~f:(fun i _ ->
-              match reindex_for_dels problem table_name i with
+              match reindex_for_dels problem table i with
               | None -> None
-              | Some i' -> Some (table_name, i')))
+              | Some i' -> Some (table, i')))
 
 (** [get_hints opts problem] constructs a list of [Hint.t]s to apply to the
     problem. Returns the empty list if [opts.hints] is [false]*)

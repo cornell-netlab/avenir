@@ -169,34 +169,30 @@ let rec trace_eval_inst ?(gas = 10) (cmd : Cmd.t) (inst : Instance.t) ~wide
         let p, w, cmd, trace = trace_eval_inst ~gas ~wide a inst pkt in
         (p, w, Cmd.(assume test %:% cmd), trace)
     | Apply t -> (
-      match StringMap.find inst t.name with
-      | None -> trace_eval_inst ~gas ~wide t.default inst pkt
-      | Some rules -> (
-        (* Printf.printf "Widening a match! %s\n" (Packet.test_of_wide wide
-           |> string_of_test); *)
-        match action_to_execute pkt wide rules with
-        | cond, Some wide, Some (data, aid) ->
-            (* Printf.printf "HIT A RULE\n%!"; *)
-            let pkt', wide', cmd', trace =
-              trace_eval_inst ~wide
-                (List.nth_exn t.actions aid |> Manip.bind_action_data data)
-                inst pkt
-            in
-            ( pkt'
-            , wide'
-            , Cmd.(assume cond %:% cmd')
-            , StringMap.set ~key:t.name ~data:(data, aid) trace )
-        | cond, _, _ ->
-            (* Printf.printf "Missed everything\n%!"; *)
-            let pkt', wide', cmd', trace =
-              trace_eval_inst ~wide t.default inst pkt
-            in
-            ( pkt'
-            , wide'
-            , Cmd.(assume cond %:% cmd')
-            , StringMap.set ~key:t.name
-                ~data:([], List.length t.actions)
-                trace ) ) )
+      let rules = Instance.get_rows inst t.name in
+      match action_to_execute pkt wide rules with
+      | cond, Some wide, Some (data, aid) ->
+          (* Printf.printf "HIT A RULE\n%!"; *)
+          let pkt', wide', cmd', trace =
+            trace_eval_inst ~wide
+              (List.nth_exn t.actions aid |> Manip.bind_action_data data)
+              inst pkt
+          in
+          ( pkt'
+          , wide'
+          , Cmd.(assume cond %:% cmd')
+          , StringMap.set ~key:t.name ~data:(data, aid) trace )
+      | cond, _, _ ->
+          (* Printf.printf "Missed everything\n%!"; *)
+          let pkt', wide', cmd', trace =
+            trace_eval_inst ~wide t.default inst pkt
+          in
+          ( pkt'
+          , wide'
+          , Cmd.(assume cond %:% cmd')
+          , StringMap.set ~key:t.name
+              ~data:([], List.length t.actions)
+              trace ) )
 
 let eval_act_trace (act : Cmd.t) (pkt : Packet.t) : Packet.t * Cmd.t =
   match trace_eval_inst act Instance.empty ~wide:StringMap.empty pkt with
@@ -230,22 +226,20 @@ let rec trace_nd_hits (c : Cmd.t) (inst : Instance.t) (pkt : Packet.t) :
           let nd_hits2 = trace_nd_hits c2 inst pkt' in
           List.map nd_hits2 ~f:(fun (hits2, pkt2) -> (hits1 @ hits2, pkt2))
           @ acc)
-  | Apply t -> (
-    match StringMap.find inst t.name with
-    | None -> trace_nd_hits t.default inst pkt
-    | Some rules ->
-        List.foldi rules ~init:[] ~f:(fun i acc (ms, data, aid) ->
-            let cond = Match.list_to_test ms in
-            ifte_test cond pkt
-              (fun _ ->
-                List.map
-                  (trace_nd_hits
-                     ( List.nth_exn t.actions aid
-                     |> Manip.bind_action_data data )
-                     inst pkt)
-                  ~f:(fun (hits, pkt') -> ((t.name, i) :: hits, pkt')))
-              (fun _ -> [])
-            @ acc) )
+  | Apply t -> 
+    Instance.get_rows inst t.name
+    |> List.foldi ~init:[] ~f:(fun i acc (ms, data, aid) ->
+           let cond = Match.list_to_test ms in
+           ifte_test cond pkt
+             (fun _ ->
+               List.map
+                 (trace_nd_hits
+                    ( List.nth_exn t.actions aid
+                      |> Manip.bind_action_data data )
+                    inst pkt)
+                 ~f:(fun (hits, pkt') -> ((t.name, i) :: hits, pkt')))
+             (fun _ -> [])
+           @ acc)
   | Select (Partial, ss) ->
       List.fold ss ~init:[] ~f:(fun acc (b, c) ->
           ifte_test b pkt (fun _ -> trace_nd_hits c inst pkt) (fun _ -> [])

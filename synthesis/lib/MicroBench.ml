@@ -48,11 +48,12 @@ let product bs ks os es =
   {bits; keys; outs; edts}
 
 let run_experiment params file (lo : args) (hi : args) =
+  Random.init 4153;
   log_header file ;
   (* compute inclusive ranges for all arguments*)
   let bitrange = Util.range_inc lo.bits hi.bits in
   let keyrange = Util.range_inc lo.keys hi.keys in
-  let outrange = Util.range_inc lo.outs hi.keys in
+  let outrange = Util.range_inc lo.outs hi.outs in
   let edtrange = Util.range_inc lo.edts hi.edts in
   let space = product bitrange keyrange outrange edtrange in
   List.iter space ~f:(fun args ->

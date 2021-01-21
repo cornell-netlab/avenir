@@ -159,7 +159,7 @@ let edit_slice_table (params : Parameters.t)
         List.filter extant_rows ~f:(could_hit facts)
       in
       let relevant_extant_inst =
-        StringMap.(set empty ~key:name ~data:relevant_extant_rows)
+        Instance.(set_rows empty name relevant_extant_rows) 
       in
       Instance.update_list params relevant_extant_inst edits_to_add )
   in
@@ -321,19 +321,6 @@ let restrict_inst_for_edit params cmd inst e =
   multimap_union bck_slice fwd_slice
   |> multimap_union (StringMap.of_alist_exn [(Edit.table e, rows)])
 
-let apply_slice slice inst =
-  StringMap.merge slice inst ~f:(fun ~key -> function
-    | `Left [] -> None
-    | `Left _ ->
-        Printf.sprintf "have slice for table, %s its' not in the instance"
-          key
-        |> failwith
-    | `Right _ -> Some []
-    | `Both (slice, rows) ->
-        List.fold slice ~init:[] ~f:(fun acc n ->
-            acc @ [List.nth_exn rows n])
-        |> Some)
-
 let rule_slice (params : Parameters.t) inst edits cmd =
   (* Printf.printf "slicing w.r.t. \n%s%!" @@ Edit.list_to_string edits; *)
   let slice =
@@ -342,4 +329,4 @@ let rule_slice (params : Parameters.t) inst edits cmd =
   in
   (* Printf.printf "edits: %s\n" (Edit.list_to_string edits);
    * print_slice slice inst; *)
-  apply_slice slice inst
+  Instance.project slice inst

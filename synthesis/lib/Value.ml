@@ -107,6 +107,12 @@ let concat =
   Sized.map2s2 ~f:(fun lx lsz rx rsz ->
       Sized.make Bigint.(shift_left lx rsz + rx) (lsz + rsz))
 
-let random sz =
-  let r = Random.int (Bigint.to_int_exn (max_int sz)) in
-  make (r, sz)
+let random ?(lo = 0) sz =
+  if sz <= 0 then failwith @@ Printf.sprintf "Bad bitwidth %d" sz
+  else
+    let m = max_int sz |> Bigint.to_int_exn in
+    if sz > m then
+      failwith @@ Printf.sprintf "lo bound %d is to large for width %d" lo m
+    else
+      let r = Random.int (m - lo) + lo in
+      make (r, sz)
