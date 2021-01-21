@@ -159,7 +159,7 @@ let edit_slice_table (params : Parameters.t)
         List.filter extant_rows ~f:(could_hit facts)
       in
       let relevant_extant_inst =
-        Instance.(set_rows empty name relevant_extant_rows)
+        Instance.(set_rows empty ~table:name ~rows:relevant_extant_rows)
       in
       Instance.update_list params relevant_extant_inst edits_to_add )
   in

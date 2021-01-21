@@ -68,7 +68,7 @@ let get_row_exn inst table idx : Row.t =
   | None -> failwith @@ Printf.sprintf "Invalid row %d in table %s" idx table
   | Some row -> row
 
-let set_rows inst table rows = StringMap.set inst ~key:table ~data:rows
+let set_rows inst ~table ~rows = StringMap.set inst ~key:table ~data:rows
 
 let negate_rows inst tbl =
   let open Test in

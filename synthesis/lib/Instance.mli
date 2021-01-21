@@ -29,7 +29,7 @@ val of_edits : Parameters.t -> Edit.t list -> t
 (** [of_edits params es] is a convenience function equivalent to
     [update_list params empty es] *)
 
-val set_rows : t -> string -> Row.t list -> t
+val set_rows : t -> table:string -> rows:Row.t list -> t
 (** [set_rows inst tbl rows] overwrites any existing rows in [inst] with
     [rows] *)
 

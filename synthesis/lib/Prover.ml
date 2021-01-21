@@ -158,8 +158,8 @@ let check_sat (_ : Parameters.t) (longtest : Test.t) =
       assert_ (get sat_prover) term ;
       lazy (Printf.sprintf " Asserted % dnodes!\n%!" (Test.num_nodes test))
       |> Log.z3 ;
-      check_sat_using (OrElse (SMT, UFBV)) (get sat_prover)
-      (* check_sat (get sat_prover) *)
+      (* check_sat_using (OrElse (SMT, UFBV)) (get sat_prover) *)
+      check_sat (get sat_prover)
     in
     let dur = Time.(diff (now ()) st) in
     Log.debug @@ lazy "Got a Result" ;
