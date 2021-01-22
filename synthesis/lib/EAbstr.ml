@@ -1,21 +1,29 @@
 open Core
 open Util
 
-type t = (Edit.t * Edit.t list) list [@@deriving yojson]
+type t = (Edit.t * Edit.t list) list option [@@deriving yojson]
 
-let make ?(filename="") () : t =
-  if (String.length filename) > 0 then
-    match of_yojson (Yojson.Safe.from_file filename) with
+let make ?(filename=None) () : t =
+  match filename with
+  | None -> Some []
+  | Some file ->
+    begin
+      match of_yojson (Yojson.Safe.from_file file) with
     | Ok cache -> cache
-    | Error _ -> failwith (Printf.sprintf "Could not read cache from file %s" filename)
-  else []
+    | Error _ -> failwith (Printf.sprintf "Could not read cache from file %s" file)
+    end
 
-let equal (c : t) (c' : t) : bool =
-  let entry_eq entry entry' =
-    match entry, entry' with
-    | (edit, edits), (edit', edits') when (Edit.equal edit edit') -> List.equal Edit.equal edits edits'
-    | _ -> false in
-  List.equal entry_eq c c'
+let equal (cache : t) (cache' : t) : bool =
+  let eq c c' =
+    let entry_eq entry entry' =
+      match entry, entry' with
+      | (edit, edits), (edit', edits') when (Edit.equal edit edit') -> List.equal Edit.equal edits edits'
+      | _ -> false in
+    List.equal entry_eq c c' in
+  match cache, cache' with
+  | None, None -> true
+  | None, Some _ | Some _, None -> false
+  | Some x, Some y -> eq x y
 
 let string_of_cache (c : t) : string =
   let string_of_entry (e : Edit.t * Edit.t list) : string =
@@ -23,7 +31,9 @@ let string_of_cache (c : t) : string =
     let init1 = (Edit.to_string x) ^ ":" in
     let fun1 = (fun a b -> a ^ "|" ^ (Edit.to_string b)) in
     List.fold y ~init: init1 ~f:fun1 in
-  (List.map ~f:string_of_entry c) |> (String.concat ~sep:",")
+  match c with
+  | None -> "None"
+  | Some cache -> (List.map ~f:string_of_entry cache) |> (String.concat ~sep:",")
 
 let dump_yojson (cache : t) (filename : string) : unit =
   cache |> to_yojson |> Yojson.Safe.to_file filename
@@ -175,15 +185,15 @@ let infer_fresh phys (curr_edits : Edit.t list) substs
 
 let infer (params : Parameters.t) (cache : t) (phys : Cmd.t) (e : Edit.t) =
   let open Option in
+  let cache' = value_exn cache ~message: "Tried to access cache, but it was uninitialized" in
   let matching_cached_edits =
-    List.filter_map cache ~f:(fun (loge, phys_edits) ->
+    List.filter_map cache' ~f:(fun (loge, phys_edits) ->
         similar loge e >>| const phys_edits)
   in
   if List.length matching_cached_edits < Option.value_exn params.ecache then
     None
   else
-    List.find_map cache ~f:(fun (log_edit, phys_edits) ->
-        let open Option in
+    List.find_map cache' ~f:(fun (log_edit, phys_edits) ->
         similar log_edit e
         >>= fun (adata, subst) ->
         sub_edit_list phys_edits (adata, subst)
@@ -197,5 +207,6 @@ let infer (params : Parameters.t) (cache : t) (phys : Cmd.t) (e : Edit.t) =
         else return phys_edits')
 
 let update (cache : t) (log : Edit.t) (physs : Edit.t list) : t =
-  if List.exists cache ~f:(fun (_, ps) -> Edit.equal ps physs) then cache
-  else (log, physs) :: cache
+  let cache' = Option.value_exn cache ~message: "Tried to access cache, but it was uninitialized" in
+  if List.exists cache' ~f:(fun (_, ps) -> Edit.equal ps physs) then cache
+  else Some ((log, physs) :: cache')

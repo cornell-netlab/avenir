@@ -10,15 +10,17 @@ type t =
     edits_depth: int
   ; search_width: int
   ; timeout: Timeout.t
-  ; (*Verfications*)
+  ; (* Verifications *)
     fastcx: bool
   ; vcache: bool
   ; ecache: int option
+  ; read_cache: string option
+  ; write_cache: string option
   ; minimize: bool
   ; do_slice: bool
   ; semantic_slicing: bool
   ; shortening: bool
-  ; (*Model finding*)
+  ; (* Model finding *)
     widening: bool
   ; monotonic: bool
   ; injection: bool
@@ -33,7 +35,7 @@ type t =
   ; use_all_cexs: bool
   ; reach_restrict: bool
   ; reach_filter: bool
-  ; (* outddated *)
+  ; (* outdated *)
     allow_annotations: bool
   ; nlp: bool
   ; above: bool }
@@ -45,6 +47,8 @@ let default =
   ; semantic_slicing= false
   ; vcache= false
   ; ecache= None
+  ; read_cache= None
+  ; write_cache= None
   ; shortening= false
   ; edits_depth= -1
   ; search_width= -1
@@ -84,6 +88,12 @@ let hint_type_union ht1 ht2 =
   else if String.(ht2 = "") then ht1
   else Printf.sprintf "Incompatible %s and %s" ht1 ht2 |> failwith
 
+let filename_union f1 f2 =
+  match f1, f2 with
+  | None, None -> None
+  | Some f, None | None, Some f -> Some f
+  | Some f, Some f' -> if String.(f = f') then Some f else Printf.sprintf "Incompatible filenames %s and %s" f f' |> failwith
+
 let union p1 p2 =
   { widening= p1.widening || p2.widening
   ; do_slice= p1.do_slice || p2.do_slice
@@ -91,6 +101,8 @@ let union p1 p2 =
   ; semantic_slicing= p1.semantic_slicing || p2.semantic_slicing
   ; vcache= p1.vcache || p2.vcache
   ; ecache= ecache_union p1.ecache p2.ecache
+  ; read_cache= filename_union p1.read_cache p2.read_cache
+  ; write_cache= filename_union p1.write_cache p2.write_cache
   ; shortening= p1.shortening || p2.shortening
   ; edits_depth= max p1.edits_depth p2.edits_depth
   ; search_width= max p1.search_width p2.search_width

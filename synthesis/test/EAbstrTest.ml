@@ -40,7 +40,7 @@ let random_cache () =
     let entry_len = Random.int 8 in
     let first = random_edit () in
     (first, List.init entry_len re) in
-  List.init cache_len random_entry
+  Some (List.init cache_len random_entry)
 
 let edit_eq _ =
   let initial = random_edit () in

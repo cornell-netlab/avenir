@@ -122,6 +122,10 @@ let mng_params =
     and prover_loc =
       flag "--loc" (optional string)
         ~doc:"<fp> Path to SMTLIB location, defaults to /usr/bin/z3"
+    and read_cache =
+        flag "--read-cache" (optional string) ~doc:"Initializes edit cache from a specified file instead of initializing with an empty cache"
+    and write_cache =
+        flag "--write-cache" (optional string) ~doc:"Writes out edit cache into a specified file after completion"
     in
     Option.value prover_loc ~default:"/usr/bin/z3" |> Prover.make_provers ;
     Avenir.Log.set_level verbosity ;
@@ -129,7 +133,9 @@ let mng_params =
       { default with
         thrift_mode
       ; interactive
-      ; timeout= Avenir.Timeout.start timeout }]
+      ; timeout= Avenir.Timeout.start timeout
+      ; read_cache
+      ; write_cache }]
 
 let problem_flags =
   let open Command.Let_syntax in
@@ -200,8 +206,14 @@ let synthesize =
         problem_flags <*> map2 opt_params mng_params ~f:Parameters.union
       and measure =
         flag "-measure" no_arg ~doc:"Produce a CSV of data to stdout"
+      and cache_in =
+        flag "-read-cache" (optional string) ~doc:"Initializes edit cache from a specified file instead of initializing with an empty cache"
+      and cache_out =
+        flag "-write-cache" (optional string) ~doc:"Writes out edit cache into a specified file after completion"
       and print_res = flag "-p" no_arg ~doc:"Print synthesized program" in
       fun () ->
+        ignore (Option.map cache_in ~f:(fun o -> Core.Printf.printf "Cache_in: %s\n" o) : unit option );
+        ignore (Option.map cache_out ~f:(fun o -> Core.Printf.printf "Cache_out: %s\n" o) : unit option );
         let data =
           Option.value_exn data_opt
             ~message:"Data must be passed in for synthesis"
