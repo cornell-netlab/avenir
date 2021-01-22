@@ -4,8 +4,6 @@ open Prover
 open Util
 open VCGen
 
-let edit_cache = ref @@ EAbstr.make ()
-
 let check_equivalence neg (params : Parameters.t) data problem =
   (* ensure default actions are used in constructing the equivalence
      condition *)
@@ -106,8 +104,7 @@ let minimize_solution (params : Parameters.t) data problem =
 (* TODO Edit cache should abstract the fact that its a reference *)
 let update_edit_cache (params : Parameters.t) problem : unit =
   if Option.is_none params.ecache then
-    edit_cache :=
-      EAbstr.update !edit_cache
+      EAbstr.update
         (Problem.log_edits problem |> List.hd_exn)
         (Problem.phys_edits problem)
 
@@ -169,7 +166,7 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref)
 and try_cache params data problem =
   Log.info @@ lazy "try_cache" ;
   match
-    EAbstr.infer params !edit_cache (Problem.phys problem)
+    EAbstr.infer params (Problem.phys problem)
       (Problem.log_edits problem |> List.hd_exn)
   with
   | None ->

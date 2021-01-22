@@ -85,6 +85,8 @@ let opt_params : Parameters.t Command.Param.t =
           "STRAT The Z3 strategy to use -- listed names are combined using \
            Z3's or-else combinator"
     in
+    if Option.is_some ecache then
+      Avenir.EAbstr.make ();
     Parameters.
       { default with
         widening

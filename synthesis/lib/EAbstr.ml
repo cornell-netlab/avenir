@@ -1,10 +1,22 @@
 open Core
 open Util
 
-type t = (Edit.t * Edit.t list) list
+type mapping = (Edit.t * Edit.t list) list 
+   
+type t = mapping option ref
 
-let make () : t = []
+let cache : t = ref None
+       
+let make () : unit =
+  cache := Some []
 
+let clear () = make ()
+
+let get_cache () =
+  match !cache with
+  | None -> failwith "Tried to access cache, but it was uninitialized"
+  | Some m -> m 
+             
 let similar (eold : Edit.t) (enew : Edit.t) =
   match (eold, enew) with
   | Add (ot, (oms, ods, oaid)), Add (nt, (nms, nds, naid))
@@ -68,26 +80,26 @@ let sub_consts (adata : Value.t StringMap.t option)
             in
             Add (table, (ms', ad', idx)) |> Some ) )
 
-let print_template subst =
-  StringMap.iteri subst ~f:(fun ~key ~data ->
-      Printf.eprintf "\t%s->%s\n%!" key (Match.to_string data))
+(* let print_template subst =
+ *   StringMap.iteri subst ~f:(fun ~key ~data ->
+ *       Printf.eprintf "\t%s->%s\n%!" key (Match.to_string data)) *)
 
 let sub_edit_list edits (adata, subst) =
   List.fold edits ~init:(Some []) ~f:(fun acc e ->
       let open Option in
       acc >>= fun acc -> sub_consts adata subst e >>| fun e' -> acc @ [e'])
 
-let similar_edit_list edits edits' =
-  List.fold2_exn edits edits'
-    ~init:(Some (Some StringMap.empty, StringMap.empty))
-    ~f:(fun acc_opt e e' ->
-      let open Option in
-      acc_opt
-      >>= fun (acc_data, acc_matches) ->
-      similar e e'
-      >>| fun (data, matches) ->
-      ( liftO2 disjoint_union acc_data data
-      , disjoint_union acc_matches matches ))
+(* let similar_edit_list edits edits' =
+ *   List.fold2_exn edits edits'
+ *     ~init:(Some (Some StringMap.empty, StringMap.empty))
+ *     ~f:(fun acc_opt e e' ->
+ *       let open Option in
+ *       acc_opt
+ *       >>= fun (acc_data, acc_matches) ->
+ *       similar e e'
+ *       >>| fun (data, matches) ->
+ *       ( liftO2 disjoint_union acc_data data
+ *       , disjoint_union acc_matches matches )) *)
 
 let equivalences diffmap : StringSet.t list =
   StringMap.fold diffmap ~init:[] ~f:(fun ~key ~data eq_classes ->
@@ -150,29 +162,25 @@ let infer_fresh phys (curr_edits : Edit.t list) substs
            | `Left l -> Some l | `Right r -> Some r | `Both (_, r) -> Some r)
          |> Edit.of_model phys)
 
-let infer (params : Parameters.t) (cache : t) (phys : Cmd.t) (e : Edit.t) =
-  let open Option in
+let infer (params : Parameters.t) (phys : Cmd.t) (e : Edit.t) =
+  let open Option.Let_syntax in
+  let c = get_cache () in 
   let matching_cached_edits =
-    List.filter_map cache ~f:(fun (loge, phys_edits) ->
+    List.filter_map c ~f:(fun (loge, phys_edits) ->
         similar loge e >>| const phys_edits)
   in
   if List.length matching_cached_edits < Option.value_exn params.ecache then
     None
   else
-    List.find_map cache ~f:(fun (log_edit, phys_edits) ->
-        let open Option in
-        similar log_edit e
-        >>= fun (adata, subst) ->
-        sub_edit_list phys_edits (adata, subst)
-        >>= fun phys_edits' ->
-        if true then
-          match
-            infer_fresh phys phys_edits' (adata, subst) matching_cached_edits
-          with
-          | Some edits -> return edits
-          | None -> return phys_edits'
-        else return phys_edits')
-
-let update (cache : t) (log : Edit.t) (physs : Edit.t list) : t =
-  if List.exists cache ~f:(fun (_, ps) -> Edit.equal ps physs) then cache
-  else (log, physs) :: cache
+    List.find_map c ~f:(fun (log_edit, phys_edits) ->
+        let%bind (adata, subst) = similar log_edit e in
+        let%bind phys_edits' = sub_edit_list phys_edits (adata, subst) in
+        infer_fresh phys phys_edits' (adata, subst) matching_cached_edits
+        |> Option.value ~default:phys_edits'
+        |> return)
+  
+let update (log : Edit.t) (physs : Edit.t list) : unit =
+  let c = get_cache () in
+  if not (List.exists c ~f:(fun (_, ps) -> Edit.equal ps physs)) then
+    cache := Some ((log, physs) :: c)
+               

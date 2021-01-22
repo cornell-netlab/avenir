@@ -443,7 +443,7 @@ let square_bench params sz n max_edits =
     ~f:(fun acc ((xs, ms), phys) ->
       Printf.printf "\n------%d,%d-----\n" xs ms ;
       (* if xs = 10 && ms = 8 then acc else *)
-      Synthesis.edit_cache := EAbstr.make () ;
+      EAbstr.make () ;
       let st = Time.now () in
       let es =
         measure (restart_timer params) None (problem phys) log_edits
@@ -898,7 +898,7 @@ let headers params sz ntables max_headers max_edits =
   in
   List.fold physical_tables ~init:"numxs,num_ms,time"
     ~f:(fun acc (num_xs, problem, log_edits) ->
-      Synthesis.edit_cache := EAbstr.make () ;
+      EAbstr.make () ;
       let st = Time.now () in
       let es = measure (restart_timer params) None problem log_edits in
       let nd = Time.now () in
@@ -975,7 +975,7 @@ let metadata params sz nmeta nedits =
   in
   List.fold problems ~init:"num_ms,time"
     ~f:(fun acc (num_xs, problem, log_edits) ->
-      Synthesis.edit_cache := EAbstr.make () ;
+      EAbstr.make () ;
       let st = Time.now () in
       let es = measure (restart_timer params) None problem log_edits in
       let nd = Time.now () in
@@ -1014,7 +1014,7 @@ let tables params sz max_tables nheaders max_edits =
   in
   List.fold physical_tables ~init:"ntables,time"
     ~f:(fun acc (num_xs, problem, log_edits) ->
-      Synthesis.edit_cache := EAbstr.make () ;
+      EAbstr.make () ;
       let st = Time.now () in
       let es = measure (restart_timer params) None problem log_edits in
       let nd = Time.now () in
@@ -1071,7 +1071,7 @@ let breadth params sz max_tables nheaders max_edits =
   in
   List.fold physical_tables ~init:"ntables,time"
     ~f:(fun acc (num_xs, problem, log_edits) ->
-      Synthesis.edit_cache := EAbstr.make () ;
+      EAbstr.make () ;
       let st = Time.now () in
       let es = measure (restart_timer params) None problem log_edits in
       let nd = Time.now () in
