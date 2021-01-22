@@ -131,10 +131,10 @@ let rec generate_n_insertions varsize length n avail_tables maxes :
     in
     match loop_free_match avail_tables with
     | None ->
-        let (_ : unit) = Printf.printf "--filled up --\n%!" in
+        let () = Printf.printf "--filled up --\n%!" in
         []
     | Some (maxes', avail_tables', name, row) ->
-        let (_ : unit) = Printf.printf "Inserting\n%!" in
+        let () = Printf.printf "Inserting\n%!" in
         Add (name, row)
         :: generate_n_insertions varsize length (n - 1) avail_tables' maxes'
 
@@ -143,13 +143,8 @@ let reorder_benchmark varsize length max_inserts params =
   Random.init 99 ;
   let logical_pipeline = mk_pipeline varsize length in
   let physical_pipeline = permute logical_pipeline in
-  let mk_empty_inst acc (name, _, _, _) = Map.set acc ~key:name ~data:[] in
-  let log_inst =
-    List.fold logical_pipeline ~init:StringMap.empty ~f:mk_empty_inst
-  in
-  let phys_inst =
-    List.fold logical_pipeline ~init:StringMap.empty ~f:mk_empty_inst
-  in
+  let log_inst = Instance.empty in
+  let phys_inst = Instance.empty in
   let to_cmd line =
     List.(line >>| (fun t -> apply t) |> reduce_exn ~f:( %:% ))
   in

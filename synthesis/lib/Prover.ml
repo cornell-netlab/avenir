@@ -133,7 +133,29 @@ let vars_to_term vars =
   let open Smtlib in
   List.map vars ~f:(fun (id, i) -> (Id id, BitVecSort i))
 
-let check_sat (_ : Parameters.t) (longtest : Test.t) =
+let parse_tactic = function
+  | "sat" | "SAT" -> Smtlib.SAT
+  | "smt" | "SMT" -> Smtlib.SMT
+  | "simplify" -> Smtlib.Simplify
+  | "solveeqs" | "solve-eqs" -> Smtlib.SolveEQs
+  | "bitblast" | "bit-blast" -> Smtlib.BitBlast
+  | "aig" | "AIG" -> Smtlib.AIG
+  | "qfbv" | "QFBV" -> Smtlib.QFBV
+  | "ufbv" | "UFBV" -> Smtlib.UFBV
+  | s -> failwith @@ Printf.sprintf "unrecognized tactic %s" s
+
+let parse_tac_list =
+  Util.concatMap ~f:parse_tactic ~c:(fun x y -> Smtlib.OrElse (x, y))
+
+(** [check_sat_orelse tacs] combines the tactics in [tacs] using SMTLIB's
+    [or-else] combinator, combining the tactic using the [check-sat-using]
+    command. If [tacs] is empty, resulting function is equivalent to
+    [check-sat] *)
+let check_sat_orelse tacs =
+  if List.is_empty tacs then Smtlib.check_sat
+  else parse_tac_list tacs |> Smtlib.check_sat_using
+
+let check_sat (params : Parameters.t) (longtest : Test.t) =
   let open Smtlib in
   if Test.equals longtest True then (Some Model.empty, Time.Span.zero)
   else if Test.equals longtest False then (None, Time.Span.zero)
@@ -158,7 +180,8 @@ let check_sat (_ : Parameters.t) (longtest : Test.t) =
       assert_ (get sat_prover) term ;
       lazy (Printf.sprintf " Asserted % dnodes!\n%!" (Test.num_nodes test))
       |> Log.z3 ;
-      check_sat (* _using (ParOr (UFBV, SMT)) *) (get sat_prover)
+      (* check_sat_using (OrElse (SMT, UFBV)) (get sat_prover) *)
+      check_sat_orelse params.solve_strat (get sat_prover)
     in
     let dur = Time.(diff (now ()) st) in
     Log.debug @@ lazy "Got a Result" ;

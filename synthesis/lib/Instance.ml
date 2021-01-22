@@ -68,6 +68,8 @@ let get_row_exn inst table idx : Row.t =
   | None -> failwith @@ Printf.sprintf "Invalid row %d in table %s" idx table
   | Some row -> row
 
+let set_rows inst ~table ~rows = StringMap.set inst ~key:table ~data:rows
+
 let negate_rows inst tbl =
   let open Test in
   get_rows inst tbl
@@ -161,98 +163,22 @@ let rec apply ?(no_miss = false) ?(ghost_edits = StringMap.empty)
       in
       tbl_select
 
-let update_consistently (params : Parameters.t) match_model (phys : Cmd.t)
-    (tbl_name : string) (act_data : Row.action_data option) (act : int)
-    (acc : [`Ok of t | `Conflict of t]) : [`Ok of t | `Conflict of t] =
-  match acc with
-  | `Ok pinst -> (
-    match
-      ( StringMap.find pinst tbl_name
-      , Row.mk_new_row match_model phys tbl_name act_data act )
-    with
-    | _, None -> acc
-    | None, Some row ->
-        if params.interactive then
-          Printf.printf "+%s : %s\n%!" tbl_name (Row.to_string row) ;
-        `Ok (StringMap.set pinst ~key:tbl_name ~data:[row])
-    | Some rows, Some (ks, data, act) ->
-        if params.interactive then
-          Printf.printf "+%s : %s" tbl_name (Row.to_string (ks, data, act)) ;
-        `Ok
-          (StringMap.set pinst ~key:tbl_name ~data:((ks, data, act) :: rows))
-    )
-  | `Conflict pinst -> (
-    match
-      ( StringMap.find pinst tbl_name
-      , Row.mk_new_row match_model phys tbl_name act_data act )
-    with
-    | _, None -> acc
-    | None, Some row ->
-        if params.interactive then
-          Printf.printf "+%s : %s\n%!" tbl_name (Row.to_string row) ;
-        `Conflict (StringMap.set pinst ~key:tbl_name ~data:[row])
-    | Some rows, Some (ks, data, act) ->
-        if params.interactive then
-          Printf.printf "+%s : %s\n%!" tbl_name
-            (Row.to_string (ks, data, act)) ;
-        `Conflict
-          (StringMap.set pinst ~key:tbl_name ~data:((ks, data, act) :: rows))
-    )
-
-let remove_deleted_rows (params : Parameters.t) (match_model : Model.t)
-    (pinst : t) : t =
-  StringMap.fold pinst ~init:empty ~f:(fun ~key:tbl_name ~data acc ->
-      StringMap.set acc ~key:tbl_name
-        ~data:
-          (List.filteri data ~f:(fun i _ ->
-               match Hole.delete_hole i tbl_name with
-               | Hole (s, _) -> (
-                 match Model.find match_model s with
-                 | None -> true
-                 | Some do_delete
-                   when Bigint.(Value.get_bigint do_delete = one) ->
-                     if params.interactive then
-                       Printf.printf "- %s : row %d\n%!" tbl_name i ;
-                     false
-                 | Some _ -> true )
-               | _ -> true)))
-
-let fixup_edit (params : Parameters.t) (data : ProfData.t ref) match_model
-    (action_map : (Row.action_data * int) StringMap.t option) (phys : Cmd.t)
-    (pinst : t) : [`Ok of t | `Conflict of t] =
-  let st = Time.now () in
-  match action_map with
-  | Some m ->
-      StringMap.fold ~init:(`Ok pinst) m
-        ~f:(fun ~key:tbl_name ~data:(act_data, act) ->
-          update_consistently params match_model phys tbl_name
-            (Some act_data) act)
-  | None ->
-      let tables_added_to =
-        Model.fold match_model ~init:[] ~f:(fun ~key ~data acc ->
-            if
-              String.is_substring key ~substring:"AddRowTo"
-              && Value.(equals data (make (1, 1)))
-            then
-              ( String.substr_replace_all key ~pattern:"?" ~with_:""
-              |> String.substr_replace_first ~pattern:"AddRowTo" ~with_:"" )
-              :: acc
-            else acc)
-      in
-      let pinst' = remove_deleted_rows params match_model pinst in
-      let out =
-        List.fold tables_added_to ~init:(`Ok pinst') ~f:(fun inst tbl_name ->
-            let str = "?ActIn" ^ tbl_name in
-            match Model.find match_model ("?ActIn" ^ tbl_name) with
-            | None -> Printf.sprintf "Couldn't Find var %s\n" str |> failwith
-            | Some v ->
-                let act = Value.get_int_exn v in
-                update_consistently params match_model phys tbl_name None act
-                  inst)
-      in
-      ProfData.update_time !data.fixup_time st ;
-      out
-
 let verify_apply ?(no_miss = false) params inst cmd =
   (*TODO the `Exact tag is unused, should fold into the tag type*)
   apply ~no_miss params NoHoles `Exact inst cmd
+
+let project slice inst =
+  StringMap.merge slice inst ~f:(fun ~key -> function
+    | `Left [] -> None
+    | `Left _ ->
+        Printf.sprintf "have slice for table, %s its' not in the instance"
+          key
+        |> failwith
+    | `Right _ -> Some []
+    | `Both (slice, rows) ->
+        List.fold slice ~init:[] ~f:(fun acc n ->
+            acc @ [List.nth_exn rows n])
+        |> Some)
+
+let fold inst ~init ~f =
+  StringMap.fold inst ~init ~f:(fun ~key ~data -> f ~table:key ~rows:data)

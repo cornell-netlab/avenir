@@ -44,7 +44,7 @@ let rec rand_matches width curr num_keys =
 
 let rand_act num_acts = Random.int num_acts
 
-let rand_act_data width = [Value.random width]
+let rand_act_data width = [Value.random ~lo:1 width]
 
 module Obt = struct
   let tblname = "onebigtable"
@@ -74,8 +74,8 @@ module Obt = struct
     let fvs =
       List.filter (Cmd.vars obt) ~f:(fun (x, _) -> String.(x <> "meta"))
     in
-    Printf.printf "There are %d fvs %d keys and %d acts" (List.length fvs)
-      num_keys num_acts ;
+    Printf.printf "There are %d fvs %d keys and %d acts\n%!"
+      (List.length fvs) num_keys num_acts ;
     assert (List.length fvs = num_keys + num_acts) ;
     (obt, fvs)
 end

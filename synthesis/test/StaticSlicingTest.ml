@@ -5,25 +5,28 @@ open Avenir.Test
 open Cmd
 
 let slicing_retargeting_metadata_ethernet _ =
-  let open Util in
   let params = Parameters.{default with above= false} in
   let inst =
-    StringMap.of_alist_exn
-      [ ( "ethernet"
-        , [ ( [Match.exact_ "hdr.ethernet.dstAddr" (Value.make (99, 48))]
-            , [Value.make (1, 32)]
-            , 0 ) ] )
-      ; ( "ipv4"
-        , [ ( [Match.exact_ "hdr.ipv4.dstAddr" (Value.make (44, 32))]
-            , [Value.make (2, 32)]
-            , 0 ) ] )
-      ; ( "nexthop"
-        , [ ( [Match.exact_ "meta.nhop" (Value.make (1, 32))]
-            , [Value.make (99, 9)]
-            , 0 )
-          ; ( [Match.exact_ "meta.nhop" (Value.make (2, 32))]
-            , [Value.make (44, 9)]
-            , 0 ) ] ) ]
+    let open Instance in
+    empty
+    |> set_rows ~table:"ethernet"
+         ~rows:
+           [ ( [Match.exact_ "hdr.ethernet.dstAddr" (Value.make (99, 48))]
+             , [Value.make (1, 32)]
+             , 0 ) ]
+    |> set_rows ~table:"ipv4"
+         ~rows:
+           [ ( [Match.exact_ "hdr.ipv4.dstAddr" (Value.make (44, 32))]
+             , [Value.make (2, 32)]
+             , 0 ) ]
+    |> set_rows ~table:"nexthop"
+         ~rows:
+           [ ( [Match.exact_ "meta.nhop" (Value.make (1, 32))]
+             , [Value.make (99, 9)]
+             , 0 )
+           ; ( [Match.exact_ "meta.nhop" (Value.make (2, 32))]
+             , [Value.make (44, 9)]
+             , 0 ) ]
   in
   let edits =
     let open Edit in
@@ -65,25 +68,28 @@ let slicing_retargeting_metadata_ethernet _ =
   StaticSlicing.edit_slice params inst edits cmd |> same_cmd expected
 
 let slicing_retargeting_metadata_ipv4 _ =
-  let open Util in
   let params = Parameters.{default with above= false} in
   let inst =
-    StringMap.of_alist_exn
-      [ ( "ethernet"
-        , [ ( [Match.exact_ "hdr.ethernet.dstAddr" (Value.make (99, 48))]
-            , [Value.make (1, 32)]
-            , 0 ) ] )
-      ; ( "ipv4"
-        , [ ( [Match.exact_ "hdr.ipv4.dstAddr" (Value.make (44, 32))]
-            , [Value.make (2, 32)]
-            , 0 ) ] )
-      ; ( "nexthop"
-        , [ ( [Match.exact_ "meta.nhop" (Value.make (1, 32))]
-            , [Value.make (99, 9)]
-            , 0 )
-          ; ( [Match.exact_ "meta.nhop" (Value.make (2, 32))]
-            , [Value.make (44, 9)]
-            , 0 ) ] ) ]
+    let open Instance in
+    empty
+    |> set_rows ~table:"ethernet"
+         ~rows:
+           [ ( [Match.exact_ "hdr.ethernet.dstAddr" (Value.make (99, 48))]
+             , [Value.make (1, 32)]
+             , 0 ) ]
+    |> set_rows ~table:"ipv4"
+         ~rows:
+           [ ( [Match.exact_ "hdr.ipv4.dstAddr" (Value.make (44, 32))]
+             , [Value.make (2, 32)]
+             , 0 ) ]
+    |> set_rows ~table:"nexthop"
+         ~rows:
+           [ ( [Match.exact_ "meta.nhop" (Value.make (1, 32))]
+             , [Value.make (99, 9)]
+             , 0 )
+           ; ( [Match.exact_ "meta.nhop" (Value.make (2, 32))]
+             , [Value.make (44, 9)]
+             , 0 ) ]
   in
   let edits =
     let open Edit in
@@ -125,14 +131,14 @@ let slicing_retargeting_metadata_ipv4 _ =
   StaticSlicing.edit_slice params inst edits cmd |> same_cmd expected
 
 let slicing_fabric_example _ =
-  let open Util in
   let params = Parameters.{default with above= false} in
   let inst =
-    StringMap.of_alist_exn
-      [ ( "nexthop"
-        , [ ( [Match.exact_ "meta.nhop" (Value.make (1, 32))]
-            , [Value.make (11, 9)]
-            , 0 ) ] ) ]
+    let open Instance in
+    set_rows empty ~table:"nexthop"
+      ~rows:
+        [ ( [Match.exact_ "meta.nhop" (Value.make (1, 32))]
+          , [Value.make (11, 9)]
+          , 0 ) ]
   in
   let edits =
     let open Edit in

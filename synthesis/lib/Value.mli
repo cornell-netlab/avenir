@@ -114,8 +114,9 @@ val slice : int -> int -> t -> t
 (** [slice hi lo v] returns a value [v\[hi:lo\]] of size [hi - lo] *)
 
 val concat : t -> t -> t
-(** [concat v v'] constructs a value of size [size v + size v'] that contains
-    ** all the bits of [v] followed by all the bits of [v']*)
+(** [concat v v'] constructs a vralue of size [size v + size v'] that
+    contains ** all the bits of [v] followed by all the bits of [v']*)
 
-val random : int -> t
-(** [random sz] generates a random [Value.t] of size [sz] *)
+val random : ?lo:int -> int -> t
+(** [random lo sz] generates a random [Value.t] of size [sz] greater than lo,
+    throws an exception if [sz <= 0] or [lo >= 2^sz] *)
