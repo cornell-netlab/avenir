@@ -6,8 +6,9 @@ type match_data =
   | Exact of Value.t
   | Between of Value.t * Value.t
   | Mask of Value.t * Value.t
+  [@@deriving sexp, compare]
 
-type t = {key: string; data: match_data}
+type t = {key: string; data: match_data} [@@deriving sexp,compare]
 
 let mk_match key data = {key; data}
 

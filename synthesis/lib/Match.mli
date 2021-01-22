@@ -1,4 +1,4 @@
-type t
+type t [@@deriving sexp, compare]
 
 val exact_ : string -> Value.t -> t
 

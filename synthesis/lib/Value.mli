@@ -1,5 +1,5 @@
 (* A value represents a fixed-width bitvector*)
-type t
+type t [@@deriving sexp, compare]
 
 val make : int * int -> t
 (** [make (i,sz)] constructs a bitvector wiht value [i] of size [sz]. **

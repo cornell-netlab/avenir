@@ -1,6 +1,6 @@
 open Util
 
-type t = Bigint.t Sized.t
+type t = Bigint.t Sized.t [@@deriving sexp, compare]
 
 let big_make (i, sz) =
   let open Bigint in
@@ -26,8 +26,9 @@ let unsafe_make (i, sz) = unsafe_big_make (Bigint.of_int_exn i, sz)
 let to_string v : string = Sized.to_string ~f:Bigint.Hex.to_string v
 
 let to_bmv2_string v : string = Sized.get v |> Bigint.Hex.to_string
-
+                              
 let to_sexp_string v = to_string v
+                     
 
 let to_smt v = Z3.Smtlib.bbv (Sized.get v) (Sized.size v)
 

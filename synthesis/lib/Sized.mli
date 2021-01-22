@@ -1,4 +1,4 @@
-type 'a t
+type 'a t [@@deriving sexp, compare]
 
 val make : 'a -> int -> 'a t
 
