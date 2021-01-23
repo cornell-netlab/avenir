@@ -330,3 +330,5 @@ let opt_equals ~f o1 o2 =
   | _, _ -> false
 
 let pair_map ~f (a, b) = (f a, f b)
+
+let some_ident_if ~f x = Option.some_if (f x) x

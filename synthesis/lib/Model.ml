@@ -35,9 +35,11 @@ let diff =
     | `Both (l, r) when Stdlib.(l <> r) -> Some (l, r)
     | _ -> None)
 
-(**UTILITIES INHERITED FROM STRINGMAP**)
+let right_union : t -> t -> t =
+  StringMap.merge ~f:(fun ~key:_ -> function
+    | `Left x | `Right x | `Both (_, x) -> Some x)
 
-let merge = StringMap.merge
+(**UTILITIES INHERITED FROM STRINGMAP**)
 
 let fold = StringMap.fold
 

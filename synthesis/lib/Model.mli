@@ -35,15 +35,8 @@ val join : t -> t -> t
 val aggregate : t list -> t
 (** [aggregate ms] combines a list of models as in [join] *)
 
-val merge :
-     t
-  -> t
-  -> f:
-       (   key:string
-        -> [`Left of Value.t | `Right of Value.t | `Both of Value.t * Value.t]
-        -> Value.t option)
-  -> t
-(** [merge m1 m2 ~f] is a specialization of [Core.Map.merge] *)
+val right_union : t -> t -> t
+(** [right_union ml mr] is the disjoint union of [ml ∖ mr] and [mr]*)
 
 val fold : t -> init:'a -> f:(key:string -> data:Value.t -> 'a -> 'a) -> 'a
 (** [fold m1 ~init ~f] is a specialization of [Core.Map.fold] *)
