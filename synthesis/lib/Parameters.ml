@@ -14,6 +14,7 @@ type t =
     fastcx: bool
   ; vcache: bool
   ; ecache: int option
+  ; aggro_freshen: bool
   ; minimize: bool
   ; do_slice: bool
   ; semantic_slicing: bool
@@ -46,6 +47,7 @@ let default =
   ; semantic_slicing= false
   ; vcache= false
   ; ecache= None
+  ; aggro_freshen= false
   ; shortening= false
   ; edits_depth= -1
   ; search_width= -1
@@ -93,6 +95,7 @@ let union p1 p2 =
   ; semantic_slicing= p1.semantic_slicing || p2.semantic_slicing
   ; vcache= p1.vcache || p2.vcache
   ; ecache= ecache_union p1.ecache p2.ecache
+  ; aggro_freshen= p1.aggro_freshen || p2.aggro_freshen
   ; shortening= p1.shortening || p2.shortening
   ; edits_depth= max p1.edits_depth p2.edits_depth
   ; search_width= max p1.search_width p2.search_width

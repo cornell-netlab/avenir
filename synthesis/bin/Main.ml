@@ -41,6 +41,11 @@ let opt_params : Parameters.t Command.Param.t =
         ~doc:
           "N Enable edit caching when there are at least N previous \
            successes"
+    and aggro_freshen =
+      flag "--aggro-freshen" no_arg
+        ~doc:
+          "N Enable edit caching when there are at least N previous \
+           successes"
     and shortening = flag "--shortening" no_arg ~doc:"shorten queries"
     and above =
       flag "--above" no_arg
@@ -98,6 +103,7 @@ let opt_params : Parameters.t Command.Param.t =
       ; fastcx
       ; vcache
       ; ecache
+      ; aggro_freshen
       ; shortening
       ; above
       ; minimize

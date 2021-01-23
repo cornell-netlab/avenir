@@ -239,4 +239,6 @@ let cegis_math_sequence (params : Parameters.t) data
     cegis_math_sequence_once
       {params with hot_start= false}
       data (get_problem ())
-  else get_problem () |> cegis_math_sequence_once params data
+  else
+    let () = Log.info (lazy "Restarting, with no freshening") in
+    get_problem () |> cegis_math_sequence_once params data

@@ -39,6 +39,19 @@ let right_union : t -> t -> t =
   StringMap.merge ~f:(fun ~key:_ -> function
     | `Left x | `Right x | `Both (_, x) -> Some x)
 
+let intersect =
+  StringMap.merge ~f:(fun ~key:_ -> function
+    | `Both (v1, v2) when Value.equals v1 v2 -> Some v1
+    | _ -> None)
+
+let perturb = StringMap.map ~f:(fun v -> Value.(random (size v) ~exc:[v]))
+
+let proj_packet_holes =
+  StringMap.filter_keys ~f:(fun h ->
+      not
+        ( Hole.is_add_row_hole h || Hole.is_delete_hole h
+        || Hole.is_which_act_hole h ))
+
 (**UTILITIES INHERITED FROM STRINGMAP**)
 
 let fold = StringMap.fold
@@ -54,3 +67,7 @@ let find = StringMap.find
 let of_alist_exn = StringMap.of_alist_exn
 
 let iteri = StringMap.iteri
+
+let to_strmap m = m
+
+let of_strmap m = m
