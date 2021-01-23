@@ -102,6 +102,12 @@ let expand eqs chis =
           StringSet.fold eqs ~init:acc ~f:(fun acc key ->
               Model.set acc ~key ~data))
 
+let randomize_along_ecs ecs ~excluding =
+  char_map ecs
+  |> randomized_model ~excluding
+  |> Log.(id_print ~s:Model.to_string ~p:ecache)
+  |> expand ecs
+
 let renew_equals (phys : Cmd.t) (olds : Edit.t list) (news : Edit.t list) =
   Log.ecache @@ lazy "[renew_equals]" ;
   let old_model = Edit.list_to_model phys olds in
@@ -116,10 +122,7 @@ let renew_equals (phys : Cmd.t) (olds : Edit.t list) (news : Edit.t list) =
     Log.ecache
     @@ lazy (Printf.sprintf "intersection %s" (Model.to_string isect_model)) ;
     let ecs = equivalences (Model.to_strmap isect_model) in
-    let chis_model =
-      randomized_model ~excluding:[isect_model] (char_map ecs)
-    in
-    let fresh_model = expand ecs chis_model in
+    let fresh_model = randomize_along_ecs ecs ~excluding:[isect_model] in
     Log.ecache
     @@ lazy (Printf.sprintf "perturbed %s" (Model.to_string fresh_model)) ;
     let renew_model = Model.right_union new_model fresh_model in
@@ -161,6 +164,8 @@ let sub_edit (adata : Value.t ValueMap.t option) (map : Match.t MatchMap.t)
  *       Printf.printf "\t%s->%s\n%!" key (Match.to_string data)) *)
 
 let sub_edits (adata, subst) edits =
+  Log.ecache (lazy "trying new template, matched with") ;
+  Log.ecache (lazy (Edit.list_to_string edits)) ;
   List.fold edits ~init:(Some []) ~f:(fun acc_opt e ->
       let%bind acc = acc_opt in
       let%map e' = sub_edit adata subst e in
@@ -189,18 +194,11 @@ let infer_fresh phys (curr_edits : Edit.t list) substs
   let old_models = inferred_models phys substs old_edits in
   Log.ecache
   @@ lazy (Printf.sprintf "old model %s" (Model.to_string curr_model)) ;
-  match diff_eq_classes curr_model old_models with
-  | None ->
-      Log.ecache @@ lazy "No Diff-ECs" ;
-      None
-  | Some ecs ->
-      char_map ecs
-      |> randomized_model ~excluding:old_models
-      |> Log.(id_print ~s:Model.to_string ~p:ecache)
-      |> expand ecs
-      |> Log.(id_print ~s:Model.to_string ~p:ecache)
-      |> Model.right_union curr_model
-      |> Edit.of_model phys |> return
+  let%map ecs = diff_eq_classes curr_model old_models in
+  randomize_along_ecs ecs ~excluding:old_models
+  |> Log.(id_print ~s:Model.to_string ~p:ecache)
+  |> Model.right_union curr_model
+  |> Edit.of_model phys
 
 let get_similars e =
   get_cache ()
@@ -208,40 +206,29 @@ let get_similars e =
          let%map adata, subst = similar log_edit e in
          (phys_edits, adata, subst))
 
-let freshen (params : Parameters.t) phys phys_edits phys_edits' substs
-    prev_solns =
-  match infer_fresh phys phys_edits' substs prev_solns with
+let freshen (params : Parameters.t) phys olds news substs prev_solns =
+  Log.ecache
+  @@ lazy (Printf.sprintf "guessing.... %s" (Edit.list_to_string news)) ;
+  match infer_fresh phys news substs prev_solns with
   | Some fresh_phys_edits -> fresh_phys_edits
   | None when params.aggro_freshen ->
-      renew_equals phys phys_edits phys_edits'
-      |> Option.value ~default:phys_edits'
-  | None -> phys_edits'
+      renew_equals phys olds news |> Option.value ~default:news
+  | None -> news
 
 let infer (params : Parameters.t) (phys : Cmd.t) (e : Edit.t) =
   let%bind min_match_size = params.ecache in
   Log.ecache (lazy (Printf.sprintf "checking edit %s..." (Edit.to_string e))) ;
   let similars = get_similars e in
-  Log.ecache (lazy (Printf.sprintf "%d matches" (List.length similars))) ;
   if List.length similars < min_match_size then None
   else
     let prev_solns = List.map similars ~f:fst3 in
-    List.find_map similars ~f:(fun (phys_edits, adata, subst) ->
-        Log.ecache (lazy "trying new template, matched with") ;
-        Log.ecache (lazy (Edit.list_to_string phys_edits)) ;
+    List.find_map similars ~f:(fun (old_edits, adata, subst) ->
         (* apply mapping to physical edit list *)
-        let%map phys_edits' = sub_edits (adata, subst) phys_edits in
+        let%map new_edits = sub_edits (adata, subst) old_edits in
         (* attempt to abstract over physical edit history*)
-        Log.ecache (lazy "guessing....") ;
-        Log.ecache (lazy (Edit.list_to_string phys_edits')) ;
         let fresh_phys_edits =
-          freshen params phys phys_edits phys_edits' (adata, subst)
-            prev_solns
+          freshen params phys old_edits new_edits (adata, subst) prev_solns
         in
-        Log.ecache
-          ( lazy
-            (Printf.sprintf "freshen guess.... there are %d edits"
-               (List.length fresh_phys_edits)) ) ;
-        Log.ecache (lazy (Edit.list_to_string fresh_phys_edits)) ;
         fresh_phys_edits)
 
 let update (log : Edit.t) (physs : Edit.t list) : unit =
