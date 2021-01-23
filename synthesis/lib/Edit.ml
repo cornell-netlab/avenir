@@ -7,18 +7,25 @@ type t =
   (* Name of table *)
   | Del of string * int
 
-let table = function Add (name, _) | Del (name, _) -> name
+let table = function
+  | Add (name, _) | Del (name, _) -> name
 
-let is_delete = function Add _ -> false | Del _ -> true
+let is_delete = function
+  | Add _ -> false
+  | Del _ -> true
 
 let has_delete = List.exists ~f:is_delete
 
 let split =
   List.fold ~init:([], []) ~f:(fun (dels, adds) e ->
-      match e with Add _ -> (dels, adds @ [e]) | Del _ -> (dels @ [e], adds))
+      match e with
+      | Add _ -> (dels, adds @ [e])
+      | Del _ -> (dels @ [e], adds))
 
 let get_deletes =
-  List.filter_map ~f:(function Add _ -> None | Del (n, i) -> Some (n, i))
+  List.filter_map ~f:(function
+    | Add _ -> None
+    | Del (n, i) -> Some (n, i))
 
 let get_matches_exn = function
   | Add (_, (matches, _, _)) -> matches
@@ -85,7 +92,9 @@ let eq_tests e e' =
 let equal e e' = Stdlib.(e = e')
 
 let get_ith_match ~i (e : t) =
-  match e with Add (_, row) -> Row.get_ith_match i row | Del (_, _) -> None
+  match e with
+  | Add (_, row) -> Row.get_ith_match i row
+  | Del (_, _) -> None
 
 let read_vars cmd = function
   | Del _ -> failwith "[read_vars] undefined for del"

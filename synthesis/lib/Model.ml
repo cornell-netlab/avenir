@@ -12,7 +12,9 @@ let of_smt_model = Z3ModelExtractor.of_smt_model
 
 let extend_multi_model multi m =
   StringMap.merge multi m ~f:(fun ~key:_ -> function
-    | `Left l -> Some l | `Right _ -> None | `Both (l, r) -> Some (r :: l))
+    | `Left l -> Some l
+    | `Right _ -> None
+    | `Both (l, r) -> Some (r :: l))
 
 let aggregate =
   List.fold ~init:StringMap.empty ~f:(fun acc m ->
@@ -30,7 +32,8 @@ let join m1 m2 = aggregate [m1; m2]
 
 let diff =
   StringMap.merge ~f:(fun ~key:_ -> function
-    | `Both (l, r) when Stdlib.(l <> r) -> Some (l, r) | _ -> None)
+    | `Both (l, r) when Stdlib.(l <> r) -> Some (l, r)
+    | _ -> None)
 
 (**UTILITIES INHERITED FROM STRINGMAP**)
 

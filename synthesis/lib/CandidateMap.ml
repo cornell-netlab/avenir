@@ -49,7 +49,9 @@ let rec project_cmd_on_acts c (subst : Expr.t StringMap.t) : Cmd.t list =
   match c with
   | Skip -> [c]
   | Assume b -> (
-    match subst |> substitute ~holes b with False -> [] | b' -> [Assume b'] )
+    match subst |> substitute ~holes b with
+    | False -> []
+    | b' -> [Assume b'] )
   | Assign (v, e) -> (
     match StringMap.find subst v with
     | None -> [v %<-% e]

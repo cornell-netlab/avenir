@@ -1,7 +1,7 @@
 open Core
 open Sexplib.Std
-   
-type 'a t = ('a * int) [@@deriving sexp, compare]
+
+type 'a t = 'a * int [@@deriving sexp, compare]
 
 let make x size = (x, size)
 

@@ -104,9 +104,9 @@ let minimize_solution (params : Parameters.t) data problem =
 (* TODO Edit cache should abstract the fact that its a reference *)
 let update_edit_cache (params : Parameters.t) problem : unit =
   if Option.is_none params.ecache then
-      EAbstr.update
-        (Problem.log_edits problem |> List.hd_exn)
-        (Problem.phys_edits problem)
+    EAbstr.update
+      (Problem.log_edits problem |> List.hd_exn)
+      (Problem.phys_edits problem)
 
 let rec cegis_math (params : Parameters.t) (data : ProfData.t ref)
     (problem : Problem.t) : Edit.t list option =

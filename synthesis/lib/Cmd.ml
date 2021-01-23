@@ -65,7 +65,9 @@ type t =
       ; actions: (string * (string * int) list * t) list
       ; default: t }
 
-let is_skip = function Skip -> true | _ -> false
+let is_skip = function
+  | Skip -> true
+  | _ -> false
 
 let var_equals (x1, sz1) (x2, sz2) = String.(x1 = x2) && sz1 = sz2
 
@@ -153,7 +155,10 @@ let ordered ss =
       | _ -> Select (Ordered, selects)
 
 let select styp =
-  match styp with Partial -> partial | Total -> total | Ordered -> ordered
+  match styp with
+  | Partial -> partial
+  | Total -> total
+  | Ordered -> ordered
 
 let apply (name, keys, actions, default) =
   Apply {name; keys= List.map keys ~f:Key.make; actions; default}
@@ -228,7 +233,9 @@ let rec to_sexp_string e : string =
   | Assign (f, e) -> "Assign(\"" ^ f ^ "\"," ^ Expr.to_sexp_string e ^ ")"
   | Select (styp, es) ->
       let cases_string =
-        match es with [] -> "[]" | _ -> "[" ^ string_select es ^ "]"
+        match es with
+        | [] -> "[]"
+        | _ -> "[" ^ string_select es ^ "]"
       in
       "Select (" ^ sexp_string_of_styp styp ^ "," ^ cases_string ^ ")"
   | Apply t ->

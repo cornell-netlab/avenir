@@ -113,4 +113,6 @@ let mk_new_row (match_model : Model.t) phys tbl_name data_opt act : t option
                   (* Printf.printf "\t%s -> %s\n" p (string_of_value v); *)
                   acc @ [v]) )
       in
-      match keys_holes with None -> None | Some ks -> Some (ks, data, act) )
+      match keys_holes with
+      | None -> None
+      | Some ks -> Some (ks, data, act) )
