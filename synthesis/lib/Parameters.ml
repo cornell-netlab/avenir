@@ -20,12 +20,8 @@ type t =
   ; do_slice: bool
   ; semantic_slicing: bool
   ; shortening: bool
-<<<<<<< HEAD
-  ; (* Model finding *)
-=======
   ; solve_strat: string list
   ; (*Model finding*)
->>>>>>> master
     widening: bool
   ; monotonic: bool
   ; injection: bool
