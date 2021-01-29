@@ -16,7 +16,8 @@ let check_equivalence neg (params : Parameters.t) data problem =
 
 let implements ?(neg = Test.True) (params : Parameters.t)
     (data : ProfData.t ref) (problem : Problem.t) :
-    (Packet.t * Packet.t) option =
+      (Packet.t * Packet.t) option =
+  Log.info @@ lazy "implements";
   try_in_sequence
     [ (fun _ -> fails_on_some_example params problem)
     ; (fun _ ->

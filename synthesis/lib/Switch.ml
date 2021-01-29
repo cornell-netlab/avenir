@@ -85,8 +85,7 @@ let to_gcl (params : Parameters.t) (_ : (string * int) list) (p : t) =
       let c =
         Instance.apply params ~no_miss:true NoHoles `Exact slice (pipeline p)
       in
-      (* let () = Printf.printf "Sliced program has %d nodes\n%!"
-         (num_nodes_in_cmd c) in *)
+      Log.debug @@ lazy (Printf.sprintf "%s" (Cmd.to_string c));
       c
   else
     match !(p.gcl) with

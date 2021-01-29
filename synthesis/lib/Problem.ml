@@ -97,12 +97,13 @@ let slice params (p : t) : t =
    *   Printf.printf "SLICED PROBLEM:\n%s\n===??====\n%s\n%!"
    *     (Switch.to_gcl params log |> string_of_cmd)
    *     (Switch.to_gcl params phys |> string_of_cmd); *)
-  if Edit.has_delete (log_edits p @ phys_edits p) then
-    (* let () = Printf.printf "delete detected, slicing inapplicable\n%!" in *)
+  if Edit.has_delete (log_edits p @ phys_edits p) then (
+    Log.debug @@ lazy "cannot slice because a delete was detected";
     p
-  else
-    (* let () = Printf.printf "slicing away!" in *)
+  ) else (
+    Log.debug @@ lazy "slicing";
     {p with log= Switch.slice params p.log; phys= Switch.slice params p.phys}
+  )
 
 let append_phys_edits (p : t) (es : Edit.t list) : t =
   {p with phys= Switch.append_edits p.phys es}

@@ -170,8 +170,7 @@ let edit_slice_table (params : Parameters.t)
      (string_of_cmd table); *)
   let table = Instance.verify_apply ~no_miss:true params sliced_inst table in
   let facts' = ConstantProp.propogate_choices facts table in
-  (* if params.debug then Printf.printf "slicing %s to \n%s\n%!" (name)
-     (string_of_cmd table); *)
+  Log.debug @@ lazy (Printf.sprintf "slicing %s to \n%s\n%!" name (Cmd.to_string table));
   (table, facts')
 
 let project_to_exprfacts (multifacts : Value.t list StringMap.t) :
@@ -316,8 +315,8 @@ let restrict_inst_for_edit params cmd inst e =
     |> restrict ~dir:`Fwd params inst sets
     |> snd
   in
-  (* Printf.printf "%s forwards requires \n%!" (Edit.table e);
-   * print_slice fwd_slice inst; *)
+  (* Printf.printf "%s forwards requires \n%!" (Edit.table e); *)
+  (* print_slice fwd_slice inst; *)
   let rows =
     Instance.get_rows inst (Edit.table e)
     |> get_indices_matching ~f:(Row.equals (Edit.get_row_exn e))
