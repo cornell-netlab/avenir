@@ -114,5 +114,5 @@ val concat : t -> t -> t
 
 val random : ?lo:int -> ?exc:t list -> int -> t
 (** [random ~lo ~exc sz] generates a random [Value.t], [v] of size [sz]
-    greater than or equal to [lo], throws an exception if [sz <= 0] or [lo >= 2^sz].
-    Further [exc] is a list of values that [v] may not be*)
+    greater than or equal to [lo], throws an exception if [sz <= 0] or
+    [lo >= 2^sz]. Further [exc] is a list of values that [v] may not be*)

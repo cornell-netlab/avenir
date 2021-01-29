@@ -88,12 +88,10 @@ let randomized_model ~excluding chis =
   (* randomly generate a new valuation not in the prohibited values *)
   StringMap.fold prohibited ~init:Model.empty ~f:(fun ~key ~data:prohibs m ->
       let sz = Value.size (List.hd_exn prohibs) in
-      (* manually prohibit 0, usually it's not what you want when youre trying
-         to create a random unique identifier -- it gets used for all sorts of
-         things in practice *)      
-      let random_v =
-        Value.random sz ~lo:1 ~exc:prohibs
-      in
+      (* manually prohibit 0, usually it's not what you want when youre
+         trying to create a random unique identifier -- it gets used for all
+         sorts of things in practice *)
+      let random_v = Value.random sz ~lo:1 ~exc:prohibs in
       Model.set m ~key ~data:random_v)
 
 (** expand characteristic valuation to each member of the equivalence class *)

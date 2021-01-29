@@ -249,8 +249,7 @@ let rec passive_propogate_aux dir map cmd =
       (Option.value_exn map', select typ cases')
   | Apply _ -> failwith "[Error] assumed tables are applied out"
 
-let passive_propogate (map, cmd) =
-  passive_propogate_aux `Rev map cmd
+let passive_propogate (map, cmd) = passive_propogate_aux `Rev map cmd
 
 let passive_propogate_fix map cmd =
   fix passive_propogate (StringMap.empty, Skip) (map, cmd)

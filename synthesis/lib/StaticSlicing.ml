@@ -85,7 +85,7 @@ let rec flows_to (vs : StringSet.t) cmd : StringSet.t =
   | Assume b ->
       (* TODO:: This might be wrong? *)
       (* Printf.printf "\tassuming %s\n%!" (string_of_test b); *)
-      StringSet.of_list @@ fsts @@ Test.frees `Var b |> StringSet.union vs
+      Test.frees `Var b |> fsts |> StringSet.of_list |> StringSet.union vs
   | Seq (c1, c2) -> flows_to (flows_to vs c1) c2
   | Select (_, cs) ->
       concatMap cs ~c:StringSet.union ~f:(fun (b, c) ->
@@ -102,7 +102,17 @@ let rec flows_to (vs : StringSet.t) cmd : StringSet.t =
                analysis\n%!" (string_of_cmd c) in *)
             assigned_vars c
           else flows_to vs c)
-  | Apply _ -> failwith "tables are for chumps"
+  | Apply t ->
+      let keys_vs =
+        t.keys |> List.map ~f:Key.to_string |> StringSet.of_list
+        |> StringSet.union vs
+      in
+      List.fold t.actions ~init:(flows_to keys_vs t.default)
+        ~f:(fun acc (_, params, act) ->
+          let open StringSet in
+          let paramset = of_list (fsts params) in
+          flows_to (union keys_vs paramset) act
+          |> Fn.flip diff paramset |> union acc)
 
 let ghost_static_slice (ghosts : int list StringMap.t) cmd =
   let ghost_vars =
@@ -170,7 +180,9 @@ let edit_slice_table (params : Parameters.t)
      (string_of_cmd table); *)
   let table = Instance.verify_apply ~no_miss:true params sliced_inst table in
   let facts' = ConstantProp.propogate_choices facts table in
-  Log.debug @@ lazy (Printf.sprintf "slicing %s to \n%s\n%!" name (Cmd.to_string table));
+  Log.debug
+  @@ lazy
+       (Printf.sprintf "slicing %s to \n%s\n%!" name (Cmd.to_string table)) ;
   (table, facts')
 
 let project_to_exprfacts (multifacts : Value.t list StringMap.t) :

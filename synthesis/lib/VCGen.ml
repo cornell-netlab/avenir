@@ -334,18 +334,23 @@ let rec good_wp c =
 let good_execs fvs c =
   (* let c = CompilerOpts.optimize fvs c in *)
   let merged_sub, passive_c = passify fvs c in
-  Log.debug @@ lazy (Printf.sprintf "Passive : %s" (Cmd.to_string passive_c)); 
+  Log.debug @@ lazy (Printf.sprintf "Passive : %s" (Cmd.to_string passive_c)) ;
   let passive_c =
     ConstantProp.passive_propogate (StringMap.empty, passive_c) |> snd
   in
-  Log.debug @@ lazy (Printf.sprintf "optimized passive : %s" (Cmd.to_string passive_c));   
+  Log.debug
+  @@ lazy (Printf.sprintf "optimized passive : %s" (Cmd.to_string passive_c)) ;
   let vc = good_wp passive_c in
-  Log.debug @@ lazy (Printf.sprintf "good_executions:\n %s" (Test.to_string vc));
+  Log.debug
+  @@ lazy (Printf.sprintf "good_executions:\n %s" (Test.to_string vc)) ;
   (merged_sub, passive_c, vc)
 
-let equivalent ?(neg = Test.True) (data : ProfData.t ref) eq_fvs l p =  
+let equivalent ?(neg = Test.True) (data : ProfData.t ref) eq_fvs l p =
   let open Cmd in
-  Log.debug @@ lazy (Printf.sprintf "checking %s \n==\n %s" (Cmd.to_string l) (Cmd.to_string p)); 
+  Log.debug
+  @@ lazy
+       (Printf.sprintf "checking %s \n==\n %s" (Cmd.to_string l)
+          (Cmd.to_string p)) ;
   let l = Assume neg %:% l in
   let p = Assume neg %:% p in
   let phys_prefix = "phys_" in
@@ -368,7 +373,10 @@ let equivalent ?(neg = Test.True) (data : ProfData.t ref) eq_fvs l p =
   let in_eq = zip_eq_exn lin pin in
   let out_eq = zip_eq_exn lout pout in
   ProfData.update_time !data.ingress_egress_time st ;
-  Log.debug @@ lazy (Printf.sprintf "%s\n %s\n %s \n => \n %s" (Test.to_string gl) (Test.to_string gp) (Test.to_string in_eq) (Test.to_string out_eq));  
+  Log.debug
+  @@ lazy
+       (Printf.sprintf "%s\n %s\n %s \n => \n %s" (Test.to_string gl)
+          (Test.to_string gp) (Test.to_string in_eq) (Test.to_string out_eq)) ;
   Test.(gl %&% gp %&% in_eq %=>% out_eq)
 
 let hoare_triple_passified_relabelled assum good_n conseq =

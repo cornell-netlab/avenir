@@ -26,7 +26,7 @@ let to_string (inst : t) : string =
   StringMap.fold inst ~init:"" ~f:(fun ~key:table_name ~data:rows acc ->
       Printf.sprintf "%s\n%s\n%s" acc table_name
         (Row.list_to_string ~tab:"\t" rows))
-  
+
 let equal (i1 : t) (i2 : t) : bool =
   StringMap.equal (List.equal Row.equals) i1 i2
 

@@ -303,6 +303,40 @@ let no_defaults (_ : Parameters.t) opts fvs phys =
     |> List.fold ~init:True ~f:(fun acc (v, sz) ->
            acc %&% (Hole (v, sz) %<>% Expr.value (0, sz)))
 
+let flows_to (phys : Cmd.t) (tgts : StringSet.t) (src : string) =
+  let open StringSet in
+  StaticSlicing.flows_to (StringSet.singleton src) phys
+  |> inter tgts |> is_empty |> not
+
+(** [unlikely_actions opts fvs phys cex] disables actions that do not
+    progress towards solving the cex. Specifically, those that make no
+    assignments to the changed variables in the cex. *)
+let unlikely_actions fvs phys (inpkt, outpkt) =
+  Log.debug @@ lazy (Printf.sprintf "[unlikely_actions]") ;
+  let open Test in
+  let raw_diffs = Packet.diff_vars inpkt outpkt |> StringSet.of_list in
+  let diffs = StringSet.(of_list fvs |> inter raw_diffs) in
+  let ta_map = Cmd.get_tables_actions phys in
+  List.fold ta_map ~init:True ~f:(fun acc (table, acts) ->
+      let actSize = max (log2 (List.length acts)) 1 in
+      Log.debug @@ lazy (Printf.sprintf "checking table %s" table) ;
+      List.foldi acts ~init:acc ~f:(fun i acc (_, _, act) ->
+          if
+            StringSet.exists (Cmd.assigned_vars act) ~f:(flows_to phys diffs)
+          then
+            let () =
+              Log.debug
+              @@ lazy
+                   (Printf.sprintf "prevent adding to table %s row %d" table
+                      i)
+            in
+            !%(bigand
+                 [ Hole.add_row_hole table %=% Expr.value (1, 1)
+                 ; Hole.which_act_hole table actSize
+                   %=% Expr.value (i, actSize) ])
+            |> and_ acc
+          else acc))
+
 (** [test_of_cexs fvs cex] aggregates an input-output list of
     counterexamples, into a pair [(intest, outest)], where [intest] is the
     disjunction of the input packets in [cexs] and [outest] is the
@@ -330,6 +364,7 @@ let apply_heurs params problem opts phys query_test partial_model =
   let open Test in
   let hole_type = get_hole_type opts in
   let fvs = Problem.fvs problem in
+  let cex = Problem.cexs problem |> List.hd_exn in
   let query_holes =
     Test.holes query_test |> List.dedup_and_sort ~compare:Stdlib.compare
   in
@@ -343,10 +378,9 @@ let apply_heurs params problem opts phys query_test partial_model =
     ; single problem opts query_holes |> fixup_test partial_model
     ; active_domain_restrict params problem opts query_holes
       |> fixup_test partial_model
-    ; (* well_formed_adds params problem hole_type
-       * |> fixup_test partial_model
-       * |> Log.print_and_return_test params.debug  ~pre:"Well-Formed Additions:\n" ~post:"\n--------\n\n"; *)
-      non_empty_adds problem |> fixup_test partial_model ]
+    ; unlikely_actions (fsts fvs) (Problem.phys problem) cex
+      |> fixup_test partial_model
+    ; non_empty_adds problem |> fixup_test partial_model ]
 
 (** [action_hole_valid tbl num_acts] ensures that the hole index for table
     [tb] doesn't surpass [num_acts] *)
