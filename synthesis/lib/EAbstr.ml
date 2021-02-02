@@ -104,6 +104,11 @@ let expand eqs chis =
               Model.set acc ~key ~data))
 
 let randomize_along_ecs ecs ~excluding =
+  Log.ecache
+  @@ lazy
+       (List.fold ecs ~init:"Randomizing Along Equivalence classes \n"
+          ~f:(fun acc cls ->
+            string_of_strset cls |> Printf.sprintf "%s\n\t{%s }" acc)) ;
   char_map ecs
   |> randomized_model ~excluding
   |> Log.(id_print ~s:Model.to_string ~p:ecache)

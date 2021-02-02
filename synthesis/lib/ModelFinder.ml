@@ -19,7 +19,8 @@ type opts =
   ; no_defaults: bool
   ; no_deletes: bool
   ; double: bool
-  ; reachable_adds: bool }
+  ; reachable_adds: bool
+  ; restr_acts: bool }
 
 type t = {schedule: opts list; search_space: (Test.t * Model.t) list}
 
@@ -57,7 +58,8 @@ let no_opts =
   ; no_defaults= false
   ; no_deletes= false
   ; double= false
-  ; reachable_adds= false }
+  ; reachable_adds= false
+  ; restr_acts= false }
 
 (* None > Mask > Paths > Injection > Hints > Only_Holes *)
 let rec make_schedule opt =
@@ -66,6 +68,7 @@ let rec make_schedule opt =
   ( if opt.double then
     let opt' = {opt with double= false} in
     make_schedule opt'
+  else if opt.restr_acts then make_schedule {opt with restr_acts= false}
   else if
   opt.injection || opt.hints || opt.paths || opt.only_holes || opt.nlp
   || opt.domain
@@ -111,7 +114,8 @@ let make_searcher (params : Parameters.t) : t =
       ; no_defaults= params.no_defaults
       ; no_deletes= params.no_deletes
       ; double= params.use_all_cexs
-      ; reachable_adds= params.reach_restrict }
+      ; reachable_adds= params.reach_restrict
+      ; restr_acts= params.restr_acts }
   in
   {schedule; search_space= []}
 
@@ -305,37 +309,48 @@ let no_defaults (_ : Parameters.t) opts fvs phys =
 
 let flows_to (phys : Cmd.t) (tgts : StringSet.t) (src : string) =
   let open StringSet in
-  StaticSlicing.flows_to (StringSet.singleton src) phys
-  |> inter tgts |> is_empty |> not
+  Log.debug @@ lazy "[flows_to]" ;
+  Log.debug @@ lazy (Printf.sprintf "Targeting %s" (string_of_strset tgts)) ;
+  let flows = StaticSlicing.flows_to (StringSet.singleton src) phys in
+  Log.debug @@ lazy (Printf.sprintf "%s -> %s" src (string_of_strset flows)) ;
+  exists tgts ~f:(mem flows)
 
 (** [unlikely_actions opts fvs phys cex] disables actions that do not
     progress towards solving the cex. Specifically, those that make no
     assignments to the changed variables in the cex. *)
-let unlikely_actions fvs phys (inpkt, outpkt) =
-  Log.debug @@ lazy (Printf.sprintf "[unlikely_actions]") ;
+let unlikely_actions opts fvs phys (inpkt, outpkt) =
   let open Test in
-  let raw_diffs = Packet.diff_vars inpkt outpkt |> StringSet.of_list in
-  let diffs = StringSet.(of_list fvs |> inter raw_diffs) in
-  let ta_map = Cmd.get_tables_actions phys in
-  List.fold ta_map ~init:True ~f:(fun acc (table, acts) ->
-      let actSize = max (log2 (List.length acts)) 1 in
-      Log.debug @@ lazy (Printf.sprintf "checking table %s" table) ;
-      List.foldi acts ~init:acc ~f:(fun i acc (_, _, act) ->
-          if
-            StringSet.exists (Cmd.assigned_vars act) ~f:(flows_to phys diffs)
-          then
-            let () =
-              Log.debug
-              @@ lazy
-                   (Printf.sprintf "prevent adding to table %s row %d" table
-                      i)
-            in
-            !%(bigand
-                 [ Hole.add_row_hole table %=% Expr.value (1, 1)
-                 ; Hole.which_act_hole table actSize
-                   %=% Expr.value (i, actSize) ])
-            |> and_ acc
-          else acc))
+  if not opts.restr_acts then True
+  else
+    let () = Log.debug @@ lazy (Printf.sprintf "[unlikely_actions]") in
+    let raw_diffs = Packet.diff_vars inpkt outpkt |> StringSet.of_list in
+    let diffs = StringSet.(of_list fvs |> inter raw_diffs) in
+    let ta_map = Cmd.get_tables_actions phys in
+    List.fold ta_map ~init:True ~f:(fun acc (table, acts) ->
+        let phys = StaticSlicing.truncate ~dir:`Fwd phys table in
+        Log.debug @@ lazy (Cmd.to_string phys) ;
+        let actSize = max (log2 (List.length acts)) 1 in
+        Log.debug @@ lazy (Printf.sprintf "checking table %s" table) ;
+        List.foldi acts ~init:acc ~f:(fun i acc (_, _, act) ->
+            if
+              StringSet.exists (Cmd.assigned_vars act)
+                ~f:(flows_to phys diffs)
+            then
+              let () =
+                lazy (Printf.sprintf "ok to add table %s act %d" table i)
+                |> Log.debug
+              in
+              acc
+            else
+              let () =
+                lazy (Printf.sprintf "dont add to table %s act %d" table i)
+                |> Log.debug
+              in
+              !%(bigand
+                   [ Hole.add_row_hole table %=% Expr.value (1, 1)
+                   ; Hole.which_act_hole table actSize
+                     %=% Expr.value (i, actSize) ])
+              |> and_ acc))
 
 (** [test_of_cexs fvs cex] aggregates an input-output list of
     counterexamples, into a pair [(intest, outest)], where [intest] is the
@@ -378,7 +393,7 @@ let apply_heurs params problem opts phys query_test partial_model =
     ; single problem opts query_holes |> fixup_test partial_model
     ; active_domain_restrict params problem opts query_holes
       |> fixup_test partial_model
-    ; unlikely_actions (fsts fvs) (Problem.phys problem) cex
+    ; unlikely_actions opts (fsts fvs) (Problem.phys problem) cex
       |> fixup_test partial_model
     ; non_empty_adds problem |> fixup_test partial_model ]
 

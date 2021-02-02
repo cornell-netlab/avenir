@@ -64,6 +64,8 @@ let opt_params : Parameters.t Command.Param.t =
       flag "--domain-restrict" no_arg
         ~doc:"Restrict allowed values to those that occur in the programs"
     and restrict_mask = flag "--restrict-masks" no_arg ~doc:"Restrict masks"
+    and restr_acts =
+      flag "--restrict-acts" no_arg ~doc:"Restrict unlikely actions"
     and no_defaults =
       flag "--no-defaults" no_arg
         ~doc:"Prefer solutions that don't rely on default actions"
@@ -115,6 +117,7 @@ let opt_params : Parameters.t Command.Param.t =
       ; unique_edits
       ; domain
       ; restrict_mask
+      ; restr_acts
       ; no_defaults
       ; no_deletes
       ; use_all_cexs

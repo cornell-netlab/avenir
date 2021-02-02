@@ -41,6 +41,9 @@ let pipe_generator_422 _ =
 
 let random_test_422 _ =
   Random.init 101 ;
+  Log.set_debug () ;
+  Log.set_z3 () ;
+  Log.set_info () ;
   let edits = Obt.rand_edits 4 2 2 10 in
   let obt, fvs = Obt.gen 4 2 2 in
   let pip = Pipe.gen 4 2 2 in

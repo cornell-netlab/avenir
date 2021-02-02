@@ -35,6 +35,7 @@ type t =
   ; use_all_cexs: bool
   ; reach_restrict: bool
   ; reach_filter: bool
+  ; restr_acts: bool
   ; (* outddated *)
     allow_annotations: bool
   ; nlp: bool
@@ -67,6 +68,7 @@ let default =
   ; use_all_cexs= false
   ; reach_restrict= false
   ; reach_filter= false
+  ; restr_acts= false
   ; allow_annotations= false
   ; nlp= false
   ; unique_edits= false
@@ -115,6 +117,7 @@ let union p1 p2 =
   ; use_all_cexs= p1.use_all_cexs || p1.use_all_cexs
   ; reach_restrict= p1.reach_restrict || p2.reach_restrict
   ; reach_filter= p1.reach_filter || p2.reach_filter
+  ; restr_acts= p1.restr_acts || p2.restr_acts
   ; allow_annotations= p1.allow_annotations || p2.allow_annotations
   ; nlp= p1.nlp || p2.nlp
   ; unique_edits= p1.unique_edits || p2.unique_edits

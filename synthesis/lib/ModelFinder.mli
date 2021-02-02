@@ -29,7 +29,8 @@ type opts =
   ; no_defaults: bool
   ; no_deletes: bool
   ; double: bool
-  ; reachable_adds: bool }
+  ; reachable_adds: bool
+  ; restr_acts: bool }
 
 val no_opts : opts
 (** [no_opts] represents all optimizations being disabled. EXFILTRATED FOR

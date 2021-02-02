@@ -26,9 +26,7 @@ let implements ?(neg = Test.True) (params : Parameters.t)
     ]
 
 let handle_fast_cex neg (params : Parameters.t) data problem = function
-  | `Yes ->
-      Log.info (lazy "New rule is not reachable\n%!") ;
-      None
+  | `Yes -> None
   | `NotFound _ -> implements ~neg params data problem
   | `NoAndCE counter -> Some counter
 
@@ -191,7 +189,7 @@ and try_cache params data problem =
       in
       match did_cache_work with
       | None ->
-          Log.info @@ lazy "Cache succeeded" ;
+          Log.info @@ lazy "Cache succeeded\n\n\n" ;
           Some ps
       | Some cex ->
           Log.info @@ lazy "Cache failed" ;
@@ -219,14 +217,21 @@ let cegis_math_sequence_once (params : Parameters.t) data
       let open Option.Let_syntax in
       let%bind problem, pedits = acc in
       let problem = Problem.replace_log_edits problem [ledit] in
-      let%map phys_edits =
+      let phys_edits =
         cegis_math params data problem
         |> manage_outer_heurs params data problem
       in
-      ( Problem.replace_phys_edits problem phys_edits
-        |> Problem.commit_edits_log params
-        |> Problem.commit_edits_phys params
-      , pedits @ phys_edits ))
+      match phys_edits with
+      | None ->
+          Log.info @@ lazy "@@@@@@@@@@@@@@@@@@failed@@@@@@@@@@@@@@@@@" ;
+          None
+      | Some phys_edits ->
+          Log.info @@ lazy "++++++++++++++++++success+++++++++++++++++" ;
+          ( Problem.replace_phys_edits problem phys_edits
+            |> Problem.commit_edits_log params
+            |> Problem.commit_edits_phys params
+          , pedits @ phys_edits )
+          |> return)
 
 let cegis_math_sequence (params : Parameters.t) data
     (get_problem : unit -> Problem.t) =

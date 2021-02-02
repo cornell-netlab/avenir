@@ -42,6 +42,8 @@ module Key = struct
     | None -> ""
     | Some v -> Printf.sprintf " = %s" (Value.to_string v)
 
+  let var (x, _, _) = x
+
   let value (_, _, vopt) = vopt
 
   let has_value k = value k |> Option.is_some

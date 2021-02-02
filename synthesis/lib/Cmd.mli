@@ -37,6 +37,9 @@ module Key : sig
   val to_string : t -> string
   (** [to_string k] is a string representation of the key [k] *)
 
+  val var : t -> string
+  (** [var k] is the key variable as a string *)
+
   val value : t -> Value.t option
   (** [value k] is the statically known value of the key [k], if it is
       labelled with a value, otherwise is *)

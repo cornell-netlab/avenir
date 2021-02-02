@@ -3,6 +3,13 @@ open Util
 
 let fvs_to_set = StringSet.of_list %. fsts
 
+let string_of_facts facts =
+  StringMap.fold facts ~init:"" ~f:(fun ~key ~data acc ->
+      List.fold data ~init:"" ~f:(fun acc v ->
+          Printf.sprintf "%s %s" acc (Value.to_string v))
+      |> Printf.sprintf "%s\n\t%s->[%s ]" acc key)
+  |> Printf.sprintf "{%s\n}"
+
 let rec static_slice_aux (fvs : StringSet.t) (c : Cmd.t) :
     StringSet.t * Cmd.t =
   match c with
@@ -78,8 +85,12 @@ let rec flows_to (vs : StringSet.t) cmd : StringSet.t =
   | Assign (f, e) ->
       let e_vs = fsts @@ Expr.frees `Var e in
       if List.exists e_vs ~f:in_vs then
-        (* let () = Printf.printf "tainting %s from %s via %s\n%!" f
-           (string_of_expr e) (string_of_strset vs) in *)
+        let () =
+          Log.debug
+          @@ lazy
+               (Printf.sprintf "tainting %s from %s via %s\n%!" f
+                  (Expr.to_string e) (string_of_strset vs))
+        in
         StringSet.add vs f
       else StringSet.remove vs f
   | Assume b ->
@@ -103,16 +114,15 @@ let rec flows_to (vs : StringSet.t) cmd : StringSet.t =
             assigned_vars c
           else flows_to vs c)
   | Apply t ->
-      let keys_vs =
-        t.keys |> List.map ~f:Key.to_string |> StringSet.of_list
-        |> StringSet.union vs
-      in
-      List.fold t.actions ~init:(flows_to keys_vs t.default)
-        ~f:(fun acc (_, params, act) ->
-          let open StringSet in
-          let paramset = of_list (fsts params) in
-          flows_to (union keys_vs paramset) act
-          |> Fn.flip diff paramset |> union acc)
+      let open StringSet in
+      let keys_vs = t.keys |> List.map ~f:Key.var |> of_list |> inter vs in
+      let dflt_flows = flows_to vs t.default in
+      if is_empty keys_vs then dflt_flows
+      else
+        List.fold t.actions ~init:dflt_flows ~f:(fun acc (_, params, act) ->
+            let paramset = of_list (fsts params) in
+            let act_flows = flows_to (union vs paramset) act in
+            diff act_flows paramset |> union acc)
 
 let ghost_static_slice (ghosts : int list StringMap.t) cmd =
   let ghost_vars =
@@ -159,9 +169,12 @@ let edit_slice_table (params : Parameters.t)
       Log.debug
       @@ lazy
            (Printf.sprintf
-              "we know about %s, so we can't eliminate extant rows in %s\n%!"
+              "we know about %s, so we can't immediately eliminate extant \
+               rows in %s\n\
+               %!"
               (Option.value_exn eliminable)
               name) ;
+      Log.debug @@ lazy (string_of_facts facts) ;
       let extant_rows =
         Instance.get_rows (Instance.update_list params inst edits) name
       in
