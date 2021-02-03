@@ -371,6 +371,34 @@ let equality : Command.t =
                          Core.Printf.printf "\t%s\t%s\t%s\n" fv
                            (Value.to_string vl) (Value.to_string vp))]
 
+let summarize : Command.t =
+  let open Command.Let_syntax in
+  Command.basic ~summary:"Check equivalence"
+    [%map_open
+     let program = anon ("program_file" %: string)
+     and p4 = flag "-P4" no_arg ~doc:"input full P4 programs"
+     and includes =
+       flag "-I1" (listed string)
+         ~doc:"<dir> add directory to include search path for logical file"
+         in
+         fun () ->
+           let cmd = if p4 then
+                       Encode.encode_from_p4 includes program false
+                     else
+                       Benchmark.parse_file program
+           in
+           let open Core.Printf in
+           printf "In program %s\n" program;
+           printf "\t %d unique read variables\n" (Cmd.num_read_vars cmd);
+           printf "\t %d unique assigned vars\n" (Cmd.num_assigned_vars cmd);
+           printf "\t %d action data parameters\n" (Cmd.num_action_data_params cmd);
+           printf "\t %d keys, %d unique\n" (Cmd.num_keys cmd) (Cmd.num_unique_keys cmd);
+           printf "\t %d tables\n" (Cmd.num_tables cmd);
+           printf "\t %d actions\n%!" (Cmd.num_actions cmd)
+           
+           
+    ]
+  
 let classbench_cmd : Command.t =
   let open Command.Let_syntax in
   Command.basic ~summary:"benchmarks generated insertions"
@@ -573,6 +601,7 @@ let main : Command.t =
     ; ("classbench", classbench_cmd)
     ; ("onf-real", onf_real)
     ; ("obt", obt)
-    ; ("eq", equality) ]
+    ; ("eq", equality)
+    ; ("summarize", summarize)]
 
 let () = Command.run main

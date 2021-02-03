@@ -35,12 +35,12 @@ let rec gen_acts width curr max =
 let rand_match width curr =
   Match.exact_ (gen_key width curr |> Cmd.Key.var_name) (Value.random width)
 
-let rec rand_matches width curr num_keys =
-  if curr >= num_keys then []
+let rec rand_matches width curr nkeys =
+  if curr >= nkeys then []
   else if curr < 0 then
     failwith
     @@ Printf.sprintf "cannot generate negatively indexed key %i" curr
-  else rand_match width curr :: rand_matches width (curr + 1) num_keys
+  else rand_match width curr :: rand_matches width (curr + 1) nkeys
 
 let rand_act num_acts = Random.int num_acts
 
@@ -49,25 +49,25 @@ let rand_act_data width = [Value.random ~lo:1 width]
 module Obt = struct
   let tblname = "onebigtable"
 
-  let rand_row width num_keys num_acts =
-    let matches = rand_matches width 0 num_keys in
+  let rand_row width nkeys num_acts =
+    let matches = rand_matches width 0 nkeys in
     let acts = rand_act num_acts in
     let act_data = rand_act_data width in
     (matches, act_data, acts)
 
-  let rand_edit width num_keys num_acts =
-    Edit.Add (tblname, rand_row width num_keys num_acts)
+  let rand_edit width nkeys num_acts =
+    Edit.Add (tblname, rand_row width nkeys num_acts)
 
-  let rec rand_edits width num_keys num_acts num =
+  let rec rand_edits width nkeys num_acts num =
     if num <= 0 then []
     else
-      rand_edit width num_keys num_acts
-      :: rand_edits width num_keys num_acts (num - 1)
+      rand_edit width nkeys num_acts
+      :: rand_edits width nkeys num_acts (num - 1)
 
-  let gen bitwidth num_keys num_acts =
+  let gen bitwidth nkeys num_acts =
     let open Cmd in
     let name = tblname in
-    let keys = gen_keys bitwidth 0 num_keys in
+    let keys = gen_keys bitwidth 0 nkeys in
     let actions = gen_acts bitwidth 0 num_acts in
     let default = "meta" %<-% Value (Value.zero bitwidth) in
     let obt = Cmd.Apply {name; keys; actions; default} in
@@ -75,17 +75,17 @@ module Obt = struct
       List.filter (Cmd.vars obt) ~f:(fun (x, _) -> String.(x <> "meta"))
     in
     Printf.printf "There are %d fvs %d keys and %d acts\n%!"
-      (List.length fvs) num_keys num_acts ;
-    assert (List.length fvs = num_keys + num_acts) ;
+      (List.length fvs) nkeys num_acts ;
+    assert (List.length fvs = nkeys + num_acts) ;
     (obt, fvs)
 end
 
 (* GENERATE ALIASED PIPELINE *)
 module Pipe = struct
-  let gen_staging bitwidth num_keys =
+  let gen_staging bitwidth nkeys =
     let open Cmd in
     let name = "staging" in
-    let keys = gen_keys bitwidth 0 num_keys in
+    let keys = gen_keys bitwidth 0 nkeys in
     let actions =
       [("set_meta", [("m", bitwidth)], "meta" %<-% Var ("m", bitwidth))]
     in
@@ -108,9 +108,9 @@ module Pipe = struct
     else
       gen_pipe_table width curr :: gen_pipeline width (curr + 1) max_tables
 
-  let gen bitwidth num_keys num_acts =
+  let gen bitwidth nkeys num_acts =
     let open Cmd in
-    let stg = gen_staging bitwidth num_keys in
+    let stg = gen_staging bitwidth nkeys in
     let pipe = gen_pipeline bitwidth 0 num_acts in
     stg :: pipe |> sequence
 end
