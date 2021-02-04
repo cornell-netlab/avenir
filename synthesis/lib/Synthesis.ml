@@ -41,17 +41,31 @@ let handle_sliced_equivalence neg problem params data = function
 let log_cex_str inpkt outpkt =
   Printf.sprintf "log :%s\n" (Packet.cex_to_string (inpkt, outpkt))
 
-let phys_cex_str params problem inpkt =
+let phys_cex_str params problem log_outpkt inpkt =
   let phys = Problem.phys_gcl_program params problem in
-  Printf.sprintf "phys :%s\n"
-    (Packet.cex_to_string (inpkt, eval_act phys inpkt))
+  let outpkt = eval_act phys inpkt |> Packet.restrict (Problem.fvs problem) in
+  let phys_str = Printf.sprintf "phys :%s"
+                   (Packet.cex_to_string (inpkt, outpkt)) in
+  let vars = Packet.diff_vars log_outpkt outpkt in
+  let diff_str =
+    List.fold vars ~init:"" ~f:(fun acc s ->
+        let logv = Packet.get_val_opt log_outpkt s
+                   |> Option.value_map ~f:(Value.to_string)  ~default:"???" in
+        let physv = Packet.get_val_opt outpkt s
+                    |> Option.value_map ~f:(Value.to_string)  ~default:"???" in 
+        Printf.sprintf "%s\n\t %s -> %s, %s" acc s logv physv
+      )
+  in
+  Printf.sprintf "%s\ndiffs : {%s}" phys_str diff_str
+  
+
 
 let normalize_cex params (problem : Problem.t) cex =
   let inpkt, outpkt =
     Util.pair_map ~f:(Packet.restrict (Problem.fvs problem)) cex
   in
   Log.debug @@ lazy (log_cex_str inpkt outpkt) ;
-  Log.debug @@ lazy (phys_cex_str params problem inpkt) ;
+  Log.debug @@ lazy (phys_cex_str params problem outpkt inpkt) ;
   (inpkt, outpkt)
 
 let eq_str params problem =
