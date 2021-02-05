@@ -187,7 +187,7 @@ let slicing_microbench () =
           , 0 ) ) ]
   in
   let expected = Instance.of_edits params edits in
-  let cmd = RandomGen.Pipe.gen 8 1 1 in
+  let cmd = RandomGen.Pipe.gen true 8 1 1 in
   Printf.printf "%s" (Cmd.to_string cmd) ;
   let inst =
     Instance.of_edits params
@@ -225,7 +225,7 @@ let edit_slicing_microbench () =
       ; Assume (Var ("meta", 8) %=% Expr.value (44, 8))
       ; "y0" %<-% Expr.value (3, 8) ]
   in
-  let cmd = RandomGen.Pipe.gen 8 1 1 in
+  let cmd = RandomGen.Pipe.gen true 8 1 1 in
   Printf.printf "%s" (Cmd.to_string cmd) ;
   let inst =
     Instance.of_edits params

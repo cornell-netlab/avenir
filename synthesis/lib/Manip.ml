@@ -23,7 +23,8 @@ let rec substituteE ?(holes = false) substMap e =
         e'
       else (*Printf.printf "NO SUBST\n%!";*) e
   | Expr.Cast (i, e) -> Expr.cast i @@ substituteE ~holes substMap e
-  | Expr.Slice {hi; lo; bits} -> Expr.slice hi lo @@ substituteE ~holes substMap bits
+  | Expr.Slice {hi; lo; bits} ->
+      Expr.slice hi lo @@ substituteE ~holes substMap bits
   | Expr.Plus es
    |Expr.Times es
    |Expr.Minus es

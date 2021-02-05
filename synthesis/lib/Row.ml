@@ -103,10 +103,11 @@ let mk_new_row (match_model : Model.t) phys tbl_name data_opt act : t option
                     let p_hole = Hole.action_data tbl_name act p sz in
                     match Model.find match_model p_hole with
                     | None ->
-                        Printf.printf
-                          "[WARNING] couldn't find action data %s in %s \n%!"
-                          p_hole
-                          (Model.to_string match_model) ;
+                        lazy(Printf.sprintf
+                               "[WARNING] couldn't find action data %s in %s \n%!"
+                               p_hole
+                               (Model.to_string match_model))
+                        |> Log.warn;
                         Value.make (Random.int (pow 2 sz), sz)
                     | Some v -> v
                   in

@@ -332,3 +332,9 @@ let opt_equals ~f o1 o2 =
 let pair_map ~f (a, b) = (f a, f b)
 
 let some_ident_if ~f x = Option.some_if (f x) x
+
+let rec map2l ~f xs ys =
+  match (xs, ys) with
+  | [], _ -> []
+  | x :: xs, [] -> f x None :: map2l ~f xs []
+  | x :: xs, y :: ys -> f x (Some y) :: map2l ~f xs ys

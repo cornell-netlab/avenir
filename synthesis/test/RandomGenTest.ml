@@ -11,7 +11,7 @@ let obt_generator_422 _ =
            , [ ("action0", [("arg0", 4)], "y0" %<-% Var ("arg0", 4))
              ; ("action1", [("arg1", 4)], "y1" %<-% Var ("arg1", 4)) ]
            , "meta" %<-% Value (Value.zero 4) ) ])
-    (Obt.gen 4 2 2 |> fst)
+    (Obt.gen true 4 2 2 |> fst)
 
 let pipe_generator_422 _ =
   let open Cmd in
@@ -37,16 +37,16 @@ let pipe_generator_422 _ =
            , [("meta", 4)]
            , [("action2", [("arg2", 4)], "y2" %<-% Var ("arg2", 4))]
            , Skip ) ])
-    (Pipe.gen 4 2 3)
+    (Pipe.gen true 4 2 3)
 
 let random_test_422 _ =
   Random.init 101 ;
   Log.set_debug () ;
   Log.set_z3 () ;
   Log.set_info () ;
-  let edits = Obt.rand_edits 4 2 2 10 in
-  let obt, fvs = Obt.gen 4 2 2 in
-  let pip = Pipe.gen 4 2 2 in
+  let edits = Obt.rand_edits true 4 2 2 10 in
+  let obt, fvs = Obt.gen true 4 2 2 in
+  let pip = Pipe.gen true 4 2 2 in
   let problem_mkr =
     Problem.make ~log:obt ~phys:pip ~fvs ~log_edits:edits
       ~log_inst:Instance.empty ~phys_inst:Instance.empty

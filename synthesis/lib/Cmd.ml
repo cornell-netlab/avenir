@@ -379,7 +379,7 @@ let rec holify_cmd ~f holes c : t =
 
 let holify ?(f = Fn.id) holes c = holify_cmd ~f holes c
 
-let sequence = List.reduce_exn ~f:seq
+let sequence = List.fold ~init:Skip ~f:seq
 
 let rec assigned_vars = function
   | Skip | Assume _ -> StringSet.empty
@@ -452,56 +452,38 @@ let rec get_tables_keys = function
 let rec read_vars = function
   | Skip -> StringSet.empty
   | Assume b -> Test.vars b |> fsts |> StringSet.of_list
-  | Assign (_,e) -> Expr.vars e |> fsts |> StringSet.of_list
-  | Seq (c1,c2) -> StringSet.union (read_vars c1) (read_vars c2)
+  | Assign (_, e) -> Expr.vars e |> fsts |> StringSet.of_list
+  | Seq (c1, c2) -> StringSet.union (read_vars c1) (read_vars c2)
   | Select (_, cs) ->
       let open StringSet in
-      List.fold cs ~init:empty ~f:(fun acc (b,c) ->
-          Test.vars b
-          |> fsts
-          |> of_list
-          |> union (read_vars c)
-          |> union acc 
-        )
+      List.fold cs ~init:empty ~f:(fun acc (b, c) ->
+          Test.vars b |> fsts |> of_list |> union (read_vars c) |> union acc)
   | Apply t ->
       let open StringSet in
       let act_reads =
-        List.fold t.actions ~init:empty
-          ~f:(fun acc (_,data, act) ->
-            fsts data
-            |> of_list
-            |> diff (read_vars act) 
-            |> union acc
-          ) in
-      List.map t.keys ~f:(Key.var)
-      |> of_list
-      |> union act_reads 
+        List.fold t.actions ~init:empty ~f:(fun acc (_, data, act) ->
+            fsts data |> of_list |> diff (read_vars act) |> union acc)
+      in
+      List.map t.keys ~f:Key.var
+      |> of_list |> union act_reads
       |> union (read_vars t.default)
 
 let num_read_vars = StringSet.length %. read_vars
 
-let num_assigned_vars = StringSet.length %. assigned_vars 
+let num_assigned_vars = StringSet.length %. assigned_vars
 
-let num_tables = List.length %. get_tables_keys 
-                      
-let num_action_data_params c = 
-  get_tables_actions c
-  |> List.bind ~f:snd
-  |> List.fold ~init:0 ~f:(fun acc (_,data,_) -> acc + List.length data)
+let num_tables = List.length %. get_tables_keys
+
+let num_action_data_params c =
+  get_tables_actions c |> List.bind ~f:snd
+  |> List.fold ~init:0 ~f:(fun acc (_, data, _) -> acc + List.length data)
 
 let num_actions c =
   get_tables_actions c
-  |> List.fold ~init:0 ~f:(fun acc (_,acts) -> acc + List.length acts)
+  |> List.fold ~init:0 ~f:(fun acc (_, acts) -> acc + List.length acts)
 
-let num_keys c =
-  get_tables_keys c
-  |> List.bind ~f:snd
-  |> List.length 
+let num_keys c = get_tables_keys c |> List.bind ~f:snd |> List.length
 
 let num_unique_keys c =
-  get_tables_keys c
-  |> List.bind ~f:snd
-  |> List.map ~f:Key.var 
-  |> StringSet.of_list
-  |> StringSet.length
-       
+  get_tables_keys c |> List.bind ~f:snd |> List.map ~f:Key.var
+  |> StringSet.of_list |> StringSet.length

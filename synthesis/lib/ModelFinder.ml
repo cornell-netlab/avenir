@@ -402,7 +402,7 @@ let apply_heurs params problem opts phys query_test partial_model =
 let action_hole_valid tbl num_acts =
   let open Test in
   Hole.which_act_hole tbl (max (log2 num_acts) 1)
-  %<=% Expr.value (num_acts - 1, max (log2 num_acts) 1)
+  %<=% Expr.value (max (num_acts - 1) 0, max (log2 num_acts) 1)
 
 (** [well_formed_actions problem] ensures that the hole index for each table
     in [Problem.phys problem] doesn't surpass the number of actions defined

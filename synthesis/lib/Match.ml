@@ -253,8 +253,7 @@ let rec has_inter_data (d : match_data) (d' : match_data) : bool =
           Value.get_bigint msk
           >= pow (of_int 2) (of_int @@ Value.size msk) - one)
       then has_inter_data (Exact v) mm
-      else
-        failwith "Cant intersect with non-exact match" 
+      else failwith "Cant intersect with non-exact match"
 
 let has_inter (m : t) (m' : t) : bool =
   String.(m.key = m'.key)

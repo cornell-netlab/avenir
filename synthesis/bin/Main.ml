@@ -375,30 +375,28 @@ let summarize : Command.t =
   let open Command.Let_syntax in
   Command.basic ~summary:"Check equivalence"
     [%map_open
-     let program = anon ("program_file" %: string)
-     and p4 = flag "-P4" no_arg ~doc:"input full P4 programs"
-     and includes =
-       flag "-I1" (listed string)
-         ~doc:"<dir> add directory to include search path for logical file"
-         in
-         fun () ->
-           let cmd = if p4 then
-                       Encode.encode_from_p4 includes program false
-                     else
-                       Benchmark.parse_file program
-           in
-           let open Core.Printf in
-           printf "In program %s\n" program;
-           printf "\t %d unique read variables\n" (Cmd.num_read_vars cmd);
-           printf "\t %d unique assigned vars\n" (Cmd.num_assigned_vars cmd);
-           printf "\t %d action data parameters\n" (Cmd.num_action_data_params cmd);
-           printf "\t %d keys, %d unique\n" (Cmd.num_keys cmd) (Cmd.num_unique_keys cmd);
-           printf "\t %d tables\n" (Cmd.num_tables cmd);
-           printf "\t %d actions\n%!" (Cmd.num_actions cmd)
-           
-           
-    ]
-  
+      let program = anon ("program_file" %: string)
+      and p4 = flag "-P4" no_arg ~doc:"input full P4 programs"
+      and includes =
+        flag "-I1" (listed string)
+          ~doc:"<dir> add directory to include search path for logical file"
+      in
+      fun () ->
+        let cmd =
+          if p4 then Encode.encode_from_p4 includes program false
+          else Benchmark.parse_file program
+        in
+        let open Core.Printf in
+        printf "In program %s\n" program ;
+        printf "\t %d unique read variables\n" (Cmd.num_read_vars cmd) ;
+        printf "\t %d unique assigned vars\n" (Cmd.num_assigned_vars cmd) ;
+        printf "\t %d action data parameters\n"
+          (Cmd.num_action_data_params cmd) ;
+        printf "\t %d keys, %d unique\n" (Cmd.num_keys cmd)
+          (Cmd.num_unique_keys cmd) ;
+        printf "\t %d tables\n" (Cmd.num_tables cmd) ;
+        printf "\t %d actions\n%!" (Cmd.num_actions cmd)]
+
 let classbench_cmd : Command.t =
   let open Command.Let_syntax in
   Command.basic ~summary:"benchmarks generated insertions"
@@ -509,50 +507,54 @@ let random_bench : Command.t =
       and file =
         flag "-output" (required string)
           ~doc:"The file to which to write the experimental data"
-      and lobits =
-        flag "-lb" (required int) ~doc:"b The lowest bitwidth in the space"
-      and hibits =
-        flag "-hb" (optional int)
-          ~doc:
-            "B The highest bitwidth in the space. If omitted taken to be b"
-      and lokeys =
-        flag "-lk" (required int)
-          ~doc:"k The lowest number of keys in the space"
-      and hikeys =
-        flag "-hk" (optional int)
-          ~doc:
-            "K The highest number of keys in the space. If omitted taken to \
-             be k"
-      and loouts =
-        flag "-lo" (required int)
-          ~doc:"o The lowest number of writable variables in the space"
-      and hiouts =
-        flag "-ho" (optional int)
-          ~doc:
-            "O The highest number of writable varaibles in the space. If \
-             omitted taken to be o"
-      and loedts =
-        flag "-le" (required int)
-          ~doc:"e The lowest number of writable edits in the space"
-      and hiedts =
-        flag "-he" (optional int)
-          ~doc:
-            "E The highest number of writable edits in the space. If \
-             omitted taken to be E"
+      and bits =
+        flag "-bs" (listed int) ~doc:"b The bitwidths in the space"
+      and keys =
+        flag "-ks" (listed int)
+          ~doc:"k The bounds for keys in the space"
+      and tbls =
+        flag "-ts" (listed int)
+          ~doc:"k The bounds for tbls in the target pipeline"              
+      and vars =
+        flag "-vs" (listed int)
+          ~doc:"v The bounds for writable variables in the space"
+      and data =
+        flag "-ds" (listed int)
+          ~doc:"d The bounds for action data"
+      and acts =
+        flag "-as" (listed int)
+          ~doc:"a The bounds for action data"
+      and edts =
+        flag "-es" (listed int)
+          ~doc:"e The bounds for edits in the space"
       in
       fun () ->
         let open Avenir.MicroBench in
         let params = Parameters.union opt mng in
-        let lo = {bits= lobits; keys= lokeys; outs= loouts; edts= loedts} in
-        let hi =
-          { bits= Option.value hibits ~default:lobits
-          ; keys= Option.value hikeys ~default:lokeys
-          ; outs= Option.value hiouts ~default:loouts
-          ; edts= Option.value hiedts ~default:loedts }
+        let get f xs = f xs ~compare:Int.compare |> Option.value ~default:1 in
+        let minelt = get List.min_elt in
+        let maxelt = get List.max_elt in
+        let lo = { bits= minelt bits
+                 ; keys= minelt keys
+                 ; tbls= minelt tbls
+                 ; vars= minelt vars
+                 ; data= minelt data
+                 ; acts= minelt acts
+                 ; edts= minelt edts} in
+        let hi = { bits= maxelt bits
+                 ; keys= maxelt keys
+                 ; tbls= maxelt tbls
+                 ; vars= maxelt vars
+                 ; data= maxelt data
+                 ; acts= maxelt acts
+                 ; edts= minelt edts}          
         in
         (hi.bits - lo.bits + 1)
         * (hi.keys - lo.keys + 1)
-        * (hi.outs - lo.outs + 1)
+        * (hi.tbls - lo.tbls + 1)
+        * (hi.vars - lo.vars + 1)
+        * (hi.data - lo.data + 1)
+        * (hi.acts - lo.acts + 1)
         * (hi.edts - lo.edts + 1)
         |> Core.Printf.printf "Starting Experiments with %d cases\n%!" ;
         run_experiment params file lo hi ;
@@ -602,6 +604,6 @@ let main : Command.t =
     ; ("onf-real", onf_real)
     ; ("obt", obt)
     ; ("eq", equality)
-    ; ("summarize", summarize)]
+    ; ("summarize", summarize) ]
 
 let () = Command.run main

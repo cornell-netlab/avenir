@@ -232,8 +232,9 @@ let rec frees typ e : (string * int) list =
    |SatMinus (e, e'), _ ->
       frees typ e @ frees typ e'
 
-let vars  = frees `Var    
-let holes = frees `Hole      
+let vars = frees `Var
+
+let holes = frees `Hole
 
 let rec has_hole = function
   | Value _ | Var _ -> false

@@ -94,12 +94,11 @@ val frees : [`Hole | `Var] -> t -> (string * int) list
     returns all [Hole]s. If [type = `Var] it returns all [Var]s. *)
 
 val vars : t -> (string * int) list
-(** [vars e == frees `Var e]*)  
+(** [vars e == frees `Var e]*)
 
 val holes : t -> (string * int) list
-(** [holes e == frees `Holes e]*)  
-  
-  
+(** [holes e == frees `Holes e]*)
+
 val has_hole : t -> bool
 (** [has_hole e] is true iff [e] contains a [Hole] AST node*)
 
