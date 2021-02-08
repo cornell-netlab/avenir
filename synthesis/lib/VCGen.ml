@@ -311,39 +311,46 @@ let rec good_wp c =
          removed"
   | Apply _ -> failwith "Tables should be applied at this stage"
 
-let rec bad_wp c =
-  let open Test in
-  let open Cmd in
-  match c with
-  | Skip -> False
-  | Assume _ -> False
-  | Seq (c1, c2) -> bad_wp c1 %+% (good_wp c1 %&% bad_wp c2)
-  | Select (Total, _) -> failwith "totality eludes me "
-  | Select (Partial, ss) ->
-      List.fold ss ~init:True ~f:(fun acc (t, c) -> acc %+% (t %&% bad_wp c))
-  | Select (Ordered, ss) ->
-      List.fold ss ~init:(False, False) ~f:(fun (cond, misses) (t, c) ->
-          (cond %+% (t %&% !%misses %&% bad_wp c), t %+% misses))
-      |> fst
-  | Assign _ ->
-      failwith
-        "ERROR: PROGRAM NOT IN PASSIVE FORM! Assignments should have been \
-         removed"
-  | Apply _ -> failwith "Tables should be applied at this stage"
+(* let rec bad_wp c =
+ *   let open Test in
+ *   let open Cmd in
+ *   match c with
+ *   | Skip -> False
+ *   | Assume _ -> False
+ *   | Seq (c1, c2) -> bad_wp c1 %+% (good_wp c1 %&% bad_wp c2)
+ *   | Select (Total, _) -> failwith "totality eludes me "
+ *   | Select (Partial, ss) ->
+ *       List.fold ss ~init:True ~f:(fun acc (t, c) -> acc %+% (t %&% bad_wp c))
+ *   | Select (Ordered, ss) ->
+ *       List.fold ss ~init:(False, False) ~f:(fun (cond, misses) (t, c) ->
+ *           (cond %+% (t %&% !%misses %&% bad_wp c), t %+% misses))
+ *       |> fst
+ *   | Assign _ ->
+ *       failwith
+ *         "ERROR: PROGRAM NOT IN PASSIVE FORM! Assignments should have been \
+ *          removed"
+ *   | Apply _ -> failwith "Tables should be applied at this stage" *)
 
 let good_execs fvs c =
   (* let c = CompilerOpts.optimize fvs c in *)
   let merged_sub, passive_c = passify fvs c in
+  Log.debug @@ lazy (Printf.sprintf "Passive : %s" (Cmd.to_string passive_c)) ;
   let passive_c =
     ConstantProp.passive_propogate (StringMap.empty, passive_c) |> snd
   in
-  (* Printf.printf "passive : \n %s\n" (string_of_cmd passive_c); *)
-  (* let vc = good_wp passive_c in *)
-  (* Printf.printf "good_executions:\n %s\n%!" (string_of_test vc); *)
-  (merged_sub, passive_c, good_wp passive_c, bad_wp passive_c)
+  Log.debug
+  @@ lazy (Printf.sprintf "optimized passive : %s" (Cmd.to_string passive_c)) ;
+  let vc = good_wp passive_c in
+  Log.debug
+  @@ lazy (Printf.sprintf "good_executions:\n %s" (Test.to_string vc)) ;
+  (merged_sub, passive_c, vc)
 
 let equivalent ?(neg = Test.True) (data : ProfData.t ref) eq_fvs l p =
   let open Cmd in
+  Log.debug
+  @@ lazy
+       (Printf.sprintf "checking %s \n==\n %s" (Cmd.to_string l)
+          (Cmd.to_string p)) ;
   let l = Assume neg %:% l in
   let p = Assume neg %:% p in
   let phys_prefix = "phys_" in
@@ -355,8 +362,8 @@ let equivalent ?(neg = Test.True) (data : ProfData.t ref) eq_fvs l p =
   let fvs_p = prefix_list fvs in
   let eq_fvs_p = prefix_list eq_fvs in
   let st = Time.now () in
-  let sub_l, _, gl, _ = good_execs fvs l in
-  let sub_p, _, gp, _ = good_execs fvs_p p' in
+  let sub_l, _, gl = good_execs fvs l in
+  let sub_p, _, gp = good_execs fvs_p p' in
   ProfData.update_time !data.good_execs_time st ;
   let st = Time.now () in
   let lin = inits eq_fvs sub_l in
@@ -366,6 +373,10 @@ let equivalent ?(neg = Test.True) (data : ProfData.t ref) eq_fvs l p =
   let in_eq = zip_eq_exn lin pin in
   let out_eq = zip_eq_exn lout pout in
   ProfData.update_time !data.ingress_egress_time st ;
+  Log.debug
+  @@ lazy
+       (Printf.sprintf "%s\n %s\n %s \n => \n %s" (Test.to_string gl)
+          (Test.to_string gp) (Test.to_string in_eq) (Test.to_string out_eq)) ;
   Test.(gl %&% gp %&% in_eq %=>% out_eq)
 
 let hoare_triple_passified_relabelled assum good_n conseq =
@@ -377,12 +388,12 @@ let hoare_triple_passified sub assum good_n conseq =
     (apply_finals_sub_test conseq sub)
 
 let passive_hoare_triple_pkt ~fvs in_pkt cmd out_pkt =
-  let sub, _, good_N, _ = good_execs fvs cmd in
+  let sub, _, good_N = good_execs fvs cmd in
   hoare_triple_passified sub
     (Packet.to_test in_pkt ~fvs)
     good_N
     (Packet.to_test out_pkt ~fvs)
 
 let passive_hoare_triple ~fvs assum cmd conseq =
-  let sub, _, good_N, _ = good_execs fvs cmd in
+  let sub, _, good_N = good_execs fvs cmd in
   hoare_triple_passified sub assum good_N conseq

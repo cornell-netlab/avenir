@@ -27,6 +27,9 @@ let to_string (inst : t) : string =
       Printf.sprintf "%s\n%s\n%s" acc table_name
         (Row.list_to_string ~tab:"\t" rows))
 
+let equal (i1 : t) (i2 : t) : bool =
+  StringMap.equal (List.equal Row.equals) i1 i2
+
 let empty = StringMap.empty
 
 let update (params : Parameters.t) (inst : t) (e : Edit.t) =

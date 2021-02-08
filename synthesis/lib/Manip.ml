@@ -9,33 +9,32 @@ let rec substituteE ?(holes = false) substMap e =
     op (substituteE ~holes substMap e) (substituteE ~holes substMap e')
   in
   let subst = get_val substMap in
-  let open Expr in
   match e with
-  | Value _ -> e
-  | Var (field, _) ->
+  | Expr.Value _ -> e
+  | Expr.Var (field, _) ->
       let replacement = subst field e in
       (* Printf.printf "substituting %s for %s;\n%!" field (string_of_expr
          e); *)
       replacement
-  | Hole (field, _) ->
+  | Expr.Hole (field, _) ->
       if holes then
         let e' = subst field e in
         (*Printf.printf "%s -> %s \n%!" field (string_of_expr e');*)
         e'
       else (*Printf.printf "NO SUBST\n%!";*) e
-  | Cast (i, e) -> cast i @@ substituteE ~holes substMap e
-  | Slice {hi; lo; bits} -> slice hi lo @@ substituteE ~holes substMap bits
-  | Plus es
-   |Times es
-   |Minus es
-   |Mask es
-   |Xor es
-   |BOr es
-   |Shl es
-   |Concat es
-   |SatPlus es
-   |SatMinus es ->
-      binop (bin_ctor e) es
+  | Expr.Cast (i, e) -> Expr.cast i @@ substituteE ~holes substMap e
+  | Expr.Slice {hi; lo; bits} -> Expr.slice hi lo @@ substituteE ~holes substMap bits
+  | Expr.Plus es
+   |Expr.Times es
+   |Expr.Minus es
+   |Expr.Mask es
+   |Expr.Xor es
+   |Expr.BOr es
+   |Expr.Shl es
+   |Expr.Concat es
+   |Expr.SatPlus es
+   |Expr.SatMinus es ->
+      binop (Expr.bin_ctor e) es
 
 (** computes ex[xs -> vs], replacing only Vars whenever holes is false,
     replacing both whenever holes is true *)

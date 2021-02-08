@@ -38,6 +38,9 @@ module Key : sig
   val to_string : t -> string
   (** [to_string k] is a string representation of the key [k] *)
 
+  val var : t -> string
+  (** [var k] is the key variable as a string *)
+
   val value : t -> Value.t option
   (** [value k] is the statically known value of the key [k], if it is
       labelled with a value, otherwise is *)
@@ -209,3 +212,24 @@ val multi_vals : t -> Value.t list
 val assigned_vars : t -> Util.StringSet.t
 (** [assigned_vars c] is a set of variables that occur on the lhs of an
     assignment in [c] *)
+
+val num_read_vars : t -> int
+(** [num_read_vars c] is the number of variables read from in [c]  *)
+
+val num_assigned_vars : t -> int
+(** [num_assigned_vars c] is the number of variables writen to in [c]  *)
+
+val num_action_data_params : t -> int
+(** [num_action_data_params c] is the number of action data parameters in tables of [c]  *)
+
+val num_keys : t -> int
+(** [num_keys c] is the number keys in tables of [c], multiple occurences counted separately *)
+
+val num_unique_keys : t -> int
+(** [num_keys c] is the number of unqiue keys in tables of [c]  *)
+
+val num_tables : t -> int
+(** [num_tables c] is the number of tables in [c] *)
+
+val num_actions : t -> int
+(** [num_actions c] is the number of actions in tables of [c] *)

@@ -67,10 +67,10 @@ val to_assignment : t -> Cmd.t
     [pkt] when run on [empty]. *)
 
 val diff_vars : t -> t -> string list
-(** [diff_vars pkt pkt'] computes the variables that are different between
-    [pkt] and [pkt'], where a variable is different either because it is
-    undefined in exactly one of [pkt] or [pkt'], or because the two packets
-    define unequal values for the variable. *)
+(** [diff_vars ~fvs pkt pkt'] computes the variables that are different
+    between [pkt] and [pkt'], where a variable is different either because it
+    is undefined in exactly one of [pkt] or [pkt'], or because the two
+    packets define unequal values for the variable.*)
 
 val to_expr_map : t -> Expr.t Util.StringMap.t
 (** [to_expr_map pkt] produces a map [m] such that if [x |-> v] in [pkt] then

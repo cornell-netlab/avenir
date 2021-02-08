@@ -69,3 +69,7 @@ let same_values = Alcotest.(check value) "same values"
 let diff_values = Alcotest.(check (neg value)) "different values"
 
 let leq_values = Alcotest.(check valuele) "less than"
+
+let instance = testable_string Instance.to_string Instance.equal
+
+let same_inst = Alcotest.(check instance) "same instances"

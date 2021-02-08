@@ -11,6 +11,9 @@ val to_string : t -> string
 (** [to_string t] is a string representation of an instance---mainly useful
     for debugging *)
 
+val equal : t -> t -> bool
+(** [equal i1 i2] is [true] when [i1] and [i2] are identical*)
+
 val size : t -> int
 (** [size t] is the sum of the number of rows in each table. *)
 

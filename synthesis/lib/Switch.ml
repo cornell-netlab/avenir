@@ -52,27 +52,29 @@ let edited_instance params (p : t) =
   | Some i -> i
 
 let to_gcl (params : Parameters.t) (_ : (string * int) list) (p : t) =
-  if p.do_slice then
-    (* let edited_inst = edited_instance params p in
-     * let ghost_edits = List.fold (edits p) ~init:StringMap.empty ~f:(fun acc e ->
-     *                       let table = Edit.table e in
-     *                       StringMap.set acc ~key:table ~data:(
-     *                           let ms = Edit.get_matches_exn e in
-     *                           Instance.get_rows edited_inst table
-     *                           |> get_indices_matching ~f:(fun (ms', _,_) -> List.equal Match.equal ms ms')
-     *                         )
-     *                     ) in
-     * let ghostly =
-     *   Instance.apply ~no_miss:false ~ghost_edits params NoHoles `Exact edited_inst (pipeline p)
-     * in
-     * let () = Printf.printf "instrumented_program: %s\n%!" (string_of_cmd ghostly) in
-     * let c  =
-     *   ghostly
-     *   |> StaticSlicing.static_slice (StringSet.of_list @@ fsts fvs)
-     *   |> StaticSlicing.ghost_static_slice ghost_edits
-     *   |> ConstantProp.propogate in *)
-    (* let propd_line = ConstantProp.propogate (pipeline p) in *)
-    if params.semantic_slicing then
+  if p.do_slice then (
+    if
+      (* let edited_inst = edited_instance params p in
+       * let ghost_edits = List.fold (edits p) ~init:StringMap.empty ~f:(fun acc e ->
+       *                       let table = Edit.table e in
+       *                       StringMap.set acc ~key:table ~data:(
+       *                           let ms = Edit.get_matches_exn e in
+       *                           Instance.get_rows edited_inst table
+       *                           |> get_indices_matching ~f:(fun (ms', _,_) -> List.equal Match.equal ms ms')
+       *                         )
+       *                     ) in
+       * let ghostly =
+       *   Instance.apply ~no_miss:false ~ghost_edits params NoHoles `Exact edited_inst (pipeline p)
+       * in
+       * let () = Printf.printf "instrumented_program: %s\n%!" (string_of_cmd ghostly) in
+       * let c  =
+       *   ghostly
+       *   |> StaticSlicing.static_slice (StringSet.of_list @@ fsts fvs)
+       *   |> StaticSlicing.ghost_static_slice ghost_edits
+       *   |> ConstantProp.propogate in *)
+      (* let propd_line = ConstantProp.propogate (pipeline p) in *)
+      params.semantic_slicing
+    then
       (* let () = Printf.printf "semantic slicing\n%!" in *)
       StaticSlicing.edit_slice params (inst p) (edits p) (pipeline p)
     else
@@ -85,9 +87,8 @@ let to_gcl (params : Parameters.t) (_ : (string * int) list) (p : t) =
       let c =
         Instance.apply params ~no_miss:true NoHoles `Exact slice (pipeline p)
       in
-      (* let () = Printf.printf "Sliced program has %d nodes\n%!"
-         (num_nodes_in_cmd c) in *)
-      c
+      Log.debug @@ lazy (Printf.sprintf "%s" (Cmd.to_string c)) ;
+      c )
   else
     match !(p.gcl) with
     | None ->

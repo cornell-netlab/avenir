@@ -23,7 +23,8 @@ let append_line file string =
   let outc = Out_channel.create ~append:true file in
   Out_channel.output_string outc string ;
   Out_channel.newline outc ;
-  Out_channel.flush outc
+  Out_channel.flush outc ;
+  Out_channel.close outc
 
 let log_header file = "bits,keys,outs,edits,succeed,time" |> append_line file
 

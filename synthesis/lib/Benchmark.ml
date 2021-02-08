@@ -345,15 +345,15 @@ let mk_ith_keys sz num_xs ith_meta =
         else (mk_ith_meta i, sz)
       else (mk_ith_var i, sz))
 
-let mk_ith_table sz num_tables tbl_idx num_xs num_ms =
+let mk_ith_table sz ntables tbl_idx num_xs num_ms =
   let open Cmd in
-  let idx_of_min_mtbl = num_tables - num_ms - 1 in
+  let idx_of_min_mtbl = ntables - num_ms - 1 in
   apply
     ( Printf.sprintf "physical%d" tbl_idx
     , ( if tbl_idx > idx_of_min_mtbl then
         mk_ith_keys sz num_xs (tbl_idx - idx_of_min_mtbl - 1)
       else mk_normal_keys sz num_xs )
-    , ( if tbl_idx >= num_tables - num_ms - 1 && tbl_idx < num_tables - 1 then
+    , ( if tbl_idx >= ntables - num_ms - 1 && tbl_idx < ntables - 1 then
         [ ( "action"
           , [(Printf.sprintf "d%i" tbl_idx, sz)]
           , mk_ith_meta (tbl_idx - idx_of_min_mtbl)
@@ -372,13 +372,13 @@ let initialize_ms sz num_ms =
         mk_ith_meta i %<-% Expr.value (0, sz))
     |> sequence
 
-let create_bench sz num_tables num_xs num_ms =
+let create_bench sz ntables num_xs num_ms =
   let open Cmd in
   sequence
     [ initialize_ms sz num_ms
     ; sequence
-      @@ List.map (range_ex 0 num_tables) ~f:(fun tbl_idx ->
-             mk_ith_table sz num_tables tbl_idx num_xs num_ms) ]
+      @@ List.map (range_ex 0 ntables) ~f:(fun tbl_idx ->
+             mk_ith_table sz ntables tbl_idx num_xs num_ms) ]
 
 let wildcard k = Match.wildcard k 32
 
@@ -1028,10 +1028,10 @@ let tables params sz max_tables nheaders max_edits =
  *        Benchmark Breadth           *
  ***************************************)
 
-let create_par_bench sz num_tables num_xs num_ms =
+let create_par_bench sz ntables num_xs num_ms =
   let open Test in
   let open Cmd in
-  let tblsize = max (log2 (num_tables + 2)) 1 in
+  let tblsize = max (log2 (ntables + 2)) 1 in
   sequence
     [ initialize_ms sz num_ms
     ; apply
@@ -1040,11 +1040,11 @@ let create_par_bench sz num_tables num_xs num_ms =
         , [ ( "action"
             , [("stg", tblsize)]
             , "table_id" %<-% Var ("stg", tblsize) ) ]
-        , "table_id" %<-% Expr.value (num_tables + 1, tblsize) )
+        , "table_id" %<-% Expr.value (ntables + 1, tblsize) )
     ; ordered
-      @@ List.map (range_ex 0 num_tables) ~f:(fun tbl_idx ->
+      @@ List.map (range_ex 0 ntables) ~f:(fun tbl_idx ->
              ( Expr.value (tbl_idx, tblsize) %=% Var ("table_id", tblsize)
-             , mk_ith_table sz num_tables tbl_idx num_xs num_ms )) ]
+             , mk_ith_table sz ntables tbl_idx num_xs num_ms )) ]
 
 let breadth params sz max_tables nheaders max_edits =
   let open Cmd in

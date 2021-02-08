@@ -227,10 +227,13 @@ let check_valid (_ : Parameters.t) (longtest : Test.t) =
   let model =
     match response with
     | Sat ->
+        Log.z3 @@ lazy "Sat" ;
         get valid_prover |> get_model |> Packet.of_smt_model
         |> Shortener.unshorten_packet shortener
         |> Some
-    | Unsat -> None
+    | Unsat ->
+        Log.z3 @@ lazy "Unsat" ;
+        None
     | Unknown -> failwith "response unknown"
   in
   reset (get valid_prover) ;
