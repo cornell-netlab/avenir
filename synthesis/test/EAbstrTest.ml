@@ -40,7 +40,7 @@ let random_cache () =
     let entry_len = Random.int 8 in
     let first = random_edit () in
     (first, List.init entry_len re) in
-  Some (List.init cache_len random_entry)
+  List.init cache_len random_entry
 
 let edit_eq _ =
   let initial = random_edit () in
@@ -54,13 +54,13 @@ let edit_eq _ =
 
 let cache_eq _ =
   let initial = random_cache () in
-  let serialized = Avenir.EAbstr.to_yojson initial in
+  let serialized = Avenir.EAbstr.mapping_to_yojson initial in
   let unpack_result yoj =
-    match Avenir.EAbstr.of_yojson yoj with
+    match Avenir.EAbstr.mapping_of_yojson yoj with
     | Result.Ok c -> c
     | _ -> failwith ("Error occurred while deserializing yojson " ^ (Yojson.Safe.to_string yoj) ^ " into cache") in
   let deserialized = unpack_result serialized in
-  Equality.same_cache initial deserialized
+  Equality.same_mapping initial deserialized
 
 (* let edit_tests =
   let mk_test i = test_case ("edit serialization/deserialization should round trip " ^ (string_of_int i)) `Quick edit_eq in
