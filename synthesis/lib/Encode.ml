@@ -378,7 +378,9 @@ and encode_expression_to_value_with_width width
     let w = get_width type_ctx e in
     let w' = get_width type_ctx e' in
     let fw, fw' =
-      match (w, w') with -1, tw | tw, -1 -> (tw, tw) | tw, tw' -> (tw, tw')
+      match (w, w') with
+      | -1, tw | tw, -1 -> (tw, tw)
+      | tw, tw' -> (tw, tw')
     in
     op
       (encode_expression_to_value_with_width fw type_ctx e)
@@ -462,7 +464,9 @@ and get_width (type_ctx : Declaration.t list) (e : Expression.t) : int =
   | E.True -> 1
   | E.False -> 1
   | E.Int (_, i) -> (
-    match i.width_signed with Some (w, _) -> w | None -> -1 )
+    match i.width_signed with
+    | Some (w, _) -> w
+    | None -> -1 )
   | E.Name n ->
       (* Printf.printf "Getting name? for %s at %s\n%!" s (Info.to_string
          info); *)
@@ -600,7 +604,9 @@ let lookup_string (Program top_decls : program) (ctx : Declaration.t list)
     let module D = Declaration in
     List.find ~f:(fun d -> Stdlib.(safe_name d = Some name))
   in
-  match find ident ctx with None -> find ident top_decls | Some d -> Some d
+  match find ident ctx with
+  | None -> find ident top_decls
+  | Some d -> Some d
 
 let lookup_string_exn (prog : program) (ctx : Declaration.t list)
     (ident : string) : Declaration.t =
@@ -846,7 +852,9 @@ and get_rel_variables (type_ctx : Declaration.t list) (param : Parameter.t) =
   let open Type in
   let open Declaration in
   let type_name t =
-    match t with _, TypeName t -> t | _ -> failwith "type_name: unhandled"
+    match t with
+    | _, TypeName t -> t
+    | _ -> failwith "type_name: unhandled"
   in
   let rel_field =
     List.find type_ctx ~f:(fun (_, d) ->

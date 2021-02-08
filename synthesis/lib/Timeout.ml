@@ -11,7 +11,9 @@ let start = Fn.flip Option.( >>| ) start_secs
 let timed_out =
   let open Time in
   let open Span in
-  function Some (st, dur) -> dur < diff (now ()) st | _ -> false
+  function
+  | Some (st, dur) -> dur < diff (now ()) st
+  | _ -> false
 
 let restart (t : t) : t = Option.(t >>| fun (_, dur) -> create dur)
 

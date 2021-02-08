@@ -203,7 +203,9 @@ let rec infer (known_facts : Expr.t StringMap.t) (b : Test.t) :
 
 let to_value_map (emap : Expr.t StringMap.t) : Value.t StringMap.t =
   StringMap.filter_map emap ~f:(fun data ->
-      match data with Value v -> Some v | _ -> None)
+      match data with
+      | Value v -> Some v
+      | _ -> None)
 
 let to_expr_map (vmap : Value.t StringMap.t) : Expr.t StringMap.t =
   StringMap.map vmap ~f:(fun v -> Expr.Value v)
@@ -220,7 +222,9 @@ let rec passive_propogate_aux dir map cmd =
       (map', assume t'')
   | Seq (c1, c2) ->
       let proc_fst, proc_snd =
-        match dir with `Fwd -> (c1, c2) | `Rev -> (c2, c1)
+        match dir with
+        | `Fwd -> (c1, c2)
+        | `Rev -> (c2, c1)
       in
       let map', proc_fst' = passive_propogate_aux dir map proc_fst in
       let map'', proc_snd' = passive_propogate_aux dir map' proc_snd in

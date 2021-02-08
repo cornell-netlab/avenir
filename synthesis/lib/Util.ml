@@ -201,7 +201,9 @@ let nonempty_inter (xs : (string * int) list) (ys : (string * int) list) =
 
 let or_unequal_lengths_to_option =
   let open List.Or_unequal_lengths in
-  function Ok x -> Some x | Unequal_lengths -> None
+  function
+  | Ok x -> Some x
+  | Unequal_lengths -> None
 
 let oLift2 f a b =
   let open Option in
@@ -209,11 +211,17 @@ let oLift2 f a b =
 
 let rec list_prefix xs i =
   if i <= 0 then []
-  else match xs with [] -> [] | x :: xs -> x :: list_prefix xs (i - 1)
+  else
+    match xs with
+    | [] -> []
+    | x :: xs -> x :: list_prefix xs (i - 1)
 
 let swap (a, b) = (b, a)
 
-let none_or x y = match x with Some _ -> x | None -> y ()
+let none_or x y =
+  match x with
+  | Some _ -> x
+  | None -> y ()
 
 let ( <|> ) = none_or
 
@@ -231,7 +239,9 @@ let timed_out (s : (Time.t * Time.Span.t) option) =
 let rec try_in_sequence = function
   | [] -> None
   | f :: fs -> (
-    match f () with None -> try_in_sequence fs | Some _ as res -> res )
+    match f () with
+    | None -> try_in_sequence fs
+    | Some _ as res -> res )
 
 let max_int nbits =
   Printf.sprintf "0b%s" (String.make nbits '1') |> Bigint.of_string
@@ -320,3 +330,5 @@ let opt_equals ~f o1 o2 =
   | _, _ -> false
 
 let pair_map ~f (a, b) = (f a, f b)
+
+let some_ident_if ~f x = Option.some_if (f x) x

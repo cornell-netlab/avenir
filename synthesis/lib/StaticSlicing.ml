@@ -230,7 +230,9 @@ let rec restrict ~dir params inst reads cmd :
       , StringMap.empty )
   | Seq (c1, c2) ->
       let proc_fst, proc_snd =
-        match dir with `Bck -> (c2, c1) | `Fwd -> (c1, c2)
+        match dir with
+        | `Bck -> (c2, c1)
+        | `Fwd -> (c1, c2)
       in
       let inters, slice_f = restrict ~dir params inst reads proc_fst in
       let reads', slice_s = restrict ~dir params inst inters proc_snd in
@@ -255,7 +257,9 @@ let rec restrict ~dir params inst reads cmd :
               List.nth_exn t.actions aid |> trd3 |> assigned_vars
             in
             let pre, post =
-              match dir with `Bck -> (lvars, keys) | `Fwd -> (keys, lvars)
+              match dir with
+              | `Bck -> (lvars, keys)
+              | `Fwd -> (keys, lvars)
             in
             if StringSet.(are_disjoint reads pre) then (rowidxs, reads_acc)
             else (rowidxs @ [i], StringSet.(union (diff reads_acc pre) post)))

@@ -48,6 +48,7 @@ let random_test_422 _ =
     Problem.make ~log:obt ~phys:pip ~fvs ~log_edits:edits
       ~log_inst:Instance.empty ~phys_inst:Instance.empty
   in
+  EAbstr.make () ;
   let es =
     Synthesis.cegis_math_sequence
       Parameters.

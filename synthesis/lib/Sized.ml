@@ -1,4 +1,7 @@
-type 'a t = 'a * int [@@deriving yojson]
+open Core
+open Sexplib.Std
+
+type 'a t = 'a * int [@@deriving yojson, sexp, compare]
 
 let make x size = (x, size)
 

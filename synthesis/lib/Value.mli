@@ -1,5 +1,5 @@
 (* A value represents a fixed-width bitvector*)
-type t
+type t [@@deriving sexp, compare]
 
 val to_yojson : t -> Yojson.Safe.t
 
@@ -117,6 +117,7 @@ val concat : t -> t -> t
 (** [concat v v'] constructs a vralue of size [size v + size v'] that
     contains ** all the bits of [v] followed by all the bits of [v']*)
 
-val random : ?lo:int -> int -> t
-(** [random lo sz] generates a random [Value.t] of size [sz] greater than lo,
-    throws an exception if [sz <= 0] or [lo >= 2^sz] *)
+val random : ?lo:int -> ?exc:t list -> int -> t
+(** [random ~lo ~exc sz] generates a random [Value.t], [v] of size [sz]
+    greater than lo, throws an exception if [sz <= 0] or [lo >= 2^sz].
+    Further [exc] is a list of values that [v] may not be*)

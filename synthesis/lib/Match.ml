@@ -6,9 +6,9 @@ type match_data =
   | Exact of Value.t
   | Between of Value.t * Value.t
   | Mask of Value.t * Value.t
-  [@@deriving yojson]
+[@@deriving yojson, sexp, compare]
 
-type t = {key : string; data : match_data} [@@deriving yojson]
+type t = {key: string; data: match_data} [@@deriving yojson, sexp, compare]
 
 let mk_match key data = {key; data}
 
@@ -58,7 +58,8 @@ let to_bmv2_string (m : t) : string =
       |> failwith
 
 let get_size (m : t) : int =
-  match m.data with Exact v | Mask (v, _) | Between (v, _) -> Value.size v
+  match m.data with
+  | Exact v | Mask (v, _) | Between (v, _) -> Value.size v
 
 let to_test (m : t) : Test.t =
   let open Test in
@@ -114,7 +115,9 @@ let to_model ?(typ = `Vals) table (m : t) =
     let model =
       [(*Hole.add_row_hole_name table, mkInt(1,1);*) (hmsk, msk)]
     in
-    match typ with `Vals -> (hv, v) :: model | `NoVals -> model
+    match typ with
+    | `Vals -> (hv, v) :: model
+    | `NoVals -> model
   in
   Model.of_alist_exn
   @@

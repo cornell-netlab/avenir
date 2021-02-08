@@ -1,126 +1,94 @@
 open Core
 open Util
+open Option.Let_syntax
+module ValueMap = Map.Make (Value)
+module MatchMap = Map.Make (Match)
 
-type t = (Edit.t * Edit.t list) list option [@@deriving yojson]
+type mapping = (Edit.t * Edit.t list) list [@@deriving yojson]
 
-let make ?(filename=None) () : t =
+type t = mapping option ref
+
+let cache : t = ref None
+
+let make ?(filename=None) () : unit =
   match filename with
-  | None -> Some []
+  | None -> cache := Some []
   | Some file ->
     begin
-      match of_yojson (Yojson.Safe.from_file file) with
-    | Ok cache -> cache
+      match mapping_of_yojson (Yojson.Safe.from_file file) with
+    | Ok c -> cache := Some c
     | Error _ -> failwith (Printf.sprintf "Could not read cache from file %s" file)
     end
 
-let equal (cache : t) (cache' : t) : bool =
-  let eq c c' =
-    let entry_eq entry entry' =
-      match entry, entry' with
-      | (edit, edits), (edit', edits') when (Edit.equal edit edit') -> List.equal Edit.equal edits edits'
-      | _ -> false in
-    List.equal entry_eq c c' in
-  match cache, cache' with
-  | None, None -> true
-  | None, Some _ | Some _, None -> false
-  | Some x, Some y -> eq x y
+let clear () = make ()
 
-let string_of_cache (c : t) : string =
+let get_cache () =
+  match !cache with
+  | None -> failwith "Tried to access cache, but it was uninitialized"
+  | Some m -> m
+
+let equal (m : mapping) (m' : mapping) : bool =
+  let entry_eq entry entry' =
+    match entry, entry' with
+    | (edit, edits), (edit', edits') when (Edit.equal edit edit') -> List.equal Edit.equal edits edits'
+    | _ -> false in
+  List.equal entry_eq m m'
+
+let string_of_mapping (m : mapping) : string =
   let string_of_entry (e : Edit.t * Edit.t list) : string =
     let (x, y) = e in
     let init1 = (Edit.to_string x) ^ ":" in
     let fun1 = (fun a b -> a ^ "|" ^ (Edit.to_string b)) in
     List.fold y ~init: init1 ~f:fun1 in
-  match c with
-  | None -> "None"
-  | Some cache -> (List.map ~f:string_of_entry cache) |> (String.concat ~sep:",")
+  (List.map ~f:string_of_entry m) |> (String.concat ~sep:",")
 
-let dump_yojson (cache : t) (filename : string) : unit =
-  cache |> to_yojson |> Yojson.Safe.to_file filename
+let dump_yojson (filename : string) : unit =
+  (get_cache ()) |> mapping_to_yojson |> Yojson.Safe.to_file filename
+
+(** [abstract_data old_data new_data] returns a mapping from values in
+    old_data to values in new_data. A pair [od ↦ nd] is added if the values
+    are different and occur at the same place in the list and there isn't a
+    previous pair in the map [od -> nd'] where [nd <> nd'] in which case it
+    returns [None]. It also returns None if the lists are different lengths*)
+let abstract_data (old_data : Row.action_data) (new_data : Row.action_data) =
+  List.fold2 old_data new_data ~init:(Some ValueMap.empty)
+    ~f:(fun acc_opt old_ new_ ->
+      let%bind acc = acc_opt in
+      if Value.equals old_ new_ then Some acc
+      else
+        match ValueMap.find acc old_ with
+        | Some nd' when Value.equals nd' new_ -> Some acc
+        | Some _ -> None
+        | None -> ValueMap.set acc ~key:old_ ~data:new_ |> Some)
+  |> or_unequal_lengths_to_option |> Option.join
+
+(** [abstract_matches old_matches new_matches] returns a mapping from values
+    in old_matches to values in new_matches. A pair [om ↦ nm] is added if
+    the values are different and occur at the same place in the list and
+    there isn't a previous pair in the map [om -> nm'] where [nm <> nm'], in
+    which case it returns [None]. It also returns [None] if the lists are
+    different lengths*)
+let abstract_matches (old_matches : Match.t list)
+    (new_matches : Match.t list) =
+  List.fold2 old_matches new_matches ~init:(Some MatchMap.empty)
+    ~f:(fun acc_opt old_ new_ ->
+      let%bind acc = acc_opt in
+      if Match.equal old_ new_ then Some acc
+      else
+        match MatchMap.find acc old_ with
+        | Some new_' when Match.equal new_' new_ -> Some acc
+        | Some _ -> None
+        | None -> MatchMap.set acc ~key:old_ ~data:new_ |> Some)
+  |> or_unequal_lengths_to_option |> Option.join
 
 let similar (eold : Edit.t) (enew : Edit.t) =
   match (eold, enew) with
   | Add (ot, (oms, ods, oaid)), Add (nt, (nms, nds, naid))
-    when String.(ot = nt) && oaid = naid (*&& ods = nds*) -> (
-      let adata =
-        List.fold2 ods nds ~init:(Some StringMap.empty) ~f:(fun acc od nd ->
-            match acc with
-            | None -> None
-            | Some acc -> (
-                if Value.equals od nd then Some acc
-                else
-                  let od_s = Value.to_string od in
-                  match StringMap.find acc od_s with
-                  | Some nd' ->
-                      if Value.equals nd' nd then Some acc else None
-                  | None -> StringMap.set acc ~key:od_s ~data:nd |> Some ))
-        |> or_unequal_lengths_to_option |> Option.join
-      in
-      let matches =
-        List.fold2 oms nms ~init:(Some StringMap.empty) ~f:(fun acc om nm ->
-            match acc with
-            | None -> None
-            | Some acc -> (
-                if Match.equal om nm then Some acc
-                else
-                  let om_s = Match.to_string om in
-                  match StringMap.find acc om_s with
-                  | Some nm' when Match.equal nm' nm -> Some acc
-                  | Some _ -> None
-                  | None -> StringMap.set acc ~key:om_s ~data:nm |> Some ))
-        |> or_unequal_lengths_to_option |> Option.join
-      in
-      match matches with None -> None | Some m -> Some (adata, m) )
+    when String.(ot = nt) && oaid = naid ->
+      let%map matches = abstract_matches oms nms in
+      let adata = abstract_data ods nds in
+      (adata, matches)
   | _, _ -> None
-
-let sub_consts (adata : Value.t StringMap.t option)
-    (map : Match.t StringMap.t) (e : Edit.t) : Edit.t option =
-  match e with
-  | Del _ -> None
-  | Add (table, (ms, ad, idx)) -> (
-      let ms' =
-        List.fold ms ~init:(Some []) ~f:(fun acc m ->
-            match acc with
-            | None -> None
-            | Some acc -> (
-              match StringMap.find map (Match.to_string m) with
-              | None -> acc @ [m] |> Some
-              | Some m' -> acc @ [m'] |> Some ))
-      in
-      match ms' with
-      | None -> None
-      | Some ms' -> (
-        match adata with
-        | None -> Add (table, (ms', ad, idx)) |> Some
-        | Some dmap ->
-            let ad' =
-              List.map ad ~f:(fun d ->
-                  match StringMap.find dmap (Value.to_string d) with
-                  | None -> d
-                  | Some d' -> d')
-            in
-            Add (table, (ms', ad', idx)) |> Some ) )
-
-let print_template subst =
-  StringMap.iteri subst ~f:(fun ~key ~data ->
-      Printf.eprintf "\t%s->%s\n%!" key (Match.to_string data))
-
-let sub_edit_list edits (adata, subst) =
-  List.fold edits ~init:(Some []) ~f:(fun acc e ->
-      let open Option in
-      acc >>= fun acc -> sub_consts adata subst e >>| fun e' -> acc @ [e'])
-
-let similar_edit_list edits edits' =
-  List.fold2_exn edits edits'
-    ~init:(Some (Some StringMap.empty, StringMap.empty))
-    ~f:(fun acc_opt e e' ->
-      let open Option in
-      acc_opt
-      >>= fun (acc_data, acc_matches) ->
-      similar e e'
-      >>| fun (data, matches) ->
-      ( liftO2 disjoint_union acc_data data
-      , disjoint_union acc_matches matches ))
 
 let equivalences diffmap : StringSet.t list =
   StringMap.fold diffmap ~init:[] ~f:(fun ~key ~data eq_classes ->
@@ -133,80 +101,163 @@ let equivalences diffmap : StringSet.t list =
             else acc)
         :: eq_classes)
 
-let infer_fresh phys (curr_edits : Edit.t list) substs
-    (old_edits : Edit.t list list) : Edit.t list option =
-  let inferred_old_edits =
-    List.filter_map old_edits ~f:(Fn.flip sub_edit_list substs)
+let char_map ecs =
+  List.fold ecs ~init:StringMap.empty ~f:(fun acc ec ->
+      StringMap.set acc ~key:(StringSet.choose_exn ec) ~data:[])
+
+let randomized_model ~excluding chis =
+  (* Pick characteristic elements for each eq-class *)
+  (* prohibit used values*)
+  let prohibited : Value.t list StringMap.t =
+    List.fold excluding ~init:chis ~f:Model.extend_multi_model
   in
-  let curr_edit_model = Edit.list_to_model phys curr_edits in
-  let old_edit_maps =
-    List.map inferred_old_edits ~f:(Edit.list_to_model phys)
-  in
-  List.find_map old_edit_maps ~f:(fun old_model ->
+  (* randomly generate a new valuation not in the prohibited values *)
+  StringMap.fold prohibited ~init:Model.empty ~f:(fun ~key ~data:prohibs m ->
+      let random_x =
+        random_int_nin (List.map prohibs ~f:Value.get_int_exn)
+      in
+      Model.set m ~key
+        ~data:(Value.make (random_x, Value.size (List.hd_exn prohibs))))
+
+(** expand characteristic valuation to each member of the equivalence class *)
+let expand eqs chis =
+  Model.fold chis ~init:Model.empty ~f:(fun ~key ~data acc ->
+      match List.find eqs ~f:(Fn.flip StringSet.mem key) with
+      | None -> Model.set acc ~key ~data
+      | Some eqs ->
+          StringSet.fold eqs ~init:acc ~f:(fun acc key ->
+              Model.set acc ~key ~data))
+
+let randomize_along_ecs ecs ~excluding =
+  char_map ecs
+  |> randomized_model ~excluding
+  |> Log.(id_print ~s:Model.to_string ~p:ecache)
+  |> expand ecs
+
+let renew_equals (phys : Cmd.t) (olds : Edit.t list) (news : Edit.t list) =
+  Log.ecache @@ lazy "[renew_equals]" ;
+  let old_model = Edit.list_to_model phys olds in
+  let new_model = Edit.list_to_model phys news in
+  let old_pkt_model = Model.proj_packet_holes old_model in
+  let new_pkt_model = Model.proj_packet_holes new_model in
+  if Model.equal old_pkt_model new_pkt_model then (
+    Log.ecache @@ lazy "Packets were equal, returning None" ;
+    None )
+  else
+    let isect_model = Model.intersect old_pkt_model new_pkt_model in
+    Log.ecache
+    @@ lazy (Printf.sprintf "intersection %s" (Model.to_string isect_model)) ;
+    let ecs = equivalences (Model.to_strmap isect_model) in
+    let fresh_model = randomize_along_ecs ecs ~excluding:[isect_model] in
+    Log.ecache
+    @@ lazy (Printf.sprintf "perturbed %s" (Model.to_string fresh_model)) ;
+    let renew_model = Model.right_union new_model fresh_model in
+    Log.ecache
+    @@ lazy (Printf.sprintf "new_model %s" (Model.to_string new_model)) ;
+    Edit.of_model phys renew_model |> return
+
+(** [sub_matches map ms] applies the mapping [map] to the matches [ms] *)
+let sub_matches map =
+  List.map ~f:(fun m ->
+      match MatchMap.find map m with
+      | None -> m
+      | Some m' -> m')
+
+(** [sub_action_data map data] applies the mapping [map] to action data
+    [data]*)
+let sub_action_data map =
+  List.map ~f:(fun d ->
+      match ValueMap.find map d with
+      | None -> d
+      | Some d' -> d')
+
+(** [sub_edit adata map e] applies the match mapping [map] and the data
+    mapping adata to the edit [e]*)
+let sub_edit (adata : Value.t ValueMap.t option) (map : Match.t MatchMap.t)
+    (e : Edit.t) : Edit.t option =
+  match e with
+  | Del _ -> None
+  | Add (table, (ms, ad, idx)) -> (
+      let ms' = sub_matches map ms in
+      match adata with
+      | None -> Add (table, (ms', ad, idx)) |> Some
+      | Some dmap ->
+          let ad' = sub_action_data dmap ad in
+          Add (table, (ms', ad', idx)) |> Some )
+
+(* let print_template subst =
+ *   StringMap.iteri subst ~f:(fun ~key ~data ->
+ *       Printf.printf "\t%s->%s\n%!" key (Match.to_string data)) *)
+
+let sub_edits (adata, subst) edits =
+  Log.ecache (lazy "trying new template, matched with") ;
+  Log.ecache (lazy (Edit.list_to_string edits)) ;
+  List.fold edits ~init:(Some []) ~f:(fun acc_opt e ->
+      let%bind acc = acc_opt in
+      let%map e' = sub_edit adata subst e in
+      acc @ [e'])
+
+let diff_eq_classes curr_edit_model old_edit_models =
+  List.find_map old_edit_models ~f:(fun old_model ->
       if Model.equal curr_edit_model old_model then None
       else
-        let diff_map = Model.diff curr_edit_model old_model in
-        let eqs =
-          equivalences diff_map
-          |> List.filter ~f:(fun s -> StringSet.length s > 1)
-        in
-        Option.some_if (not (List.is_empty eqs)) eqs)
-  |> Option.map ~f:(fun eqs ->
-         (*characteristic elements *)
-         let chis =
-           List.fold eqs ~init:StringMap.empty ~f:(fun acc s ->
-               StringMap.set acc ~key:(StringSet.choose_exn s) ~data:[])
-         in
-         let prohibited : Value.t list StringMap.t =
-           List.fold old_edit_maps ~init:chis ~f:Model.extend_multi_model
-         in
-         let valuation =
-           StringMap.fold prohibited ~init:Model.empty
-             ~f:(fun ~key ~data:prohibs m ->
-               let random_x =
-                 random_int_nin (List.map prohibs ~f:Value.get_int_exn)
-               in
-               Model.set m ~key
-                 ~data:
-                   (Value.make (random_x, Value.size (List.hd_exn prohibs))))
-         in
-         let expanded_valuation =
-           Model.fold valuation ~init:Model.empty ~f:(fun ~key ~data acc ->
-               match List.find eqs ~f:(Fn.flip StringSet.mem key) with
-               | None -> Model.set acc ~key ~data
-               | Some eqs ->
-                   StringSet.fold eqs ~init:acc ~f:(fun acc key ->
-                       Model.set acc ~key ~data))
-         in
-         Model.merge curr_edit_model expanded_valuation ~f:(fun ~key:_ ->
-           function
-           | `Left l -> Some l | `Right r -> Some r | `Both (_, r) -> Some r)
-         |> Edit.of_model phys)
+        Model.diff curr_edit_model old_model
+        |> equivalences
+        |> List.filter ~f:(fun s -> StringSet.length s > 1)
+        |> some_ident_if ~f:(Fn.non List.is_empty))
 
-let infer (params : Parameters.t) (cache : t) (phys : Cmd.t) (e : Edit.t) =
-  let open Option in
-  let cache' = value_exn cache ~message: "Tried to access cache, but it was uninitialized" in
-  let matching_cached_edits =
-    List.filter_map cache' ~f:(fun (loge, phys_edits) ->
-        similar loge e >>| const phys_edits)
-  in
-  if List.length matching_cached_edits < Option.value_exn params.ecache then
-    None
+let inferred_models phys substs editss =
+  List.filter_map editss ~f:(fun es ->
+      let%map es' = sub_edits substs es in
+      Edit.list_to_model phys es')
+
+let infer_fresh phys (curr_edits : Edit.t list) substs
+    (old_edits : Edit.t list list) : Edit.t list option =
+  Log.ecache @@ lazy "[infer_fresh]" ;
+  let curr_model = Edit.list_to_model phys curr_edits in
+  Log.ecache
+  @@ lazy (Printf.sprintf "current model %s" (Model.to_string curr_model)) ;
+  let old_models = inferred_models phys substs old_edits in
+  Log.ecache
+  @@ lazy (Printf.sprintf "old model %s" (Model.to_string curr_model)) ;
+  let%map ecs = diff_eq_classes curr_model old_models in
+  randomize_along_ecs ecs ~excluding:old_models
+  |> Log.(id_print ~s:Model.to_string ~p:ecache)
+  |> Model.right_union curr_model
+  |> Edit.of_model phys
+
+let get_similars e =
+  get_cache ()
+  |> List.filter_map ~f:(fun (log_edit, phys_edits) ->
+         let%map adata, subst = similar log_edit e in
+         (phys_edits, adata, subst))
+
+let freshen (params : Parameters.t) phys olds news substs prev_solns =
+  Log.ecache
+  @@ lazy (Printf.sprintf "guessing.... %s" (Edit.list_to_string news)) ;
+  match infer_fresh phys news substs prev_solns with
+  | Some fresh_phys_edits -> fresh_phys_edits
+  | None when params.aggro_freshen ->
+      renew_equals phys olds news |> Option.value ~default:news
+  | None -> news
+
+let infer (params : Parameters.t) (phys : Cmd.t) (e : Edit.t) =
+  let%bind min_match_size = params.ecache in
+  Log.ecache (lazy (Printf.sprintf "checking edit %s..." (Edit.to_string e))) ;
+  let similars = get_similars e in
+  if List.length similars < min_match_size then None
   else
-    List.find_map cache' ~f:(fun (log_edit, phys_edits) ->
-        similar log_edit e
-        >>= fun (adata, subst) ->
-        sub_edit_list phys_edits (adata, subst)
-        >>= fun phys_edits' ->
-        if true then
-          match
-            infer_fresh phys phys_edits' (adata, subst) matching_cached_edits
-          with
-          | Some edits -> return edits
-          | None -> return phys_edits'
-        else return phys_edits')
+    let prev_solns = List.map similars ~f:fst3 in
+    List.find_map similars ~f:(fun (old_edits, adata, subst) ->
+        (* apply mapping to physical edit list *)
+        let%map new_edits = sub_edits (adata, subst) old_edits in
+        (* attempt to abstract over physical edit history*)
+        let fresh_phys_edits =
+          freshen params phys old_edits new_edits (adata, subst) prev_solns
+        in
+        fresh_phys_edits)
 
-let update (cache : t) (log : Edit.t) (physs : Edit.t list) : t =
-  let cache' = Option.value_exn cache ~message: "Tried to access cache, but it was uninitialized" in
-  if List.exists cache' ~f:(fun (_, ps) -> Edit.equal ps physs) then cache
-  else Some ((log, physs) :: cache')
+let update (log : Edit.t) (physs : Edit.t list) : unit =
+  let c = get_cache () in
+  if not (List.exists c ~f:(fun (_, ps) -> Edit.equal ps physs)) then
+    cache := Some ((log, physs) :: c)

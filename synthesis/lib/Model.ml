@@ -12,7 +12,9 @@ let of_smt_model = Z3ModelExtractor.of_smt_model
 
 let extend_multi_model multi m =
   StringMap.merge multi m ~f:(fun ~key:_ -> function
-    | `Left l -> Some l | `Right _ -> None | `Both (l, r) -> Some (r :: l))
+    | `Left l -> Some l
+    | `Right _ -> None
+    | `Both (l, r) -> Some (r :: l))
 
 let aggregate =
   List.fold ~init:StringMap.empty ~f:(fun acc m ->
@@ -30,11 +32,27 @@ let join m1 m2 = aggregate [m1; m2]
 
 let diff =
   StringMap.merge ~f:(fun ~key:_ -> function
-    | `Both (l, r) when Stdlib.(l <> r) -> Some (l, r) | _ -> None)
+    | `Both (l, r) when Stdlib.(l <> r) -> Some (l, r)
+    | _ -> None)
+
+let right_union : t -> t -> t =
+  StringMap.merge ~f:(fun ~key:_ -> function
+    | `Left x | `Right x | `Both (_, x) -> Some x)
+
+let intersect =
+  StringMap.merge ~f:(fun ~key:_ -> function
+    | `Both (v1, v2) when Value.equals v1 v2 -> Some v1
+    | _ -> None)
+
+let perturb = StringMap.map ~f:(fun v -> Value.(random (size v) ~exc:[v]))
+
+let proj_packet_holes =
+  StringMap.filter_keys ~f:(fun h ->
+      not
+        ( Hole.is_add_row_hole h || Hole.is_delete_hole h
+        || Hole.is_which_act_hole h ))
 
 (**UTILITIES INHERITED FROM STRINGMAP**)
-
-let merge = StringMap.merge
 
 let fold = StringMap.fold
 
@@ -49,3 +67,7 @@ let find = StringMap.find
 let of_alist_exn = StringMap.of_alist_exn
 
 let iteri = StringMap.iteri
+
+let to_strmap m = m
+
+let of_strmap m = m

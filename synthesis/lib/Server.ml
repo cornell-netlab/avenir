@@ -31,7 +31,9 @@ let op_to_json (op : op) : Yojson.Basic.t =
         ; ("row", `Int row) ]
 
 let null_check message json =
-  match json with `Null -> raise (Failure message) | _ -> json
+  match json with
+  | `Null -> raise (Failure message)
+  | _ -> json
 
 let member_not_null field json =
   let open Yojson.Basic.Util in

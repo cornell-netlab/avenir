@@ -16,6 +16,7 @@ type t =
   ; ecache: int option
   ; read_cache: string option
   ; write_cache: string option
+  ; aggro_freshen: bool
   ; minimize: bool
   ; do_slice: bool
   ; semantic_slicing: bool
@@ -50,6 +51,7 @@ let default =
   ; ecache= None
   ; read_cache= None
   ; write_cache= None
+  ; aggro_freshen= false
   ; shortening= false
   ; edits_depth= -1
   ; search_width= -1
@@ -105,6 +107,7 @@ let union p1 p2 =
   ; ecache= ecache_union p1.ecache p2.ecache
   ; read_cache= filename_union p1.read_cache p2.read_cache
   ; write_cache= filename_union p1.write_cache p2.write_cache
+  ; aggro_freshen= p1.aggro_freshen || p2.aggro_freshen
   ; shortening= p1.shortening || p2.shortening
   ; edits_depth= max p1.edits_depth p2.edits_depth
   ; search_width= max p1.search_width p2.search_width

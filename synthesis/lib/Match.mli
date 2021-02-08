@@ -1,4 +1,4 @@
-type t
+type t [@@deriving sexp, compare]
 
 val to_yojson : t -> Yojson.Safe.t
 

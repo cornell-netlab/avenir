@@ -1,4 +1,4 @@
-type 'a t
+type 'a t [@@deriving sexp, compare]
 
 val to_yojson : ('a -> Yojson.Safe.t) -> 'a t -> Yojson.Safe.t
 

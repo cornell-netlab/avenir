@@ -14,5 +14,3 @@ val cegis_math_sequence :
   -> ProfData.t ref
   -> (unit -> Problem.t)
   -> (Problem.t * Edit.t list) option
-
-val edit_cache : EAbstr.t ref

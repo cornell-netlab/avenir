@@ -275,7 +275,9 @@ let rec wp_paths negs c phi : (Cmd.t * Test.t) list =
           ( List.fold (wp_paths negs act phi) ~init:wp_so_far
               ~f:(fun acc (trace, act_wp) ->
                 let misses =
-                  match negs with `NoNegs -> True | `Negs -> !%prev_conds
+                  match negs with
+                  | `NoNegs -> True
+                  | `Negs -> !%prev_conds
                 in
                 ( assume (cond %&% misses) %:% trace
                 , cond %&% misses %&% act_wp )

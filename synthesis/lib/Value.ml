@@ -1,3 +1,4 @@
+open Core
 open Util
 
 let bigint_to_yojson (bi: Bigint.t) : Yojson.Safe.t = `Intlit (Bigint.to_string bi)
@@ -7,7 +8,7 @@ let bigint_of_yojson (j: Yojson.Safe.t) : Bigint.t Ppx_deriving_yojson_runtime.e
   | `Intlit s -> Result.Ok (Bigint.of_string s)
   | _ -> Result.Error "t"
 
-type t = (Bigint.t [@to_yojson bigint_to_yojson] [@of_yojson bigint_of_yojson]) Sized.t [@@deriving yojson]
+type t = (Bigint.t [@to_yojson bigint_to_yojson] [@of_yojson bigint_of_yojson]) Sized.t [@@deriving yojson, sexp, compare]
 
 let big_make (i, sz) =
   let open Bigint in
@@ -114,12 +115,25 @@ let concat =
   Sized.map2s2 ~f:(fun lx lsz rx rsz ->
       Sized.make Bigint.(shift_left lx rsz + rx) (lsz + rsz))
 
-let random ?(lo = 0) sz =
+let rec random_not_in ?(gas = 1000) exc upper =
+  if gas <= 0 then failwith "Random Generation failed, out of gas"
+  else
+    let r = Random.int upper in
+    if List.exists exc ~f:(( = ) r) then
+      random_not_in ~gas:(gas - 1) exc upper
+    else r
+
+let random ?(lo = 0) ?(exc = []) sz =
+  let exc_ints =
+    List.filter_map exc ~f:(fun v ->
+        let i = get_int_exn v in
+        if i < lo then None else Some i)
+  in
   if sz <= 0 then failwith @@ Printf.sprintf "Bad bitwidth %d" sz
   else
     let m = max_int sz |> Bigint.to_int_exn in
     if sz > m then
       failwith @@ Printf.sprintf "lo bound %d is to large for width %d" lo m
     else
-      let r = Random.int (m - lo) + lo in
+      let r = random_not_in exc_ints (m - lo) + lo in
       make (r, sz)

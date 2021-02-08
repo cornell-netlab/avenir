@@ -35,15 +35,22 @@ val join : t -> t -> t
 val aggregate : t list -> t
 (** [aggregate ms] combines a list of models as in [join] *)
 
-val merge :
-     t
-  -> t
-  -> f:
-       (   key:string
-        -> [`Left of Value.t | `Right of Value.t | `Both of Value.t * Value.t]
-        -> Value.t option)
-  -> t
-(** [merge m1 m2 ~f] is a specialization of [Core.Map.merge] *)
+val right_union : t -> t -> t
+(** [right_union ml mr] is the disjoint union of [ml ∖ mr] and [mr]*)
+
+val intersect : t -> t -> t
+(** [intersect m1 m2] is the intersection of [m1] and [m2], i.e. the
+    key-value pair [x ↦ v] is in [intersect m1 m2] iff it is in both [m1]
+    and [m2] *)
+
+val perturb : t -> t
+(** [perturb m] randomly generates new values for variables in [m]. if
+    [x ↦ v] is in [m], then [x ↦ v'] in [perturb m] where
+    [Value.veq v v'] is [false] and doesn't throw an exception. *)
+
+val proj_packet_holes : t -> t
+(** [proj_packet_holes m] projects a model down to holes that correspond to
+    keys & actiondata in tables *)
 
 val fold : t -> init:'a -> f:(key:string -> data:Value.t -> 'a -> 'a) -> 'a
 (** [fold m1 ~init ~f] is a specialization of [Core.Map.fold] *)
@@ -60,3 +67,7 @@ val of_alist_exn : (string * Value.t) list -> t
 (** [of_alist_exn assoc] constructs a valuation from an association list *
     i.e. [(k,v)] is an element of [assoc[] iff [k |-> v] in [of_alist_exn
     assoc] *)
+
+val to_strmap : t -> Value.t StringMap.t
+
+val of_strmap : Value.t StringMap.t -> t

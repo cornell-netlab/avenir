@@ -99,7 +99,11 @@ let ( %&% ) = and_
 
 let neg t =
   if enable_smart_constructors then
-    match t with True -> False | False -> True | Neg t -> t | _ -> Neg t
+    match t with
+    | True -> False
+    | False -> True
+    | Neg t -> t
+    | _ -> Neg t
   else Neg t
 
 let ( !% ) = neg

@@ -99,8 +99,9 @@ let rec trace_eval_inst ?(gas = 10) (cmd : Cmd.t) (inst : Instance.t) ~wide
         , wide''
         , Cmd.seq cmd' cmd''
         , StringMap.merge trace' trace'' ~f:(fun ~key:_ -> function
-            | `Left v -> Some v | `Right v -> Some v | `Both (v, _) -> Some v)
-        )
+            | `Left v -> Some v
+            | `Right v -> Some v
+            | `Both (v, _) -> Some v) )
     | Select (styp, selects) ->
         let default _ =
           match styp with
