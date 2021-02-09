@@ -7,6 +7,21 @@ type action_data = Value.t list [@@deriving yojson]
 (* Match expressions, action data, action index*)
 type t = Match.t list * action_data * int [@@deriving yojson]
 
+let random_action_data () =
+  let random_value () =
+    let size = (Random.int 29) + 1 in
+    Value.random size in
+  let rv _ = random_value () in
+  let len = Random.int 8 in
+  List.init len ~f:rv
+
+let random () =
+  let int_bound = 1024 in
+  let rm _ = Match.random () in
+  let len = Random.int 8 in
+  let matches = List.init len ~f:rm in
+  (matches, random_action_data (), Random.int int_bound)
+
 (* TODO rename to equal *)
 let equals (ms, ad, i) (ms', ad', i') =
   List.equal Match.equal ms ms' && List.equal Stdlib.( = ) ad ad' && i = i'

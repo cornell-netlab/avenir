@@ -11,6 +11,8 @@ val mapping_to_yojson : mapping -> Yojson.Safe.t
 
 val mapping_of_yojson : Yojson.Safe.t -> mapping Ppx_deriving_yojson_runtime.error_or
 
+val random_mapping : unit -> mapping
+
 val equal : mapping -> mapping -> bool
 
 val string_of_mapping : mapping -> string

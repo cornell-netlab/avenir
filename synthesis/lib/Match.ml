@@ -22,6 +22,16 @@ let mask_ key v m =
   if Bigint.(Value.get_bigint m >= max_int (Value.size v)) then exact_ key v
   else mk_match key @@ Mask (v, m)
 
+let random () =
+  let random_value () =
+    let size = (Random.int 29) + 1 in
+    Value.random size in
+  match Random.int 3 with
+  | 0 -> exact_ "match_placeholder" (random_value ())
+  | 1 -> between_ "match_placeholder" (random_value ()) (random_value ())
+  | _ -> mask_ "match_placeholder" (random_value ()) (random_value ())
+
+
 let wildcard key sz = mask_ key (Value.zero sz) (Value.zero sz)
 
 let equal_data d d' =
@@ -254,7 +264,7 @@ let rec has_inter_data (d : match_data) (d' : match_data) : bool =
           >= pow (of_int 2) (of_int @@ Value.size msk) - one)
       then has_inter_data (Exact v) mm
       else
-        failwith "Cant intersect with non-exact match" 
+        failwith "Cant intersect with non-exact match"
 
 let has_inter (m : t) (m' : t) : bool =
   String.(m.key = m'.key)

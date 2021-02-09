@@ -10,6 +10,8 @@ val between_ : string -> Value.t -> Value.t -> t
 
 val mask_ : string -> Value.t -> Value.t -> t
 
+val random : unit -> t
+
 val wildcard : string -> int -> t
 
 val equal : t -> t -> bool

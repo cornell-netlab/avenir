@@ -8,6 +8,12 @@ type t =
   | Del of string * int
   [@@deriving yojson]
 
+let random () =
+  let int_bound = 1024 in
+  match Random.int 2 with
+  | 0 -> Add ("edit_placeholder", Row.random ())
+  | _ -> Del ("edit_placeholder", Random.int int_bound)
+
 let table = function
   | Add (name, _) | Del (name, _) -> name
 

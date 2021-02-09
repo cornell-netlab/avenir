@@ -27,6 +27,15 @@ let get_cache () =
   | None -> failwith "Tried to access cache, but it was uninitialized"
   | Some m -> m
 
+let random_mapping () =
+  let len = Random.int 16 in
+  let random_entry _ =
+    let re _ = Edit.random () in
+    let entry_len = Random.int 8 in
+    let first = Edit.random () in
+    (first, List.init entry_len ~f:re) in
+  List.init len ~f:random_entry
+
 let equal (m : mapping) (m' : mapping) : bool =
   let entry_eq entry entry' =
     match entry, entry' with
