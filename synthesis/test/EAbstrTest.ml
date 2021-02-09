@@ -1,49 +1,7 @@
-(* open Avenir.EAbstr *)
-open Avenir.Match
-open Avenir.Value
-open Avenir.Edit
 open Alcotest
 
-let int_bound = 1024
-
-let random_value () =
-  let size = (Random.int 29) + 1 in
-  Printf.printf "%d\n" size;
-  random size
-
-let random_match () =
-  match Random.int 3 with
-  | 0 -> exact_ "match_placeholder" (random_value ())
-  | 1 -> between_ "match_placeholder" (random_value ()) (random_value ())
-  | _ -> mask_ "match_placeholder" (random_value ()) (random_value ())
-
-let random_action_data () =
-  let rv _ = random_value () in
-  let len = Random.int 8 in
-  List.init len rv
-
-let random_row () =
-  let rv _ = random_match () in
-  let len = Random.int 8 in
-  let matches = List.init len rv in
-  (matches, random_action_data (), Random.int int_bound)
-
-let random_edit () =
-  match Random.int 2 with
-  | 0 -> Add ("edit_placeholder", random_row ())
-  | _ -> Del ("edit_placeholder", Random.int int_bound)
-
-let random_cache () =
-  let cache_len = Random.int 16 in
-  let random_entry _ =
-    let re _ = random_edit () in
-    let entry_len = Random.int 8 in
-    let first = random_edit () in
-    (first, List.init entry_len re) in
-  List.init cache_len random_entry
-
 let edit_eq _ =
-  let initial = random_edit () in
+  let initial = Avenir.Edit.random () in
   let serialized = Avenir.Edit.to_yojson initial in
   let unpack_result yoj =
     match Avenir.Edit.of_yojson yoj with
@@ -53,7 +11,7 @@ let edit_eq _ =
   Equality.same_edit initial deserialized
 
 let cache_eq _ =
-  let initial = random_cache () in
+  let initial = Avenir.EAbstr.random_mapping () in
   let serialized = Avenir.EAbstr.mapping_to_yojson initial in
   let unpack_result yoj =
     match Avenir.EAbstr.mapping_of_yojson yoj with

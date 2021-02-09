@@ -52,7 +52,7 @@ let edit = testable_string Edit.to_string Edit.equal
 let same_edit = Alcotest.(check edit) "same edit"
 
 let mapping = testable_string EAbstr.string_of_mapping EAbstr.equal
-let same_cache = Alcotest.(check mapping) "same cache"
+let same_mapping = Alcotest.(check mapping) "same cache"
 
 let edits =
   testable_string Edit.list_to_string (fun es es' ->
