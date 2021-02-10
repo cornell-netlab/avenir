@@ -222,14 +222,8 @@ let synthesize =
         problem_flags <*> map2 opt_params mng_params ~f:Parameters.union
       and measure =
         flag "-measure" no_arg ~doc:"Produce a CSV of data to stdout"
-      and cache_in =
-        flag "-read-cache" (optional string) ~doc:"Initializes edit cache from a specified file instead of initializing with an empty cache"
-      and cache_out =
-        flag "-write-cache" (optional string) ~doc:"Writes out edit cache into a specified file after completion"
       and print_res = flag "-p" no_arg ~doc:"Print synthesized program" in
       fun () ->
-        ignore (Option.map cache_in ~f:(fun o -> Core.Printf.printf "Cache_in: %s\n" o) : unit option );
-        ignore (Option.map cache_out ~f:(fun o -> Core.Printf.printf "Cache_out: %s\n" o) : unit option );
         let data =
           Option.value_exn data_opt
             ~message:"Data must be passed in for synthesis"
@@ -239,14 +233,18 @@ let synthesize =
           if params.thrift_mode then Edit.to_bmv2_string (Problem.phys prob)
           else Edit.to_string
         in
+        if Option.is_some params.read_cache then Avenir.EAbstr.make ~filename:params.read_cache ();
         if measure then
           match Benchmark.measure params None mk_prob data with
           | None -> Core.Printf.printf "No solution could be found \n%!"
           | Some soln when print_res ->
+              if Option.is_some params.write_cache then
+                Avenir.EAbstr.dump_yojson (Option.value_exn params.write_cache);
               Core.Printf.printf "EDITS:\n%!" ;
               List.iter soln ~f:(fun e ->
                   Core.Printf.printf "%s\n%!" (edit_to_string e))
-          | _ -> ()
+          | _ -> if Option.is_some params.write_cache then
+            Avenir.EAbstr.dump_yojson (Option.value_exn params.write_cache); ()
         else
           let data = List.join data in
           let mk_prob =
@@ -265,6 +263,7 @@ let synthesize =
           with
           | None -> failwith "failed"
           | Some (_, phys_edits) ->
+              if Option.is_some params.write_cache then Avenir.EAbstr.dump_yojson (Option.value_exn params.write_cache);
               if print_res then (
                 Core.Printf.printf "Target operations:\n%!" ;
                 List.iter phys_edits ~f:(fun e ->
@@ -407,10 +406,10 @@ let summarize : Command.t =
            printf "\t %d keys, %d unique\n" (Cmd.num_keys cmd) (Cmd.num_unique_keys cmd);
            printf "\t %d tables\n" (Cmd.num_tables cmd);
            printf "\t %d actions\n%!" (Cmd.num_actions cmd)
-           
-           
+
+
     ]
-  
+
 let classbench_cmd : Command.t =
   let open Command.Let_syntax in
   Command.basic ~summary:"benchmarks generated insertions"

@@ -6,27 +6,6 @@ module MatchMap = Map.Make (Match)
 
 type mapping = (Edit.t * Edit.t list) list [@@deriving yojson]
 
-type t = mapping option ref
-
-let cache : t = ref None
-
-let make ?(filename=None) () : unit =
-  match filename with
-  | None -> cache := Some []
-  | Some file ->
-    begin
-      match mapping_of_yojson (Yojson.Safe.from_file file) with
-    | Ok c -> cache := Some c
-    | Error _ -> failwith (Printf.sprintf "Could not read cache from file %s" file)
-    end
-
-let clear () = make ()
-
-let get_cache () =
-  match !cache with
-  | None -> failwith "Tried to access cache, but it was uninitialized"
-  | Some m -> m
-
 let random_mapping () =
   let len = Random.int 16 in
   let random_entry _ =
@@ -50,6 +29,29 @@ let string_of_mapping (m : mapping) : string =
     let fun1 = (fun a b -> a ^ "|" ^ (Edit.to_string b)) in
     List.fold y ~init: init1 ~f:fun1 in
   (List.map ~f:string_of_entry m) |> (String.concat ~sep:",")
+
+type t = mapping option ref
+
+let cache : t = ref None
+
+let make ?(filename=None) () : unit =
+  match filename with
+  | None -> cache := Some []
+  | Some file ->
+    begin
+      let json = Yojson.Safe.from_file file in
+      Core.Printf.printf "%s" (Yojson.Safe.to_string json);
+      match mapping_of_yojson (Yojson.Safe.from_file file) with
+    | Ok c -> cache := Some c; Core.Printf.printf "%s" (string_of_mapping c)
+    | Error e -> Core.Printf.printf "Failed to read in cache from file"; failwith e
+    end
+
+let clear () = make ()
+
+let get_cache () =
+  match !cache with
+  | None -> failwith "Tried to access cache, but it was uninitialized"
+  | Some m -> m
 
 let dump_yojson (filename : string) : unit =
   (get_cache ()) |> mapping_to_yojson |> Yojson.Safe.to_file filename

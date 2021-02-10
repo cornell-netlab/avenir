@@ -6,7 +6,8 @@ let bigint_to_yojson (bi: Bigint.t) : Yojson.Safe.t = `Intlit (Bigint.to_string 
 let bigint_of_yojson (j: Yojson.Safe.t) : Bigint.t Ppx_deriving_yojson_runtime.error_or =
   match j with
   | `Intlit s -> Result.Ok (Bigint.of_string s)
-  | _ -> Result.Error "t"
+  | `Int i -> Result.Ok (Bigint.of_int i)
+  | _ -> Result.Error (Printf.sprintf "Can't parse %s" (Yojson.Safe.to_string j))
 
 type t = (Bigint.t [@to_yojson bigint_to_yojson] [@of_yojson bigint_of_yojson]) Sized.t [@@deriving yojson, sexp, compare]
 
