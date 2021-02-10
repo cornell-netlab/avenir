@@ -39,10 +39,8 @@ let make ?(filename=None) () : unit =
   | None -> cache := Some []
   | Some file ->
     begin
-      let json = Yojson.Safe.from_file file in
-      Core.Printf.printf "%s" (Yojson.Safe.to_string json);
       match mapping_of_yojson (Yojson.Safe.from_file file) with
-    | Ok c -> cache := Some c; Core.Printf.printf "%s" (string_of_mapping c)
+    | Ok c -> cache := Some c
     | Error e -> Core.Printf.printf "Failed to read in cache from file"; failwith e
     end
 
