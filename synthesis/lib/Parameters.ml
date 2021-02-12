@@ -14,8 +14,8 @@ type t =
     fastcx: bool
   ; vcache: bool
   ; ecache: int option
-  ; read_cache: string option
-  ; write_cache: string option
+  ; read_ecache: string option
+  ; write_ecache: string option
   ; aggro_freshen: bool
   ; minimize: bool
   ; do_slice: bool
@@ -50,8 +50,8 @@ let default =
   ; semantic_slicing= false
   ; vcache= false
   ; ecache= None
-  ; read_cache= None
-  ; write_cache= None
+  ; read_ecache= None
+  ; write_ecache= None
   ; aggro_freshen= false
   ; shortening= false
   ; edits_depth= -1
@@ -107,8 +107,8 @@ let union p1 p2 =
   ; semantic_slicing= p1.semantic_slicing || p2.semantic_slicing
   ; vcache= p1.vcache || p2.vcache
   ; ecache= ecache_union p1.ecache p2.ecache
-  ; read_cache= filename_union p1.read_cache p2.read_cache
-  ; write_cache= filename_union p1.write_cache p2.write_cache
+  ; read_ecache= filename_union p1.read_ecache p2.read_ecache
+  ; write_ecache= filename_union p1.write_ecache p2.write_ecache
   ; aggro_freshen= p1.aggro_freshen || p2.aggro_freshen
   ; shortening= p1.shortening || p2.shortening
   ; edits_depth= max p1.edits_depth p2.edits_depth
