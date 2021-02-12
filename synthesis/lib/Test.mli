@@ -9,6 +9,12 @@ type t =
   | Iff of (t * t)
   | Neg of t
 
+val to_yojson : t -> Yojson.Safe.t
+
+val of_yojson : Yojson.Safe.t -> t Ppx_deriving_yojson_runtime.error_or
+
+val random : unit -> t
+
 val equals : t -> t -> bool
 (** [equals a b] is true iff [a] and [b] represent the same AST *)
 

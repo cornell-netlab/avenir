@@ -1,13 +1,49 @@
 open Core
 open Util
 
-type gen = {query: Test.t; restriction: Test.t option}
+type gen = {query: Test.t; restriction: Test.t option} [@@deriving yojson]
 
-type t = {seen: Test.t list; generals: gen list}
+type t = {seen: Test.t list; generals: gen list} [@@deriving yojson]
+
+let random () : t =
+  let random_gen _ = {
+    query = Test.random ();
+    restriction = if (Random.bool ()) then None else Some (Test.random ())
+  } in
+  let len = Random.int 16 in
+  let rt _ = Test.random () in {
+    seen = List.init ~f:rt len;
+    generals = List.init ~f:random_gen len
+  }
+
+let equal (c : t) (c' : t) : bool =
+  let gen_eq (g : gen) (g' : gen) =
+    Test.equals g.query g'.query && Option.equal Test.equals g.restriction g'.restriction in
+  List.equal Test.equals c.seen c'.seen && List.equal gen_eq c.generals c'.generals
+
+let to_string (cache : t) : string =
+  let gen_to_string (g : gen) =
+    let query_str = Test.to_string g.query in
+    let rest_str = if Option.is_none g.restriction then Test.to_string (Option.value_exn g.restriction) else "None" in
+    Printf.sprintf "{ query : %s ; restriction : %s }" query_str rest_str in
+  let seen_str = (List.map ~f:Test.to_string cache.seen) |> String.concat ~sep:"; " in
+  let generals_str = (List.map ~f:gen_to_string cache.generals) |> String.concat ~sep:"; " in
+  Printf.sprintf "{ seen : %s ; generals : %s }" seen_str generals_str
 
 let disable = false
 
-let make () = {seen= []; generals= []}
+let make ?(filename=None) () : t =
+  match filename with
+  | None -> { seen= []; generals= [] }
+  | Some file ->
+    begin
+      match of_yojson (Yojson.Safe.from_file file) with
+      | Ok c -> c
+      | Error e -> Printf.printf "Failed to read in cache from file"; failwith e
+    end
+
+let write_cache (cache : t) (filename : string) : unit =
+  cache |> to_yojson |> Yojson.Safe.to_file filename
 
 let gen = NameGen.make ()
 

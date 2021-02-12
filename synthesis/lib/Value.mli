@@ -1,6 +1,10 @@
 (* A value represents a fixed-width bitvector*)
 type t [@@deriving sexp, compare]
 
+val to_yojson : t -> Yojson.Safe.t
+
+val of_yojson : Yojson.Safe.t -> t Ppx_deriving_yojson_runtime.error_or
+
 val make : int * int -> t
 (** [make (i,sz)] constructs a bitvector wiht value [i] of size [sz]. **
     Throws an exception when [i > 2^sz -1] or when [i < 0]. ***)

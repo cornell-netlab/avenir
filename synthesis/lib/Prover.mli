@@ -1,5 +1,8 @@
 open Core
 
+(** Query cache *)
+val cache : QAbstr.t ref
+
 (*
  * Interface to Z3
  *)

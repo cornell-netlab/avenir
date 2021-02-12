@@ -13,6 +13,19 @@ type t =
   | Impl of (t * t)
   | Iff of (t * t)
   | Neg of t
+  [@@deriving yojson]
+
+let rec random () =
+  match Random.int 9 with
+  | 0 -> True
+  | 1 -> False
+  | 2 -> Eq (Expr.random (), Expr.random ())
+  | 3 -> Le (Expr.random (), Expr.random ())
+  | 4 -> And (random (), random ())
+  | 5 -> Or (random (), random ())
+  | 6 -> Impl (random (), random ())
+  | 7 -> Iff (random (), random ())
+  | _ -> Neg (random ())
 
 let rec equals a b =
   match (a, b) with

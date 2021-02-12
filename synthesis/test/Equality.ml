@@ -67,3 +67,7 @@ let leq_values = Alcotest.(check valuele) "less than"
 let instance = testable_string Instance.to_string Instance.equal
 
 let same_inst = Alcotest.(check instance) "same instances"
+
+let qcache = testable_string QAbstr.to_string QAbstr.equal
+
+let same_qcache = Alcotest.(check qcache) "same query cache"

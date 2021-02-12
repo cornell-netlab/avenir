@@ -1,7 +1,15 @@
 open Core
 open Util
 
-type t = Bigint.t Sized.t [@@deriving sexp, compare]
+let bigint_to_yojson (bi: Bigint.t) : Yojson.Safe.t = `Intlit (Bigint.to_string bi)
+
+let bigint_of_yojson (j: Yojson.Safe.t) : Bigint.t Ppx_deriving_yojson_runtime.error_or =
+  match j with
+  | `Intlit s -> Result.Ok (Bigint.of_string s)
+  | `Int i -> Result.Ok (Bigint.of_int i)
+  | _ -> Result.Error (Printf.sprintf "Can't parse %s" (Yojson.Safe.to_string j))
+
+type t = (Bigint.t [@to_yojson bigint_to_yojson] [@of_yojson bigint_of_yojson]) Sized.t [@@deriving yojson, sexp, compare]
 
 let big_make (i, sz) =
   let open Bigint in

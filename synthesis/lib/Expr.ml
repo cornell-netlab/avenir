@@ -16,6 +16,28 @@ type t =
   | Concat of (t * t)
   | Cast of (int * t)
   | Slice of {hi: int; lo: int; bits: t}
+  [@@deriving yojson]
+
+let rec random () : t =
+  let random_value () =
+    let size = (Random.int 29) + 1 in
+    Value.random size in
+  match Random.int 15 with
+  | 0 -> Value (random_value ())
+  | 1 -> Var ("var_name", Random.int 32)
+  | 2 -> Hole ("hole_name", Random.int 32)
+  | 3 -> Plus (random (), random ())
+  | 4 -> SatPlus (random (), random ())
+  | 5 -> SatMinus (random (), random ())
+  | 6 -> Times (random (), random ())
+  | 7 -> Minus (random (), random ())
+  | 8 -> Mask (random (), random ())
+  | 9 -> Xor (random (), random ())
+  | 10 -> BOr (random (), random ())
+  | 11 -> Shl (random (), random ())
+  | 12 -> Concat (random (), random ())
+  | 13 -> Cast (Random.int 32, random ())
+  | _ -> Slice { hi = Random.int 32; lo = Random.int 32; bits = random () }
 
 let rec to_string (e : t) : string =
   let string_binop e1 op e2 =
@@ -232,8 +254,8 @@ let rec frees typ e : (string * int) list =
    |SatMinus (e, e'), _ ->
       frees typ e @ frees typ e'
 
-let vars  = frees `Var    
-let holes = frees `Hole      
+let vars  = frees `Var
+let holes = frees `Hole
 
 let rec has_hole = function
   | Value _ | Var _ -> false
