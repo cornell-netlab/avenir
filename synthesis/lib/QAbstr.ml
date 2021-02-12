@@ -42,9 +42,6 @@ let make ?(filename=None) () : t =
       | Error e -> Printf.printf "Failed to read in cache from file"; failwith e
     end
 
-let write_cache (cache : t) (filename : string) : unit =
-  cache |> to_yojson |> Yojson.Safe.to_file filename
-
 let gen = NameGen.make ()
 
 let rec abstract_expr (m : string StringMap.t) (e1 : Expr.t) (e2 : Expr.t) :

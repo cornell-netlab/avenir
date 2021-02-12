@@ -243,6 +243,9 @@ let is_valid params test = check_valid params test |> fst |> Option.is_none
 
 let cache = ref @@ QAbstr.make ()
 
+let write_cache (cache : QAbstr.t) (filename : string) : unit =
+  cache |> QAbstr.to_yojson |> Yojson.Safe.to_file filename
+
 let rec restriction_cegis ~gas (params : Parameters.t)
     (restriction : Test.t option) (query : Test.t) quantified_vars :
     Test.t option option =

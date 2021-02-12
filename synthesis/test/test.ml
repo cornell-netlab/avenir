@@ -18,4 +18,5 @@ let () =
     ; ("model interface", ModelTest.test)
     ; ("value interface", ValueTest.test)
     ; ("random generators", RandomGenTest.test)
-    ; ("equivalence", SynthesisTest.equivs) ]
+    ; ("equivalence", SynthesisTest.equivs)
+    ; ("query cache serialization", QAbstrTest.test)]
