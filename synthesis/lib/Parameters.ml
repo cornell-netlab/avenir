@@ -10,10 +10,12 @@ type t =
     edits_depth: int
   ; search_width: int
   ; timeout: Timeout.t
-  ; (*Verfications*)
+  ; (*Verifications*)
     fastcx: bool
   ; vcache: bool
   ; ecache: int option
+  ; read_qcache: string option
+  ; write_qcache: string option
   ; aggro_freshen: bool
   ; minimize: bool
   ; do_slice: bool
@@ -48,6 +50,8 @@ let default =
   ; semantic_slicing= false
   ; vcache= false
   ; ecache= None
+  ; read_qcache= None
+  ; write_qcache= None
   ; aggro_freshen= false
   ; shortening= false
   ; edits_depth= -1
@@ -90,6 +94,12 @@ let hint_type_union ht1 ht2 =
   else if String.(ht2 = "") then ht1
   else Printf.sprintf "Incompatible %s and %s" ht1 ht2 |> failwith
 
+let filename_union f1 f2 =
+  match f1, f2 with
+  | None, None -> None
+  | Some f, None | None, Some f -> Some f
+  | Some f, Some f' -> if String.(f = f') then Some f else Printf.sprintf "Incompatible filenames %s and %s" f f' |> failwith
+
 let union p1 p2 =
   { widening= p1.widening || p2.widening
   ; do_slice= p1.do_slice || p2.do_slice
@@ -97,6 +107,8 @@ let union p1 p2 =
   ; semantic_slicing= p1.semantic_slicing || p2.semantic_slicing
   ; vcache= p1.vcache || p2.vcache
   ; ecache= ecache_union p1.ecache p2.ecache
+  ; read_qcache= filename_union p1.read_qcache p2.read_qcache
+  ; write_qcache= filename_union p1.write_qcache p2.write_qcache
   ; aggro_freshen= p1.aggro_freshen || p2.aggro_freshen
   ; shortening= p1.shortening || p2.shortening
   ; edits_depth= max p1.edits_depth p2.edits_depth

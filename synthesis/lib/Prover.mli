@@ -3,6 +3,9 @@ open Core
 (** Query cache *)
 val cache : QAbstr.t ref
 
+val write_cache : QAbstr.t -> string -> unit
+(** Writes out the query cache, serialized into a Yojson object, into a file. *)
+
 (*
  * Interface to Z3
  *)

@@ -138,6 +138,10 @@ let mng_params =
     and prover_loc =
       flag "--loc" (optional string)
         ~doc:"<fp> Path to SMTLIB location, defaults to /usr/bin/z3"
+    and read_qcache =
+      flag "--read-qcache" (optional string) ~doc:"Initializes query cache from a specified file instead of initializing with an empty cache"
+    and write_qcache =
+      flag "--write-qcache" (optional string) ~doc:"Writes out query cache into a specified file after completion"
     in
     Option.value prover_loc ~default:"/usr/bin/z3" |> Prover.make_provers ;
     Avenir.Log.set_level verbosity ;
@@ -145,7 +149,9 @@ let mng_params =
       { default with
         thrift_mode
       ; interactive
-      ; timeout= Avenir.Timeout.start timeout }]
+      ; timeout= Avenir.Timeout.start timeout
+      ; read_qcache
+      ; write_qcache }]
 
 let problem_flags =
   let open Command.Let_syntax in
@@ -227,14 +233,20 @@ let synthesize =
           if params.thrift_mode then Edit.to_bmv2_string (Problem.phys prob)
           else Edit.to_string
         in
+        if Option.is_some params.read_qcache then
+          Avenir.Prover.cache := Avenir.QAbstr.make ~filename:params.read_qcache ();
+          Avenir.Prover.write_cache !Avenir.Prover.cache "tempqcache.json";
         if measure then
           match Benchmark.measure params None mk_prob data with
           | None -> Core.Printf.printf "No solution could be found \n%!"
           | Some soln when print_res ->
+              if Option.is_some params.write_qcache then
+                Avenir.Prover.write_cache !Avenir.Prover.cache (Option.value_exn params.write_qcache);
               Core.Printf.printf "EDITS:\n%!" ;
               List.iter soln ~f:(fun e ->
                   Core.Printf.printf "%s\n%!" (edit_to_string e))
-          | _ -> ()
+          | _ -> if Option.is_some params.write_qcache then
+            Avenir.Prover.write_cache !Avenir.Prover.cache (Option.value_exn params.write_qcache); ()
         else
           let data = List.join data in
           let mk_prob =
@@ -253,6 +265,7 @@ let synthesize =
           with
           | None -> failwith "failed"
           | Some (_, phys_edits) ->
+              if Option.is_some params.write_qcache then Core.Printf.printf "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"; Avenir.Prover.write_cache !Avenir.Prover.cache (Option.value_exn params.write_qcache);
               if print_res then (
                 Core.Printf.printf "Target operations:\n%!" ;
                 List.iter phys_edits ~f:(fun e ->
@@ -395,10 +408,10 @@ let summarize : Command.t =
            printf "\t %d keys, %d unique\n" (Cmd.num_keys cmd) (Cmd.num_unique_keys cmd);
            printf "\t %d tables\n" (Cmd.num_tables cmd);
            printf "\t %d actions\n%!" (Cmd.num_actions cmd)
-           
-           
+
+
     ]
-  
+
 let classbench_cmd : Command.t =
   let open Command.Let_syntax in
   Command.basic ~summary:"benchmarks generated insertions"
