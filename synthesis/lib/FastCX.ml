@@ -120,9 +120,9 @@ let unreachable params (problem : Problem.t) (test : Test.t) =
   in
   loop n True
 
-let get_cex ?(neg = Test.True) params data (problem : Problem.t) =
+let get_cex ?(neg = Test.True) params data (problem : Problem.t) =  
   let open Problem in
-  Log.debug @@ lazy (Printf.sprintf "\t   a fast Cex\n%!") ;
+  Log.info @@ lazy "fast cex";
   let e = log_edits problem |> List.hd_exn in
   hits_pred params data (log problem) (log_inst problem) (log_edits problem)
     e

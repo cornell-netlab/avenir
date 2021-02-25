@@ -91,7 +91,8 @@ let eq_str params problem =
 
 let get_cex ?(neg = Test.True) (params : Parameters.t)
     (data : ProfData.t ref) (problem : Problem.t) :
-    (Packet.t * Packet.t) option =
+      (Packet.t * Packet.t) option =
+  Log.info @@ lazy "get_cex" ;
   Log.debug @@ lazy (eq_str params problem) ;
   let open Option in
   if params.fastcx then
