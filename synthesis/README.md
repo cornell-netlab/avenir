@@ -174,6 +174,7 @@ To run the retargeting experiments, run
 
 ``` bash
 cd synthesis/benchmarks/retargeting
+python retarget.py --run
 ```
 
 This will generate performance graphs for each experiment: `self`,
@@ -198,7 +199,7 @@ apt install automake                         \
             libgmp-dev                       \
             libpcap-dev                      \
             libboost-dev                     \
-            libbost-test-dev                 \
+            libboost-test-dev                 \
             libboost-program-options-dev     \
             libboost-system-dev              \
             libboost-filesystem-dev          \
@@ -224,7 +225,7 @@ make
 sudo make install
 cd lib/py
 sudo python setup.py install
-cd ..
+cd ../../..
 ```
 
 Now, install [nanomsg 1.0.0](https://github.com/nanomsg/nanomsg/tree/1.0.0) from source
@@ -251,8 +252,8 @@ Finally, we can download and install Bmv2:
 
 ``` bash
 git clone git@github.com:p4lang/behavioral-model.git
-git checkout 1.14.0
 cd behavioral-model
+git checkout 1.14.0
 ./autogen.sh
 ./configure
 make
@@ -267,7 +268,7 @@ Now to run the experiment, execute the following commads
 <!-- sudo -E python 1sw_demo.py --behavioral-exe ~/behavioral-model/targets/simple_router/simple_router --json ~/behavioral-model/targets/simple_router/simple_router.json --loc ~/avenir/synthesis --rules rules64 --num-hosts 64 -->
 
 ``` bash
-cd mininet
+cd avenir/synthesis/benchmarks/bmv2/mininet
 sudo -E python2 1sw_demo.py \
     --behavioral-exe <bmv2path>/targets/simple_router/simple_router \
     --json <bmv2path>/targets/simple_router/simple_router.json \ 

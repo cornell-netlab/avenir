@@ -211,7 +211,8 @@ let exists_in_table params (_ (*prog*) : Cmd.t) inst edits e =
  * Here we only check that the rules are exact, which implies this property given the assumption that every insertion is reachable
  *)
 let slice_conclusive (params : Parameters.t) (data : ProfData.t ref)
-    (problem : t) =
+      (problem : t) =
+  Log.info @@ lazy "slice_conclusive";
   let st = Time.now () in
   let log_edit = log_edits problem |> List.hd_exn in
   let res =
