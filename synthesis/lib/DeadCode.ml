@@ -28,7 +28,7 @@ let rec eliminate_unused_vars cmd (used : StringSet.t) =
             let c', used' = eliminate_unused_vars c used in
             ( acc_cases @ [(b, c')]
             , stringset_add_list used' (fsts b_fvs)
-              |> StringSet.union acc_used ))
+              |> StringSet.union acc_used ) )
       in
       (select typ cases', used')
   | Apply {name; keys; actions; default} ->
@@ -41,7 +41,7 @@ let rec eliminate_unused_vars cmd (used : StringSet.t) =
               strset_remove_list used_with_data (fsts data)
             in
             ( acc_acts @ [(n, data, act')]
-            , StringSet.union acc_used used_sans_data ))
+            , StringSet.union acc_used used_sans_data ) )
       in
       if
         List.for_all actions' ~f:(fun (_, _, act) -> equals act Skip)

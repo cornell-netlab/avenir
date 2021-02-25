@@ -25,7 +25,7 @@ let interp_equal i1 i2 =
 let to_string (inst : t) : string =
   StringMap.fold inst ~init:"" ~f:(fun ~key:table_name ~data:rows acc ->
       Printf.sprintf "%s\n%s\n%s" acc table_name
-        (Row.list_to_string ~tab:"\t" rows))
+        (Row.list_to_string ~tab:"\t" rows) )
 
 let equal (i1 : t) (i2 : t) : bool =
   StringMap.equal (List.equal Row.equals) i1 i2
@@ -39,13 +39,13 @@ let update (params : Parameters.t) (inst : t) (e : Edit.t) =
           match rows_opt with
           | None -> [row]
           | Some rows when params.above -> rows @ [row]
-          | Some rows -> row :: rows)
+          | Some rows -> row :: rows )
   | Del (tbl, i) ->
       StringMap.change inst tbl ~f:(function
         | None -> None
         | Some rows ->
             List.filteri rows ~f:(fun j _ -> i <> List.length rows - j - 1)
-            |> Some)
+            |> Some )
 
 let rec update_list params (inst : t) (edits : Edit.t list) =
   match edits with
@@ -77,11 +77,11 @@ let negate_rows inst tbl =
   let open Test in
   get_rows inst tbl
   |> List.fold ~init:True ~f:(fun acc (matches, _, _) ->
-         acc %&% !%(Match.list_to_test matches))
+         acc %&% !%(Match.list_to_test matches) )
 
 let overwrite (old_inst : t) (new_inst : t) : t =
   StringMap.fold new_inst ~init:old_inst ~f:(fun ~key ~data acc ->
-      StringMap.set acc ~key ~data)
+      StringMap.set acc ~key ~data )
 
 let size : t -> int =
   StringMap.fold ~init:0 ~f:(fun ~key:_ ~data -> ( + ) (List.length data))
@@ -101,7 +101,7 @@ let rec apply ?(no_miss = false) ?(ghost_edits = StringMap.empty)
             let c' =
               apply params ~no_miss ~ghost_edits tag encode_tag inst c
             in
-            acc @ [(t, c')])
+            acc @ [(t, c')] )
       in
       Cmd.select typ ss
   | Apply t ->
@@ -146,7 +146,7 @@ let rec apply ?(no_miss = false) ?(ghost_edits = StringMap.empty)
                   let action =
                     List.nth_exn t.actions action |> bind_action_data data
                   in
-                  (cond, instrument action) :: acc)
+                  (cond, instrument action) :: acc )
       in
       let holes =
         match tag with
@@ -156,7 +156,7 @@ let rec apply ?(no_miss = false) ?(ghost_edits = StringMap.empty)
                 ( Hole.table_hole encode_tag t.keys t.name i actSize
                 , Cmd.holify
                     ~f:(fun (h, sz) -> (Hole.action_data t.name i h sz, sz))
-                    (List.map params ~f:fst) act ))
+                    (List.map params ~f:fst) act ) )
       in
       let dflt_row = if no_miss then [] else [(Test.True, t.default)] in
       let tbl_select =
@@ -180,8 +180,8 @@ let project slice inst =
     | `Right _ -> Some []
     | `Both (slice, rows) ->
         List.fold slice ~init:[] ~f:(fun acc n ->
-            acc @ [List.nth_exn rows n])
-        |> Some)
+            acc @ [List.nth_exn rows n] )
+        |> Some )
 
 let fold inst ~init ~f =
   StringMap.fold inst ~init ~f:(fun ~key ~data -> f ~table:key ~rows:data)

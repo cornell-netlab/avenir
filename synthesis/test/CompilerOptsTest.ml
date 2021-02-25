@@ -82,7 +82,7 @@ let rev_propogate_computes_single_path _ =
         (bigand
            [ Hole ("?AddRowtoipv4", 1) %=% mkVInt (1, 1)
            ; Hole ("?ipv4.dst_ipv4", 32) %=% mkVInt (5, 32)
-           ; Hole ("?ActInipv4", 2) %=% mkVInt (0, 2) ])
+           ; Hole ("?ActInipv4", 2) %=% mkVInt (0, 2) ] )
     %:% mkAssume (Hole ("?port_ipv4_0", 32) %=% mkVInt (99, 32)) )
   @@ passive_optimize out_packet cmd
 

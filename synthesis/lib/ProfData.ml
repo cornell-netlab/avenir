@@ -106,7 +106,7 @@ let to_string (data : t) =
 let to_csv (dataset : t list) =
   Printf.sprintf "%s\n%s" header_string
     (List.fold dataset ~init:"" ~f:(fun acc dataline ->
-         Printf.sprintf "%s%s\n" acc (to_string dataline)))
+         Printf.sprintf "%s%s\n" acc (to_string dataline) ) )
 
 let zero _ : t ref =
   ref

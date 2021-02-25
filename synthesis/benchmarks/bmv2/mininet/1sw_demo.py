@@ -183,6 +183,7 @@ def experiment(num_hosts, mode, experiment):
             else:
                 run_measurement(net, src, tgt)
 
+    print "running", experiment
     os.system(experiment)
 
     sleep(10)

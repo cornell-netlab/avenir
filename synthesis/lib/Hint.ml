@@ -32,7 +32,7 @@ let to_string (h : t) =
         List.fold ms ~init:"" ~f:(fun acc m ->
             let sep = if !first then "" else ";" in
             first := false ;
-            Printf.sprintf "%s%s%s" acc sep (Match.to_string m))
+            Printf.sprintf "%s%s%s" acc sep (Match.to_string m) )
   in
   let acts, act_id =
     match h.act_id_opt with
@@ -128,7 +128,7 @@ let get_poss_injections phys e : string list =
   |> List.filter_map ~f:(fun (t, vars) ->
          if StringSet.is_subset rel_keys ~of_:(fsts vars |> StringSet.of_list)
          then Some t
-         else None)
+         else None )
 
 let make edit table =
   let matches = Edit.get_matches_exn edit |> Match.relevant_matches in
@@ -146,7 +146,7 @@ let extract_action_data table act_id params
   | None -> []
   | Some data ->
       List.fold2_exn params data ~init:[] ~f:(fun acc (param, sz) value ->
-          acc @ [(Hole.action_data table act_id param sz, value)])
+          acc @ [(Hole.action_data table act_id param sz, value)] )
 
 let to_model typ (phys : Cmd.t) (hint : t) : Model.t =
   let open Cmd in
@@ -155,7 +155,7 @@ let to_model typ (phys : Cmd.t) (hint : t) : Model.t =
     |> Option.value_exn
          ~message:
            (Printf.sprintf "couldn't find table %s in %s" hint.table
-              (Cmd.to_string phys))
+              (Cmd.to_string phys) )
   in
   let action =
     let add_hole = Hole.add_row_hole_name hint.table in
@@ -186,7 +186,7 @@ let to_model typ (phys : Cmd.t) (hint : t) : Model.t =
                 | Some _ -> None
                 | None ->
                     let open Match in
-                    wildcard k sz |> to_model hint.table |> Some)
+                    wildcard k sz |> to_model hint.table |> Some )
         |> Model.aggregate
   in
   Model.join matches action

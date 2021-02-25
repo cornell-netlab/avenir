@@ -148,4 +148,4 @@ let all_params params =
       ; only_holes= i land 16 > 0
       ; unique_edits= i land 32 > 0
       ; domain= i land 64 > 0
-      ; restrict_mask= i land 128 > 0 })
+      ; restrict_mask= i land 128 > 0 } )

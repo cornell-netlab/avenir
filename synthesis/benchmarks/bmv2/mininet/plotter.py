@@ -64,7 +64,7 @@ def setrcparams():
   plt.rcParams['pdf.fonttype'] = 42
   plt.rcParams['ps.fonttype'] = 42
   plt.rcParams['pdf.compression'] = 9
-  plt.rcParams['text.usetex'] = True
+  plt.rcParams['text.usetex'] = False
   plt.rcParams['pgf.texsystem']= "pdflatex"
   plt.rcParams["font.sans-serif"] = "Linux Libertine"
   plt.rcParams["text.latex.preamble"] = "\usepackage{libertine},\usepackage[libertine]{newtxmath},\usepackage[T1]{fontenc}"

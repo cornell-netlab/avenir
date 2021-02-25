@@ -307,9 +307,9 @@ let meet_combines_facts _ =
   let map =
     ConstantProp.meet
       (StringMap.of_alist_exn
-         [("standard_metadata.egress_spec$2", Expr.value (1, 9))])
+         [("standard_metadata.egress_spec$2", Expr.value (1, 9))] )
       (StringMap.of_alist_exn
-         [("standard_metadata.egress_spec$2", Expr.value (1, 9))])
+         [("standard_metadata.egress_spec$2", Expr.value (1, 9))] )
   in
   match StringMap.find map "standard_metadata.egress_spec$2" with
   | None -> Alcotest.(check string) "Should have found" "Some 1" "None"

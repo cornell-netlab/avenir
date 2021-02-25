@@ -38,7 +38,7 @@ let check_size e1 e2 =
     Log.warn
     @@ lazy
          (Printf.sprintf "%s and %s are differently sized\n%!" (to_string e1)
-            (to_string e2))
+            (to_string e2) )
 
 let rec expr_to_term_help expr styp : Smtlib.term =
   let open Expr in
@@ -166,13 +166,13 @@ let check_sat (params : Parameters.t) (longtest : Test.t) =
     let holes =
       Test.holes test
       |> List.dedup_and_sort ~compare:(fun (idx, _) (idy, _) ->
-             Stdlib.compare idx idy)
+             Stdlib.compare idx idy )
     in
     let () =
       List.iter holes ~f:(fun (id, i) ->
           lazy (Printf.sprintf "(declare-const %s (_ BitVec %d))\n%!" id i)
           |> Log.z3 ;
-          declare_const (get sat_prover) (Id id) (BitVecSort i))
+          declare_const (get sat_prover) (Id id) (BitVecSort i) )
     in
     let term = forall_ vars (test_to_term test `Sat) in
     let response =
@@ -208,13 +208,13 @@ let check_valid (_ : Parameters.t) (longtest : Test.t) =
   let vars =
     Test.vars test
     |> List.dedup_and_sort ~compare:(fun (idx, _) (idy, _) ->
-           Stdlib.compare idx idy)
+           Stdlib.compare idx idy )
   in
   let () =
     List.iter vars ~f:(fun (id, i) ->
         Log.z3
         @@ lazy (Printf.sprintf "(declare-const %s (_ BitVec %d))\n%!" id i) ;
-        declare_const (get valid_prover) (Id id) (BitVecSort i))
+        declare_const (get valid_prover) (Id id) (BitVecSort i) )
   in
   let st = Time.now () in
   let term = not_ (test_to_term test `Valid) in
@@ -259,7 +259,7 @@ let rec restriction_cegis ~gas (params : Parameters.t)
               %&%
               match Packet.get_val_opt m var with
               | None -> True
-              | Some v -> Var (var, Value.size v) %<>% Value v)
+              | Some v -> Var (var, Value.size v) %<>% Value v )
         in
         restriction_cegis ~gas:(gas - 1) params (Some restr_test') query
           quantified_vars
@@ -274,7 +274,7 @@ let check_valid_cached (params : Parameters.t) (test : Test.t) =
       Log.info
       @@ lazy
            (Printf.sprintf "\tCache_hit after %fms!\n%!"
-              Time.(diff (now ()) st |> Span.to_ms)) ;
+              Time.(diff (now ()) st |> Span.to_ms) ) ;
       (None, Time.(diff (now ()) st))
   | `Hit _ -> (None, Time.(diff (now ()) st))
   | `Miss test ->
@@ -282,7 +282,7 @@ let check_valid_cached (params : Parameters.t) (test : Test.t) =
       @@ lazy
            (Printf.sprintf
               "\tCouldn't abstract from %d previous tests : %d nodes!\n%!"
-              (List.length !cache.seen) (Test.num_nodes test)) ;
+              (List.length !cache.seen) (Test.num_nodes test) ) ;
       let dur' = Time.(diff (now ()) st) in
       Log.debug @@ lazy "Querying" ;
       let m, dur = check_valid params test in
@@ -300,7 +300,7 @@ let check_valid_cached (params : Parameters.t) (test : Test.t) =
                abstractions!\n\
                %!"
               (List.length !cache.seen)
-              (List.length !cache.generals)) ;
+              (List.length !cache.generals) ) ;
       (* if params.debug then Printf.printf "ABSTRACTION: %s\n"
          (string_of_test query); *)
       let m = restriction_cegis ~gas:2 params None query qvars in

@@ -22,8 +22,8 @@ let implements ?(neg = Test.True) (params : Parameters.t)
     [ (fun _ -> fails_on_some_example params problem)
     ; (fun _ ->
         let open Option in
-        check_equivalence neg params data problem >>| Packet.extract_inout_ce)
-    ]
+        check_equivalence neg params data problem >>| Packet.extract_inout_ce
+        ) ]
 
 let handle_fast_cex neg (params : Parameters.t) data problem = function
   | `Yes -> None
@@ -33,32 +33,42 @@ let handle_fast_cex neg (params : Parameters.t) data problem = function
 let slice_ok problem = not (Problem.empty_phys_edits problem)
 
 let handle_sliced_equivalence neg problem params data = function
-  | Some counter -> Some counter
+  | Some counter ->
+      let () = Log.info @@ lazy "slices inequivalent" in
+      Some counter
   | None ->
-      if Problem.slice_conclusive params data problem then None
-      else implements ~neg params data problem
+      if Problem.slice_conclusive params data problem then
+        let () = Log.info @@ lazy "slice conclusive" in
+        None
+      else
+        let () = Log.info @@ lazy "slice inconclusive checking full" in
+        implements ~neg params data problem
 
 let log_cex_str inpkt outpkt =
   Printf.sprintf "log :%s\n" (Packet.cex_to_string (inpkt, outpkt))
 
 let phys_cex_str params problem log_outpkt inpkt =
   let phys = Problem.phys_gcl_program params problem in
-  let outpkt = eval_act phys inpkt |> Packet.restrict (Problem.fvs problem) in
-  let phys_str = Printf.sprintf "phys :%s"
-                   (Packet.cex_to_string (inpkt, outpkt)) in
+  let outpkt =
+    eval_act phys inpkt |> Packet.restrict (Problem.fvs problem)
+  in
+  let phys_str =
+    Printf.sprintf "phys :%s" (Packet.cex_to_string (inpkt, outpkt))
+  in
   let vars = Packet.diff_vars log_outpkt outpkt in
   let diff_str =
     List.fold vars ~init:"" ~f:(fun acc s ->
-        let logv = Packet.get_val_opt log_outpkt s
-                   |> Option.value_map ~f:(Value.to_string)  ~default:"???" in
-        let physv = Packet.get_val_opt outpkt s
-                    |> Option.value_map ~f:(Value.to_string)  ~default:"???" in 
-        Printf.sprintf "%s\n\t %s -> %s, %s" acc s logv physv
-      )
+        let logv =
+          Packet.get_val_opt log_outpkt s
+          |> Option.value_map ~f:Value.to_string ~default:"???"
+        in
+        let physv =
+          Packet.get_val_opt outpkt s
+          |> Option.value_map ~f:Value.to_string ~default:"???"
+        in
+        Printf.sprintf "%s\n\t %s -> %s, %s" acc s logv physv )
   in
   Printf.sprintf "%s\ndiffs : {%s}" phys_str diff_str
-  
-
 
 let normalize_cex params (problem : Problem.t) cex =
   let inpkt, outpkt =
@@ -241,16 +251,18 @@ let cegis_math_sequence_once (params : Parameters.t) data
           None
       | Some phys_edits ->
           Log.info @@ lazy "++++++++++++++++++success+++++++++++++++++" ;
+          if not params.hot_start && params.thrift_mode then
+            Printf.printf "%s%!" (Edit.list_to_bmv2_string (Problem.phys problem) phys_edits);
           ( Problem.replace_phys_edits problem phys_edits
             |> Problem.commit_edits_log params
             |> Problem.commit_edits_phys params
           , pedits @ phys_edits )
-          |> return)
+          |> return )
 
 let cegis_math_sequence (params : Parameters.t) data
     (get_problem : unit -> Problem.t) =
+  let open Option.Let_syntax in
   if params.hot_start then
-    let open Option.Let_syntax in
     let st = Time.now () in
     let%bind _ = cegis_math_sequence_once params data (get_problem ()) in
     let () =
@@ -261,4 +273,6 @@ let cegis_math_sequence (params : Parameters.t) data
       data (get_problem ())
   else
     let () = Log.info (lazy "Restarting, with no freshening") in
-    get_problem () |> cegis_math_sequence_once params data
+    let problem = get_problem () in
+    let%bind res = cegis_math_sequence_once params data problem in
+    return res

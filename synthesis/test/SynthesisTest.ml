@@ -29,7 +29,7 @@ let microbench_equiv_test _ =
     Synthesis.implements Parameters.default (ProfData.zero ())
       (Problem.make ~log:obt ~phys:pip
          ~fvs:[("x0", 4); ("x1", 4); ("y0", 4); ("y1", 4)]
-         ~log_inst:Instance.empty ~phys_inst:Instance.empty ~log_edits:[] ())
+         ~log_inst:Instance.empty ~phys_inst:Instance.empty ~log_edits:[] () )
   in
   match cex_opt with
   | None -> Alcotest.(check pass) "equivalent" true true

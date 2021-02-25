@@ -42,7 +42,7 @@ let to_string params (p : t) =
     (Switch.to_string params p.log)
     (Switch.to_string params p.phys)
     ( List.map p.fvs ~f:(fun (x, sz) ->
-          "(" ^ x ^ "#" ^ string_of_int sz ^ ")")
+          "(" ^ x ^ "#" ^ string_of_int sz ^ ")" )
     |> List.reduce ~f:(fun x y -> x ^ "," ^ y)
     |> Option.value ~default:"" )
     (Bigint.to_string @@ Cmd.num_table_paths @@ Switch.pipeline p.phys)
@@ -89,6 +89,7 @@ let phys_gcl_holes params (p : t) dels tag : Cmd.t =
 let phys_drop_spec (p : t) : Test.t option = Switch.drop_spec p.phys
 
 let slice params (p : t) : t =
+  let () = Log.info @@ lazy "slicing" in
   (* let log_inst_slice = Instance.update_list params Instance.empty (Switch.edits p.log) in
    * let phys_inst_slice = Instance.update_list params Instance.empty (Switch.edits p.phys) in
    * let log = Instance.overwrite (Switch.inst p.log) log_inst_slice |> Switch.replace_inst p.log in
@@ -185,7 +186,7 @@ let unique_in_table params (_ (*prog*) : Cmd.t) inst edits e =
       let inst' = Instance.update_list params inst earlier_edits in
       let earlier_rows = Instance.get_rows inst' tbl in
       List.for_all earlier_rows ~f:(fun (ms', _, _) ->
-          not (Match.has_inter_l ms ms'))
+          not (Match.has_inter_l ms ms') )
 
 let exists_in_table params (_ (*prog*) : Cmd.t) inst edits e =
   let open Edit in
@@ -204,7 +205,7 @@ let exists_in_table params (_ (*prog*) : Cmd.t) inst edits e =
       List.exists earlier_rows ~f:(fun (ms', ad', aid') ->
           List.equal (fun m m' -> Match.equal m m') ms ms'
           && aid = aid'
-          && List.equal (fun v v' -> Stdlib.(v = v')) ad ad')
+          && List.equal (fun v v' -> Stdlib.(v = v')) ad ad' )
 
 (* The truth of a slice implies the truth of the full programs when
  * the inserted rules are disjoint with every previous rule (i.e. no overlaps or deletions)
@@ -221,7 +222,7 @@ let slice_conclusive (params : Parameters.t) (data : ProfData.t ref)
            unique_in_table params (phys problem) (phys_inst problem)
              (phys_edits problem) e
            || exists_in_table params (phys problem) (phys_inst problem)
-                (phys_edits problem) e)
+                (phys_edits problem) e )
   in
   ProfData.update_time !data.check_sliceable_time st ;
   res

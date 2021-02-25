@@ -22,7 +22,8 @@ let make (problem : Problem.t) : t =
     ~init:Model.empty
     ~f:(fun acc (tbl, vars) ->
       if nonempty_inter vars (log_edit_domain problem) then acc
-      else Model.set acc ~key:("?AddRowTo" ^ tbl) ~data:(Value.make (0, 1)))
+      else Model.set acc ~key:("?AddRowTo" ^ tbl) ~data:(Value.make (0, 1))
+      )
 
 let apply (inj : t) (phi : Test.t) = Manip.fixup_test inj phi
 

@@ -10,7 +10,7 @@ let obt_generator_422 _ =
            , [("x0", 4); ("x1", 4)]
            , [ ("action0", [("arg0", 4)], "y0" %<-% Var ("arg0", 4))
              ; ("action1", [("arg1", 4)], "y1" %<-% Var ("arg1", 4)) ]
-           , "meta" %<-% Value (Value.zero 4) ) ])
+           , "meta" %<-% Value (Value.zero 4) ) ] )
     (Obt.gen 4 2 2 |> fst)
 
 let pipe_generator_422 _ =
@@ -36,7 +36,7 @@ let pipe_generator_422 _ =
            ( "meta2"
            , [("meta", 4)]
            , [("action2", [("arg2", 4)], "y2" %<-% Var ("arg2", 4))]
-           , Skip ) ])
+           , Skip ) ] )
     (Pipe.gen 4 2 3)
 
 let random_test_422 _ =

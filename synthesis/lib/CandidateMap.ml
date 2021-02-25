@@ -14,7 +14,7 @@ let rec compute_cand_for_trace (tag : [`Exact | `Mask]) (line : Cmd.t)
       %:% compute_cand_for_trace tag c2 pinst trace
   | Select (typ, cs) ->
       List.map cs ~f:(fun (b, c) ->
-          (b, compute_cand_for_trace tag c pinst trace))
+          (b, compute_cand_for_trace tag c pinst trace) )
       |> select typ
   | Apply t -> (
     (*might need to use existing instance to negate prior rules *)
@@ -31,7 +31,7 @@ let rec compute_cand_for_trace (tag : [`Exact | `Mask]) (line : Cmd.t)
           let args =
             let open Test in
             List.fold2_exn params data ~init:True ~f:(fun acc param arg ->
-                acc %&% (Hole param %=% Value arg))
+                acc %&% (Hole param %=% Value arg) )
           in
           assume cond %:% assume args %:% holify List.(params >>| fst) act )
 
@@ -41,7 +41,7 @@ let apply_hints params tag typ (h_opt : (trace -> trace list) option) m pline
   | None -> [(Instance.apply params tag typ pinst pline, None)]
   | Some h ->
       List.map (h m) ~f:(fun t ->
-          (compute_cand_for_trace typ pline pinst t, Some t))
+          (compute_cand_for_trace typ pline pinst t, Some t) )
 
 let rec project_cmd_on_acts c (subst : Expr.t StringMap.t) : Cmd.t list =
   let open Cmd in
@@ -67,7 +67,7 @@ let rec project_cmd_on_acts c (subst : Expr.t StringMap.t) : Cmd.t list =
             project_cmd_on_acts a subst
             >>= fun act ->
             let t' = substitute ~holes t subst in
-            if Test.equals t' False then [] else [(t', act)])
+            if Test.equals t' False then [] else [(t', act)] )
       |> select typ |> return
   | Apply _ -> failwith "Shouldnt have applys at this stage"
 

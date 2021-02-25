@@ -33,7 +33,7 @@ let abstract_data (old_data : Row.action_data) (new_data : Row.action_data) =
         match ValueMap.find acc old_ with
         | Some nd' when Value.equals nd' new_ -> Some acc
         | Some _ -> None
-        | None -> ValueMap.set acc ~key:old_ ~data:new_ |> Some)
+        | None -> ValueMap.set acc ~key:old_ ~data:new_ |> Some )
   |> or_unequal_lengths_to_option |> Option.join
 
 (** [abstract_matches old_matches new_matches] returns a mapping from values
@@ -42,8 +42,8 @@ let abstract_data (old_data : Row.action_data) (new_data : Row.action_data) =
     there isn't a previous pair in the map [om -> nm'] where [nm <> nm'], in
     which case it returns [None]. It also returns [None] if the lists are
     different lengths*)
-let abstract_matches (old_matches : Match.t list)
-    (new_matches : Match.t list) =
+let abstract_matches (old_matches : Match.t list) (new_matches : Match.t list)
+    =
   List.fold2 old_matches new_matches ~init:(Some MatchMap.empty)
     ~f:(fun acc_opt old_ new_ ->
       let%bind acc = acc_opt in
@@ -52,7 +52,7 @@ let abstract_matches (old_matches : Match.t list)
         match MatchMap.find acc old_ with
         | Some new_' when Match.equal new_' new_ -> Some acc
         | Some _ -> None
-        | None -> MatchMap.set acc ~key:old_ ~data:new_ |> Some)
+        | None -> MatchMap.set acc ~key:old_ ~data:new_ |> Some )
   |> or_unequal_lengths_to_option |> Option.join
 
 let similar (eold : Edit.t) (enew : Edit.t) =
@@ -72,12 +72,12 @@ let equivalences diffmap : StringSet.t list =
         StringMap.fold diffmap ~init:(StringSet.singleton key)
           ~f:(fun ~key:key_inner ~data:data_inner acc ->
             if Stdlib.(data = data_inner) then StringSet.add acc key_inner
-            else acc)
-        :: eq_classes)
+            else acc )
+        :: eq_classes )
 
 let char_map ecs =
   List.fold ecs ~init:StringMap.empty ~f:(fun acc ec ->
-      StringMap.set acc ~key:(StringSet.choose_exn ec) ~data:[])
+      StringMap.set acc ~key:(StringSet.choose_exn ec) ~data:[] )
 
 let randomized_model ~excluding chis =
   (* Pick characteristic elements for each eq-class *)
@@ -92,7 +92,7 @@ let randomized_model ~excluding chis =
          trying to create a random unique identifier -- it gets used for all
          sorts of things in practice *)
       let random_v = Value.random sz ~lo:1 ~exc:prohibs in
-      Model.set m ~key ~data:random_v)
+      Model.set m ~key ~data:random_v )
 
 (** expand characteristic valuation to each member of the equivalence class *)
 let expand eqs chis =
@@ -101,14 +101,14 @@ let expand eqs chis =
       | None -> Model.set acc ~key ~data
       | Some eqs ->
           StringSet.fold eqs ~init:acc ~f:(fun acc key ->
-              Model.set acc ~key ~data))
+              Model.set acc ~key ~data ) )
 
 let randomize_along_ecs ecs ~excluding =
   Log.ecache
   @@ lazy
        (List.fold ecs ~init:"Randomizing Along Equivalence classes \n"
           ~f:(fun acc cls ->
-            string_of_strset cls |> Printf.sprintf "%s\n\t{%s }" acc)) ;
+            string_of_strset cls |> Printf.sprintf "%s\n\t{%s }" acc ) ) ;
   char_map ecs
   |> randomized_model ~excluding
   |> Log.(id_print ~s:Model.to_string ~p:ecache)
@@ -141,7 +141,7 @@ let sub_matches map =
   List.map ~f:(fun m ->
       match MatchMap.find map m with
       | None -> m
-      | Some m' -> m')
+      | Some m' -> m' )
 
 (** [sub_action_data map data] applies the mapping [map] to action data
     [data]*)
@@ -149,7 +149,7 @@ let sub_action_data map =
   List.map ~f:(fun d ->
       match ValueMap.find map d with
       | None -> d
-      | Some d' -> d')
+      | Some d' -> d' )
 
 (** [sub_edit adata map e] applies the match mapping [map] and the data
     mapping adata to the edit [e]*)
@@ -175,7 +175,7 @@ let sub_edits (adata, subst) edits =
   List.fold edits ~init:(Some []) ~f:(fun acc_opt e ->
       let%bind acc = acc_opt in
       let%map e' = sub_edit adata subst e in
-      acc @ [e'])
+      acc @ [e'] )
 
 let diff_eq_classes curr_edit_model old_edit_models =
   List.find_map old_edit_models ~f:(fun old_model ->
@@ -184,12 +184,12 @@ let diff_eq_classes curr_edit_model old_edit_models =
         Model.diff curr_edit_model old_model
         |> equivalences
         |> List.filter ~f:(fun s -> StringSet.length s > 1)
-        |> some_ident_if ~f:(Fn.non List.is_empty))
+        |> some_ident_if ~f:(Fn.non List.is_empty) )
 
 let inferred_models phys substs editss =
   List.filter_map editss ~f:(fun es ->
       let%map es' = sub_edits substs es in
-      Edit.list_to_model phys es')
+      Edit.list_to_model phys es' )
 
 let infer_fresh phys (curr_edits : Edit.t list) substs
     (old_edits : Edit.t list list) : Edit.t list option =
@@ -210,7 +210,7 @@ let get_similars e =
   get_cache ()
   |> List.filter_map ~f:(fun (log_edit, phys_edits) ->
          let%map adata, subst = similar log_edit e in
-         (phys_edits, adata, subst))
+         (phys_edits, adata, subst) )
 
 let freshen (params : Parameters.t) phys olds news substs prev_solns =
   Log.ecache
@@ -235,7 +235,7 @@ let infer (params : Parameters.t) (phys : Cmd.t) (e : Edit.t) =
         let fresh_phys_edits =
           freshen params phys old_edits new_edits (adata, subst) prev_solns
         in
-        fresh_phys_edits)
+        fresh_phys_edits )
 
 let update (log : Edit.t) (physs : Edit.t list) : unit =
   let c = get_cache () in

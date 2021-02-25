@@ -77,14 +77,14 @@ let to_test ?(random_fill = false) ~fvs (pkt : t) =
           if random_fill then
             Var (x, sz) %=% Expr.value (Random.int (pow 2 sz), sz)
           else True
-      | Some v -> Var (x, sz) %=% Value v)
+      | Some v -> Var (x, sz) %=% Value v )
 
 let of_smt_model = Z3ModelExtractor.of_smt_model
 
 let to_assignment (pkt : t) =
   let open Cmd in
   StringMap.fold pkt ~init:Skip ~f:(fun ~key ~data acc ->
-      ( %:% ) acc @@ (key %<-% Value data))
+      ( %:% ) acc @@ (key %<-% Value data) )
 
 let remake ?(fvs = None) (pkt : t) : t =
   (* let fvs = None in *)
@@ -104,11 +104,11 @@ let remake ?(fvs = None) (pkt : t) : t =
               let upper = Float.(top * 0.9 |> to_int) |> max 1 in
               let lower = Float.(top * 0.1 |> to_int) in
               StringMap.set acc ~key:var_nm
-                ~data:(Value.make (lower + Random.int upper, sz)))
+                ~data:(Value.make (lower + Random.int upper, sz)) )
 
 let restrict (fvs : (string * int) list) (pkt : t) =
   StringMap.filter_keys pkt ~f:(fun k ->
-      List.exists fvs ~f:(fun (v, _) -> String.(k = v)))
+      List.exists fvs ~f:(fun (v, _) -> String.(k = v)) )
 
 let equal ?(fvs = None) (pkt : t) (pkt' : t) =
   match fvs with
@@ -136,7 +136,7 @@ let extract_inout_ce (model : t) : t * t =
                   ( set_field out_pkt v data
                   , StringMap.set counter ~key:v ~data:idx )
             in
-            ((in_pkt', out_pkt'), counter'))
+            ((in_pkt', out_pkt'), counter') )
   |> fst
 
 let mk_packet_from_list (assoc : (string * Value.t) list) : t =
@@ -159,7 +159,7 @@ let diff_vars (pkt : t) (pkt' : t) : string list =
     let diff_map =
       StringMap.merge pkt pkt' ~f:(fun ~key:_ -> function
         | `Both (l, r) when Value.eq l r -> None
-        | `Left v | `Right v | `Both (_, v) -> Some v)
+        | `Left v | `Right v | `Both (_, v) -> Some v )
     in
     StringMap.keys diff_map
 
