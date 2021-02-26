@@ -193,13 +193,14 @@ following guide worked on Ubuntu 20.04 in January 2021.
 
 First, install toplevel dependencies.
 ``` bash
-apt install automake                         \
+apt install fping                            \
+            automake                         \
             cmake                            \
             libjudy-dev                      \
             libgmp-dev                       \
             libpcap-dev                      \
             libboost-dev                     \
-            libboost-test-dev                 \
+            libboost-test-dev                \
             libboost-program-options-dev     \
             libboost-system-dev              \
             libboost-filesystem-dev          \

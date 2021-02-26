@@ -90,7 +90,7 @@ class SingleSwitchTopo(Topo):
 
 
 def filename(src_idx):
-    return "h{src}_fping_all.txt".format(src = str(src_idx + 1))
+    return "h{src}_rrping_all.exp_data".format(src = str(src_idx + 1))
 
 
 def start_ping(net, src_idx, tgt_idxs):
@@ -102,8 +102,8 @@ def start_ping(net, src_idx, tgt_idxs):
         htgt = net.get(tgt_name)
         ips += " {}".format(htgt.IP())
 
-    return hsrc.cmd("fping -e {ips} > {fn} & ".format(ips = ips, fn = filename(src_idx)))
-
+    # return hsrc.cmd("fping --timeout=10000 -r 0 -e {ips} > {fn} & ".format(ips = ips, fn = filename(src_idx)))
+    return hsrc.cmd("python3 rrping.py {0} -o {1} -v > {1}.log &".format(ips,filename(src_idx)))
 
 def run_measurement(net, src_idx, tgt_idxs):
     return start_ping(net, src_idx, tgt_idxs)
@@ -127,7 +127,7 @@ def get_fping_times(f):
     with open(f,'r') as fp:
         cts = fp.read()
 
-    res = re.findall(r"is alive \((\d+)ms\)", cts)
+    res = re.findall(r"is alive \((\d+) ms\)", cts)
     print "trying",cts,"got", res
     if res:
         return res
@@ -135,12 +135,23 @@ def get_fping_times(f):
         print "no data for", f
         raise ValueError
 
+def get_rrping_times(f):
+    cts = ""
+    with open(f,'r') as fp:
+        cts = fp.read()
 
+    res = cts.split()
+    print "trying",cts,"got", res
+    if res:
+        return res
+    else:
+        print "no data for", f
+        raise ValueError
 
 def collect_data(num_hosts):
-    data = sorted([t for t in get_fping_times(filename(src))
-                     for src in xrange(num_hosts)]
-                  , key=int)
+    data = sorted([t for src in xrange(num_hosts)
+                     for t in get_rrping_times(filename(src))]
+                  , key=lambda x: int(float(x)))
     return data
 
 def process_data(data):
@@ -151,8 +162,6 @@ def process_data(data):
         if t:
             data_dict[float(t)/1000.0] = 100 * float(i)/float(len(data))
     return data_dict
-
-
 
 def experiment(num_hosts, mode, experiment):
     num_hosts = args.num_hosts
@@ -191,7 +200,7 @@ def experiment(num_hosts, mode, experiment):
 
     print "Ready !!!!"
     for src in xrange(num_hosts):
-        tgts = [ i for i in xrange(num_hosts) if i > src ]
+        tgts = [ i for i in xrange(num_hosts) if i != src ]
         run_measurement(net, src, tgts)
 
     print "running", experiment
@@ -218,7 +227,7 @@ def normalize(data,hotstartfile):
 
 def cleanup():
     for filename in os.listdir('.'):
-        if filename.endswith(".txt"):
+        if filename.endswith(".exp_data"):
             os.remove(filename)
 
 
@@ -239,7 +248,7 @@ def experiment_cmd (exp, label):
     return cmd
 
 def main():
-
+    cleanup()
     baseline = "cat benchmarks/bmv2/mininet/{0}_solution.txt".format(args.rules)
     print "running cold-start"
     data0 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir(""), "cold"))

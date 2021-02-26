@@ -3,6 +3,7 @@ import csv
 import locale
 import time
 import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 from cycler import cycler
 from collections import defaultdict
@@ -117,7 +118,7 @@ def plot_series(data0, data1 = None, data2 = None):
   # plt.xlim(left=0)
   # plt.ylim(bottom=0,top=101)
   plt.xlabel("time (s)", labelpad=0)
-  plt.ylabel("\% reachability")
+  plt.ylabel("% reachability")
   plt.legend(loc='lower right', ncol=1)#, bbox_to_anchor=(0,1.1))
   # plt.xticks(np.arange(0, 101, 25))
   # plt.yticks(np.arange(0, 11, 2))
