@@ -15,7 +15,7 @@ let remove_missed_edits params data problem es =
       | None, _ ->
           (* Printf.printf "Checked \n%s\n" (string_of_test check); *)
           acc @ [e]
-      | Some _, _ -> acc)
+      | Some _, _ -> acc )
 
 let extract_reached_edits (params : Parameters.t) data problem model =
   let es = Edit.of_model (Problem.phys problem) model in

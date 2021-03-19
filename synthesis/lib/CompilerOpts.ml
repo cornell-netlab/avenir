@@ -8,21 +8,21 @@ let optimize fvs cmd =
         (Printf.sprintf
            "after %d optimizing passes: \n %s\n--/%d iter, size is %s--\n%!"
            !i (to_string cmd) !i
-           (Bigint.to_string @@ num_paths cmd)) ;
+           (Bigint.to_string @@ num_paths cmd) ) ;
     let cmd' = ConstantProp.propogate cmd in
     Interactive.pause debug
       ~prompt:
         (Printf.sprintf
            "After Constant Propogation\n %s \n===%d iters, size is %s\n%!"
            (to_string cmd') !i
-           (Bigint.to_string @@ num_paths cmd')) ;
+           (Bigint.to_string @@ num_paths cmd') ) ;
     let cmd'' = DeadCode.elim_vars fvs cmd' in
     Interactive.pause debug
       ~prompt:
         (Printf.sprintf
            "After Dead Code\n %s \n+++%d iters, size is %s+++\n%!"
            (to_string cmd'') !i
-           (Bigint.to_string @@ num_paths cmd'')) ;
+           (Bigint.to_string @@ num_paths cmd'') ) ;
     i := !i + 1 ;
     StaticSlicing.static_slice Util.(StringSet.of_list @@ fsts fvs) cmd''
   in

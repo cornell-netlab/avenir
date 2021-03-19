@@ -93,17 +93,24 @@ def read_data():
   return (data0, data1)
 
 
-def scatter (outdir,xs,ys, label, xlabel, ylabel, ylim=None):
+def scatter (outdir,xs,ys, label, xlabel, ylabel, ylim=None,xlim=None,colors=None):
   plt.rc("font", size=9)
   plt.rc("ytick", labelsize=9)
   plt.rc("xtick", labelsize=9)
-  fig = plt.figure()
-  fig.suptitle(label)
-  print "generating"
-  plt.xlabel(xlabel)
-  plt.ylabel(ylabel)
+  fig = plt.figure(figsize=(3.7,1.0))
+  # fig.suptitle(label)
+  plt.xlabel(xlabel, fontsize=9)
+  plt.ylabel(ylabel, fontsize=9)
   if ylim is not None: plt.ylim(ylim[0],ylim[1])
-  plt.scatter(xs,ys)
+  if xlim is not None: plt.xlim(xlim[0],xlim[1])
+  print "generating"
+  if colors is None:
+    c = None
+    s = None
+  else:
+    c = [-1*c for c in colors]
+    s = [c * 1000 for c in colors]
+  plt.scatter(xs,ys,c=c,s=s)
   f =  "%s/%s.pdf" % (outdir,label)
   f = f.replace("//","/")
   print "saving to", f
@@ -112,17 +119,32 @@ def scatter (outdir,xs,ys, label, xlabel, ylabel, ylim=None):
   plt.close(fig)
   print "done"
 
-def violins (outdir,xs, ydistribs, label, xlabel, ylabel, ylim=None, widths=0.9):
-  plt.rc("font", size=22)
-  plt.rc("ytick", labelsize=22)
-  plt.rc("xtick", labelsize=22)
-  fig = plt.figure(figsize=(37,10))
-  fig.suptitle(label)
+def base() :
+  return 10
+
+def exp(x):
+  return base()**x
+
+def log(x):
+  math.log(x,base())
+
+def violins (outdir,xs, ydistribs, label, xlabel, ylabel, ylim=None, widths=0.9, xlines=[]):
+  plt.rc("font", size=60)
+  plt.rc("ytick", labelsize=60)
+  plt.rc("xtick", labelsize=60)
+  fig,ax = plt.subplots(figsize=(37,10))
+  # fig.suptitle(label)
   print "generating"
-  plt.xlabel(xlabel, fontsize=22)
-  plt.ylabel(ylabel, fontsize= 22)
+  plt.xlabel(xlabel, fontsize=60)
+  plt.ylabel(ylabel, fontsize=60)
   if ylim is not None: plt.ylim(ylim[0],ylim[1])
-  plt.violinplot(ydistribs,xs, widths=widths, showmeans=False, showmedians=True, showextrema=False)
+  ax.violinplot(ydistribs,xs, widths=widths, showmeans=False, showmedians=True, showextrema=False)
+  for (ls, x, xl, yl, off, rotation) in xlines:
+    ax.axvline(x)
+    for i,l in enumerate(ls):
+      print "plotting", l, "at x=", (xl + (i * off)), "y=", yl
+      ax.text(xl, yl - (i * off), l, rotation=rotation, size=40)
+  # ax.set_yscale('log')
   f =  "%s/%s.pdf" % (outdir,label)
   f = f.replace("//","/")
   print "saving to", f

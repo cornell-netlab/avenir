@@ -27,12 +27,12 @@ let split =
   List.fold ~init:([], []) ~f:(fun (dels, adds) e ->
       match e with
       | Add _ -> (dels, adds @ [e])
-      | Del _ -> (dels @ [e], adds))
+      | Del _ -> (dels @ [e], adds) )
 
 let get_deletes =
   List.filter_map ~f:(function
     | Add _ -> None
-    | Del (n, i) -> Some (n, i))
+    | Del (n, i) -> Some (n, i) )
 
 let get_matches_exn = function
   | Add (_, (matches, _, _)) -> matches
@@ -76,11 +76,11 @@ let to_bmv2_string (cmd : Cmd.t) e =
       let act_name, _, _ = List.nth_exn actions action_id in
       let bmv2_matches =
         List.fold matches ~init:"" ~f:(fun acc m ->
-            Printf.sprintf "%s %s" acc (Match.to_bmv2_string m))
+            Printf.sprintf "%s %s" acc (Match.to_bmv2_string m) )
       in
       let bmv2_data =
         List.fold action_data ~init:"" ~f:(fun acc d ->
-            Printf.sprintf "%s %s" acc (Value.to_bmv2_string d))
+            Printf.sprintf "%s %s" acc (Value.to_bmv2_string d) )
       in
       Printf.sprintf "table_add %s %s%s =>%s" nm act_name bmv2_matches
         bmv2_data
@@ -88,7 +88,11 @@ let to_bmv2_string (cmd : Cmd.t) e =
 
 let list_to_string es =
   List.fold es ~init:"" ~f:(fun acc e ->
-      Printf.sprintf "%s\n%s" acc (to_string e))
+      Printf.sprintf "%s\n%s" acc (to_string e) )
+
+let list_to_bmv2_string cmd es =
+    List.fold es ~init:"" ~f:(fun acc e ->
+      Printf.sprintf "%s%s\n" acc (to_bmv2_string cmd e) )
 
 let eq_tests e e' =
   match (e, e') with
@@ -147,7 +151,7 @@ let negate phys (model : Model.t) (es : t list) : Test.t =
   let open Test in
   !%( if List.is_empty es then
       Model.fold model ~init:True ~f:(fun ~key ~data:v acc ->
-          and_ acc @@ (Hole (key, Value.size v) %=% Value v))
+          and_ acc @@ (Hole (key, Value.size v) %=% Value v) )
     else test_of_list phys es )
 
 let extract_dels_adds phys (m : Model.t) =
@@ -172,7 +176,7 @@ let extract_dels_adds phys (m : Model.t) =
                            %s to be true\n\
                            %!"
                           (Hole.which_act_hole_name tbl)
-                          key) ;
+                          key ) ;
                   failwith ""
               | Some v -> Value.get_int_exn v
             in
@@ -181,15 +185,15 @@ let extract_dels_adds phys (m : Model.t) =
                 Log.warn
                 @@ lazy
                      (Printf.sprintf "Couldn't make new row in table %s\n"
-                        tbl) ;
+                        tbl ) ;
                 failwith ""
             | Some row -> (fst acc, Add (tbl, row) :: snd acc)
-          else acc)
+          else acc )
 
 let of_model phys (m : Model.t) =
   let dels, adds = extract_dels_adds phys m in
   List.dedup_and_sort dels ~compare:(fun i j ->
       match (i, j) with
       | Del (_, ix), Del (_, jx) -> compare jx ix
-      | _, _ -> failwith "dels list contains an add")
+      | _, _ -> failwith "dels list contains an add" )
   @ adds

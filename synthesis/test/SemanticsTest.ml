@@ -34,4 +34,4 @@ let cross_packet =
 let test : unit Alcotest.test_case list =
   List.map cross_packet ~f:(fun (run_pkt, ex_pkt) ->
       Alcotest.test_case "cross product" `Quick
-      @@ fun _ -> Equality.same_packet ex_pkt run_pkt)
+      @@ fun _ -> Equality.same_packet ex_pkt run_pkt )

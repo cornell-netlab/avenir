@@ -59,4 +59,4 @@ let run_experiment params file (lo : args) (hi : args) =
   let space = product bitrange keyrange outrange edtrange in
   List.iter space ~f:(fun args ->
       EAbstr.make () ;
-      run_experiment_case (Parameters.restart_timer params) file args)
+      run_experiment_case (Parameters.restart_timer params) file args )

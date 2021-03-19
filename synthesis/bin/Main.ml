@@ -207,7 +207,7 @@ let problem_flags =
             if onos then
               Benchmark.(
                 onos_to_edits var_mapping d "ipv6" "hdr.ipv6.dst_addr")
-            else parse_runtime log d |> List.(map ~f:return))
+            else parse_runtime log d |> List.(map ~f:return) )
       in
       ( params
       , Problem.make ~log ~phys ~log_inst ~phys_inst ~log_edits:[] ~fvs
@@ -257,7 +257,7 @@ let synthesize =
           Avenir.Log.debug
           @@ lazy
                (Core.Printf.sprintf "PROBLEM: %s \n"
-                  (Problem.to_string params prob)) ;
+                  (Problem.to_string params prob) ) ;
           match
             Synthesis.cegis_math_sequence params (ProfData.zero ()) mk_prob
           with
@@ -267,7 +267,7 @@ let synthesize =
               if print_res then (
                 Core.Printf.printf "Target operations:\n%!" ;
                 List.iter phys_edits ~f:(fun e ->
-                    Core.Printf.printf "%s\n%!" (edit_to_string e)) )
+                    Core.Printf.printf "%s\n%!" (edit_to_string e) ) )
               else ()]
 
 let encode_cmd : Command.t =
@@ -330,7 +330,7 @@ let onf_real : Command.t =
         | None -> Core.Printf.printf "no example could be found\n"
         | Some r when print ->
             List.iter r ~f:(fun edit ->
-                Edit.to_string edit |> Core.Printf.printf "%s\n%!")
+                Edit.to_string edit |> Core.Printf.printf "%s\n%!" )
         | Some _ -> ()]
 
 let equality : Command.t =
@@ -380,35 +380,33 @@ let equality : Command.t =
                    | Some vl, Some vp ->
                        if not (Value.eq vl vp) then
                          Core.Printf.printf "\t%s\t%s\t%s\n" fv
-                           (Value.to_string vl) (Value.to_string vp))]
+                           (Value.to_string vl) (Value.to_string vp) )]
 
 let summarize : Command.t =
   let open Command.Let_syntax in
   Command.basic ~summary:"Check equivalence"
     [%map_open
-     let program = anon ("program_file" %: string)
-     and p4 = flag "-P4" no_arg ~doc:"input full P4 programs"
-     and includes =
-       flag "-I1" (listed string)
-         ~doc:"<dir> add directory to include search path for logical file"
-         in
-         fun () ->
-           let cmd = if p4 then
-                       Encode.encode_from_p4 includes program false
-                     else
-                       Benchmark.parse_file program
-           in
-           let open Core.Printf in
-           printf "In program %s\n" program;
-           printf "\t %d unique read variables\n" (Cmd.num_read_vars cmd);
-           printf "\t %d unique assigned vars\n" (Cmd.num_assigned_vars cmd);
-           printf "\t %d action data parameters\n" (Cmd.num_action_data_params cmd);
-           printf "\t %d keys, %d unique\n" (Cmd.num_keys cmd) (Cmd.num_unique_keys cmd);
-           printf "\t %d tables\n" (Cmd.num_tables cmd);
-           printf "\t %d actions\n%!" (Cmd.num_actions cmd)
-
-
-    ]
+      let program = anon ("program_file" %: string)
+      and p4 = flag "-P4" no_arg ~doc:"input full P4 programs"
+      and includes =
+        flag "-I1" (listed string)
+          ~doc:"<dir> add directory to include search path for logical file"
+      in
+      fun () ->
+        let cmd =
+          if p4 then Encode.encode_from_p4 includes program false
+          else Benchmark.parse_file program
+        in
+        let open Core.Printf in
+        printf "In program %s\n" program ;
+        printf "\t %d unique read variables\n" (Cmd.num_read_vars cmd) ;
+        printf "\t %d unique assigned vars\n" (Cmd.num_assigned_vars cmd) ;
+        printf "\t %d action data parameters\n"
+          (Cmd.num_action_data_params cmd) ;
+        printf "\t %d keys, %d unique\n" (Cmd.num_keys cmd)
+          (Cmd.num_unique_keys cmd) ;
+        printf "\t %d tables\n" (Cmd.num_tables cmd) ;
+        printf "\t %d actions\n%!" (Cmd.num_actions cmd)]
 
 let classbench_cmd : Command.t =
   let open Command.Let_syntax in
@@ -446,7 +444,7 @@ let classbench_cmd : Command.t =
               try
                 ignore
                   (Benchmark.rep_par params data nrules : Edit.t list option)
-              with _ -> Core.Printf.printf "well that failed")
+              with _ -> Core.Printf.printf "well that failed" )
         else
           failwith
           @@ Core.Printf.sprintf "Unrecognized experiment parameter %s"
@@ -613,6 +611,6 @@ let main : Command.t =
     ; ("onf-real", onf_real)
     ; ("obt", obt)
     ; ("eq", equality)
-    ; ("summarize", summarize)]
+    ; ("summarize", summarize) ]
 
 let () = Command.run main

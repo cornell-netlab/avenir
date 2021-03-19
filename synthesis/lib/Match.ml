@@ -180,7 +180,7 @@ let is_wildcard m =
 let list_to_string : t list -> string =
   let list_el_string m = if is_wildcard m then "" else to_string m ^ " " in
   List.fold ~init:"" ~f:(fun acc m ->
-      Printf.sprintf "%s%s" acc (list_el_string m))
+      Printf.sprintf "%s%s" acc (list_el_string m) )
 
 let list_to_test (matches : t list) =
   let open Test in
@@ -206,7 +206,7 @@ let mk_ipv6_match key ipv6_str =
           in
           loop addr_str |> String.split ~on:':'
           |> List.fold ~init:"" ~f:(fun acc str ->
-                 Printf.sprintf "%s:%s" acc (lfill '0' 4 str))
+                 Printf.sprintf "%s:%s" acc (lfill '0' 4 str) )
     in
     String.substr_replace_all exp_addr_str ~pattern:":" ~with_:""
   in
@@ -263,8 +263,7 @@ let rec has_inter_data (d : match_data) (d' : match_data) : bool =
           Value.get_bigint msk
           >= pow (of_int 2) (of_int @@ Value.size msk) - one)
       then has_inter_data (Exact v) mm
-      else
-        failwith "Cant intersect with non-exact match"
+      else failwith "Cant intersect with non-exact match"
 
 let has_inter (m : t) (m' : t) : bool =
   String.(m.key = m'.key)

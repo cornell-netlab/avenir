@@ -147,14 +147,14 @@ let rec abstracted (q1 : Test.t) (q2 : Test.t)
 
 let string_of_map (m : string StringMap.t) =
   StringMap.fold m ~init:"" ~f:(fun ~key ~data acc ->
-      Printf.sprintf "%s(%s -> %s) " acc key data)
+      Printf.sprintf "%s(%s -> %s) " acc key data )
 
 let exists_matching_abstraction test generals =
   List.exists generals ~f:(fun {query; restriction} ->
       match (abstracted test query StringMap.empty, restriction) with
       | Some _, None -> true
       | Some m, Some r -> Test.equals (Manip.substV r m) True
-      | _ -> false)
+      | _ -> false )
 
 let cache_check (_ : Parameters.t) ({seen; generals} : t) test =
   if disable then ({seen= []; generals= []}, `Miss test)

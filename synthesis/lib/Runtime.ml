@@ -24,7 +24,7 @@ let action_data_of_string ?(sep = ';') (data_str : string) : Row.action_data
                |> Printf.sprintf "0x%s"
              else value_str
            in
-           Value.big_make (Bigint.of_string value_str, int_of_string size_str))
+           Value.big_make (Bigint.of_string value_str, int_of_string size_str) )
 
 let matches_of_string ?(sep = ';') (keys : (string * int) list)
     (data_str : string) : Match.t list =
@@ -115,7 +115,7 @@ let matches_of_string ?(sep = ';') (keys : (string * int) list)
                    in
                    let size = int_of_string size_str in
                    let value = Bigint.of_string value_str in
-                   Match.exact_ key (Value.big_make (value, size)) ))
+                   Match.exact_ key (Value.big_make (value, size)) ) )
 
 let parse program filename : Edit.t list =
   let lines = In_channel.read_lines filename in
@@ -153,11 +153,11 @@ let parse_bmv2_entry cmd string : Edit.t =
       let keys = List.map keys ~f:Cmd.Key.to_sized in
       let action_id, (_, params, _) =
         List.findi actions ~f:(fun _ (name, _, _) ->
-            String.(name = action_name))
+            String.(name = action_name) )
         |> Option.value_exn
              ~message:
                (Printf.sprintf "Couldn't find action %s in %s" action_name
-                  tbl_name)
+                  tbl_name )
       in
       let normalized_cont =
         String.concat ~sep:" " cont
@@ -170,7 +170,7 @@ let parse_bmv2_entry cmd string : Edit.t =
             ( matches_of_string ~sep:' ' keys matches_str
             , action_data_of_string ~sep:' ' action_data_str
               |> List.fold2_exn params ~init:[] ~f:(fun acc (_, i) v ->
-                     acc @ [Value.resize v i]) )
+                     acc @ [Value.resize v i] ) )
       in
       Add (tbl_name, (matches, action_data, action_id))
   | "table_delete" :: _ ->

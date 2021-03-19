@@ -123,7 +123,7 @@ let to_string (_ : Parameters.t) (p : t) =
     (List.fold p.edits ~init:"" ~f:(fun acc e ->
          Printf.sprintf "%s%s%s" acc
            (if String.(acc = "") then "" else "\n")
-           (Edit.to_string e)))
+           (Edit.to_string e) ) )
 
 let clear_cache (p : t) =
   {p with gcl= ref None; gcl_holes= ref None; edited_inst= ref None}

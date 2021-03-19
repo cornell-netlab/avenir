@@ -71,7 +71,7 @@ let sat_add =
         (Bigint.to_string x')
         Bigint.(to_string (x + x'))
         (Bigint.to_string (max_int sz)) ;
-      Bigint.(min (x + x') (max_int sz)))
+      Bigint.(min (x + x') (max_int sz)) )
 
 let multiply = Sized.fmap2s ~f:(fun x x' sz -> Bigint.(x * x') |> wrap sz)
 
@@ -92,13 +92,13 @@ let sized_mask sz =
 
 let shl =
   Sized.fmap2s ~f:(fun x x' sz ->
-      Bigint.(shift_left x (to_int_exn x') land sized_mask sz))
+      Bigint.(shift_left x (to_int_exn x') land sized_mask sz) )
 
 let cast w v =
   (* v & (2^w -1)#w *)
   Sized.fmap v ~f:(fun x ->
       let open Bigint in
-      x land sized_mask w)
+      x land sized_mask w )
   |> Sized.resize w
 
 let resize v sz = Sized.resize sz v
@@ -110,11 +110,11 @@ let slice hi lo v =
         let sz' = hi - lo in
         assert (sz' > 0) ;
         let x' = Bigint.(shift_right x lo land sized_mask sz') in
-        Sized.make x' sz')
+        Sized.make x' sz' )
 
 let concat =
   Sized.map2s2 ~f:(fun lx lsz rx rsz ->
-      Sized.make Bigint.(shift_left lx rsz + rx) (lsz + rsz))
+      Sized.make Bigint.(shift_left lx rsz + rx) (lsz + rsz) )
 
 let rec random_not_in ?(gas = 1000) exc upper =
   if gas <= 0 then failwith "Random Generation failed, out of gas"
@@ -128,7 +128,7 @@ let random ?(lo = 0) ?(exc = []) sz =
   let exc_ints =
     List.filter_map exc ~f:(fun v ->
         let i = get_int_exn v in
-        if i < lo then None else Some i)
+        if i < lo then None else Some i )
   in
   if sz <= 0 then failwith @@ Printf.sprintf "Bad bitwidth %d" sz
   else

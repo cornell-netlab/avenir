@@ -153,7 +153,7 @@ let rec size (e : t) : int =
         failwith
           (Printf.sprintf
              "size of expressions: %s, and %s differs (%d and %d)"
-             (to_string e) (to_string e') s s')
+             (to_string e) (to_string e') s s' )
   | Slice {hi; lo; _} ->
       let sz = hi - lo in
       if sz < 0 then -1 else sz
@@ -232,8 +232,9 @@ let rec frees typ e : (string * int) list =
    |SatMinus (e, e'), _ ->
       frees typ e @ frees typ e'
 
-let vars  = frees `Var    
-let holes = frees `Hole      
+let vars = frees `Var
+
+let holes = frees `Hole
 
 let rec has_hole = function
   | Value _ | Var _ -> false

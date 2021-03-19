@@ -39,24 +39,24 @@ let to_string ((mtchs, ad, actid) : t) =
 
 let list_to_string ?(tab = "") rs : string =
   List.fold rs ~init:"" ~f:(fun acc r ->
-      Printf.sprintf "%s\n%s%s" acc tab (to_string r))
+      Printf.sprintf "%s\n%s%s" acc tab (to_string r) )
 
 let test_of_data (tbl : string) (act_id : int) (vs : (string * int) list)
     (vals : action_data) =
   let open Test in
   List.fold2_exn vs vals ~init:True ~f:(fun acc (x, sz) v ->
       assert (sz = Value.size v) ;
-      and_ acc @@ (Hole.action_data_hole tbl act_id x sz %=% Value v))
+      and_ acc @@ (Hole.action_data_hole tbl act_id x sz %=% Value v) )
 
 let model_alist_of_data (tbl : string) (act_id : int)
     (vars : (string * int) list) (vals : action_data) =
   List.fold2_exn vars vals ~init:[] ~f:(fun acc (x, sz) v ->
       assert (sz = Value.size v) ;
-      acc @ [(Hole.action_data tbl act_id x sz, v)])
+      acc @ [(Hole.action_data tbl act_id x sz, v)] )
 
 let intersects ((m1s, _, _) : t) ((m2s, _, _) : t) : bool =
   List.fold2_exn m1s m2s ~init:true ~f:(fun acc m1 m2 ->
-      acc && Match.has_inter m1 m2)
+      acc && Match.has_inter m1 m2 )
 
 let get_ith_match (i : int) ((ms, _, _) : t) = List.nth ms i
 
@@ -102,7 +102,7 @@ let mk_new_row (match_model : Model.t) phys tbl_name data_opt act : t option
                       else [Match.between_ k lo hi]
                     in
                     Some (ks @ k)
-                | _, _, _ -> failwith "got something that wasn't a model" ))
+                | _, _, _ -> failwith "got something that wasn't a model" ) )
       in
       let data =
         match data_opt with
@@ -127,7 +127,7 @@ let mk_new_row (match_model : Model.t) phys tbl_name data_opt act : t option
                     | Some v -> v
                   in
                   (* Printf.printf "\t%s -> %s\n" p (string_of_value v); *)
-                  acc @ [v]) )
+                  acc @ [v] ) )
       in
       match keys_holes with
       | None -> None

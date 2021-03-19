@@ -65,7 +65,7 @@ let action_to_execute pkt wide (rows : Row.t list) =
           ifte_test cond pkt
             (fun _ -> (missed %&% cond, None, Some (data, action)))
             (fun _ -> (missed %&% !%cond, Some wide, None))
-      | _, _, _ -> rst)
+      | _, _, _ -> rst )
 
 let rec trace_eval_inst ?(gas = 10) (cmd : Cmd.t) (inst : Instance.t) ~wide
     (* :(wide = StringMap.empty) *) (pkt : Packet.t) :
@@ -101,7 +101,7 @@ let rec trace_eval_inst ?(gas = 10) (cmd : Cmd.t) (inst : Instance.t) ~wide
         , StringMap.merge trace' trace'' ~f:(fun ~key:_ -> function
             | `Left v -> Some v
             | `Right v -> Some v
-            | `Both (v, _) -> Some v) )
+            | `Both (v, _) -> Some v ) )
     | Select (styp, selects) ->
         let default _ =
           match styp with
@@ -157,4 +157,4 @@ let fails_on_some_example params problem =
   let cexs = Problem.cexs problem in
   let fvs = Some (Problem.fvs problem) in
   List.find cexs ~f:(fun (inpkt, outpkt) ->
-      not (Packet.equal ~fvs outpkt (eval_log inpkt)))
+      not (Packet.equal ~fvs outpkt (eval_log inpkt)) )
