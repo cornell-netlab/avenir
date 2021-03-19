@@ -15,11 +15,11 @@ let combine_actions (act1 : string * (string * int) list * Cmd.t)
   let remap v1 v2 = StringMap.of_alist_exn [(v1, v2)] in
   let new_c1 =
     List.fold new_p1 ~init:c1 ~f:(fun e (v1, v2, w) ->
-        substitute_cmd e (remap v1 (Expr.Var (v2, w))) ~holes:false)
+        substitute_cmd e (remap v1 (Expr.Var (v2, w))) ~holes:false )
   in
   let new_c2 =
     List.fold new_p2 ~init:c2 ~f:(fun e (v1, v2, w) ->
-        substitute_cmd e (remap v1 (Expr.Var (v2, w))) ~holes:false)
+        substitute_cmd e (remap v1 (Expr.Var (v2, w))) ~holes:false )
   in
   let new_p1' = List.map new_p1 ~f:(fun (_, v, w) -> (v, w)) in
   let new_p2' = List.map new_p2 ~f:(fun (_, v, w) -> (v, w)) in
@@ -44,7 +44,7 @@ let rec mk_one_big_table' (tbl : only_apply) c =
   | Select (_, tcl) ->
       let free =
         List.map tcl ~f:(fun (t, _) ->
-            List.map (Test.vars t) ~f:(fun (f, s) -> Key.make (f, s)))
+            List.map (Test.vars t) ~f:(fun (f, s) -> Key.make (f, s)) )
         |> List.concat
       in
       let es = List.map tcl ~f:snd in
@@ -62,7 +62,7 @@ let rec mk_one_big_table' (tbl : only_apply) c =
       in
       let tbl_to_def_app_t =
         List.map tbl.actions ~f:(fun t ->
-            combine_actions t ("DEFAULT", [], app_t.default))
+            combine_actions t ("DEFAULT", [], app_t.default) )
       in
       { keys= Util.dedup (tbl.keys @ app_t.keys)
       ; actions= def_tbl_to_app_t @ tbl_to_def_app_t @ cross_actions

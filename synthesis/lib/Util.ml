@@ -197,7 +197,7 @@ let inter ~f xs ys = List.(filter xs ~f:(fun x -> exists ys ~f:(f x)))
 
 let nonempty_inter (xs : (string * int) list) (ys : (string * int) list) =
   List.exists xs ~f:(fun (v, _) ->
-      List.exists ys ~f:(fun (v', _) -> Stdlib.(v = v')))
+      List.exists ys ~f:(fun (v', _) -> Stdlib.(v = v')) )
 
 let or_unequal_lengths_to_option =
   let open List.Or_unequal_lengths in
@@ -265,7 +265,7 @@ let strmap_project_list m l =
   |> List.fold ~init:StringMap.empty ~f:(fun acc key ->
          match StringMap.find m key with
          | None -> acc
-         | Some data -> StringMap.set acc ~key ~data)
+         | Some data -> StringMap.set acc ~key ~data )
 
 let string_of_strset s =
   StringSet.fold s ~init:"" ~f:(Printf.sprintf "%s %s")
@@ -276,7 +276,7 @@ let string_of_intlist (l : int list) : string =
 
 let string_of_strmap m ~to_string : string =
   StringMap.fold m ~init:"{}" ~f:(fun ~key ~data s ->
-      Printf.sprintf "%s (%s |-> %s)" s key (to_string data))
+      Printf.sprintf "%s (%s |-> %s)" s key (to_string data) )
   |> Printf.sprintf "%s }"
 
 let find2_exn map1 s1 s2 =
@@ -294,14 +294,14 @@ let disjoint_union m m' =
     | `Left l -> Some l
     | `Right r -> Some r
     | `Both (l, r) when Stdlib.(l = r) -> Some l
-    | `Both _ -> failwith "disjoint map union not disjoint")
+    | `Both _ -> failwith "disjoint map union not disjoint" )
 
 let multimap_union (l : 'a list StringMap.t) (r : 'a list StringMap.t) =
   StringMap.merge l r ~f:(fun ~key:_ -> function
     | `Left l -> Some l
     | `Right r -> Some r
     | `Both (r, l) ->
-        Some (r @ l |> List.dedup_and_sort ~compare:Stdlib.compare))
+        Some (r @ l |> List.dedup_and_sort ~compare:Stdlib.compare) )
 
 let lossless_append xs_opt ys_opt =
   let open Option in

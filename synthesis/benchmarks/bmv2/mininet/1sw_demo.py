@@ -89,25 +89,27 @@ class SingleSwitchTopo(Topo):
                     f.write("%s\n" % r)
 
 
-def filename(src_idx, tgt_idx):
-    return "h{src}_ping_h{tgt}.txt".format(src = str(src_idx + 1), tgt = str(tgt_idx + 1))
+def filename(src_idx):
+    return "h{src}_rrping_all.exp_data".format(src = str(src_idx + 1))
 
 
-def start_ping(net, src_idx, tgt_idx):
+def start_ping(net, src_idx, tgt_idxs):
     src_name = "h%d" % (src_idx + 1)
-    tgt_name = "h%d" % (tgt_idx + 1)
-    assert src_name != tgt_name
     hsrc = net.get(src_name)
-    htgt = net.get(tgt_name)
-    return hsrc.cmd("ping {ip} -c 1 -w 10000 > {fn} & ".format(ip = htgt.IP()
-                                                               , fn = filename(src_idx, tgt_idx)))
+    ips = ""
+    for tgt_idx in tgt_idxs:
+        tgt_name = "h%d" % (tgt_idx + 1)
+        htgt = net.get(tgt_name)
+        ips += " {}".format(htgt.IP())
+
+    # return hsrc.cmd("fping --timeout=10000 -r 0 -e {ips} > {fn} & ".format(ips = ips, fn = filename(src_idx)))
+    return hsrc.cmd("python3 rrping.py {0} -o {1} -v > {1}.log &".format(ips,filename(src_idx)))
+
+def run_measurement(net, src_idx, tgt_idxs):
+    return start_ping(net, src_idx, tgt_idxs)
 
 
-def run_measurement(net, src_idx, tgt_idx):
-    return start_ping(net, src_idx, tgt_idx)
-
-
-def get_time(f):
+def get_ping_time(f):
     cts = ""
     with open(f,'r') as fp:
         cts = fp.read()
@@ -120,12 +122,36 @@ def get_time(f):
         print "no data for", f
         raise ValueError
 
+def get_fping_times(f):
+    cts = ""
+    with open(f,'r') as fp:
+        cts = fp.read()
+
+    res = re.findall(r"is alive \((\d+) ms\)", cts)
+    print "trying",cts,"got", res
+    if res:
+        return res
+    else:
+        print "no data for", f
+        raise ValueError
+
+def get_rrping_times(f):
+    cts = ""
+    with open(f,'r') as fp:
+        cts = fp.read()
+
+    res = cts.split()
+    print "trying",cts,"got", res
+    if res:
+        return res
+    else:
+        print "no data for", f
+        raise ValueError
 
 def collect_data(num_hosts):
-    data = sorted([get_time(filename(src,tgt))
-                   for src in xrange(num_hosts)
-                   for tgt in xrange(num_hosts)
-                   if src != tgt], key=int)
+    data = sorted([t for src in xrange(num_hosts)
+                     for t in get_rrping_times(filename(src))]
+                  , key=lambda x: int(float(x)))
     return data
 
 def process_data(data):
@@ -136,8 +162,6 @@ def process_data(data):
         if t:
             data_dict[float(t)/1000.0] = 100 * float(i)/float(len(data))
     return data_dict
-
-
 
 def experiment(num_hosts, mode, experiment):
     num_hosts = args.num_hosts
@@ -153,7 +177,6 @@ def experiment(num_hosts, mode, experiment):
                   switch = P4Switch,
                   controller = None)
     net.start()
-
 
     sw_mac = ["00:aa:bb:00:00:%02x" % n for n in xrange(num_hosts)]
 
@@ -175,14 +198,12 @@ def experiment(num_hosts, mode, experiment):
     if args.CLI:
         CLI(net)
 
-    print "Ready !"
+    print "Ready !!!!"
     for src in xrange(num_hosts):
-        for tgt in xrange(num_hosts):
-            if src == tgt :
-                continue
-            else:
-                run_measurement(net, src, tgt)
+        tgts = [ i for i in xrange(num_hosts) if i != src ]
+        run_measurement(net, src, tgts)
 
+    print "running", experiment
     os.system(experiment)
 
     sleep(10)
@@ -206,7 +227,7 @@ def normalize(data,hotstartfile):
 
 def cleanup():
     for filename in os.listdir('.'):
-        if filename.endswith(".txt"):
+        if filename.endswith(".exp_data"):
             os.remove(filename)
 
 
@@ -221,13 +242,13 @@ def run_avenir(flags):
 
 def experiment_cmd (exp, label):
     cd = "cd {}".format(args.loc)
-    runtime = "tee output.debug | benchmarks/bmv2/simple_router/runtime_CLI.py"
+    runtime = "benchmarks/bmv2/simple_router/runtime_CLI.py"
     cmd = "{0} && (({1} | {2}) 2> /tmp/cache_build_time_{3})".format(cd, exp, runtime, label)
     print cmd
     return cmd
 
 def main():
-
+    cleanup()
     baseline = "cat benchmarks/bmv2/mininet/{0}_solution.txt".format(args.rules)
     print "running cold-start"
     data0 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir(""), "cold"))

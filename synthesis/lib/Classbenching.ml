@@ -47,7 +47,7 @@ let parse_ip_mask ident str =
              Bigint.(of_string char_s |> Hex.to_string)
              |> String.substr_replace_all ~pattern:"0x" ~with_:""
            in
-           if String.length byte < 2 then Printf.sprintf "0%s" byte else byte)
+           if String.length byte < 2 then Printf.sprintf "0%s" byte else byte )
     |> List.fold ~init:"0x" ~f:(Printf.sprintf "%s%s")
     |> Bigint.of_string
   in
@@ -130,7 +130,7 @@ let parse_classbench fp =
              List.nth_exn vars 3 |> parse_port_range "tp_dst" |> Some
            in
            let proto = List.nth_exn vars 4 |> parse_proto "proto" |> Some in
-           rows @ [{default with ip_src; ip_dst; tcp_sport; tcp_dport; proto}])
+           rows @ [{default with ip_src; ip_dst; tcp_sport; tcp_dport; proto}] )
   in
   rules
 
@@ -169,7 +169,7 @@ let parse_classbench_of fp =
            ; eth_typ= parse_of "eth_type" line
            ; proto= parse_of "nw_proto" line }
          in
-         rows @ [cb_row])
+         rows @ [cb_row] )
 
 let get cb_row h =
   let open String in
@@ -214,7 +214,7 @@ let generate field acc cb_row sz =
         | Some mtch ->
             let v = Match.get_exact_val mtch in
             let vi = Value.get_bigint v in
-            if Bigint.(vi > max_so_far) then vi else max_so_far)
+            if Bigint.(vi > max_so_far) then vi else max_so_far )
   in
   let mtch =
     Value.big_make (Bigint.(biggest + one), sz) |> Match.exact_ field

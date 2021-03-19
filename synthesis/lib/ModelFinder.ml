@@ -129,7 +129,7 @@ let reindex_for_dels problem tbl i =
          match (cnt, edit) with
          | Some n, Del (t, j) when String.(t = tbl) ->
              if i = j then None else Some (n - 1)
-         | _ -> cnt)
+         | _ -> cnt )
 
 (** [get_deletes opts problem] constructs a list of [(x,idx)], where [x] is a
     table name and [i] is a row to delete. If [opts.no_deletes] is [true],
@@ -143,7 +143,7 @@ let get_deletes opts (problem : Problem.t) =
         @ List.filter_mapi rows ~f:(fun i _ ->
               match reindex_for_dels problem table i with
               | None -> None
-              | Some i' -> Some (table, i')))
+              | Some i' -> Some (table, i') ) )
 
 (** [get_hints opts problem] constructs a list of [Hint.t]s to apply to the
     problem. Returns the empty list if [opts.hints] is [false]*)
@@ -194,7 +194,7 @@ let adds_are_reachable params (problem : Problem.t) (opts : opts) fvs
            and_ acc
            @@ impl (Hole.add_row_hole tbl_name %=% Expr.value (1, 1))
            @@ FastCX.is_reachable encode_tag params problem fvs in_pkt
-                tbl_name keys)
+                tbl_name keys )
 
 (** [non_empty_adds problem] computes a condition ensuring that at least one
     table in [Problem.phys problem] is added to *)
@@ -205,7 +205,7 @@ let non_empty_adds (problem : Problem.t) =
          match acc with
          | None -> Some (Hole.add_row_hole tbl %=% Expr.value (1, 1))
          | Some acc ->
-             Some (acc %+% (Hole.add_row_hole tbl %=% Expr.value (1, 1))))
+             Some (acc %+% (Hole.add_row_hole tbl %=% Expr.value (1, 1))) )
   |> Option.value ~default:True
 
 (** [single problem opts query_holes] computes, if [opts.single] is [true], a
@@ -224,9 +224,9 @@ let single problem (opts : opts) query_holes =
             && List.exists (Problem.phys_edits problem) ~f:(fun e ->
                    String.(
                      Edit.table e
-                     = String.chop_prefix_exn h ~prefix:Hole.add_row_prefix))
+                     = String.chop_prefix_exn h ~prefix:Hole.add_row_prefix) )
           then Hole (h, sz) %=% Expr.value (0, sz)
-          else acc ))
+          else acc ) )
 
 (** [restrict_mask opts query_holes] computes, if [opts.restrict_mask] is
     [true], a condition enforcing that every mask hole in [query_holes] is
@@ -247,7 +247,7 @@ let restrict_mask (opts : opts) query_holes =
                ; bigand
                    [ Hole (h_value, sz) %=% Expr.value (0, sz)
                    ; Hole (h, sz) %=% Expr.value (0, sz) ] ]
-        else True)
+        else True )
 
 (** [active_domain_restrict params problem opts query_holes] computes, if
     [opts.restrict_mask] is [true], a condition enforcing that every data
@@ -264,7 +264,7 @@ let active_domain_restrict params problem opts query_holes : Test.t =
       @ Cmd.multi_vals (Problem.phys_gcl_program params problem)
       |> List.dedup_and_sort ~compare:Stdlib.compare
       |> List.filter ~f:(fun v ->
-             Bigint.(Value.get_bigint v <> zero && Value.get_bigint v <> one))
+             Bigint.(Value.get_bigint v <> zero && Value.get_bigint v <> one) )
     in
     List.fold query_holes ~init:True ~f:(fun acc (h, sz) ->
         let restr =
@@ -284,9 +284,9 @@ let active_domain_restrict params problem opts query_holes : Test.t =
                 %=% Value (Value.big_make (i, szi))
                 %+% (Hole (h, sz) %=% Expr.value (0, szi))
                 %+% (Hole (h, sz) %=% Expr.value (1, szi))
-              else False)
+              else False )
         in
-        if Test.equals restr False then acc else acc %&% restr)
+        if Test.equals restr False then acc else acc %&% restr )
 
 (** [no_defaults problem opts fvs phys] computes a condition that is [True]
     if [opt.no_defaults] is [False], and otherwise ensures that no data hole
@@ -302,10 +302,10 @@ let no_defaults (_ : Parameters.t) opts fvs phys =
               ; Hole.add_row_prefix
               ; Hole.delete_row_prefix
               ; Hole.which_act_prefix ] ~f:(fun substring ->
-                String.is_substring v ~substring)
-            |> not))
+                String.is_substring v ~substring )
+            |> not ) )
     |> List.fold ~init:True ~f:(fun acc (v, sz) ->
-           acc %&% (Hole (v, sz) %<>% Expr.value (0, sz)))
+           acc %&% (Hole (v, sz) %<>% Expr.value (0, sz)) )
 
 let flows_to (phys : Cmd.t) (tgts : StringSet.t) (src : string) =
   let open StringSet in
@@ -349,8 +349,8 @@ let unlikely_actions opts fvs phys (inpkt, outpkt) =
               !%(bigand
                    [ Hole.add_row_hole table %=% Expr.value (1, 1)
                    ; Hole.which_act_hole table actSize
-                     %=% Expr.value (i, actSize) ])
-              |> and_ acc))
+                     %=% Expr.value (i, actSize) ] )
+              |> and_ acc ) )
 
 (** [test_of_cexs fvs cex] aggregates an input-output list of
     counterexamples, into a pair [(intest, outest)], where [intest] is the
@@ -359,7 +359,7 @@ let unlikely_actions opts fvs phys (inpkt, outpkt) =
 let tests_of_cexs fvs cexs =
   let open Test in
   List.fold cexs ~init:(False, False) ~f:(fun (ins, outs) (inp, outp) ->
-      (ins %+% Packet.to_test ~fvs inp, outs %+% Packet.to_test ~fvs outp))
+      (ins %+% Packet.to_test ~fvs inp, outs %+% Packet.to_test ~fvs outp) )
 
 (** [no_defaults problem fvs sub good cexs] is [True] when [opts.double] is
     [false] and otherwise is a computes a hoare triple on the passive program
@@ -411,7 +411,7 @@ let well_formed_actions problem =
   let open Test in
   Problem.phys problem |> Cmd.get_tables_actsizes
   |> List.fold ~init:True ~f:(fun acc (tbl, num_acts) ->
-         acc %&% action_hole_valid tbl num_acts)
+         acc %&% action_hole_valid tbl num_acts )
 
 let construct_model_query opts fvs cexs in_pkt phys out_pkt =
   let open Test in

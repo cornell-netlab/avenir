@@ -143,10 +143,10 @@ let ordered ss =
       List.remove_consecutive_duplicates ss ~which_to_keep:`First
         ~equal:(fun (cond, _) (cond', _) -> Test.equals cond cond')
       |> List.filter ~f:(fun (b, c) ->
-             (not (Test.equals b False)) && not (assumes_false c))
+             (not (Test.equals b False)) && not (assumes_false c) )
       |> List.fold ~init:([], true) ~f:(fun (cases, reachable) (b, c) ->
              if reachable then (cases @ [(b, c)], not (Test.equals b True))
-             else (cases, reachable))
+             else (cases, reachable) )
       |> fst
     in
     if List.for_all selects ~f:(fun (_, c) -> equals c Skip) then Skip
@@ -197,12 +197,12 @@ let rec to_string ?(depth = 0) (e : t) : string =
             ^ repeat "\t" (depth + 1)
             ^ Test.to_string cond ^ " ->\n "
             ^ to_string ~depth:(depth + 2) act
-            ^ " []")
+            ^ " []" )
       ^ "\n" ^ repeat "\t" depth ^ "fi"
   | Apply t ->
       repeat "\t" depth ^ "apply (" ^ t.name ^ ",("
       ^ List.fold t.keys ~init:"" ~f:(fun str k ->
-            str ^ Key.to_string k ^ ",")
+            str ^ Key.to_string k ^ "," )
       ^ ")" ^ ",("
       ^ List.foldi t.actions ~init:"" ~f:(fun i str a ->
             str
@@ -213,19 +213,18 @@ let rec to_string ?(depth = 0) (e : t) : string =
                 ^ List.fold
                     (List.nth_exn t.actions i |> snd3)
                     ~init:""
-                    ~f:(fun acc (x, sz) ->
-                      Printf.sprintf "%s%s#%d," acc x sz)
+                    ~f:(fun acc (x, sz) -> Printf.sprintf "%s%s#%d," acc x sz)
                 ^ ") -> "
               else "" )
             ^ to_string (trd3 a)
-            ^ "}")
+            ^ "}" )
       ^ "), {" ^ to_string t.default ^ "})"
 
 let rec to_sexp_string e : string =
   let string_select =
     concatMap
       ~f:(fun (cond, act) ->
-        "(" ^ Test.to_sexp_string cond ^ "," ^ to_sexp_string act ^ ")")
+        "(" ^ Test.to_sexp_string cond ^ "," ^ to_sexp_string act ^ ")" )
       ~c:(fun acc d -> acc ^ ";" ^ d)
   in
   match e with
@@ -243,10 +242,10 @@ let rec to_sexp_string e : string =
   | Apply t ->
       "Apply(" ^ t.name ^ ",["
       ^ List.fold_left t.keys ~init:"" ~f:(fun str k ->
-            Printf.sprintf "%s;\"%s\"" str (Key.to_string k))
+            Printf.sprintf "%s;\"%s\"" str (Key.to_string k) )
       ^ "],["
       ^ List.fold_left t.actions ~init:"" ~f:(fun str a ->
-            str ^ ";((SOME ACTION DATA), " ^ to_sexp_string (trd3 a) ^ ")")
+            str ^ ";((SOME ACTION DATA), " ^ to_sexp_string (trd3 a) ^ ")" )
       ^ "]," ^ to_sexp_string t.default ^ ")"
 
 (* let get_test_from_assume = function
@@ -271,11 +270,11 @@ let rec num_nodes c =
   | Assume t -> Test.num_nodes t
   | Select (_, cases) ->
       List.fold cases ~init:0 ~f:(fun acc (b, c) ->
-          acc + Test.num_nodes b + num_nodes c)
+          acc + Test.num_nodes b + num_nodes c )
   | Apply {keys; actions; default; _} ->
       List.length keys + num_nodes default
       + List.fold actions ~init:0 ~f:(fun acc (_, data, act) ->
-            acc + List.length data + num_nodes act)
+            acc + List.length data + num_nodes act )
 
 let rec get_actions (c : t) : (string * (string * int) list * t) list =
   match c with
@@ -292,7 +291,7 @@ let rec num_table_paths (c : t) : Bigint.t =
   | Select (_, cases) ->
       List.fold cases ~init:one ~f:(fun acc (_, c) ->
           let res = num_table_paths c in
-          if res = one then acc else acc + res)
+          if res = one then acc else acc + res )
   | Apply {actions; _} -> of_int (List.length actions) + one
 
 (* for the default action*)
@@ -310,7 +309,7 @@ let rec num_paths (c : t) : Bigint.t =
 
 let free_keys =
   List.filter_map ~f:(fun k ->
-      if Key.has_value k then None else Some (Key.to_sized k))
+      if Key.has_value k then None else Some (Key.to_sized k) )
 
 let rec frees typ (c : t) : (string * int) list =
   ( match c with
@@ -323,7 +322,7 @@ let rec frees typ (c : t) : (string * int) list =
   | Assume t -> Test.frees typ t
   | Select (_, ss) ->
       List.fold ss ~init:[] ~f:(fun fvs (test, action) ->
-          Test.frees typ test @ frees typ action @ fvs)
+          Test.frees typ test @ frees typ action @ fvs )
   | Apply t ->
       free_keys t.keys
       @ List.fold t.actions ~init:(frees typ t.default)
@@ -331,8 +330,8 @@ let rec frees typ (c : t) : (string * int) list =
             acc
             @ ( frees typ a
               |> List.filter ~f:(fun (x, _) ->
-                     List.for_all (List.map data ~f:fst) ~f:(String.( <> ) x))
-              )) )
+                     List.for_all (List.map data ~f:fst) ~f:(String.( <> ) x) )
+              ) ) )
   |> dedup
 
 let vars = frees `Var
@@ -348,10 +347,10 @@ let rec multi_vals c : Value.t list =
   | Assume t -> Test.multi_vals t
   | Select (_, ss) ->
       concatMap ss ~init:(Some []) ~c:( @ ) ~f:(fun (test, action) ->
-          Test.multi_vals test @ multi_vals action)
+          Test.multi_vals test @ multi_vals action )
   | Apply t ->
       List.fold t.actions ~init:(multi_vals t.default) ~f:(fun rst act ->
-          rst @ multi_vals (trd3 act))
+          rst @ multi_vals (trd3 act) )
 
 let rec holify_cmd ~f holes c : t =
   match c with
@@ -361,7 +360,7 @@ let rec holify_cmd ~f holes c : t =
   | Seq (c, c') -> holify_cmd ~f holes c %:% holify_cmd ~f holes c'
   | Select (styp, cases) ->
       List.map cases ~f:(fun (t, c) ->
-          (Test.holify ~f holes t, holify_cmd ~f holes c))
+          (Test.holify ~f holes t, holify_cmd ~f holes c) )
       |> select styp
   | Apply t ->
       Apply
@@ -372,9 +371,9 @@ let rec holify_cmd ~f holes c : t =
                 let holes' =
                   List.filter holes ~f:(fun h ->
                       List.for_all (List.map data ~f:fst)
-                        ~f:(String.( <> ) h))
+                        ~f:(String.( <> ) h) )
                 in
-                (n, data, holify_cmd ~f holes' act))
+                (n, data, holify_cmd ~f holes' act) )
         ; default= holify_cmd ~f holes t.default }
 
 let holify ?(f = Fn.id) holes c = holify_cmd ~f holes c
@@ -387,7 +386,7 @@ let rec assigned_vars = function
   | Seq (c1, c2) -> StringSet.union (assigned_vars c1) (assigned_vars c2)
   | Select (_, cs) ->
       List.fold cs ~init:StringSet.empty ~f:(fun acc (_, c) ->
-          StringSet.union acc (assigned_vars c))
+          StringSet.union acc (assigned_vars c) )
   | Apply t ->
       List.fold t.actions ~init:(assigned_vars t.default)
         ~f:(fun acc (_, _, act) -> StringSet.union acc @@ assigned_vars act)
@@ -417,7 +416,7 @@ let rec get_tables_actsizes = function
   | Seq (c1, c2) -> get_tables_actsizes c1 @ get_tables_actsizes c2
   | Select (_, cs) ->
       List.fold cs ~init:[] ~f:(fun acc (_, c) ->
-          acc @ get_tables_actsizes c)
+          acc @ get_tables_actsizes c )
   | Apply t -> [(t.name, List.length t.actions)]
 
 let table_vars ?(keys_only = false) ((keys : Key.t list), acts, default) =
@@ -430,7 +429,7 @@ let table_vars ?(keys_only = false) ((keys : Key.t list), acts, default) =
     >>= fun (_, ad, c) ->
     vars c
     |> filter ~f:(fun (x, _) ->
-           for_all ad ~f:(fun (y, _) -> String.(x <> y))) )
+           for_all ad ~f:(fun (y, _) -> String.(x <> y)) ) )
     @ vars default
 
 let rec get_tables_vars ?(keys_only = false) = function
@@ -439,7 +438,7 @@ let rec get_tables_vars ?(keys_only = false) = function
       get_tables_vars ~keys_only c1 @ get_tables_vars ~keys_only c2
   | Select (_, cs) ->
       List.fold cs ~init:[] ~f:(fun acc (_, c) ->
-          acc @ get_tables_vars ~keys_only c)
+          acc @ get_tables_vars ~keys_only c )
   | Apply t ->
       [(t.name, table_vars ~keys_only (t.keys, t.actions, t.default))]
 
@@ -452,56 +451,38 @@ let rec get_tables_keys = function
 let rec read_vars = function
   | Skip -> StringSet.empty
   | Assume b -> Test.vars b |> fsts |> StringSet.of_list
-  | Assign (_,e) -> Expr.vars e |> fsts |> StringSet.of_list
-  | Seq (c1,c2) -> StringSet.union (read_vars c1) (read_vars c2)
+  | Assign (_, e) -> Expr.vars e |> fsts |> StringSet.of_list
+  | Seq (c1, c2) -> StringSet.union (read_vars c1) (read_vars c2)
   | Select (_, cs) ->
       let open StringSet in
-      List.fold cs ~init:empty ~f:(fun acc (b,c) ->
-          Test.vars b
-          |> fsts
-          |> of_list
-          |> union (read_vars c)
-          |> union acc 
-        )
+      List.fold cs ~init:empty ~f:(fun acc (b, c) ->
+          Test.vars b |> fsts |> of_list |> union (read_vars c) |> union acc )
   | Apply t ->
       let open StringSet in
       let act_reads =
-        List.fold t.actions ~init:empty
-          ~f:(fun acc (_,data, act) ->
-            fsts data
-            |> of_list
-            |> diff (read_vars act) 
-            |> union acc
-          ) in
-      List.map t.keys ~f:(Key.var)
-      |> of_list
-      |> union act_reads 
+        List.fold t.actions ~init:empty ~f:(fun acc (_, data, act) ->
+            fsts data |> of_list |> diff (read_vars act) |> union acc )
+      in
+      List.map t.keys ~f:Key.var
+      |> of_list |> union act_reads
       |> union (read_vars t.default)
 
 let num_read_vars = StringSet.length %. read_vars
 
-let num_assigned_vars = StringSet.length %. assigned_vars 
+let num_assigned_vars = StringSet.length %. assigned_vars
 
-let num_tables = List.length %. get_tables_keys 
-                      
-let num_action_data_params c = 
-  get_tables_actions c
-  |> List.bind ~f:snd
-  |> List.fold ~init:0 ~f:(fun acc (_,data,_) -> acc + List.length data)
+let num_tables = List.length %. get_tables_keys
+
+let num_action_data_params c =
+  get_tables_actions c |> List.bind ~f:snd
+  |> List.fold ~init:0 ~f:(fun acc (_, data, _) -> acc + List.length data)
 
 let num_actions c =
   get_tables_actions c
-  |> List.fold ~init:0 ~f:(fun acc (_,acts) -> acc + List.length acts)
+  |> List.fold ~init:0 ~f:(fun acc (_, acts) -> acc + List.length acts)
 
-let num_keys c =
-  get_tables_keys c
-  |> List.bind ~f:snd
-  |> List.length 
+let num_keys c = get_tables_keys c |> List.bind ~f:snd |> List.length
 
 let num_unique_keys c =
-  get_tables_keys c
-  |> List.bind ~f:snd
-  |> List.map ~f:Key.var 
-  |> StringSet.of_list
-  |> StringSet.length
-       
+  get_tables_keys c |> List.bind ~f:snd |> List.map ~f:Key.var
+  |> StringSet.of_list |> StringSet.length

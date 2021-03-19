@@ -30,7 +30,7 @@ let set_level strs =
         if c = 'w' || c = 'W' then set_warn () ;
         if c = 'i' || c = 'I' then set_info () ;
         if c = 'z' || c = 'Z' then set_z3 () ;
-        if c = 'e' || c = 'E' then set_ecache ())
+        if c = 'e' || c = 'E' then set_ecache () )
 
 let print msg s = Format.printf "%s%s\n%!" msg (Lazy.force s)
 

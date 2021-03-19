@@ -19,7 +19,7 @@ let partition_on_finished flows =
         StringSet.is_empty st.target_vars
         (*&& StringSet.is_empty st.source_keys*)
       then First flow
-      else Second flow)
+      else Second flow )
 
 (* return all traces of tables and actions on which every non_trivial_key flows to the keys in affected vars
  * the traces that have no source_keys are the completely determined ones that we can
@@ -41,7 +41,7 @@ let rec flows c (st : t) : (t * (string * int) list) list =
       in
       finished_flows
       @ bind unfinished_flows ~f:(fun (st2, trace2) ->
-            flows c1 st2 |> map_snd ~f:(fun trace1 -> trace1 @ trace2))
+            flows c1 st2 |> map_snd ~f:(fun trace1 -> trace1 @ trace2) )
   | Select (_, cs) -> List.bind cs ~f:(fun (_, c) -> flows c st)
   | Apply t ->
       let open StringSet in
@@ -59,7 +59,7 @@ let rec flows c (st : t) : (t * (string * int) list) list =
             let unbound_targets = diff st.target_vars params in
             (* remove parameters *)
             let target_vars = union unbound_targets targetable_keys in
-            Some (mkstate source_keys target_vars, [(t.name, act_id)]))
+            Some (mkstate source_keys target_vars, [(t.name, act_id)]) )
       @ flows t.default st
 
 let print t =
@@ -68,9 +68,9 @@ let print t =
       List.iter actions ~f:(fun (params, act_id, action) ->
           Printf.printf "\naction[%d] \\%s ->\n%s" act_id
             (List.fold params ~init:"" ~f:(fun acc x ->
-                 Printf.sprintf "%s %s" acc (Expr.to_string (Var x))))
-            (Cmd.to_string action)) ;
-      Printf.printf "\n\n%!") ;
+                 Printf.sprintf "%s %s" acc (Expr.to_string (Var x)) ) )
+            (Cmd.to_string action) ) ;
+      Printf.printf "\n\n%!" ) ;
   Printf.printf "--\n%!" ;
   t
 
@@ -108,11 +108,11 @@ let positive_actions (params : Parameters.t) (phys : Cmd.t)
                             let exp = Expr.holify ~f:Fn.id unknowns data in
                             let test = Test.(Value v %=% exp) in
                             Prover.is_sat params test
-                      else acc)
+                      else acc )
               in
-              Option.some_if t (act_params, act_id, act))
+              Option.some_if t (act_params, act_id, act) )
         in
-        Option.some_if (has positives) (table, positives))
+        Option.some_if (has positives) (table, positives) )
     |> print
   , diff_vars )
 
@@ -127,18 +127,18 @@ let reach_positive_actions params problem in_pkt out_pkt =
   let affected_vars =
     List.fold pos_acts ~init:StringSet.empty ~f:(fun acc (_, acts) ->
         List.fold acts ~init:acc ~f:(fun acc (_, _, a) ->
-            StringSet.union acc @@ Cmd.assigned_vars a))
+            StringSet.union acc @@ Cmd.assigned_vars a ) )
     |> StringSet.inter fvs_set
   in
   if StringSet.(is_subset diff_vars ~of_:affected_vars) then
     List.bind pos_acts ~f:(fun (table, acts) ->
-        List.map acts ~f:(fun a -> (table, a)))
+        List.map acts ~f:(fun a -> (table, a)) )
     |> List.map ~f:(fun (table, _) ->
            match Cmd.get_schema_of_table table phys with
            | Some (keys, _, _) ->
                FastCX.is_reachable `Mask params problem fvs in_pkt table keys
            | None ->
-               failwith @@ Printf.sprintf "couldn't find table %s" table)
+               failwith @@ Printf.sprintf "couldn't find table %s" table )
   else
     failwith
     @@ Printf.sprintf "%s is not a subset of %s"
@@ -161,9 +161,9 @@ let rec tables_affecting_keys phys (keys : StringSet.t) =
   | Select (_, cases) ->
       List.map cases ~f:(fun (b, c) ->
           let keys', tables' = tables_affecting_keys c keys in
-          (union keys' (of_list @@ fsts @@ Test.vars b), tables'))
+          (union keys' (of_list @@ fsts @@ Test.vars b), tables') )
       |> List.fold ~init:(empty, empty) ~f:(fun (acc_ks, acc_ts) (ks, ts) ->
-             (union acc_ks ks, union acc_ts ts))
+             (union acc_ks ks, union acc_ts ts) )
   | Apply t ->
       let some_assigned =
         List.fold t.actions ~init:(assigned_vars t.default)
@@ -198,9 +198,9 @@ let rec tables_affected_by_keys phys keys =
   | Select (_, cases) ->
       List.map cases ~f:(fun (b, c) ->
           let keys', tables' = tables_affected_by_keys c keys in
-          (union keys' (of_list @@ fsts @@ Test.vars b), tables'))
+          (union keys' (of_list @@ fsts @@ Test.vars b), tables') )
       |> List.fold ~init:(empty, empty) ~f:(fun (acc_ks, acc_ts) (ks, ts) ->
-             (union acc_ks ks, union acc_ts ts))
+             (union acc_ks ks, union acc_ts ts) )
   | Apply t ->
       let some_assigned =
         List.fold t.actions ~init:(assigned_vars t.default)
@@ -247,7 +247,7 @@ let feasible_tables phys fvs matches inpkt outpkt =
              , StringSet.of_list @@ fsts @@ Cmd.free_keys keys
              , List.fold actions ~init:(Cmd.assigned_vars default)
                  ~f:(fun acc (_, _, act) ->
-                   Cmd.assigned_vars act |> StringSet.union acc) ))
+                   Cmd.assigned_vars act |> StringSet.union acc ) ) )
 
 let traces (log_edit : Edit.t) fvs phys inpkt outpkt =
   match log_edit with
@@ -266,11 +266,11 @@ let string_of_state (st : t) : string =
 let string_of_trace ((state, trace) : t * (string * int) list) : string =
   Printf.sprintf "%s\n\t%s\n%!" (string_of_state state)
   @@ List.fold trace ~init:"" ~f:(fun acc (table, act) ->
-         Printf.sprintf "%s %s.action[%d]" acc table act)
+         Printf.sprintf "%s %s.action[%d]" acc table act )
 
 let string_of_traces (traces : (t * (string * int) list) list) : string =
   List.fold traces ~init:"Traces:" ~f:(fun acc trace ->
-      Printf.sprintf "%s\n\n%s" acc (string_of_trace trace))
+      Printf.sprintf "%s\n\n%s" acc (string_of_trace trace) )
   |> Printf.sprintf "%s\n%!"
 
 let equal_states state state' =

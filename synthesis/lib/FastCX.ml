@@ -62,7 +62,7 @@ let hits_pred params (_ : ProfData.t ref) prog inst edits e : Test.t =
         Match.list_to_test ms
         %&% List.fold (Instance.get_rows_before inst t i) ~init:True
               ~f:(fun acc (matches, _, _) ->
-                acc %&% !%(Match.list_to_test matches))
+                acc %&% !%(Match.list_to_test matches) )
       in
       let prefix = truncated t prog |> Option.value_exn in
       let pref_gcl =
@@ -73,7 +73,7 @@ let hits_pred params (_ : ProfData.t ref) prog inst edits e : Test.t =
 
 let hits_list_pred params (data : ProfData.t ref) prog inst edits =
   List.fold edits ~init:[] ~f:(fun acc e ->
-      hits_pred params data prog inst edits e :: acc)
+      hits_pred params data prog inst edits e :: acc )
 
 let make_cex params problem (x : Packet.t) =
   let open Problem in
@@ -100,7 +100,7 @@ let unreachable params (problem : Problem.t) (test : Test.t) =
     Log.debug
     @@ lazy
          (Printf.sprintf "FAST CX QUERY %d : \n %s\n%!" (n - i)
-            (Test.to_string query)) ;
+            (Test.to_string query) ) ;
     match attempt_model query with
     | Some in_pkt -> makecexloop params problem i in_pkt phi
     | None -> (
@@ -120,9 +120,9 @@ let unreachable params (problem : Problem.t) (test : Test.t) =
   in
   loop n True
 
-let get_cex ?(neg = Test.True) params data (problem : Problem.t) =
+let get_cex ?(neg = Test.True) params data (problem : Problem.t) =  
   let open Problem in
-  Log.debug @@ lazy (Printf.sprintf "\t   a fast Cex\n%!") ;
+  Log.info @@ lazy "fast cex";
   let e = log_edits problem |> List.hd_exn in
   hits_pred params data (log problem) (log_inst problem) (log_edits problem)
     e

@@ -13,7 +13,7 @@ let meet m m' : 'a StringMap.t =
           None
       | `Right _ ->
           (* Printf.printf "Forgetting the Right value of %s\n%!" key; *)
-          None)
+          None )
 
 let meet_opt m_opt m : 'a StringMap.t =
   Option.value_map m_opt ~default:m ~f:(meet m)
@@ -113,7 +113,7 @@ let rec propogate_cmd (map : Expr.t StringMap.t) (cmd : Cmd.t) =
             let map', c' = propogate_cmd map c in
             ( Some (meet_opt accMap map')
             , cases @ [(b', c')]
-            , Test.equals b' True && Cmd.styp_equals typ Ordered ))
+            , Test.equals b' True && Cmd.styp_equals typ Ordered ) )
       in
       (Option.value_exn map', select typ cases')
   | Apply {name; keys; actions; default} ->
@@ -136,9 +136,9 @@ let rec propogate_cmd (map : Expr.t StringMap.t) (cmd : Cmd.t) =
                       key (Expr.to_string pre) (Expr.to_string post)
                     |> failwith
                 | `Left pre -> Some pre
-                | `Right post -> Some post)
+                | `Right post -> Some post )
             in
-            (Some (meet_opt acc_map facts), acc_acts @ [(n, data, act')]))
+            (Some (meet_opt acc_map facts), acc_acts @ [(n, data, act')]) )
       in
       let facts_def, default' = propogate_cmd map default in
       let keys' =
@@ -161,7 +161,7 @@ let rec propogate_cmd (map : Expr.t StringMap.t) (cmd : Cmd.t) =
                   "[INFO] could replace key %s in table %s with value %s\n%!"
                   k name (Expr.to_string e) ;
                 Key.make (k, sz)
-            | None -> Key.make (k, sz))
+            | None -> Key.make (k, sz) )
       in
       ( meet_opt facts_acts facts_def
       , Apply {name; keys= keys'; actions= actions'; default= default'} )
@@ -205,7 +205,7 @@ let to_value_map (emap : Expr.t StringMap.t) : Value.t StringMap.t =
   StringMap.filter_map emap ~f:(fun data ->
       match data with
       | Value v -> Some v
-      | _ -> None)
+      | _ -> None )
 
 let to_expr_map (vmap : Value.t StringMap.t) : Expr.t StringMap.t =
   StringMap.map vmap ~f:(fun v -> Expr.Value v)
@@ -244,7 +244,7 @@ let rec passive_propogate_aux dir map cmd =
               let open Option in
               acc_map >>| meet map' |> value ~default:map' |> return
             in
-            (map_opt, acc_cases @ [(b', c')]))
+            (map_opt, acc_cases @ [(b', c')]) )
       in
       (Option.value_exn map', select typ cases')
   | Apply _ -> failwith "[Error] assumed tables are applied out"
@@ -254,7 +254,7 @@ let passive_propogate (map, cmd) = passive_propogate_aux `Rev map cmd
 let passive_propogate_fix map cmd =
   fix passive_propogate (StringMap.empty, Skip) (map, cmd)
     ~equal:(fun (map, cmd) (map', cmd') ->
-      StringMap.equal Stdlib.( = ) map map' && Stdlib.(cmd = cmd'))
+      StringMap.equal Stdlib.( = ) map map' && Stdlib.(cmd = cmd') )
   |> snd
 
 let rec eval_expr_choices facts (e : Expr.t) : Value.t list option =

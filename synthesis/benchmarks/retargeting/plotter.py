@@ -3,6 +3,7 @@ import csv
 import locale
 import time
 import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 from cycler import cycler
 from collections import defaultdict
@@ -92,33 +93,34 @@ def read_data():
 
   return (data0, data1)
 
-def plot_series(data0, name0="", data1=None, name1 = "", data2=None, name2="", data3=None, name3="", name = "plot", xlabel = "LABELME", ylabel = "LABELME"):
-  print "adding data0"
+def plot_series(data_sets, name = "plot", xlabel = "LABELME", ylabel = "LABELME"):
   fig = plt.figure(figsize=(3.7,1.0)) # Override fig size based on trial
-  xs = sorted(data0.keys())
-  ys = [data0[x] for x in xs]
-  plt.plot(xs, ys, c='#DB4437', label=name0, ls='-', zorder=2)
-  # plt.axhline(y=5, c='#4285F4', ls=':', label='y=5', zorder=1)
+  for (data, label) in data_sets:
+    xs = sorted(data.keys())
+    ys = [data[x] for x in xs]
+    ls = ':' if 'hot' in label else '-'
+    plt.plot(xs, ys, label=label, ls=ls, zorder=2)
+  # # plt.axhline(y=5, c='#4285F4', ls=':', label='y=5', zorder=1)
 
-  if data1:
-    print "adding data1"
-    xs = sorted(data1.keys())
-    ys = [data1[x] for x in xs]
-    plt.plot(xs, ys, label=name1, ls='-', zorder=3)
-    # plt.text(75, 1, "text", size="smaller")
+  # if data1:
+  #   print "adding data1"
+  #   xs = sorted(data1.keys())
+  #   ys = [data1[x] for x in xs]
+  #   plt.plot(xs, ys, label=name1, ls='-', zorder=3)
+  #   # plt.text(75, 1, "text", size="smaller")
 
-  if data2:
-    print "adding data2"
-    xs = sorted(data2.keys())
-    ys = [data2[x] for x in xs]
-    plt.plot(xs, ys, label=name2, ls='-', zorder=3)
-    # plt.text(75, 1, "text", size="smaller")
+  # if data2:
+  #   print "adding data2"
+  #   xs = sorted(data2.keys())
+  #   ys = [data2[x] for x in xs]
+  #   plt.plot(xs, ys, label=name2, ls='-', zorder=3)
+  #   # plt.text(75, 1, "text", size="smaller")
 
-  if data3:
-    print "adding data3"
-    xs = sorted(data3.keys())
-    ys = [data3[x] for x in xs]
-    plt.plot(xs, ys, label=name3, ls='-', zorder=3)
+  # if data3:
+  #   print "adding data3"
+  #   xs = sorted(data3.keys())
+  #   ys = [data3[x] for x in xs]
+  #   plt.plot(xs, ys, label=name3, ls='-', zorder=3)
     # plt.text(75, 1, "text", size="smaller")
 
   # plt.annotate("annotation", xy=(25, 2.5), xytext=(40, 1), arrowprops=dict(arrowstyle="->"))
@@ -128,7 +130,7 @@ def plot_series(data0, name0="", data1=None, name1 = "", data2=None, name2="", d
   print "labelling"
   plt.xlabel(xlabel, labelpad=0)
   plt.ylabel(ylabel)
-  plt.legend(loc='lower right', ncol=1)
+  plt.legend(bbox_to_anchor=(1.05,1.25), ncol=2)
   # plt.xticks(np.arange(0, 101, 25))
   # plt.yticks(np.arange(0, 11, 2))
   print "saving"

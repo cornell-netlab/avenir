@@ -76,7 +76,7 @@ let match_holes_table encode_tag tbl keys =
       | None ->
           let x, sz = Cmd.Key.to_sized k in
           match_holes encode_tag tbl x sz
-      | Some _ -> True)
+      | Some _ -> True )
 
 let action_data_prefix tbl i = Printf.sprintf "%s_%d_" tbl i
 

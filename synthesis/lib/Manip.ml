@@ -23,7 +23,8 @@ let rec substituteE ?(holes = false) substMap e =
         e'
       else (*Printf.printf "NO SUBST\n%!";*) e
   | Expr.Cast (i, e) -> Expr.cast i @@ substituteE ~holes substMap e
-  | Expr.Slice {hi; lo; bits} -> Expr.slice hi lo @@ substituteE ~holes substMap bits
+  | Expr.Slice {hi; lo; bits} ->
+      Expr.slice hi lo @@ substituteE ~holes substMap bits
   | Expr.Plus es
    |Expr.Times es
    |Expr.Minus es
@@ -57,7 +58,7 @@ let rec substitute ?(holes = false) ex subsMap =
 
 let substV ?(holes = false) ex substMap =
   StringMap.fold substMap ~init:StringMap.empty ~f:(fun ~key ~data acc ->
-      StringMap.set acc ~key ~data:(Expr.Value data))
+      StringMap.set acc ~key ~data:(Expr.Value data) )
   |> substitute ~holes ex
 
 let rec substitute_cmd ?(holes = false) cmd subst =
@@ -79,7 +80,7 @@ let rec substitute_cmd ?(holes = false) cmd subst =
         (substitute_cmd ~holes c2 subst)
   | Cmd.Select (typ, cs) ->
       List.map cs ~f:(fun (b, c) ->
-          (substitute ~holes b subst, substitute_cmd ~holes c subst))
+          (substitute ~holes b subst, substitute_cmd ~holes c subst) )
       |> Cmd.select typ
   | Cmd.Apply _ ->
       failwith
@@ -126,7 +127,7 @@ let rec wp negs c phi =
             (* Printf.printf "Combining guard: %s  action: %s and accumulation %s\n%!==%s\n%!"
              *   (string_of_test cond) (string_of_test act_wp) (string_of_test wp_so_far)
              *   ((cond %&% act_wp) %+% wp_so_far |> string_of_test); *)
-            cond %&% act_wp %+% wp_so_far)
+            cond %&% act_wp %+% wp_so_far )
       in
       (* Printf.printf "{%s}\n %s\n {%s}\n%!" (string_of_test phi')
          (string_of_cmd c) (string_of_test phi); *)
@@ -141,7 +142,7 @@ let rec wp negs c phi =
             (* Printf.printf "Combining guard: %s  action: %s and accumulation %s\n%!==%s\n%!"
              *   (string_of_test guard) (string_of_test act_wp) (string_of_test wp_so_far)
              *   ((guard %=>% act_wp) %&% wp_so_far |> string_of_test); *)
-            (guard %=>% act_wp %&% wp_so_far, cond %+% misses))
+            (guard %=>% act_wp %&% wp_so_far, cond %+% misses) )
         |> fst
       in
       (* Printf.printf "{%s}\n %s\n {%s}\n%!" (string_of_test phi')
@@ -207,7 +208,7 @@ let rec fill_holes (c : Cmd.t) subst =
   let open Cmd in
   let rec_select =
     concatMap ~c:( @ ) ~f:(fun (cond, act) ->
-        [(fill_holes_test cond subst, fill_holes act subst)])
+        [(fill_holes_test cond subst, fill_holes act subst)] )
   in
   match c with
   | Assign (f, Hole (h, sz)) -> (
@@ -232,7 +233,7 @@ let rec fill_holes (c : Cmd.t) subst =
         { t with
           actions=
             List.map t.actions ~f:(fun (n, scope, a) ->
-                (n, scope, fill_holes a subst))
+                (n, scope, fill_holes a subst) )
         ; default= fill_holes t.default subst }
 
 let rec wp_paths negs c phi : (Cmd.t * Test.t) list =
@@ -243,7 +244,7 @@ let rec wp_paths negs c phi : (Cmd.t * Test.t) list =
   | Seq (c1, c2) ->
       List.map (wp_paths negs c2 phi) ~f:(fun (trace2, phi) ->
           List.map (wp_paths negs c1 phi) ~f:(fun (trace1, phi') ->
-              (trace1 %:% trace2, phi')))
+              (trace1 %:% trace2, phi') ) )
       |> List.join
   | Assign (field, e) ->
       let phi' = substitute phi (StringMap.singleton field e) in
@@ -263,7 +264,7 @@ let rec wp_paths negs c phi : (Cmd.t * Test.t) list =
       List.fold cmds ~init:[] ~f:(fun wp_so_far (cond, act) ->
           List.fold (wp_paths negs act phi) ~init:wp_so_far
             ~f:(fun acc (trace, act_wp) ->
-              acc @ [(assume cond %:% trace, cond %&% act_wp)]))
+              acc @ [(assume cond %:% trace, cond %&% act_wp)] ) )
   (* negates the previous conditions *)
   | Select (Ordered, cmds) ->
       (* let open List in
@@ -280,8 +281,8 @@ let rec wp_paths negs c phi : (Cmd.t * Test.t) list =
                 in
                 ( assume (cond %&% misses) %:% trace
                 , cond %&% misses %&% act_wp )
-                :: acc)
-          , prev_conds %+% cond ))
+                :: acc )
+          , prev_conds %+% cond ) )
       |> fst
   | Apply t ->
       let open List in
@@ -295,7 +296,7 @@ let bind_action_data (vals : Value.t list) (_, scope, cmd) : Cmd.t =
   let holes = fsts scope in
   let subst =
     List.fold2 holes vals ~init:StringMap.empty ~f:(fun acc x v ->
-        StringMap.set acc ~key:x ~data:(Expr.Value v))
+        StringMap.set acc ~key:x ~data:(Expr.Value v) )
   in
   match subst with
   | Ok subst -> substitute_cmd cmd subst
@@ -384,7 +385,7 @@ and fixup (real : Cmd.t) (model : Model.t) : Cmd.t =
         { t with
           actions=
             List.map t.actions ~f:(fun (n, data, a) ->
-                (n, data, fixup a model))
+                (n, data, fixup a model) )
         ; default= fixup t.default model }
 
 let rec action_reads (nm, data, cmd) =
@@ -402,7 +403,7 @@ let rec action_reads (nm, data, cmd) =
   | Select (_, cs) ->
       concatMap cs ~c:StringSet.union ~f:(fun (b, c) ->
           to_set (Test.vars b)
-          |> StringSet.union @@ action_reads (nm, data, c))
+          |> StringSet.union @@ action_reads (nm, data, c) )
   | Apply t ->
       Printf.sprintf "table %s not appeard in action %s" t.name nm
       |> failwith

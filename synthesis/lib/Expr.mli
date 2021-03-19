@@ -105,7 +105,6 @@ val vars : t -> (string * int) list
 val holes : t -> (string * int) list
 (** [holes e == frees `Holes e]*)
 
-
 val has_hole : t -> bool
 (** [has_hole e] is true iff [e] contains a [Hole] AST node*)
 

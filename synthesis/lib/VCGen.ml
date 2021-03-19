@@ -16,7 +16,7 @@ let rec indexVars_expr e (sub : (int * int) StringMap.t) =
               failwith
               @@ Printf.sprintf "collision on %s: (%d,%d) <> (%d,%d)" key
                    (fst i1) (snd i1) (fst i2) (snd i2)
-        | `Left i | `Right i -> Some i) )
+        | `Left i | `Right i -> Some i ) )
   in
   match e with
   | Value _ -> (e, sub)
@@ -70,7 +70,7 @@ let inits fvs sub =
   StringMap.fold sub ~init:[] ~f:(fun ~key:v ~data:(_, sz) vs ->
       if List.exists fvs ~f:(fun (x, _) -> String.(x = v)) then
         freshen v sz 0 :: vs
-      else vs)
+      else vs )
   |> List.dedup_and_sort ~compare:(fun (u, _) (v, _) -> Stdlib.compare u v)
 
 let rec apply_init_expr (e : Expr.t) =
@@ -113,7 +113,7 @@ let finals fvs sub =
   StringMap.fold sub ~init:[] ~f:(fun ~key:v ~data:(i, sz) vs ->
       if List.exists fvs ~f:(fun (x, _) -> String.(x = v)) then
         freshen v sz i :: vs
-      else vs)
+      else vs )
   |> List.sort ~compare:(fun (u, _) (v, _) -> Stdlib.compare u v)
 
 let apply_finals_sub_packet (pkt : Packet.t) sub : Packet.t =
@@ -123,7 +123,7 @@ let apply_finals_sub_packet (pkt : Packet.t) sub : Packet.t =
         | Some (i, _) -> fst (freshen key (Value.size data) i)
         | None -> key
       in
-      Packet.set_field acc key data)
+      Packet.set_field acc key data )
 
 let rec apply_finals_sub_expr e sub =
   let open Expr in
@@ -173,7 +173,7 @@ let rec apply_finals_sub_test t sub =
 let zip_eq_exn xs ys =
   let open Test in
   List.fold2_exn xs ys ~init:True ~f:(fun acc x y ->
-      acc %&% (Var x %=% Var y))
+      acc %&% (Var x %=% Var y) )
 
 let prepend_str = Printf.sprintf "%s%s"
 
@@ -228,7 +228,7 @@ let rec prepend pfx c =
             List.map t.actions ~f:(fun (n, scope, act) ->
                 ( n
                 , List.map scope ~f:(fun (x, sz) -> (prepend_str pfx x, sz))
-                , prepend pfx act ))
+                , prepend pfx act ) )
         ; default= prepend pfx t.default }
 
 let rec passify_aux sub c : (int * int) StringMap.t * Cmd.t =
@@ -256,14 +256,14 @@ let rec passify_aux sub c : (int * int) StringMap.t * Cmd.t =
       let sub_lst =
         List.map ss ~f:(fun (t, c) ->
             let sub', c' = passify_aux sub c in
-            (sub', (indexVars t sub, c')))
+            (sub', (indexVars t sub, c')) )
       in
       let merged_subst =
         List.fold sub_lst ~init:StringMap.empty ~f:(fun acc (sub', _) ->
             StringMap.merge acc sub' ~f:(fun ~key:_ -> function
               | `Left i -> Some i
               | `Right i -> Some i
-              | `Both ((i, sz), (j, _)) -> Some (max i j, sz)))
+              | `Both ((i, sz), (j, _)) -> Some (max i j, sz) ) )
       in
       let rewriting sub =
         StringMap.fold sub ~init:Skip ~f:(fun ~key:v ~data:(idx, _) acc ->
@@ -272,12 +272,12 @@ let rec passify_aux sub c : (int * int) StringMap.t * Cmd.t =
               Assume
                 (Var (freshen v sz merged_idx) %=% Var (freshen v sz idx))
               %:% acc
-            else acc)
+            else acc )
       in
       let ss' =
         List.filter_map sub_lst ~f:(fun (sub', (t', c')) ->
             let rc = rewriting sub' in
-            Some (t', c' %:% rc))
+            Some (t', c' %:% rc) )
       in
       (merged_subst, select typ ss')
   | Apply _ -> failwith "Cannot passify (yet) table applications"
@@ -285,7 +285,7 @@ let rec passify_aux sub c : (int * int) StringMap.t * Cmd.t =
 let passify fvs c =
   let init_sub =
     List.fold fvs ~init:StringMap.empty ~f:(fun sub (v, sz) ->
-        StringMap.set sub ~key:v ~data:(0, sz))
+        StringMap.set sub ~key:v ~data:(0, sz) )
   in
   (* Printf.printf "active : \n %s \n" (string_of_cmd c); *)
   passify_aux init_sub c
@@ -300,10 +300,10 @@ let rec good_wp c =
   | Select (Total, _) -> failwith "Totality eludes me"
   | Select (Partial, ss) ->
       List.fold ss ~init:False ~f:(fun cond (t, c) ->
-          cond %+% (t %&% good_wp c))
+          cond %+% (t %&% good_wp c) )
   | Select (Ordered, ss) ->
       List.fold ss ~init:(False, False) ~f:(fun (cond, misses) (t, c) ->
-          (cond %+% (t %&% !%misses %&% good_wp c), t %+% misses))
+          (cond %+% (t %&% !%misses %&% good_wp c), t %+% misses) )
       |> fst
   | Assign _ ->
       failwith
@@ -350,7 +350,7 @@ let equivalent ?(neg = Test.True) (data : ProfData.t ref) eq_fvs l p =
   Log.debug
   @@ lazy
        (Printf.sprintf "checking %s \n==\n %s" (Cmd.to_string l)
-          (Cmd.to_string p)) ;
+          (Cmd.to_string p) ) ;
   let l = Assume neg %:% l in
   let p = Assume neg %:% p in
   let phys_prefix = "phys_" in
@@ -376,7 +376,7 @@ let equivalent ?(neg = Test.True) (data : ProfData.t ref) eq_fvs l p =
   Log.debug
   @@ lazy
        (Printf.sprintf "%s\n %s\n %s \n => \n %s" (Test.to_string gl)
-          (Test.to_string gp) (Test.to_string in_eq) (Test.to_string out_eq)) ;
+          (Test.to_string gp) (Test.to_string in_eq) (Test.to_string out_eq) ) ;
   Test.(gl %&% gp %&% in_eq %=>% out_eq)
 
 let hoare_triple_passified_relabelled assum good_n conseq =
