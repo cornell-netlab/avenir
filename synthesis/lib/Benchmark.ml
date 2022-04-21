@@ -24,7 +24,7 @@ let parse_fvs fp : ((string * int) * (string * int)) list =
                    failwith
                    @@ Printf.sprintf "Couldn't parse int from %s" sz_str
                in
-               ((abs, sz), (phys, sz)) ) )
+               ((abs, sz), (phys, sz)) ))
 
 let rec run_experiment iter seq (phys_seq : Edit.t list)
     (params : Parameters.t) hints (problem : Problem.t) =
@@ -161,7 +161,7 @@ let reorder_benchmark varsize length max_inserts params =
     |> List.map ~f:(fun i ->
            [ ("k_" ^ tbl i, varsize)
            ; ("x_" ^ tbl i, varsize)
-             (* ; ("?ActIn"^tbl i, 8) *) ] )
+             (* ; ("?ActIn"^tbl i, 8) *) ])
     |> List.join
   in
   let problem =
@@ -175,7 +175,7 @@ let translate_key (var_mapping : ((string * int) * (string * int)) list)
     (key : string) =
   match
     List.find_map var_mapping ~f:(fun ((k, _), (k', _)) ->
-        Option.some_if String.(k = key) k' )
+        Option.some_if String.(k = key) k')
   with
   | Some key -> key
   | None -> key
@@ -194,7 +194,7 @@ let onos_to_edits (var_mapping : ((string * int) * (string * int)) list)
             , 0 ) )
     | [_; "REMOVE"; _; _; _] -> failwith "cannot yet handle removes"
     | _ ->
-        Printf.sprintf "Unrecognized row: %s\n%!"
+        Printf.sprintf "Unrecognized ONOS row: %s\n%!"
           (List.intersperse data ~sep:"---" |> List.reduce_exn ~f:( ^ ))
         |> failwith
   in
@@ -242,7 +242,7 @@ and zero_init fvs cmd =
   let vs =
     Cmd.vars cmd
     |> List.dedup_and_sort ~compare:(fun (v1, _) (v2, _) ->
-           String.compare v1 v2 )
+           String.compare v1 v2)
   in
   let zi = List.filter vs ~f:(fun (v, _) -> StringSet.(mem fvs v) |> not) in
   Cmd.(
@@ -343,7 +343,7 @@ let mk_ith_keys sz num_xs ith_meta =
       if i <= ith_meta then
         if ith_meta > num_xs then (mk_ith_meta (ith_meta - num_xs + i), sz)
         else (mk_ith_meta i, sz)
-      else (mk_ith_var i, sz) )
+      else (mk_ith_var i, sz))
 
 let mk_ith_table sz ntables tbl_idx num_xs num_ms =
   let open Cmd in
@@ -369,7 +369,7 @@ let initialize_ms sz num_ms =
   if num_ms = 0 then Skip
   else
     List.map (range_ex 0 num_ms) ~f:(fun i ->
-        mk_ith_meta i %<-% Expr.value (0, sz) )
+        mk_ith_meta i %<-% Expr.value (0, sz))
     |> sequence
 
 let create_bench sz ntables num_xs num_ms =
@@ -378,7 +378,7 @@ let create_bench sz ntables num_xs num_ms =
     [ initialize_ms sz num_ms
     ; sequence
       @@ List.map (range_ex 0 ntables) ~f:(fun tbl_idx ->
-             mk_ith_table sz ntables tbl_idx num_xs num_ms ) ]
+             mk_ith_table sz ntables tbl_idx num_xs num_ms) ]
 
 let wildcard k = Match.wildcard k 32
 
@@ -430,7 +430,7 @@ let square_bench params sz n max_edits =
             Printf.printf
               "\n\n-------%d---%d----------\n%s\n--------------\n\n%!" num_xs
               num_ms (Cmd.to_string p) ;
-            acc @ [((num_xs, num_ms), p)] ) )
+            acc @ [((num_xs, num_ms), p)]))
   in
   let log_edits =
     create_log_edits_easier 32 0 max_edits n |> List.map ~f:List.return
@@ -453,7 +453,7 @@ let square_bench params sz n max_edits =
       match es with
       | None -> Printf.sprintf "%s\n%d,%d,TIMEOUT" acc xs ms
       | Some _ ->
-          Printf.sprintf "%s\n%d,%d,%f" acc xs ms (Time.Span.to_ms dur) )
+          Printf.sprintf "%s\n%d,%d,%f" acc xs ms (Time.Span.to_ms dur))
   |> Printf.printf "%s\n"
 
 (****************************************
@@ -464,7 +464,7 @@ let cb_to_matches fvs cb_row =
   List.map fvs ~f:(fun (f, sz) ->
       get cb_row f
       |> Option.value
-           ~default:(Match.mask_ f (Value.make (0, sz)) (Value.make (0, sz))) )
+           ~default:(Match.mask_ f (Value.make (0, sz)) (Value.make (0, sz))))
 
 let generate_out acc =
   let open Edit in
@@ -474,7 +474,7 @@ let generate_out acc =
         | Add (_, (_, [v], _)) when Bigint.(Value.get_bigint v > max_so_far)
           ->
             Value.get_bigint v
-        | _ -> max_so_far )
+        | _ -> max_so_far)
   in
   Bigint.(
     if (biggest + one) % of_int 512 = zero then biggest + one + one
@@ -496,12 +496,12 @@ let rep params data nrules =
         if
           List.exists acc ~f:(function
             | Add (_, (ms, _, _)) -> List.equal Match.equal ms matches
-            | _ -> false )
+            | _ -> false)
           || List.for_all matches ~f:Match.is_wildcard
         then acc
         else
           let outp = generate_out acc in
-          acc @ [Add ("obt", (matches, [Value.big_make (outp, 9)], 0))] )
+          acc @ [Add ("obt", (matches, [Value.big_make (outp, 9)], 0))])
   in
   Printf.printf "there are cleaned rules %d\n%!" (List.length gen_data) ;
   let gen_data = List.filteri gen_data ~f:(fun i _ -> i < nrules) in
@@ -517,7 +517,7 @@ let rep params data nrules =
       ; ordered
           [ ( Var ("out", 9) %=% Expr.value (0, 9)
             , List.fold fvs ~init:Skip ~f:(fun acc (fv, sz) ->
-                  acc %:% (fv %<-% Expr.value (0, sz)) ) )
+                  acc %:% (fv %<-% Expr.value (0, sz))) )
           ; (True, Skip) ] ]
   in
   let phys =
@@ -541,7 +541,7 @@ let rep params data nrules =
       ; ordered
           [ ( Var ("out", 9) %=% Expr.value (0, 9)
             , List.fold fvs ~init:Skip ~f:(fun acc (fv, sz) ->
-                  acc %:% (fv %<-% Expr.value (0, sz)) ) )
+                  acc %:% (fv %<-% Expr.value (0, sz))) )
           ; (True, Skip) ] ]
   in
   let problem =
@@ -572,12 +572,12 @@ let rep_middle params data nrules =
         if
           List.exists acc ~f:(function
             | Add (_, (ms, _, _)) -> List.equal Match.equal ms matches
-            | _ -> false )
+            | _ -> false)
           || List.for_all matches ~f:Match.is_wildcard
         then acc
         else
           let outp = generate_out acc in
-          acc @ [Add ("obt", (matches, [Value.big_make (outp, 9)], 0))] )
+          acc @ [Add ("obt", (matches, [Value.big_make (outp, 9)], 0))])
   in
   Printf.printf "there are cleaned rules %d\n%!" (List.length gen_data) ;
   let gen_data = List.filteri gen_data ~f:(fun i _ -> i < nrules) in
@@ -597,7 +597,7 @@ let rep_middle params data nrules =
       ; ordered
           [ ( Var ("out", 9) %=% Expr.value (0, 9)
             , List.fold fvs ~init:Skip ~f:(fun acc (fv, sz) ->
-                  acc %:% (fv %<-% Expr.value (0, sz)) ) )
+                  acc %:% (fv %<-% Expr.value (0, sz))) )
           ; (True, Skip) ] ]
   in
   let phys =
@@ -633,7 +633,7 @@ let rep_middle params data nrules =
       ; ordered
           [ ( Var ("out", 9) %=% Expr.value (0, 9)
             , List.fold fvs ~init:Skip ~f:(fun acc (fv, sz) ->
-                  acc %:% (fv %<-% Expr.value (0, sz)) ) )
+                  acc %:% (fv %<-% Expr.value (0, sz))) )
           ; (True, Skip) ] ]
   in
   let problem =
@@ -674,7 +674,7 @@ let rep_of params exactify data nrules =
         if
           List.exists acc ~f:(function
             | Add (_, (ms, _, _)) -> List.equal Match.equal ms matches
-            | _ -> false )
+            | _ -> false)
           || List.for_all matches ~f:Match.is_wildcard
         then
           (* let () = Printf.printf "\tthrowing out %s\n" (Edit.to_string
@@ -684,7 +684,7 @@ let rep_of params exactify data nrules =
           let outp = generate_out acc in
           let e = Add ("obt", (matches, [Value.big_make (outp, 9)], 0)) in
           (* let () = Printf.printf "Keeping %s\n" (Edit.to_string e) in *)
-          acc @ [e] )
+          acc @ [e])
   in
   Printf.printf "there are %d cleaned rules\n%!" (List.length gen_data) ;
   let gen_data = List.filteri gen_data ~f:(fun i _ -> i < nrules) in
@@ -710,7 +710,7 @@ let rep_of params exactify data nrules =
       ; ordered
           [ ( Var ("out", 9) %=% Expr.value (0, 9)
             , List.fold fvs ~init:Skip ~f:(fun acc (fv, sz) ->
-                  acc %:% (fv %<-% Expr.value (0, sz)) ) )
+                  acc %:% (fv %<-% Expr.value (0, sz))) )
           ; (True, Skip) ] ]
   in
   let phys =
@@ -744,7 +744,7 @@ let rep_of params exactify data nrules =
       ; ordered
           [ ( Var ("out", 9) %=% Expr.value (0, 9)
             , List.fold fvs ~init:Skip ~f:(fun acc (fv, sz) ->
-                  acc %:% (fv %<-% Expr.value (0, sz)) ) )
+                  acc %:% (fv %<-% Expr.value (0, sz))) )
           ; (True, Skip) ] ]
   in
   let problem =
@@ -780,7 +780,7 @@ let rep_par params data nrules =
         if
           List.exists acc ~f:(function
             | Add (_, (ms, _, _)) -> List.equal Match.equal ms matches
-            | _ -> false )
+            | _ -> false)
           || List.for_all matches ~f:Match.is_wildcard
         then
           (* let () = Printf.printf "\tthrowing out %s\n" (Edit.to_string
@@ -790,7 +790,7 @@ let rep_par params data nrules =
           let outp = generate_out acc in
           let e = Add ("obt", (matches, [Value.big_make (outp, 9)], 0)) in
           (* let () = Printf.printf "Keeping %s\n" (Edit.to_string e) in *)
-          acc @ [e] )
+          acc @ [e])
   in
   Printf.printf "there are %d cleaned rules\n%!" (List.length gen_data) ;
   let gen_data = List.filteri gen_data ~f:(fun i _ -> i < nrules) in
@@ -814,7 +814,7 @@ let rep_par params data nrules =
       ; ordered
           [ ( Var ("out", 9) %=% Expr.value (0, 9)
             , List.fold fvs ~init:Skip ~f:(fun acc (fv, sz) ->
-                  acc %:% (fv %<-% Expr.value (0, sz)) ) )
+                  acc %:% (fv %<-% Expr.value (0, sz))) )
           ; (True, Skip) ] ]
   in
   let phys =
@@ -861,7 +861,7 @@ let rep_par params data nrules =
       ; ordered
           [ ( Var ("out", 9) %=% Expr.value (0, 9)
             , List.fold fvs ~init:Skip ~f:(fun acc (fv, sz) ->
-                  acc %:% (fv %<-% Expr.value (0, sz)) ) )
+                  acc %:% (fv %<-% Expr.value (0, sz))) )
           ; (True, Skip) ] ]
   in
   let problem =
@@ -894,7 +894,7 @@ let headers params sz ntables max_headers max_edits =
           Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[]
             ~log_inst:Instance.empty ~phys_inst:Instance.empty
         in
-        acc @ [(num_xs, problem, log_edits)] )
+        acc @ [(num_xs, problem, log_edits)])
   in
   List.fold physical_tables ~init:"numxs,num_ms,time"
     ~f:(fun acc (num_xs, problem, log_edits) ->
@@ -905,7 +905,7 @@ let headers params sz ntables max_headers max_edits =
       let dur = Time.diff nd st in
       match es with
       | None -> Printf.sprintf "%s\n%d,TIMEOUT" acc num_xs
-      | Some _ -> Printf.sprintf "%s\n%d,%f" acc num_xs (Time.Span.to_ms dur) )
+      | Some _ -> Printf.sprintf "%s\n%d,%f" acc num_xs (Time.Span.to_ms dur))
   |> Printf.printf "%s\n"
 
 (***************************************
@@ -929,7 +929,7 @@ let metadata params sz nmeta nedits =
         let phys =
           ("out" %<-% Expr.value (0, 9))
           :: List.map (range_ex 0 nmeta) ~f:(fun i ->
-                 Printf.sprintf "m%d" i %<-% Expr.value (0, sz) )
+                 Printf.sprintf "m%d" i %<-% Expr.value (0, sz))
           @ List.map (range_ex 0 nmeta) ~f:(fun table_idx ->
                 if table_idx = 0 then
                   apply
@@ -954,7 +954,7 @@ let metadata params sz nmeta nedits =
                         , [(Printf.sprintf "d%d" table_idx, sz)]
                         , Printf.sprintf "m%d" table_idx
                           %<-% Var (Printf.sprintf "d%d" table_idx, sz) ) ]
-                    , Skip ) )
+                    , Skip ))
           |> sequence
         in
         let log_edits =
@@ -963,7 +963,7 @@ let metadata params sz nmeta nedits =
                   ( "logical"
                   , ( [Match.exact_ "x" (Value.make (i, sz))]
                     , [Value.make (i, 9)]
-                    , 0 ) ) ] )
+                    , 0 ) ) ])
         in
         Printf.printf "Log:\n%s\n%!" (to_string logical_table) ;
         Printf.printf "Phys:\n%s\n%!" (to_string phys) ;
@@ -971,7 +971,7 @@ let metadata params sz nmeta nedits =
           Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[]
             ~log_inst:Instance.empty ~phys_inst:Instance.empty
         in
-        acc @ [(num_ms, problem, log_edits)] )
+        acc @ [(num_ms, problem, log_edits)])
   in
   List.fold problems ~init:"num_ms,time"
     ~f:(fun acc (num_xs, problem, log_edits) ->
@@ -982,7 +982,7 @@ let metadata params sz nmeta nedits =
       let dur = Time.diff nd st in
       match es with
       | None -> Printf.sprintf "%s\n%d,TIMEOUT" acc num_xs
-      | Some _ -> Printf.sprintf "%s\n%d,%f" acc num_xs (Time.Span.to_ms dur) )
+      | Some _ -> Printf.sprintf "%s\n%d,%f" acc num_xs (Time.Span.to_ms dur))
   |> Printf.printf "%s\n"
 
 (***************************************
@@ -1010,7 +1010,7 @@ let tables params sz max_tables nheaders max_edits =
           Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[]
             ~log_inst:Instance.empty ~phys_inst:Instance.empty
         in
-        acc @ [(ntables, problem, log_edits)] )
+        acc @ [(ntables, problem, log_edits)])
   in
   List.fold physical_tables ~init:"ntables,time"
     ~f:(fun acc (num_xs, problem, log_edits) ->
@@ -1021,7 +1021,7 @@ let tables params sz max_tables nheaders max_edits =
       let dur = Time.diff nd st in
       match es with
       | None -> Printf.sprintf "%s\n%d,TIMEOUT" acc num_xs
-      | Some _ -> Printf.sprintf "%s\n%d,%f" acc num_xs (Time.Span.to_ms dur) )
+      | Some _ -> Printf.sprintf "%s\n%d,%f" acc num_xs (Time.Span.to_ms dur))
   |> Printf.printf "%s\n"
 
 (***************************************
@@ -1044,7 +1044,7 @@ let create_par_bench sz ntables num_xs num_ms =
     ; ordered
       @@ List.map (range_ex 0 ntables) ~f:(fun tbl_idx ->
              ( Expr.value (tbl_idx, tblsize) %=% Var ("table_id", tblsize)
-             , mk_ith_table sz ntables tbl_idx num_xs num_ms ) ) ]
+             , mk_ith_table sz ntables tbl_idx num_xs num_ms )) ]
 
 let breadth params sz max_tables nheaders max_edits =
   let open Cmd in
@@ -1067,7 +1067,7 @@ let breadth params sz max_tables nheaders max_edits =
           Problem.make ~log:logical_table ~phys ~fvs ~log_edits:[]
             ~log_inst:Instance.empty ~phys_inst:Instance.empty
         in
-        acc @ [(ntables, problem, log_edits)] )
+        acc @ [(ntables, problem, log_edits)])
   in
   List.fold physical_tables ~init:"ntables,time"
     ~f:(fun acc (num_xs, problem, log_edits) ->
@@ -1078,5 +1078,5 @@ let breadth params sz max_tables nheaders max_edits =
       let dur = Time.diff nd st in
       match es with
       | None -> Printf.sprintf "%s\n%d,TIMEOUT" acc num_xs
-      | Some _ -> Printf.sprintf "%s\n%d,%f" acc num_xs (Time.Span.to_ms dur) )
+      | Some _ -> Printf.sprintf "%s\n%d,%f" acc num_xs (Time.Span.to_ms dur))
   |> Printf.printf "%s\n"

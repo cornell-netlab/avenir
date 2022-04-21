@@ -57,3 +57,33 @@ let ecache s = if !level.ecache then print (green "[ECache] ") s
 let id_print ~s ~p x =
   p (lazy (s x)) ;
   x
+
+(* Demo logging *)
+let abs_log_fn : string option ref = ref None
+let tgt_log_fn : string option ref = ref None  
+  
+let abs_log_file (abs_log : string option) : unit =
+  abs_log_fn := abs_log 
+    
+let tgt_log_file (tgt_log : string option) : unit =
+  tgt_log_fn := tgt_log
+
+let append fn ~data =
+  let open Out_channel in
+  let outc= create ~append:true fn in
+  output_string outc data;
+  newline outc;
+  close outc
+
+let log_abs data =
+  match !abs_log_fn with
+  | None -> ()
+  | Some fn ->
+     append fn ~data
+
+let log_tgt data =
+  match !tgt_log_fn with
+  | None -> ()
+  | Some fn ->
+     append fn ~data
+  

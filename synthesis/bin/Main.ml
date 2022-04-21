@@ -216,12 +216,16 @@ let synthesize =
         problem_flags <*> map2 opt_params mng_params ~f:Parameters.union
       and measure =
         flag "-measure" no_arg ~doc:"Produce a CSV of data to stdout"
-      and print_res = flag "-p" no_arg ~doc:"Print synthesized program" in
+      and print_res = flag "-p" no_arg ~doc:"Print synthesized program"
+      and abs_log = flag "--abs-log" (optional string) ~doc:"Set a logging file for abstract rules";
+      and tgt_log = flag "--tgt-log" (optional string) ~doc:"Set a logging file for target rules" in
       fun () ->
         let data =
           Option.value_exn data_opt
             ~message:"Data must be passed in for synthesis"
         in
+        Avenir.Log.abs_log_file abs_log;
+        Avenir.Log.tgt_log_file tgt_log;
         let prob = mk_prob () in
         let edit_to_string =
           if params.thrift_mode then Edit.to_bmv2_string (Problem.phys prob)

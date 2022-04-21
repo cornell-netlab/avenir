@@ -92,7 +92,6 @@ class SingleSwitchTopo(Topo):
 def filename(src_idx):
     return "h{src}_rrping_all.exp_data".format(src = str(src_idx + 1))
 
-
 def start_ping(net, src_idx, tgt_idxs):
     src_name = "h%d" % (src_idx + 1)
     hsrc = net.get(src_name)
@@ -108,18 +107,17 @@ def start_ping(net, src_idx, tgt_idxs):
 def run_measurement(net, src_idx, tgt_idxs):
     return start_ping(net, src_idx, tgt_idxs)
 
-
 def get_ping_time(f):
     cts = ""
     with open(f,'r') as fp:
         cts = fp.read()
 
     res = re.findall(r", time (\d+)ms", cts)
-    print "trying",cts,"got", res
+    print "trying", cts,"got", res
     if res:
         return res[-1]
     else:
-        print "no data for", f
+        print "no data for", f, " was `", res, "`"
         raise ValueError
 
 def get_fping_times(f):
@@ -132,7 +130,7 @@ def get_fping_times(f):
     if res:
         return res
     else:
-        print "no data for", f
+        print "no data for", f, " was `", res, "`"
         raise ValueError
 
 def get_rrping_times(f):
@@ -145,7 +143,7 @@ def get_rrping_times(f):
     if res:
         return res
     else:
-        print "no data for", f
+        print "no data for", f, " was `", res, "`"
         raise ValueError
 
 def collect_data(num_hosts):
@@ -195,8 +193,6 @@ def experiment(num_hosts, mode, experiment):
         h.describe()
 
     sleep(1)
-    if args.CLI:
-        CLI(net)
 
     print "Ready !!!!"
     for src in xrange(num_hosts):
@@ -207,6 +203,9 @@ def experiment(num_hosts, mode, experiment):
     os.system(experiment)
 
     sleep(10)
+
+    if args.CLI:
+        CLI(net)
 
     net.stop()
 
@@ -227,7 +226,7 @@ def normalize(data,hotstartfile):
 
 def cleanup():
     for filename in os.listdir('.'):
-        if filename.endswith(".exp_data"):
+        if filename.endswith(".exp_data") or filename.endswith(".reachable") or filename.endswith(".rowdata"):
             os.remove(filename)
 
 
@@ -237,6 +236,8 @@ def run_avenir(flags):
     cmd += "-data benchmarks/bmv2/mininet/{0} ".format(args.rules)
     cmd += "--thrift -b 100 -e 3 -P4 -I1 benchmarks/real/p4includes/ -I2 benchmarks/real/p4includes/ "
     cmd += "--no-defaults --min --hints exact --no-deletes --cache-edits 3 -s -S {0}".format(flags)
+    cmd += "--abs-log benchmarks/bmv2/mininet/abs.rowdata "
+    cmd += "--tgt-log benchmarks/bmv2/mininet/tgt.rowdata "
     print cmd
     return cmd
 
@@ -253,14 +254,14 @@ def main():
     print "running cold-start"
     data0 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir(""), "cold"))
     cleanup()
-    print "running hot-start"
-    data1 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir("--hot-start"), "hot"))
-    data1 = normalize(data1,"/tmp/cache_build_time_hot")
-    cleanup()
-    print "running baseline"
-    data2 = experiment(args.num_hosts, args.mode, experiment_cmd(baseline, "base"))
-    cleanup()
-    plotter.plot_series(data1, data0, data2)
+    # print "running hot-start"
+    # data1 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir("--hot-start"), "hot"))
+    # data1 = normalize(data1,"/tmp/cache_build_time_hot")
+    # cleanup()
+    # print "running baseline"
+    # data2 = experiment(args.num_hosts, args.mode, experiment_cmd(baseline, "base"))
+    # cleanup()
+    # plotter.plot_series(data1, data0, data2)
 
 
 if __name__ == '__main__':
