@@ -23,6 +23,11 @@ import subprocess
 import re
 import plotter
 import os
+import httplib, json
+
+import multiprocessing as mp
+import inspectviz as viz
+
 
 from p4_mininet import P4Switch, P4Host
 
@@ -48,6 +53,12 @@ parser.add_argument('--CLI', help="start CLI", action="store_const", const=True,
 
 args = parser.parse_args()
 
+# constants
+RUNTIME = "benchmarks/bmv2/simple_router/runtime_CLI.py"
+# global variables
+abs_queue = mp.Queue()
+tgt_queue = mp.Queue()
+
 
 class SingleSwitchTopo(Topo):
     "Single switch connected to n (< 256) hosts."
@@ -60,8 +71,8 @@ class SingleSwitchTopo(Topo):
                                 json_path = json_path,
                                 thrift_port = thrift_port,
                                 pcap_dump = pcap_dump)
-        log_rules = []
-        phys_rules = []
+        self.log_rules = []
+        self.phys_rules = []
         for h in xrange(n):
             hid = h + 1
             ip = "10.0.%d.10" % h
@@ -70,11 +81,11 @@ class SingleSwitchTopo(Topo):
                                 ip = "{}/24".format(ip),
                                 mac = mac)
             self.addLink(host, switch)
-            log_rules.extend([
+            self.log_rules.extend([
                 # "table_add send_frame rewrite_mac {} => {}".format(str(hid),mac),
                 "table_add ipv4_forward set_nhop {0}/32 => {1} {2}".format(ip,mac,str(hid))
                 ])
-            phys_rules.extend([
+            self.phys_rules.extend([
                 # "table_add send_frame rewrite_mac {} => {}".format(str(hid),mac),
                 "table_add forward set_dmac {} => {}".format(ip,mac),
                 "table_add ipv4_lpm set_nhop {0}/32 => {0} {1}".format(ip,str(hid))
@@ -82,10 +93,10 @@ class SingleSwitchTopo(Topo):
 
         if args.rules:
             with open(args.rules,'w') as f:
-                for r in log_rules:
+                for r in self.log_rules:
                     f.write("%s\n" % r)
             with open(args.rules + "_solution.txt", 'w') as f:
-                for r in phys_rules:
+                for r in self.phys_rules:
                     f.write("%s\n" % r)
 
 
@@ -161,7 +172,7 @@ def process_data(data):
             data_dict[float(t)/1000.0] = 100 * float(i)/float(len(data))
     return data_dict
 
-def experiment(num_hosts, mode, experiment):
+def experiment(num_hosts, mode, experiment=None, demo=None):
     num_hosts = args.num_hosts
     mode = args.mode
 
@@ -199,8 +210,12 @@ def experiment(num_hosts, mode, experiment):
         tgts = [ i for i in xrange(num_hosts) if i != src ]
         run_measurement(net, src, tgts)
 
-    print "running", experiment
-    os.system(experiment)
+    if experiment is not None:
+        print "running", experiment
+        os.system(experiment)
+    elif demo is not None:
+        # print "running demo with rules", topo.log_rules
+        demo(topo.log_rules)
 
     sleep(10)
 
@@ -209,9 +224,10 @@ def experiment(num_hosts, mode, experiment):
 
     net.stop()
 
-    data = collect_data(num_hosts)
-    print data
-    return process_data(data)
+    if demo is None:
+        data = collect_data(num_hosts)
+        print data
+        return process_data(data)
 
 
 def normalize(data,hotstartfile):
@@ -243,16 +259,62 @@ def run_avenir(flags):
 
 def experiment_cmd (exp, label):
     cd = "cd {}".format(args.loc)
-    runtime = "benchmarks/bmv2/simple_router/runtime_CLI.py"
-    cmd = "{0} && (({1} | {2}) 2> /tmp/cache_build_time_{3})".format(cd, exp, runtime, label)
+    cmd = "{0} && (({1} | {2}) 2> /tmp/cache_build_time_{3})".format(cd, exp, RUNTIME, label)
     print cmd
     return cmd
 
+def post_viz(queue, row):
+    queue.put(row)
+    return True
+
+def post_avenir(row):
+    conn = httplib.HTTPConnection("127.0.0.1:19900")
+    conn.request("POST", "/", str({'opCode': 'ADD', 'thrift_row' : row}).replace("'",'"'))
+    response = conn.getresponse().read()
+    conn.close()
+    # print("got", response)
+    return response
+
+def stringify_rows(rows_json):
+    rowstr=""
+    for r in rows_json["PhysOps"]:
+        rowstr += r["thrift_row"] + "\n"
+    return rowstr
+
+def thrift_add_rows(rows):
+    thrift_string = stringify_rows(json.loads(rows))
+    cmd = "cd {0} && ((echo \"{1}\") | {2}) 2>&1 > /dev/null".format(args.loc, thrift_string, RUNTIME)
+    os.system(cmd)
+    return thrift_string
+
+def demo_cmd (rows):
+    global abs_queue
+    global tgt_queue
+    for row in rows:
+        raw_input("Queue Abstract Row? [Y/n]")
+        # post abstract row to visualization server
+        post_viz(abs_queue, row)
+        # wait for input from user
+        raw_input("Send to Avenir? [Y/n]")
+        # send request to Avenir Server & get response
+        tgt_rows = post_avenir(row)
+        # install row via thrift
+        tgt_string = thrift_add_rows(tgt_rows)
+        # post target row to visualization server
+        post_viz(tgt_queue, tgt_string)
+
+
 def main():
+    global abs_queue
+    global tgt_queue
     cleanup()
     baseline = "cat benchmarks/bmv2/mininet/{0}_solution.txt".format(args.rules)
     print "running cold-start"
-    data0 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir(""), "cold"))
+    # data0 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir(""), "cold"))
+    viz_proc = mp.Process(target=viz.run, args=(abs_queue,tgt_queue))
+    viz_proc.start()
+    data0 = experiment(args.num_hosts, args.mode, demo=demo_cmd)
+    viz_proc.join()
     cleanup()
     # print "running hot-start"
     # data1 = experiment(args.num_hosts, args.mode, experiment_cmd(run_avenir("--hot-start"), "hot"))

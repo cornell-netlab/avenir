@@ -6,6 +6,7 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, Gdk, GdkPixbuf, GObject, GLib
 import math
 
+
 num_abs=0
 num_tgt=0
 
@@ -21,9 +22,6 @@ DEEPPURPLE = (.22, .14, .23)
 
 def rectangle(ctx, w, h):
     ctx.move_to(0, 0)
-    # ctx.rel_line_to(2 * w, 0)
-    # ctx.rel_line_to(0, 2 * h)
-    # ctx.rel_line_to(-2 * w, 0)
     ctx.rel_line_to(w,0)
     ctx.rel_line_to(0,h)
     ctx.rel_line_to(-1 * w,0)
@@ -54,7 +52,6 @@ def draw_roundrect(ctx,x,y,w,h):
     ctx.fill()
     ctx.restore()
 
-
 def draw_table(ctx, num, num_valid, x, y, back_color, front_color):
     w=300
     h=240
@@ -67,11 +64,9 @@ def draw_table(ctx, num, num_valid, x, y, back_color, front_color):
 
     ctx.set_source_rgb(*front_color)
     step=10
-    print ("step", step)
     xi = x + 2*step
     wi = w - 4*step
     hi = float(h - (num + 3)*step)/float(num)
-    print("height", hi)
     yi = y + 2*step
     for i in range(num_valid):
         draw_rectangle(ctx, xi, yi, wi, hi)
@@ -93,9 +88,16 @@ def draw_avenir(ctx, x, y):
     ctx.select_font_face("Avenir", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
     ctx.show_text("Avenir")
 
+def update_counts(abs_queue, tgt_queue):
+    global num_abs
+    global num_tgt
+    num_abs = abs_queue.qsize()
+    num_tgt = tgt_queue.qsize()
+    # print "THERE SHOULD BE", num_abs, "ABSTRACT ROWS"
+    # print "THERE SHOULD BE", num_tgt, "TARGET ROWS"
 
-def draw(da, ctx):
-    print("draw")
+def draw(abs_queue, tgt_queue, da, ctx):
+    # print("draw")
     xpos = 250
     abs_ypos = 50
     tgt_ypos = 700
@@ -106,50 +108,27 @@ def draw(da, ctx):
     draw_table(ctx, num, num_tgt, xpos, tgt_ypos, BURNTORANGE, LIGHTORANGE)
 
 
-def main():
+
+def run(abs_queue, tgt_queue):
+    print("starting GTK with", abs_queue, tgt_queue)
     window = Gtk.Window()
     window.set_default_size(800,1200)
-    window.add_events(Gdk.EventMask.KEY_PRESS_MASK)
-
-
-    def update_counts():
-        global num_abs
-        global num_tgt
-        with open("abs.rowdata") as f:
-            num_abs = len(f.readlines())
-        with open("tgt.rowdata") as f:
-            num_tgt = len(f.readlines())
-
-    def callback(window, event):
-        global num_abs
-        global num_tgt
-        print("button press")
-        update_counts()
-        window.queue_draw()
-
-    # window.connect('key-press-event', callback)
-    window.connect('destroy', lambda w: Gtk.main_quit())
 
     drawingarea = Gtk.DrawingArea()
     window.add(drawingarea)
-    drawingarea.connect('draw', draw)
-
+    drawingarea.connect('draw', lambda da, ctx: draw(abs_queue, tgt_queue, da, ctx))
     window.show_all()
 
-    count = 0
+    window.connect('destroy', Gtk.main_quit)
+
     def update_state():
-        global count
-        callback(window,None)
-        count = count + 1
-        print("UPDATE", count)
+        update_counts(abs_queue,tgt_queue)
         window.queue_draw()
         return True
 
-    # Bind the function above as an 'idle' callback.
-    cid = GLib.idle_add(update_state)
+    # Bind the function above as an 'timeout' callback
+    # this should trigger an update approximately every 10ms
+    cid = GLib.timeout_add(10, update_state)
 
     # start the main loop
     Gtk.main()
-
-if __name__ == "__main__":
-    main()

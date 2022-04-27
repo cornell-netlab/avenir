@@ -12,6 +12,7 @@ let problem = ref Problem.empty
 type op =
   | Add of string * string list * string list * int
   | Delete of string * int
+  | ThriftRow of string
 
 type avenir_request = Op of op | Verify of op list * op list
 
@@ -29,6 +30,10 @@ let op_to_json (op : op) : Yojson.Basic.t =
         [ ("opCode", `String "DELETE")
         ; ("tableID", `String table)
         ; ("row", `Int row) ]
+  | ThriftRow row ->
+      `Assoc
+        [ ("opCode", `String "ADD")
+        ; ("thrift_row", `String row) ]      
 
 let null_check message json =
   match json with
@@ -41,15 +46,19 @@ let member_not_null field json =
 
 let parse_add_request json =
   let open Yojson.Basic.Util in
-  let table = json |> member_not_null "tableID" |> to_string in
-  let matches =
-    json |> member_not_null "matches" |> to_list |> List.map ~f:to_string
-  in
-  let actionData =
-    json |> member_not_null "actionData" |> to_list |> List.map ~f:to_string
-  in
-  let actionId = json |> member_not_null "actionID" |> to_int in
-  Add (table, matches, actionData, actionId)
+  if keys json |> List.exists ~f:String.((=) "thrift_row") then
+    let thrift_row = json |> member_not_null "thrift_row" |> to_string in
+    ThriftRow thrift_row
+  else
+    let table = json |> member_not_null "tableID" |> to_string in
+    let matches =
+      json |> member_not_null "matches" |> to_list |> List.map ~f:to_string
+    in
+    let actionData =
+      json |> member_not_null "actionData" |> to_list |> List.map ~f:to_string
+    in
+    let actionId = json |> member_not_null "actionID" |> to_int in
+    Add (table, matches, actionData, actionId)
 
 let parse_delete_request json =
   let open Yojson.Basic.Util in
@@ -96,16 +105,19 @@ let edit_of_op prog op =
             , action_data_of_string @@ String.concat ~sep:";" actionData
             , actId ) ) )
   | Delete (table, rowId) -> Edit.Del (table, rowId)
-
-let op_of_edit e =
-  match e with
-  | Edit.Add (table, (matches, actionData, actId)) ->
-      Add
-        ( table
-        , List.map ~f:Match.to_string matches
-        , List.map ~f:Value.to_string actionData
-        , actId )
-  | Edit.Del (table, rowId) -> Delete (table, rowId)
+  | ThriftRow row ->
+      Runtime.parse_bmv2_entry prog row
+    
+let op_of_edit prog e =
+  ThriftRow (Edit.to_bmv2_string prog e) 
+  (* match e with
+   * | Edit.Add (table, (matches, actionData, actId)) ->
+   *     Add
+   *       ( table
+   *       , List.map ~f:Match.to_string matches
+   *       , List.map ~f:Value.to_string actionData
+   *       , actId )    
+   * | Edit.Del (table, rowId) -> Delete (table, rowId) *)
 
 let avenir_stub op : op list =
   let e = edit_of_op (Problem.log !problem) op in
@@ -118,7 +130,7 @@ let avenir_stub op : op list =
       problem :=
         Problem.replace_phys_edits !problem es
         |> Problem.commit_edits_phys !params ;
-      List.map es ~f:op_of_edit
+      List.map es ~f:(op_of_edit (Problem.phys !problem))
 
 let verify_stub abstract_ops physical_ops =
   let problem_ =

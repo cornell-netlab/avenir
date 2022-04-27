@@ -30,7 +30,7 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, Gdk, GdkPixbuf, GObject, GLib
 
 # Generate the graph
-g = Graph()
+g = Graph(directed=False)
 n = int(sys.argv[1])
 for i in range(n):
     g.add_vertex()
@@ -71,7 +71,7 @@ def vertex(idx):
     return g.vertex(idx)
 
 def has_edge(u,v):
-    return u in g.get_in_neighbors(v)
+    return u in g.get_all_neighbors(v)
 
 def add_edge(g, src_idx, tgt_idx):
     src = vertex(src_idx)
