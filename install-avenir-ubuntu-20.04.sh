@@ -1,5 +1,6 @@
 #! /bin/bash
 
+set -x
 INSTALL_DIR=`pwd`
 
 # Based on instructions found here: https://opam.ocaml.org/doc/Install.html
