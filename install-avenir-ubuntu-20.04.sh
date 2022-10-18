@@ -18,6 +18,7 @@ opam --version
 opam --yes init
 eval $(opam env --switch=default)
 opam --yes switch create . ocaml-base-compiler.4.09.0
+eval $(opam env)
 sudo apt-get install --yes m4
 opam --yes install merlin dune utop core ocamlformat
 eval $(opam env)
