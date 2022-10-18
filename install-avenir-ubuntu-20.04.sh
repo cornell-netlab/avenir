@@ -1,9 +1,97 @@
 #! /bin/bash
 
-set -x
-INSTALL_DIR=`pwd`
+# Remember the current directory when the script was started:
+INSTALL_DIR="${PWD}"
 
-# Based on instructions found here: https://opam.ocaml.org/doc/Install.html
+THIS_SCRIPT_FILE_MAYBE_RELATIVE="$0"
+THIS_SCRIPT_DIR_MAYBE_RELATIVE="${THIS_SCRIPT_FILE_MAYBE_RELATIVE%/*}"
+THIS_SCRIPT_DIR_ABSOLUTE=`readlink -f "${THIS_SCRIPT_DIR_MAYBE_RELATIVE}"`
+
+ubuntu_version_warning() {
+    1>&2 echo "This script has only been tested on these systems:"
+    1>&2 echo "    Ubuntu 18.04"
+    1>&2 echo "    Ubuntu 18.04 (TODO)"
+    1>&2 echo ""
+    1>&2 echo "Proceed installing manually at your own risk of"
+    1>&2 echo "significant time spent figuring out how to make it all"
+    1>&2 echo "work, or consider getting VirtualBox and creating an"
+    1>&2 echo "Ubuntu virtual machine with one of the tested versions."
+}
+
+abort_script=0
+
+lsb_release >& /dev/null
+if [ $? != 0 ]
+then
+    1>&2 echo "No 'lsb_release' found in your command path."
+    ubuntu_version_warning
+    exit 1
+fi
+
+distributor_id=`lsb_release -si`
+ubuntu_release=`lsb_release -s -r`
+if [ "${distributor_id}" = "Ubuntu" -a \( "${ubuntu_release}" = "18.04" -o "${ubuntu_release}" = "20.04" \) ]
+then
+    echo "Found distributor '${distributor_id}' release '${ubuntu_release}'.  Continuing with installation."
+else
+    ubuntu_version_warning
+    1>&2 echo ""
+    1>&2 echo "Here is what command 'lsb_release -a' shows this OS to be:"
+    lsb_release -a
+    exit 1
+fi
+
+# Minimum required system memory is 2 GBytes, minus a few MBytes
+# because from experiments I have run on several different Ubuntu
+# Linux VMs, when you configure them with 2 Gbytes of RAM, the first
+# line of /proc/meminfo shows a little less than that available, I
+# believe because some memory occupied by the kernel is not shown.
+
+min_mem_MBytes=`expr 2 \* \( 1024 - 64 \)`
+memtotal_KBytes=`head -n 1 /proc/meminfo | awk '{print $2;}'`
+memtotal_MBytes=`expr ${memtotal_KBytes} / 1024`
+
+if [ "${memtotal_MBytes}" -lt "${min_mem_MBytes}" ]
+then
+    memtotal_comment="too low"
+    abort_script=1
+else
+    memtotal_comment="enough"
+fi
+
+echo "Minimum recommended memory to run this script: ${min_mem_MBytes} MBytes"
+echo "Memory on this system from /proc/meminfo:      ${memtotal_MBytes} MBytes -> $memtotal_comment"
+
+min_free_disk_MBytes=`expr 9 \* 1024`
+free_disk_MBytes=`df --output=avail --block-size=1M . | tail -n 1`
+
+if [ "${free_disk_MBytes}" -lt "${min_free_disk_MBytes}" ]
+then
+    free_disk_comment="too low"
+    abort_script=1
+else
+    free_disk_comment="enough"
+fi
+
+echo "Minimum free disk space to run this script:    ${min_free_disk_MBytes} MBytes"
+echo "Free disk space on this system from df output: ${free_disk_MBytes} MBytes -> $free_disk_comment"
+
+if [ "${abort_script}" == 1 ]
+then
+    echo ""
+    echo "Aborting script because system has too little RAM or free disk space"
+    exit 1
+fi
+
+echo "------------------------------------------------------------"
+echo "Time and disk space used before installation begins:"
+set -x
+date
+df -h .
+df -BM .
+
+# This section for installing opam is based on instructions found
+# here: https://opam.ocaml.org/doc/Install.html
 
 sudo add-apt-repository --yes ppa:avsm/ppa
 sudo apt update
@@ -43,7 +131,7 @@ sudo ln ${Z3_INSTALL_DIR}/bin/z3 /usr/bin/z3
 sudo apt-get install --yes libgmp-dev
 opam --yes pin add z3 https://github.com/priyasrikumar/ocaml-z3.git
 
-# Install desired version of petr4
+# Install recommended version of petr4
 cd ${INSTALL_DIR}
 git clone https://github.com/cornell-netlab/petr4
 cd petr4
@@ -53,7 +141,6 @@ PETR4_INSTALL_DIR=`pwd`
 cd ${INSTALL_DIR}
 git clone https://github.com/cornell-netlab/avenir
 cd avenir
-AVENIR_INSTALL_DIR=`pwd`
 
 cd synthesis
 opam --yes install p4pp=0.1.4
@@ -73,3 +160,13 @@ opam --yes pin add petr4 ${PETR4_INSTALL_DIR}
 # the Avenir developers.
 sudo apt-get install --yes pkt-config
 opam --yes install async cohttp-async ipaddr shell
+
+make
+
+set +x
+echo "------------------------------------------------------------"
+echo "Time and disk space used when installation was complete:"
+set -x
+date
+df -h .
+df -BM .
