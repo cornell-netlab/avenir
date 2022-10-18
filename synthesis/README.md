@@ -24,10 +24,29 @@ opam install merlin dune utop core ocamlformat
 opam user-setup install
 ```
 
++ [merlin](https://opam.ocaml.org/packages/merlin/) - Editor helper,
+  provides completion, typing and source browsing in Vim and Emacs
++ [dune](https://opam.ocaml.org/packages/dune/) - Fast, portable, and
+  opinionated build system
+
++ [utop](https://opam.ocaml.org/packages/utop/) - utop is an improved
+  toplevel (i.e., Read-Eval-Print Loop or REPL) for OCaml. It can run
+  in a terminal or in Emacs. It supports line edition, history,
+  real-time and context sensitive completion, colors, and more. It
+  integrates with the Tuareg mode in Emacs.
++ [core](https://opam.ocaml.org/packages/core/) - Industrial strength
+  alternative to OCaml's standard library
++ [ocamlformat](https://opam.ocaml.org/packages/ocamlformat/) -
+  Auto-formatter for OCaml code
+
+
 + Install Menhir
 
++ [Menhir](https://opam.ocaml.org/packages/menhir/) is an LR(1) parser
+  generator.
+
 ```bash
-apt install bubblewrap
+sudo apt-get install bubblewrap
 opam install menhir
 ```
 
@@ -48,6 +67,12 @@ opam pin add z3 https://github.com/priyasrikumar/ocaml-z3.git
 cd <petr4 fp>
 git checkout cd556c1e2c20ccbd5b959f385cecebc43f5cfd72
 ```
+
+# TODO: What is the 'hybrid' directory mentioned here?
+# There is no file named hybrid in the petr4 repo.
+# There are several with that name in the avenir repo, but none that have a subdirectory named 'synthesis'.
+# For now I will change to the avenir/synthesis directory, hoping that will work.
+
 Then change back to the `hybrid/synthesis` directory. Install the version of the p4 preprocessor `p4pp` that works with this specific commit:
 ``` bash
 opam install p4pp=0.1.4
@@ -57,8 +82,9 @@ Then, pin the petr4 package to the local state.
 opam pin add petr4 <petr4 fp>
 ```
 
-+ Install any remaining dependencies (e.g. `async`) using `opam install` (e.g.
-  `opam install async`) that show up when you run the following command:
++ Install any remaining dependencies (e.g. `async`) using `opam
+  install` (e.g.  `opam install async`) that show up when you run the
+  following command:
 
 ```
 dune external-lib-deps --missing @all
