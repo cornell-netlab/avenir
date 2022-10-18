@@ -56,6 +56,7 @@ AVENIR_INSTALL_DIR=`pwd`
 
 cd synthesis
 opam --yes install p4pp=0.1.4
+opam --yes install cstruct=6.0.0
 # I experienced errors attempting to compile petr4 in the next step
 opam --yes pin add petr4 ${PETR4_INSTALL_DIR}
 
