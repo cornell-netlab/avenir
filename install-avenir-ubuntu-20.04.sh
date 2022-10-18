@@ -10,11 +10,9 @@ sudo apt update
 sudo apt-get install --yes opam
 opam --version
 
-# As of 2022-Oct-16 when I last ran this on an Ubuntu 20.04 system,
-# this installed opam version 2.1.0
+# As of 2022-Oct-16 when I last ran this on Ubuntu 18.04 and 20.04
+# systems, the commands above installed opam version 2.1.0
 
-# TODO: I have not yet tested 'opam --yes init' with the --yes option
-# to see whether it avoids interactive prompting.  Hopefully it does.
 opam --yes init
 eval $(opam env --switch=default)
 opam --yes switch create . ocaml-base-compiler.4.09.0
@@ -30,6 +28,9 @@ opam --yes install menhir
 # but it install version 4.8.7 according to the output of `z3
 # --version`, which is older than the version 4.8.8 recommended by the
 # Avenir README.
+
+# Instead, install a pre-built version of z3 4.8.10 as distributed by
+# the Z3 developers.
 
 # Download Z3 zip file
 wget https://github.com/Z3Prover/z3/releases/download/z3-4.8.10/z3-4.8.10-x64-ubuntu-18.04.zip
@@ -56,20 +57,19 @@ AVENIR_INSTALL_DIR=`pwd`
 
 cd synthesis
 opam --yes install p4pp=0.1.4
-opam --yes install cstruct=6.0.0
-# I experienced errors attempting to compile petr4 in the next step
+opam --yes pin add cstruct 6.0.0
 opam --yes pin add petr4 ${PETR4_INSTALL_DIR}
 
 # I got the following error message attempting the next command:
 # dune external-lib-deps: This subcommand is no longer implemented.
 
-# This is the version of dune installed on my system:
-# $ which dune
-# /home/andy/install/_opam/bin/dune
-# $ dune --version
-# 3.4.1
-dune external-lib-deps --missing @all
+# This error occured whiel running dune version 3.4.1.  Apparently
+# this 'extern-lib-deps' sub-command was removed in some version of
+# dune since the Avenir install instructions were written, so skip
+# this command.
+# dune external-lib-deps --missing @all
 
-# There are more commands to run from the synthesis/README.md file,
-# but the errors above lead me to believe I am doing something wrong,
-# or the steps in the README need updating.
+# These should be the packages that need to be installed, according to
+# the Avenir developers.
+sudo apt-get install --yes pkt-config
+opam --yes install async cohttp-async ipaddr shell
