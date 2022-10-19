@@ -1,19 +1,24 @@
 #! /bin/bash
 
-# Remember the current directory when the script was started:
-INSTALL_DIR="${PWD}"
-
-OPAMENV="${INSTALL_DIR}/opam-env"
-mkdir -p ${OPAMENV}
-
 THIS_SCRIPT_FILE_MAYBE_RELATIVE="$0"
 THIS_SCRIPT_DIR_MAYBE_RELATIVE="${THIS_SCRIPT_FILE_MAYBE_RELATIVE%/*}"
 THIS_SCRIPT_DIR_ABSOLUTE=`readlink -f "${THIS_SCRIPT_DIR_MAYBE_RELATIVE}"`
 
+# Install the new directories as siblings of the avenir repo directory.
+# I believe that the _opam directory created during installation must be
+# in a directory that is somewhere above the avenir/synthesis directory,
+# otherwise Ocaml builds will use the ~/.opam directory contents, which
+# are not the desired version of the OCaml compiler.
+cd ${THIS_SCRIPT_DIR_ABSOLUTE}/../..
+INSTALL_DIR="${PWD}"
+
+OPAMENV="${INSTALL_DIR}/avenir-install-details"
+mkdir -p ${OPAMENV}
+
 ubuntu_version_warning() {
     1>&2 echo "This script has only been tested on these systems:"
     1>&2 echo "    Ubuntu 18.04"
-    1>&2 echo "    Ubuntu 18.04 (TODO)"
+    1>&2 echo "    Ubuntu 20.04 (TODO)"
     1>&2 echo ""
     1>&2 echo "Proceed installing manually at your own risk of"
     1>&2 echo "significant time spent figuring out how to make it all"
@@ -83,6 +88,25 @@ if [ "${abort_script}" == 1 ]
 then
     echo ""
     echo "Aborting script because system has too little RAM or free disk space"
+    exit 1
+fi
+
+Z3_DIR_NAME="z3-4.8.10-x64-ubuntu-18.04"
+
+1>&2 echo ""
+1>&2 echo "Install directory: ${INSTALL_DIR}"
+1>&2 echo ""
+1>&2 echo "Inside that directory, this script will create new directories"
+1>&2 echo "with these names:"
+1>&2 echo "    _opam"
+1>&2 echo "    petr4"
+1>&2 echo "    ${Z3_DIR_NAME}"
+
+if [ -e "_opam" -o -e "peter4" -o -e ${Z3_DIR_NAME} ]
+then
+    1>&2 echo ""
+    1>&2 echo "One or more files with those names already exist."
+    1>&2 echo "Remove or rename them, then try this script again."
     exit 1
 fi
 
