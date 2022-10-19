@@ -102,11 +102,14 @@ opam --version
 # systems, the commands above installed opam version 2.1.0
 
 opam --yes init
+opam env --switch=default > opam-env-1.txt
 eval $(opam env --switch=default)
 opam --yes switch create . ocaml-base-compiler.4.09.0
+opam env > opam-env-2.txt
 eval $(opam env)
 sudo apt-get install --yes m4
 opam --yes install merlin dune utop core ocamlformat
+opam env > opam-env-3.txt
 eval $(opam env)
 opam --yes user-setup install
 sudo apt-get install --yes bubblewrap
@@ -140,8 +143,14 @@ PETR4_INSTALL_DIR=`pwd`
 
 cd ${THIS_SCRIPT_DIR_ABSOLUTE}/../synthesis
 opam --yes install p4pp=0.1.4
+opam env > opam-env-4.txt
+eval $(opam env)
 opam --yes pin add cstruct 6.0.0
+opam env > opam-env-5.txt
+eval $(opam env)
 opam --yes pin add petr4 ${PETR4_INSTALL_DIR}
+opam env > opam-env-6.txt
+eval $(opam env)
 
 # I got the following error message attempting the next command:
 # dune external-lib-deps: This subcommand is no longer implemented.
@@ -156,6 +165,8 @@ opam --yes pin add petr4 ${PETR4_INSTALL_DIR}
 # the Avenir developers.
 sudo apt-get install --yes pkg-config
 opam --yes install async cohttp-async ipaddr shell
+opam env > opam-env-7.txt
+eval $(opam env)
 
 make
 
