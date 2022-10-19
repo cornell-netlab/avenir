@@ -45,9 +45,12 @@ for i,v in enumerate(g.vertices()):
 
 # set nodes to server shapes
 vertex_sfcs = g.new_vertex_property("object")
-server = cairo.ImageSurface.create_from_png("host.png")
+# server = cairo.ImageSurface.create_from_png("host.png")
+# set nodes labels to integer strings
+vertex_labels = g.new_vertex_property("string")
 for v in g.vertices():
-    vertex_sfcs[v] = server
+    vertex_labels[v] = str(v)
+    # vertex_sfcs[v] = server
 
 # We will filter out edges which are in the "non-reachable" state, by masking
 # them using a property map.
@@ -64,7 +67,8 @@ win.set_default_size(1000, 800)
 win.graph = GraphWidget(g, pos,
                         edge_color=[0.6, 0.6, 0.6, 1],
                         vertex_fill_color=[0.0, 0.0, 0.0, 0.0],
-                        vertex_surface=vertex_sfcs)
+                        vertex_surface=vertex_sfcs,
+                        vertex_text=vertex_labels)
 win.add(win.graph)
 
 def vertex(idx):

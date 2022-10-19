@@ -52,9 +52,34 @@ def draw_roundrect(ctx,x,y,w,h):
     ctx.fill()
     ctx.restore()
 
-def draw_table(ctx, num, num_valid, x, y, back_color, front_color):
-    w=300
-    h=240
+def draw_single_table(ctx, num, num_valid, x, y, back_color, front_color):
+    w=300*1.2
+    h=240*1.2
+    ctx.set_source_rgb(*back_color)
+    ctx.set_line_width(7.5)
+    ctx.set_tolerance(0.1)
+    ctx.set_line_join(cairo.LINE_JOIN_ROUND)
+    ctx.set_dash([7.5, 7.5], 0)
+    draw_roundrect(ctx, x, y, w, h)
+
+    step=10
+    xi = x + 2*step
+    wi = w - 4*step
+    hi = float(h - (num + 3)*step)/float(num)
+    yi = y + 2*step
+    for i in range(num_valid):
+        ctx.set_source_rgb(*front_color)
+        draw_rectangle(ctx, xi, yi, wi, hi)
+        ctx.set_source_rgb(*BLACK)
+        ctx.move_to(xi + (wi / 2.0), yi + 16)
+        ctx.set_font_size(20)
+        ctx.select_font_face(str(i), cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        ctx.show_text(str(i))
+        yi = yi + hi + step
+
+def draw_double_table(ctx, num, num_valid, x, y, back_color, front_color):
+    w=300*1.2
+    h=240*1.2
     ctx.set_source_rgb(*back_color)
     ctx.set_line_width(7.5)
     ctx.set_tolerance(0.1)
@@ -69,12 +94,30 @@ def draw_table(ctx, num, num_valid, x, y, back_color, front_color):
     hi = float(h - (num + 3)*step)/float(num)
     yi = y + 2*step
     for i in range(num_valid):
-        draw_rectangle(ctx, xi, yi, wi, hi)
+        # first rect
+        ctx.set_source_rgb(*front_color)
+        draw_rectangle(ctx, xi, yi, (wi - step)/2.0, hi)
+        # first label
+        ctx.set_source_rgb(*BLACK)
+        ctx.move_to(xi + (wi / 4.0), yi + 16)
+        ctx.set_font_size(20)
+        ctx.select_font_face(str(i), cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        ctx.show_text(str(i))
+
+        # second rect
+        ctx.set_source_rgb(*front_color)
+        draw_rectangle(ctx, xi + ((wi + step)/2.0), yi, (wi - step)/2.0, hi)
+        # second label
+        ctx.set_source_rgb(*BLACK)
+        ctx.move_to(xi + 3.0*(wi / 4.0), yi + 16)
+        ctx.set_font_size(20)
+        ctx.select_font_face(str(i), cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        ctx.show_text(str(i))
         yi = yi + hi + step
 
 def draw_avenir(ctx, x, y):
-    w=300
-    h=180
+    w=300*1.2
+    h=180*1.2
     ctx.set_source_rgb(*DEEPPURPLE)
     ctx.set_line_width(7.5)
     ctx.set_tolerance(0.1)
@@ -83,7 +126,7 @@ def draw_avenir(ctx, x, y):
     draw_roundrect(ctx, x, y, w, h)
 
     ctx.set_source_rgb(*WHITE)
-    ctx.move_to(x + 55, y + 110)
+    ctx.move_to(x + 80, y + 130)
     ctx.set_font_size(60)
     ctx.select_font_face("Avenir", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
     ctx.show_text("Avenir")
@@ -103,9 +146,9 @@ def draw(abs_queue, tgt_queue, da, ctx):
     tgt_ypos = 700
     avr_ypos = 400
     num = 8
-    draw_table(ctx, num, num_abs, xpos, abs_ypos, BLUEGRAY, LIGHTBLUE)
+    draw_single_table(ctx, num, num_abs, xpos, abs_ypos, BLUEGRAY, LIGHTBLUE)
     draw_avenir(ctx, xpos, avr_ypos)
-    draw_table(ctx, num, num_tgt, xpos, tgt_ypos, BURNTORANGE, LIGHTORANGE)
+    draw_double_table(ctx, num, num_tgt, xpos, tgt_ypos, BURNTORANGE, LIGHTORANGE)
 
 
 

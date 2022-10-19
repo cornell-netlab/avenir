@@ -1,0 +1,16 @@
+table_add forward set_dmac 10.0.0.10 => 00:04:00:00:00:00
+table_add ipv4_lpm set_nhop 10.0.0.10/32 => 10.0.0.10 1
+table_add forward set_dmac 10.0.1.10 => 00:04:00:00:00:01
+table_add ipv4_lpm set_nhop 10.0.1.10/32 => 10.0.1.10 2
+table_add forward set_dmac 10.0.2.10 => 00:04:00:00:00:02
+table_add ipv4_lpm set_nhop 10.0.2.10/32 => 10.0.2.10 3
+table_add forward set_dmac 10.0.3.10 => 00:04:00:00:00:03
+table_add ipv4_lpm set_nhop 10.0.3.10/32 => 10.0.3.10 4
+table_add forward set_dmac 10.0.4.10 => 00:04:00:00:00:04
+table_add ipv4_lpm set_nhop 10.0.4.10/32 => 10.0.4.10 5
+table_add forward set_dmac 10.0.5.10 => 00:04:00:00:00:05
+table_add ipv4_lpm set_nhop 10.0.5.10/32 => 10.0.5.10 6
+table_add forward set_dmac 10.0.6.10 => 00:04:00:00:00:06
+table_add ipv4_lpm set_nhop 10.0.6.10/32 => 10.0.6.10 7
+table_add forward set_dmac 10.0.7.10 => 00:04:00:00:00:07
+table_add ipv4_lpm set_nhop 10.0.7.10/32 => 10.0.7.10 8
