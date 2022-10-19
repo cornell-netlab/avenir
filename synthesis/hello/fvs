@@ -1,4 +1,4 @@
-hdr.ipv4_valid,hdr.ipv4_valid,1
+hdr.ipv4.isValid,hdr.ipv4.isValid,1
 hdr.ethernet.srcAddr,hdr.ethernet.srcAddr,48
 hdr.ethernet.dstAddr,hdr.ethernet.dstAddr,48
 hdr.ipv4.ttl,hdr.ipv4.ttl,8

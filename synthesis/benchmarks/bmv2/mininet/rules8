@@ -1,0 +1,8 @@
+table_add ipv4_forward set_nhop 10.0.0.10/32 => 00:04:00:00:00:00 1
+table_add ipv4_forward set_nhop 10.0.1.10/32 => 00:04:00:00:00:01 2
+table_add ipv4_forward set_nhop 10.0.2.10/32 => 00:04:00:00:00:02 3
+table_add ipv4_forward set_nhop 10.0.3.10/32 => 00:04:00:00:00:03 4
+table_add ipv4_forward set_nhop 10.0.4.10/32 => 00:04:00:00:00:04 5
+table_add ipv4_forward set_nhop 10.0.5.10/32 => 00:04:00:00:00:05 6
+table_add ipv4_forward set_nhop 10.0.6.10/32 => 00:04:00:00:00:06 7
+table_add ipv4_forward set_nhop 10.0.7.10/32 => 00:04:00:00:00:07 8

@@ -18,9 +18,15 @@ def time_diff_ms(st):
     ms = seconds * 1000 + df.microseconds / 1000.0
     return ms
 
+def to_hostnames(hosts):
+    return ["h" + h.split(".")[2]
+            for h in hosts]
+
+
 def main() :
     start = datetime.now()
     unreachable = set(args.hosts) ## hosts who have not yet completed a successful ping test
+    print(unreachable)
     reachable = {} ## host id to first timestamp reached
     while unreachable:
         if args.v: print ("unreachable", unreachable)
@@ -38,10 +44,10 @@ def main() :
 
         unreachable = unreachable - set(reachable.keys())
         if args.v: print("there are", len(unreachable), "elts")
+        with open(args.o + ".reachable", 'w') as f:
+            f.write('\n'.join(to_hostnames(set(args.hosts) - unreachable)))
         with open(args.o, 'w') as f:
             f.write('\n'.join(reachable.values()))
-
-
     exit
 
 

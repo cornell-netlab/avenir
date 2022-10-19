@@ -44,3 +44,15 @@ val ecache : string Lazy.t -> unit
 val id_print : s:('a -> string) -> p:(string Lazy.t -> unit) -> 'a -> 'a
 (** [id_print s p x] lazily converts [x] to a string using [s] and prints it
     using [p]. It returns the original [x]*)
+
+val abs_log_file : string option -> unit
+(** [abs_log_file s] initializes the abstract row logger with filepath s*)
+
+val tgt_log_file : string option -> unit
+(** [tgt_log_file s] initializes the target row logger with filepath s*)
+
+val log_abs : string -> unit
+(** Log the string to the abstract log file, if initialized, or do nothing*)
+
+val log_tgt : string -> unit
+(** Log the string to the target log file, if initialized, or do nothing*)

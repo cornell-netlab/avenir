@@ -175,6 +175,7 @@ and drive_search (i : int) (params : Parameters.t) (data : ProfData.t ref)
     let%bind es =
       EditSimpl.extract_reached_edits params data problem model
     in
+    Log.info @@ lazy (Printf.sprintf "%s\n%!" (Edit.list_to_string es));
     let problem' = Problem.step_search_state problem es in
     (* step down *)
     let problem = Problem.negate_model_in_model_space problem model es in
@@ -239,6 +240,7 @@ let cegis_math_sequence_once (params : Parameters.t) data
   List.fold log_edit_sequence
     ~init:(Some (problem, []))
     ~f:(fun acc ledit ->
+      Log.log_abs "row";
       let open Option.Let_syntax in
       let%bind problem, pedits = acc in
       let problem = Problem.replace_log_edits problem [ledit] in
@@ -251,6 +253,7 @@ let cegis_math_sequence_once (params : Parameters.t) data
           Log.info @@ lazy "@@@@@@@@@@@@@@@@@@failed@@@@@@@@@@@@@@@@@" ;
           None
       | Some phys_edits ->
+         Log.log_tgt "row";
           Log.info @@ lazy "++++++++++++++++++success+++++++++++++++++" ;
           if not params.hot_start && params.thrift_mode then
             Printf.printf "%s%!" (Edit.list_to_bmv2_string (Problem.phys problem) phys_edits);
