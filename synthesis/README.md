@@ -106,7 +106,7 @@ either `Equivalent`, or a counterexample. In this case you should see
 To synthesize the same insertions whose correctness we just verified, make sure you are still in the `hello` directory and run 
 
 ```
-../avenir synth abstract.p4 target.p4 no_edits.csv no_edits.csv fvs -b 1000 -e 10 -data inserts.csv -I1 includes -I2 includes -P4 -p
+../avenir synth abstract.p4 target.p4 inserts.csv no_edits.csv fvs -b 1000 -e 10 -data inserts.csv -I1 includes -I2 includes -P4 -p --hint mask --cache-edits 1
 ```
 You should again see the IR encoding of the pipeline programs, and then a line
 that says `Target operations`, and the same (possibly reordered) operations as
