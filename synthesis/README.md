@@ -1,5 +1,7 @@
 # Getting Started
 
+If you wish to automate these install steps on a freshly installed Ubuntu 18.04 or 20.04 system, run the script `./scripts/ubuntu-install.sh`.  In whatever directory your shell is when you execute this script, it will create directories named `_opam`, `petr4`, one whose name begins with `z3-`.  You may then skip down to the section [Running the code](#running-the-code).
+
 + First, [install](https://opam.ocaml.org/doc/Install.html) OPAM version >2.0.4. If you already have OPAM >2.0.4 installed you can skip this step. If you have an earlier version of OPAM, upgrade it. 
 
 + In the `synthesis` directory, run
@@ -135,7 +137,7 @@ the retargeting experiment and the BMV2 simple-switch demonstration.
 
 ## Prerequisite software
 
-The following packaged are required to run these evaluations:
+The following packages are required to run these evaluations:
 - python2.7
 - python-tk (via `apt`)
 - matplotlib (via `pip`)
