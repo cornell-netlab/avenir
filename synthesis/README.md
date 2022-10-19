@@ -1,6 +1,12 @@
 # Getting Started
 
-If you wish to automate these install steps on a freshly installed Ubuntu 18.04 or 20.04 system, run the script `./scripts/ubuntu-install.sh`.  In whatever directory your shell is when you execute this script, it will create directories named `_opam`, `petr4`, one whose name begins with `z3-`.  You may then skip down to the section [Running the code](#running-the-code).
+If you wish to automate these install steps on a freshly installed Ubuntu 18.04 or 20.04 system, run the script `avenir/scripts/ubuntu-install.sh`.  Running this script will create several directories in your current directory from which you execute the script, with the following names:
+
++ `_opam`
++ `petr4`
++ one whose name begins with `z3-` and includes a version number
+
+After the install script completes, you may then skip down to the section [Verification](#verification).
 
 + First, [install](https://opam.ocaml.org/doc/Install.html) OPAM version >2.0.4. If you already have OPAM >2.0.4 installed you can skip this step. If you have an earlier version of OPAM, upgrade it. 
 
