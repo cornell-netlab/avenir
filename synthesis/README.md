@@ -95,7 +95,7 @@ abstract insertions in `hello/inserts.csv`.
 To verify equivalence, run the following commands
 ```
 cd hello
-../avenir eq abstract.p4 target.p4 inserts.csv solution.csv fvs noassume -I1 includes -I2 includes
+../avenir eq abstract.p4 target.p4 inserts.csv solution.csv fvs -I1 includes -I2 includes -P4
 ```
 This will print the IR encoding of `abstract.p4` and `target.p4` followed by
 either `Equivalent`, or a counterexample. In this case you should see
