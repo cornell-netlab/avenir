@@ -138,11 +138,7 @@ cd petr4
 git checkout cd556c1e2c20ccbd5b959f385cecebc43f5cfd72
 PETR4_INSTALL_DIR=`pwd`
 
-cd ${INSTALL_DIR}
-git clone https://github.com/cornell-netlab/avenir
-cd avenir
-
-cd synthesis
+cd ${THIS_SCRIPT_DIR_ABSOLUTE}/../synthesis
 opam --yes install p4pp=0.1.4
 opam --yes pin add cstruct 6.0.0
 opam --yes pin add petr4 ${PETR4_INSTALL_DIR}
