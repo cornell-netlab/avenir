@@ -158,7 +158,7 @@ opam --yes pin add petr4 ${PETR4_INSTALL_DIR}
 
 # These should be the packages that need to be installed, according to
 # the Avenir developers.
-sudo apt-get install --yes pkt-config
+sudo apt-get install --yes pkg-config
 opam --yes install async cohttp-async ipaddr shell
 
 make
