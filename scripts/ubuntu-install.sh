@@ -3,6 +3,9 @@
 # Remember the current directory when the script was started:
 INSTALL_DIR="${PWD}"
 
+OPAMENV="${INSTALL_DIR}/opam-env"
+mkdir -p ${OPAMENV}
+
 THIS_SCRIPT_FILE_MAYBE_RELATIVE="$0"
 THIS_SCRIPT_DIR_MAYBE_RELATIVE="${THIS_SCRIPT_FILE_MAYBE_RELATIVE%/*}"
 THIS_SCRIPT_DIR_ABSOLUTE=`readlink -f "${THIS_SCRIPT_DIR_MAYBE_RELATIVE}"`
@@ -102,14 +105,14 @@ opam --version
 # systems, the commands above installed opam version 2.1.0
 
 opam --yes init
-opam env --switch=default > opam-env-1.txt
+opam env --switch=default > ${OPAMENV}/opam-env-1.txt
 eval $(opam env --switch=default)
 opam --yes switch create . ocaml-base-compiler.4.09.0
-opam env > opam-env-2.txt
+opam env > ${OPAMENV}/opam-env-2.txt
 eval $(opam env)
 sudo apt-get install --yes m4
 opam --yes install merlin dune utop core ocamlformat
-opam env > opam-env-3.txt
+opam env > ${OPAMENV}/opam-env-3.txt
 eval $(opam env)
 opam --yes user-setup install
 sudo apt-get install --yes bubblewrap
@@ -143,13 +146,13 @@ PETR4_INSTALL_DIR=`pwd`
 
 cd ${THIS_SCRIPT_DIR_ABSOLUTE}/../synthesis
 opam --yes install p4pp=0.1.4
-opam env > opam-env-4.txt
+opam env > ${OPAMENV}/opam-env-4.txt
 eval $(opam env)
 opam --yes pin add cstruct 6.0.0
-opam env > opam-env-5.txt
+opam env > ${OPAMENV}/opam-env-5.txt
 eval $(opam env)
 opam --yes pin add petr4 ${PETR4_INSTALL_DIR}
-opam env > opam-env-6.txt
+opam env > ${OPAMENV}/opam-env-6.txt
 eval $(opam env)
 
 # I got the following error message attempting the next command:
@@ -165,7 +168,7 @@ eval $(opam env)
 # the Avenir developers.
 sudo apt-get install --yes pkg-config
 opam --yes install async cohttp-async ipaddr shell
-opam env > opam-env-7.txt
+opam env > ${OPAMENV}/opam-env-7.txt
 eval $(opam env)
 
 make
