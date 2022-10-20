@@ -18,7 +18,8 @@ mkdir -p ${OPAMENV}
 ubuntu_version_warning() {
     1>&2 echo "This script has only been tested on these systems:"
     1>&2 echo "    Ubuntu 18.04"
-    1>&2 echo "    Ubuntu 20.04 (TODO)"
+    1>&2 echo "    Ubuntu 20.04"
+    1>&2 echo "    Ubuntu 22.04"
     1>&2 echo ""
     1>&2 echo "Proceed installing manually at your own risk of"
     1>&2 echo "significant time spent figuring out how to make it all"
@@ -38,7 +39,7 @@ fi
 
 distributor_id=`lsb_release -si`
 ubuntu_release=`lsb_release -s -r`
-if [ "${distributor_id}" = "Ubuntu" -a \( "${ubuntu_release}" = "18.04" -o "${ubuntu_release}" = "20.04" \) ]
+if [ "${distributor_id}" = "Ubuntu" -a \( "${ubuntu_release}" = "18.04" -o "${ubuntu_release}" = "20.04" -o "${ubuntu_release}" = "22.04" \) ]
 then
     echo "Found distributor '${distributor_id}' release '${ubuntu_release}'.  Continuing with installation."
 else
