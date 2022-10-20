@@ -91,7 +91,7 @@ then
     exit 1
 fi
 
-Z3_DIR_NAME="z3-4.8.10-x64-ubuntu-18.04"
+Z3_DIR_NAME="z3-4.8.8-x64-ubuntu-16.04"
 
 1>&2 echo ""
 1>&2 echo "Install directory: ${INSTALL_DIR}"
@@ -147,15 +147,15 @@ opam --yes install menhir
 # --version`, which is older than the version 4.8.8 recommended by the
 # Avenir README.
 
-# Instead, install a pre-built version of z3 4.8.10 as distributed by
+# Instead, install a pre-built version of z3 4.8.8 as distributed by
 # the Z3 developers.
 
 # Download Z3 zip file
-wget https://github.com/Z3Prover/z3/releases/download/z3-4.8.10/z3-4.8.10-x64-ubuntu-18.04.zip
+wget https://github.com/Z3Prover/z3/releases/download/z3-4.8.8/z3-4.8.8-x64-ubuntu-16.04.zip
 # unzip it
-unzip -e z3-4.8.10-x64-ubuntu-18.04.zip
+unzip -e z3-4.8.8-x64-ubuntu-16.04.zip
 # create a link from /usr/bin/z3 to where it is installed
-Z3_INSTALL_DIR="${INSTALL_DIR}/z3-4.8.10-x64-ubuntu-18.04"
+Z3_INSTALL_DIR="${INSTALL_DIR}/z3-4.8.8-x64-ubuntu-16.04"
 sudo ln ${Z3_INSTALL_DIR}/bin/z3 /usr/bin/z3
 
 sudo apt-get install --yes libgmp-dev
