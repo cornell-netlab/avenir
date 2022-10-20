@@ -1,5 +1,7 @@
 # Getting Started
 
+If you wish to automate these install steps on a freshly installed Ubuntu 18.04 or 20.04 system, run the script `avenir/scripts/ubuntu-install.sh`.  After the install script completes, you may then skip down to the section [Verification](#verification).
+
 + First, [install](https://opam.ocaml.org/doc/Install.html) OPAM version >2.0.4. If you already have OPAM >2.0.4 installed you can skip this step. If you have an earlier version of OPAM, upgrade it. 
 
 + In the `synthesis` directory, run
@@ -27,7 +29,7 @@ opam user-setup install
 + Install Menhir
 
 ```bash
-apt install bubblewrap
+sudo apt-get install bubblewrap
 opam install menhir
 ```
 
@@ -48,24 +50,22 @@ opam pin add z3 https://github.com/priyasrikumar/ocaml-z3.git
 cd <petr4 fp>
 git checkout cd556c1e2c20ccbd5b959f385cecebc43f5cfd72
 ```
-Then change back to the `hybrid/synthesis` directory. Install the version of the p4 preprocessor `p4pp` that works with this specific commit:
+Then change back to the `avenir/synthesis` directory. Install the version of the p4 preprocessor `p4pp` that works with this specific commit:
 ``` bash
 opam install p4pp=0.1.4
+opam pin add cstruct 6.0.0
 ```
 Then, pin the petr4 package to the local state.
 ```
 opam pin add petr4 <petr4 fp>
 ```
 
-+ Install any remaining dependencies (e.g. `async`) using `opam install` (e.g.
-  `opam install async`) that show up when you run the following command:
++ Install the remaining dependencies with the commands below:
 
 ```
-dune external-lib-deps --missing @all
+sudo apt-get install pkg-config
+opam install async cohttp-async ipaddr shell
 ```
-
-The list of packages should be `async cohttp-async ipaddr shell`. If `z3`,
-`petr4`, or `p4pp` show up here, repeat the previous steps untill they no longer appear when you run this command. If `menhir` appears in this list even when `opam` declares that it has been correctly installed, you may proceed.
 
 + Run `make` to verify that `avenir` builds.
 
@@ -136,7 +136,7 @@ the retargeting experiment and the BMV2 simple-switch demonstration.
 
 ## Prerequisite software
 
-The following packaged are required to run these evaluations:
+The following packages are required to run these evaluations:
 - python2.7
 - python-tk (via `apt`)
 - matplotlib (via `pip`)
