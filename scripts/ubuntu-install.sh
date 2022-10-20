@@ -190,7 +190,7 @@ eval $(opam env)
 
 # These should be the packages that need to be installed, according to
 # the Avenir developers.
-sudo apt-get install --yes pkg-config
+sudo apt-get install --yes pkg-config g++
 opam --yes install async cohttp-async ipaddr shell
 opam env > ${OPAMENV}/opam-env-7.txt
 eval $(opam env)
