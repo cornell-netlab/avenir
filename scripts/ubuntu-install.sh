@@ -194,6 +194,7 @@ sudo apt-get install --yes pkg-config
 opam --yes install async cohttp-async ipaddr shell
 opam env > ${OPAMENV}/opam-env-7.txt
 eval $(opam env)
+sudo ldconfig
 
 make
 
